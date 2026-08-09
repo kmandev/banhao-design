@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E}a:hover{color:#C2431F}
+</style>
+</helmet>
+
+<div style="max-width:1240px;margin:0 auto;padding:56px 40px 96px">
+
+  <div style="display:flex;align-items:center;gap:14px">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px">🏠</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.16em">BANHAO</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">บ้านเฮา · Payment Architecture · Phase 1 เงินสด + พร้อมเพย์ QR</div>
+    </div>
+  </div>
+  <div style="font-size:17px;line-height:1.75;color:#4A4038;margin-top:22px;max-width:760px;text-wrap:pretty">
+    เอกสารนี้ครอบคลุมเงินทั้งเส้นทาง ตั้งแต่ลูกค้ากดจ่าย จนถึงเงินเข้าบัญชีร้านและไรเดอร์
+    หลักการเดียวที่ห้ามยืดหยุ่นคือ แอปไม่ใช่ผู้ตัดสินว่าจ่ายสำเร็จหรือยัง มีแต่ backend ที่ได้รับการยืนยันจากผู้ให้บริการชำระเงินเท่านั้นที่ตัดสินได้
+    ข้อมูลตัวเลขทั้งหมดในเอกสารเป็นข้อมูลตัวอย่างเพื่อการออกแบบ
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 34px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — ARCHITECTURE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">สถาปัตยกรรมการชำระเงิน</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+    <sc-for list="{{ layers }}" as="l" hint-placeholder-count="4">
+      <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+        <div style="font-size:12px;font-weight:600;color:#E4572E;letter-spacing:.06em">{{ l.tag }}</div>
+        <div style="font-size:16px;font-weight:700;margin-top:7px;line-height:1.4">{{ l.title }}</div>
+        <div style="font-size:13.5px;color:#5A4E42;margin-top:9px;line-height:1.75">{{ l.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:14px;padding:18px 20px;border-radius:18px;background:#211B16;color:#E8DED2;font-size:14.5px;line-height:1.85">
+    Webhook คือทางเดียวที่เปลี่ยน Payment เป็น SUCCESS — ผู้ให้บริการยิงเข้ามา → ตรวจลายเซ็น → ตรวจยอดและ order → อัปเดต Payment →
+    อัปเดต Order → บันทึก Ledger → แจ้งลูกค้า ทุกขั้นทำแบบ idempotent ด้วย payment reference เดียว ถ้า callback ซ้ำ ระบบต้องอ่านผลเดิมไม่สร้างรายการใหม่
+    Provider Integration แยกเป็นชั้นของตัวเอง เพื่อเปลี่ยนผู้ให้บริการภายหลังโดยไม่แตะ Core Payment
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 34px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — STATE MACHINE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Payment State แยกจาก Order State</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:20px;max-width:780px;line-height:1.75">ออเดอร์หนึ่งใบมีสองสถานะเดินคู่กันเสมอ ห้ามยุบเป็นสถานะเดียว เพราะออเดอร์ที่ยกเลิกแล้วยังมีเงินค้างอยู่ในระบบจนกว่าจะคืนเสร็จ</div>
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:flex;padding:13px 20px;background:#F7F1E8;font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em">
+      <div style="width:180px;flex:0 0 180px">PAYMENT STATE</div>
+      <div style="flex:1">ลูกค้าเห็น</div>
+      <div style="width:210px;flex:0 0 210px">Order State ที่คู่กันได้</div>
+      <div style="width:190px;flex:0 0 190px">ใครเปลี่ยน</div>
+    </div>
+    <sc-for list="{{ payStates }}" as="p" hint-placeholder-count="9">
+      <div style="{{ p.row }}">
+        <div style="width:180px;flex:0 0 180px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;{{ p.tone }}">{{ p.key }}</div>
+        <div style="flex:1;font-size:13.5px">{{ p.cust }}</div>
+        <div style="width:210px;flex:0 0 210px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ p.order }}</div>
+        <div style="width:190px;flex:0 0 190px;font-size:12.5px;color:#9A8C7E">{{ p.actor }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 34px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — FLOWS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">เส้นทางเงินทั้ง 6 เส้น</div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ flows }}" as="f" hint-placeholder-count="6">
+      <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px">
+          <div style="{{ f.chip }}">{{ f.role }}</div>
+          <div style="font-size:14px;color:#7A6E64">{{ f.note }}</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+          <sc-for list="{{ f.steps }}" as="st" hint-placeholder-count="7">
+            <div style="{{ st.style }}">{{ st.label }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 34px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — LEDGER</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">บัญชีแยกประเภทต่อหนึ่งออเดอร์</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:20px;max-width:780px;line-height:1.75">ทุกออเดอร์ต้องกระทบยอดเป็นศูนย์ เงินที่ลูกค้าจ่ายเข้ามาต้องกระจายไปที่ร้าน ไรเดอร์ และแพลตฟอร์มจนครบบาท ห้ามมีเศษหายไปในระบบ</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+      <div style="padding:14px 20px;background:#F7F1E8;font-size:13px;font-weight:600">ออเดอร์ #BH000125 · จ่ายพร้อมเพย์ (ตัวอย่าง)</div>
+      <sc-for list="{{ ledger }}" as="l" hint-placeholder-count="6">
+        <div style="{{ l.row }}">
+          <div style="flex:1;font-size:14px;{{ l.strong }}">{{ l.label }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;{{ l.amtStyle }}">{{ l.amount }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+      <div style="padding:14px 20px;background:#F7F1E8;font-size:13px;font-weight:600">ออเดอร์ #BH000131 · จ่ายเงินสด (ตัวอย่าง)</div>
+      <sc-for list="{{ ledgerCash }}" as="l" hint-placeholder-count="6">
+        <div style="{{ l.row }}">
+          <div style="flex:1;font-size:14px;{{ l.strong }}">{{ l.label }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;{{ l.amtStyle }}">{{ l.amount }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="margin-top:14px;padding:17px 20px;border-radius:18px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:14px;line-height:1.8;color:#5A4E42">
+    ความต่างสำคัญของเงินสด — ไรเดอร์เป็นคนถือเงินของแพลตฟอร์มไว้ชั่วคราว ระบบจึงต้องบันทึกเป็นหนี้ที่ไรเดอร์ต้องนำส่ง (Cash Collection)
+    ไม่ใช่รายได้ของไรเดอร์ หน้าจอไรเดอร์ต้องแยกสองก้อนนี้ให้ขาดจากกัน ไม่งั้นไรเดอร์จะเข้าใจว่าเงินในกระเป๋าคือรายได้ทั้งหมด
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 34px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — DRIVER</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">ไรเดอร์ · เก็บเงินสดและรายได้</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:22px">ไรเดอร์ไม่ต้องคิดเลขเอง ระบบคำนวณเงินทอนให้จากยอดที่ลูกค้าแจ้งไว้ตอนสั่ง</div>
+  <div style="display:flex;gap:18px;flex-wrap:wrap">
+
+    <div style="width:268px;border-radius:26px;border:2px solid #1F1A16;background:#fff;overflow:hidden;flex:0 0 268px">
+      <div style="padding:10px 14px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">P-D1 เก็บเงินลูกค้า</div>
+      <div style="padding:14px">
+        <div style="border:2px solid #E4572E;border-radius:16px;padding:16px;text-align:center">
+          <div style="font-size:11px;color:#9A8C7E">ยอดที่ต้องเก็บ</div>
+          <div style="font-size:32px;font-weight:700;margin-top:2px">฿130</div>
+        </div>
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px;margin-top:10px;font-size:12.5px;line-height:2.1;color:#5A4E42">
+          ลูกค้าแจ้งว่าเตรียมมา<span style="float:right;font-weight:600">฿500</span><br>
+          ต้องทอน<span style="float:right;font-weight:700;color:#E4572E">฿370</span>
+        </div>
+        <div style="height:50px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;margin-top:12px">ยืนยันว่าได้รับเงินแล้ว</div>
+        <div style="height:42px;border-radius:14px;border:1.5px solid #E0D6C8;color:#7A6E64;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:8px">ลูกค้าจ่ายไม่ครบ / มีปัญหา</div>
+        <div style="font-size:10.5px;color:#9A8C7E;margin-top:10px;line-height:1.7">กดยืนยันแล้วออเดอร์ถึงจะเป็น COMPLETED และเงินก้อนนี้จะเข้ายอดที่ต้องนำส่ง</div>
+      </div>
+    </div>
+
+    <div style="width:268px;border-radius:26px;border:2px solid #1F1A16;background:#fff;overflow:hidden;flex:0 0 268px">
+      <div style="padding:10px 14px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">P-D2 รายได้ vs เงินสดในมือ</div>
+      <div style="padding:14px">
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px">
+          <div style="font-size:11px;color:#9A8C7E">รายได้วันนี้ (เป็นของคุณ)</div>
+          <div style="font-size:26px;font-weight:700;margin-top:2px;color:#0F8B5F">฿400</div>
+          <div style="font-size:11.5px;color:#5A4E42;line-height:2;margin-top:8px">
+            ค่าจัดส่ง<span style="float:right;font-weight:600">฿350</span><br>
+            โบนัส<span style="float:right;font-weight:600">฿50</span>
+          </div>
+        </div>
+        <div style="border:2px solid #D6A419;border-radius:14px;padding:13px;margin-top:10px;background:#FDF3E6">
+          <div style="font-size:11px;color:#8A6A14">เงินสดที่เก็บมาแทนบ้านเฮา</div>
+          <div style="font-size:26px;font-weight:700;margin-top:2px">฿850</div>
+          <div style="font-size:11.5px;color:#5A4E42;line-height:2;margin-top:8px">
+            หักรายได้ของคุณ<span style="float:right;font-weight:600">−฿240</span><br>
+            <b>ต้องนำส่งบ้านเฮา</b><span style="float:right;font-weight:700">฿610</span>
+          </div>
+        </div>
+        <div style="height:46px;border-radius:14px;border:1.5px solid #1F1A16;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;margin-top:12px">แจ้งนำส่งเงินสด</div>
+      </div>
+    </div>
+
+    <div style="width:268px;border-radius:26px;border:2px solid #1F1A16;background:#fff;overflow:hidden;flex:0 0 268px">
+      <div style="padding:10px 14px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">P-D3 รอบโอนรายได้</div>
+      <div style="padding:14px">
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px;font-size:12px;line-height:2.1;color:#5A4E42">
+          รอบวันที่ 8 ส.ค.<span style="float:right;font-weight:600;color:#0F8B5F">โอนแล้ว ฿1,820</span><br>
+          รอบวันที่ 9 ส.ค.<span style="float:right;font-weight:600;color:#8A6A14">รอโอน ฿400</span><br>
+          เงินสดค้างนำส่ง<span style="float:right;font-weight:600;color:#D93A3A">฿610</span>
+        </div>
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px;margin-top:10px;font-size:11.5px;color:#5A4E42;line-height:1.9">
+          บัญชีรับเงิน<br><b>ธนาคารตัวอย่าง ··· 4821</b><br>โอนทุกวันจันทร์ เวลา 10:00 น.
+        </div>
+        <div style="font-size:10.5px;color:#9A8C7E;margin-top:12px;line-height:1.7">ถ้ายังมีเงินสดค้างนำส่งเกินวงเงินที่กำหนด ระบบจะหยุดจ่ายงานใหม่ให้อัตโนมัติ</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="font-size:26px;font-weight:700;margin:44px 0 8px">ร้านค้า · รายได้และรอบโอน</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:22px">ร้านไม่ต้องเช็กสลิปเอง ระบบบอกว่าออเดอร์ไหนจ่ายมาแล้วและร้านจะได้รับเท่าไหร่</div>
+  <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden">
+    <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">P-M1 การเงินร้านค้า</div>
+    <div style="padding:18px">
+      <div style="display:flex;gap:10px">
+        <sc-for list="{{ merchantFinance }}" as="m" hint-placeholder-count="4">
+          <div style="{{ m.box }}">
+            <div style="font-size:11px;color:#9A8C7E">{{ m.label }}</div>
+            <div style="{{ m.valStyle }}">{{ m.value }}</div>
+            <div style="font-size:11px;color:#7A6E64;margin-top:4px">{{ m.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:16px;align-items:flex-start">
+        <div style="flex:1.3;border:1.5px dashed #C4B7A8;border-radius:14px;overflow:hidden">
+          <div style="padding:10px 14px;font-size:12px;font-weight:600;background:#F7F1E8">ออเดอร์ที่จ่ายแล้ว รอโอน</div>
+          <div style="display:flex;padding:9px 14px;font-size:11px;color:#9A8C7E;border-bottom:1px dashed #E0D6C8">
+            <div style="width:96px;flex:0 0 96px">ออเดอร์</div><div style="flex:1">วิธีจ่าย</div>
+            <div style="width:74px;flex:0 0 74px;text-align:right">ยอดอาหาร</div>
+            <div style="width:74px;flex:0 0 74px;text-align:right">ค่าธรรมเนียม</div>
+            <div style="width:74px;flex:0 0 74px;text-align:right">ร้านได้รับ</div>
+          </div>
+          <sc-for list="{{ merchantOrders }}" as="o" hint-placeholder-count="5">
+            <div style="display:flex;padding:10px 14px;font-size:12px;border-bottom:1px dashed #F0E8DD">
+              <div style="width:96px;flex:0 0 96px;font-family:'IBM Plex Mono',monospace;font-size:11px">{{ o.id }}</div>
+              <div style="flex:1">{{ o.method }}</div>
+              <div style="width:74px;flex:0 0 74px;text-align:right">฿{{ o.gross }}</div>
+              <div style="width:74px;flex:0 0 74px;text-align:right;color:#D93A3A">−฿{{ o.fee }}</div>
+              <div style="width:74px;flex:0 0 74px;text-align:right;font-weight:700">฿{{ o.net }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:14px;overflow:hidden">
+          <div style="padding:10px 14px;font-size:12px;font-weight:600;background:#F7F1E8">ประวัติรอบโอน</div>
+          <sc-for list="{{ settlements }}" as="s" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px dashed #F0E8DD">
+              <div style="flex:1">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ s.id }}</div>
+                <div style="font-size:11px;color:#9A8C7E;margin-top:2px">{{ s.date }} · {{ s.bank }}</div>
+              </div>
+              <div style="font-size:13px;font-weight:700">฿{{ s.amount }}</div>
+              <div style="{{ s.badge }}">{{ s.status }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="font-size:11.5px;color:#9A8C7E;margin-top:12px;line-height:1.7">ออเดอร์เงินสดไม่เข้ารอบโอน เพราะร้านได้รับเงินจากไรเดอร์หน้าร้านแล้ว ระบบหักค่าธรรมเนียมจากยอดโอนรอบถัดไปแทน</div>
+    </div>
+  </div>
+
+  <div style="font-size:26px;font-weight:700;margin:44px 0 8px">แอดมิน · ภาพรวมการเงินและการกระทบยอด</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:22px">หน้าที่แอดมินเปิดทุกเช้าคือหน้ากระทบยอด ไม่ใช่กราฟรายได้</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden">
+      <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">P-A1 Finance Dashboard · วันนี้</div>
+      <div style="padding:16px">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:9px">
+          <sc-for list="{{ adminFinance }}" as="a" hint-placeholder-count="8">
+            <div style="{{ a.box }}">
+              <div style="font-size:10.5px;color:#9A8C7E">{{ a.label }}</div>
+              <div style="{{ a.valStyle }}">{{ a.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px;margin-top:12px;font-size:11.5px;color:#5A4E42;line-height:2">
+          เงินเข้าออนไลน์ + เงินสดที่ไรเดอร์เก็บ = ยอดขายรวม<span style="float:right;font-weight:700;color:#0F8B5F">ตรงกัน ✓</span><br>
+          ยอดจ่ายร้าน + ยอดจ่ายไรเดอร์ + รายได้บ้านเฮา + คืนเงิน = ยอดขายรวม<span style="float:right;font-weight:700;color:#0F8B5F">ตรงกัน ✓</span>
+        </div>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden">
+      <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">P-A2 Reconciliation</div>
+      <div style="padding:16px">
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="padding:6px 11px;border-radius:9px;background:#E7F4EE;color:#0F8B5F;font-size:11.5px;font-weight:600">ตรงกัน 312</div>
+          <div style="padding:6px 11px;border-radius:9px;background:#FDF3E6;color:#8A6A14;font-size:11.5px;font-weight:600">รอยืนยัน 4</div>
+          <div style="padding:6px 11px;border-radius:9px;background:#FBE9E9;color:#D93A3A;font-size:11.5px;font-weight:600">ไม่ตรง 2</div>
+        </div>
+        <sc-for list="{{ recon }}" as="r" hint-placeholder-count="5">
+          <div style="{{ r.row }}">
+            <div style="width:104px;flex:0 0 104px;font-family:'IBM Plex Mono',monospace;font-size:11px">{{ r.id }}</div>
+            <div style="flex:1;font-size:12px">{{ r.detail }}</div>
+            <div style="{{ r.badge }}">{{ r.status }}</div>
+          </div>
+        </sc-for>
+        <div style="border:1.5px solid #F0D6D6;background:#FDF6F6;border-radius:12px;padding:12px;margin-top:12px;font-size:11.5px;color:#5A4E42;line-height:1.8">
+          <b style="color:#D93A3A">ยอดไม่ตรง 2 รายการ</b> — ผู้ให้บริการแจ้งรับเงิน แต่ในระบบยังเป็น PENDING เปิดดูรายการเพื่อจับคู่ด้วยมือ หรือคืนเงินให้ลูกค้า
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden;margin-top:16px">
+    <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">P-A3 Payment Transaction Detail</div>
+    <div style="display:flex;padding:18px;gap:20px">
+      <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:14px;padding:14px;font-size:12.5px;line-height:2.2;color:#5A4E42;font-family:'IBM Plex Mono',monospace">
+        PAYMENT ID<span style="float:right;color:#1F1A16">PAY-BH000125</span><br>
+        ORDER<span style="float:right;color:#1F1A16">BH000125</span><br>
+        AMOUNT<span style="float:right;color:#1F1A16">฿130.00</span><br>
+        METHOD<span style="float:right;color:#1F1A16">PROMPTPAY</span><br>
+        STATUS<span style="float:right;color:#0F8B5F;font-weight:600">SUCCESS</span><br>
+        CREATED<span style="float:right;color:#1F1A16">18:40:12</span><br>
+        PAID<span style="float:right;color:#1F1A16">18:41:03</span><br>
+        PROVIDER REF<span style="float:right;color:#1F1A16">····8F2A</span>
+      </div>
+      <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:14px;padding:14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px">Transaction Timeline</div>
+        <sc-for list="{{ txTimeline }}" as="t" hint-placeholder-count="6">
+          <div style="display:flex;gap:12px;padding:5px 0;font-size:12px">
+            <div style="width:56px;flex:0 0 56px;color:#9A8C7E;font-family:'IBM Plex Mono',monospace">{{ t.time }}</div>
+            <div style="flex:1;color:#5A4E42">{{ t.label }}</div>
+          </div>
+        </sc-for>
+        <div style="font-size:11px;color:#9A8C7E;margin-top:10px;line-height:1.7">แสดงเฉพาะเลขอ้างอิงบางส่วน ไม่แสดงเลขบัญชีเต็ม คีย์ หรือข้อมูลลับของผู้ให้บริการ</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 34px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — EDGE CASES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">กรณีที่ต้องออกแบบไว้ก่อน</div>
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:flex;padding:13px 20px;background:#F7F1E8;font-size:12px;font-weight:600;color:#7A6E64">
+      <div style="width:210px;flex:0 0 210px">สถานการณ์</div>
+      <div style="flex:1">ระบบทำอะไร</div>
+      <div style="flex:1">ผู้ใช้เห็นอะไร</div>
+    </div>
+    <sc-for list="{{ edges }}" as="e" hint-placeholder-count="10">
+      <div style="{{ e.row }}">
+        <div style="width:210px;flex:0 0 210px;font-size:13px;font-weight:600">{{ e.case }}</div>
+        <div style="flex:1;font-size:13px;color:#5A4E42;line-height:1.6">{{ e.system }}</div>
+        <div style="flex:1;font-size:13px;color:#4A4038;line-height:1.6">{{ e.ui }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:18px 20px;border-radius:18px;background:#211B16;color:#E8DED2;font-size:14.5px;line-height:1.85">
+    ก่อนขึ้นใช้งานจริงต้องตรวจกับผู้ให้บริการชำระเงินและที่ปรึกษาด้านกฎหมาย — เงื่อนไขผู้ให้บริการ โมเดลรับเงินแบบมาร์เก็ตเพลส KYC/KYB
+    นโยบายคืนเงิน รอบโอนเงิน กฎการชำระเงินของไทย ภาษีและบัญชี รวมถึง PDPA และการยืนยันบัญชีธนาคาร
+    เอกสารนี้เป็นการออกแบบผลิตภัณฑ์ ยังไม่ผูกกับผู้ให้บริการรายใด
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  renderVals() {
+    const row = alt => 'display:flex;padding:12px 20px;border-top:1px solid #F5EEE4;align-items:center;' + (alt ? 'background:#FDFAF6' : '');
+    const step = (label, kind) => ({
+      label,
+      style: 'padding:9px 14px;border-radius:12px;font-size:13px;font-weight:500;' +
+        (kind === 'end' ? 'background:#E7F4EE;color:#0F8B5F;font-weight:600'
+         : kind === 'bad' ? 'background:#FBE9E9;color:#D93A3A;font-weight:600'
+         : kind === 'key' ? 'background:#E4572E;color:#fff;font-weight:600'
+         : kind === 'wait' ? 'background:#FDF3E6;color:#8A6A14;font-weight:600'
+         : 'background:#F3EDE4;color:#4A4038')
+    });
+    const arrow = { label:'→', style:'font-size:14px;color:#C4B7A8' };
+    const chip = c => 'padding:6px 12px;border-radius:10px;font-size:12.5px;font-weight:600;background:' + c + ';color:#fff';
+    const badge = (bg, col) => 'padding:5px 10px;border-radius:9px;font-size:11px;font-weight:600;background:' + bg + ';color:' + col;
+    const led = (label, amount, kind) => ({
+      label, amount,
+      row: 'display:flex;align-items:center;padding:12px 20px;border-top:1px solid #F5EEE4;' + (kind === 'total' ? 'background:#F7F1E8' : ''),
+      strong: kind === 'total' || kind === 'in' ? 'font-weight:700' : '',
+      amtStyle: 'font-weight:' + (kind === 'sub' ? '500' : '700') + ';color:' +
+        (kind === 'in' ? '#0F8B5F' : kind === 'total' ? '#1F1A16' : '#5A4E42')
+    });
+
+    return {
+      layers: [
+        { tag:'CLIENT', title:'แอปลูกค้า ไรเดอร์ ร้าน', body:'แสดงยอดและสถานะเท่านั้น กดปุ่มได้ แต่ไม่มีสิทธิ์ประกาศว่าจ่ายสำเร็จ ทุกหน้าจออ่านสถานะจาก backend' },
+        { tag:'CORE PAYMENT', title:'Payment Service', body:'สร้าง Payment, ออก QR, คุมสถานะ, บันทึก Ledger, จัดการคืนเงินและรอบโอน ไม่รู้จักผู้ให้บริการรายใดโดยตรง' },
+        { tag:'INTEGRATION', title:'Provider Adapter', body:'ชั้นแปลงคำสั่งไปหาผู้ให้บริการและรับ webhook กลับ เปลี่ยนผู้ให้บริการได้โดยไม่แตะ Core และไม่แตะ UI เลย' },
+        { tag:'LEDGER', title:'บัญชีแยกประเภท', body:'ทุกการเคลื่อนไหวของเงินถูกบันทึกเป็นรายการเดินบัญชี ใช้กระทบยอดย้อนหลังได้ทุกบาททุกวัน' }
+      ],
+      payStates: [
+        { key:'CREATED', cust:'กำลังสร้างรายการชำระเงิน', order:'PENDING_PAYMENT', actor:'ระบบ', row: row(), tone:'color:#7A6E64' },
+        { key:'PENDING', cust:'รอการชำระเงิน · แสดง QR และเวลานับถอยหลัง', order:'PENDING_PAYMENT', actor:'รอผู้ใช้', row: row(1), tone:'color:#8A6A14' },
+        { key:'PROCESSING', cust:'กำลังตรวจสอบการชำระเงิน', order:'PENDING_PAYMENT', actor:'ผู้ให้บริการ', row: row(), tone:'color:#8A6A14' },
+        { key:'SUCCESS', cust:'ชำระเงินสำเร็จ', order:'NEW → COMPLETED', actor:'Webhook เท่านั้น', row: row(1), tone:'color:#0F8B5F' },
+        { key:'FAILED', cust:'ยังยืนยันการชำระเงินไม่ได้', order:'PENDING_PAYMENT', actor:'ผู้ให้บริการ', row: row(), tone:'color:#D93A3A' },
+        { key:'EXPIRED', cust:'QR นี้หมดอายุแล้ว', order:'PENDING_PAYMENT', actor:'ระบบ (10 นาที)', row: row(1), tone:'color:#D93A3A' },
+        { key:'CANCELLED', cust:'ยกเลิกรายการชำระเงิน', order:'CANCELLED', actor:'ลูกค้า / ระบบ', row: row(), tone:'color:#7A6E64' },
+        { key:'REFUND_PENDING', cust:'กำลังดำเนินการคืนเงิน', order:'CANCELLED', actor:'ระบบ / แอดมิน', row: row(1), tone:'color:#8A6A14' },
+        { key:'REFUND_PROCESSING', cust:'ธนาคารกำลังดำเนินการ', order:'CANCELLED', actor:'ผู้ให้บริการ', row: row(), tone:'color:#8A6A14' },
+        { key:'REFUNDED', cust:'คืนเงินสำเร็จ', order:'CANCELLED', actor:'Webhook เท่านั้น', row: row(1), tone:'color:#0F8B5F' },
+        { key:'CASH_PENDING', cust:'จ่ายเงินสดปลายทาง', order:'NEW → DELIVERING', actor:'ระบบ', row: row(), tone:'color:#7A6E64' },
+        { key:'CASH_COLLECTED', cust:'จ่ายเงินแล้ว ขอบคุณครับ', order:'COMPLETED', actor:'ไรเดอร์', row: row(1), tone:'color:#0F8B5F' }
+      ],
+      flows: [
+        { role:'พร้อมเพย์', chip: chip('#E4572E'), note:'เส้นทางหลัก · สถานะเปลี่ยนได้จาก webhook เท่านั้น', steps:[
+          step('ตะกร้า'), arrow, step('ยืนยันการสั่ง'), arrow, step('เลือกพร้อมเพย์','key'), arrow, step('สร้าง Payment'), arrow,
+          step('ออก QR'), arrow, step('รอการชำระ','wait'), arrow, step('ธนาคารยืนยัน','key'), arrow, step('ชำระสำเร็จ','end'), arrow, step('ส่งออเดอร์ให้ร้าน','end')
+        ]},
+        { role:'เงินสด', chip: chip('#1F1A16'), note:'เงินเข้าระบบตอนไรเดอร์ยืนยัน ไม่ใช่ตอนกดสั่ง', steps:[
+          step('เลือกเงินสด','key'), arrow, step('แจ้งยอดที่เตรียมมา'), arrow, step('ส่งออเดอร์ให้ร้าน'), arrow, step('ไรเดอร์ส่งอาหาร'), arrow,
+          step('เก็บเงิน + ทอน'), arrow, step('ไรเดอร์ยืนยันรับเงิน','key'), arrow, step('ออเดอร์เสร็จ','end'), arrow, step('บันทึกเงินสดค้างนำส่ง','end')
+        ]},
+        { role:'คืนเงิน', chip: chip('#D93A3A'), note:'ไม่ประกาศว่าคืนสำเร็จจนกว่าธนาคารยืนยัน', steps:[
+          step('ออเดอร์ถูกยกเลิก','bad'), arrow, step('สร้างคำขอคืนเงิน'), arrow, step('ส่งไปผู้ให้บริการ'), arrow,
+          step('กำลังดำเนินการ','wait'), arrow, step('ธนาคารยืนยัน'), arrow, step('คืนเงินสำเร็จ','end')
+        ]},
+        { role:'คืนเงิน · เงินสด', chip: chip('#8A6A14'), note:'แยกตามว่าไรเดอร์เก็บเงินไปแล้วหรือยัง', steps:[
+          step('ยกเลิกก่อนเก็บเงิน'), arrow, step('ไม่ต้องคืนเงิน','end'), step('|'), step('ยกเลิกหลังเก็บเงิน','bad'), arrow,
+          step('สร้างรายการปรับปรุงเงินสด'), arrow, step('แอดมินคืนเงินให้ลูกค้า','end')
+        ]},
+        { role:'โอนให้ร้าน', chip: chip('#0F8B5F'), note:'เฉพาะออเดอร์ที่จ่ายออนไลน์และส่งสำเร็จแล้ว', steps:[
+          step('ออเดอร์เสร็จ'), arrow, step('ตั้งยอดค้างจ่ายร้าน'), arrow, step('รวมเป็นรอบโอน'), arrow,
+          step('โอนเข้าบัญชี'), arrow, step('โอนสำเร็จ','end')
+        ]},
+        { role:'โอนให้ไรเดอร์', chip: chip('#2E6FB7'), note:'หักเงินสดค้างนำส่งออกก่อนโอน', steps:[
+          step('ส่งสำเร็จ'), arrow, step('บันทึกรายได้ไรเดอร์'), arrow, step('หักเงินสดค้างนำส่ง','wait'), arrow,
+          step('รวมเป็นรอบโอน'), arrow, step('โอนสำเร็จ','end')
+        ]}
+      ],
+      ledger: [
+        led('ลูกค้าชำระเงิน (พร้อมเพย์)', '+฿130', 'in'),
+        led('ยอดค้างจ่ายร้านค้า', '−฿108', 'sub'),
+        led('รายได้ไรเดอร์', '−฿12', 'sub'),
+        led('รายได้บ้านเฮา (ค่าธรรมเนียม + ค่าบริการ)', '−฿10', 'sub'),
+        led('คงเหลือในระบบ', '฿0', 'total')
+      ],
+      ledgerCash: [
+        led('ไรเดอร์เก็บเงินสดจากลูกค้า', '+฿130', 'in'),
+        led('ร้านได้รับเงินสดหน้าร้านแล้ว', '−฿108', 'sub'),
+        led('รายได้ไรเดอร์ (หักจากเงินที่ถืออยู่)', '−฿12', 'sub'),
+        led('เงินสดที่ไรเดอร์ต้องนำส่งบ้านเฮา', '−฿10', 'sub'),
+        led('คงเหลือในระบบ', '฿0', 'total')
+      ],
+      merchantFinance: [
+        { label:'ยอดขายวันนี้', value:'฿5,820', note:'32 ออเดอร์',
+          box:'flex:1;border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px', valStyle:'font-size:22px;font-weight:700;margin-top:2px' },
+        { label:'รอโอนเข้าบัญชี', value:'฿4,350', note:'รอบวันจันทร์',
+          box:'flex:1;border:2px solid #D6A419;background:#FDF3E6;border-radius:14px;padding:13px', valStyle:'font-size:22px;font-weight:700;margin-top:2px;color:#8A6A14' },
+        { label:'โอนแล้วเดือนนี้', value:'฿41,470', note:'6 รอบ',
+          box:'flex:1;border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px', valStyle:'font-size:22px;font-weight:700;margin-top:2px;color:#0F8B5F' },
+        { label:'ค่าธรรมเนียมเดือนนี้', value:'฿4,610', note:'10% ของยอดอาหาร',
+          box:'flex:1;border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px', valStyle:'font-size:22px;font-weight:700;margin-top:2px;color:#D93A3A' }
+      ],
+      merchantOrders: [
+        { id:'BH000125', method:'พร้อมเพย์', gross:120, fee:12, net:108 },
+        { id:'BH000128', method:'พร้อมเพย์', gross:180, fee:18, net:162 },
+        { id:'BH000131', method:'เงินสด (รับหน้าร้านแล้ว)', gross:95, fee:10, net:85 },
+        { id:'BH000134', method:'พร้อมเพย์', gross:260, fee:26, net:234 },
+        { id:'BH000137', method:'พร้อมเพย์', gross:75, fee:8, net:67 }
+      ],
+      settlements: [
+        { id:'ST-000125', date:'8 ส.ค.', bank:'···4821', amount:'6,180', status:'โอนแล้ว', badge: badge('#E7F4EE','#0F8B5F') },
+        { id:'ST-000118', date:'1 ส.ค.', bank:'···4821', amount:'7,240', status:'โอนแล้ว', badge: badge('#E7F4EE','#0F8B5F') },
+        { id:'ST-000131', date:'12 ส.ค.', bank:'···4821', amount:'4,350', status:'รอโอน', badge: badge('#FDF3E6','#8A6A14') },
+        { id:'ST-000111', date:'25 ก.ค.', bank:'···4821', amount:'5,900', status:'ล้มเหลว', badge: badge('#FBE9E9','#D93A3A') }
+      ],
+      adminFinance: (function(){
+        const box = 'border:1.5px dashed #C4B7A8;border-radius:12px;padding:11px';
+        const boxHi = 'border:2px solid #E4572E;border-radius:12px;padding:11px;background:#FDECE6';
+        const v = c => 'font-size:18px;font-weight:700;margin-top:2px' + (c ? ';color:' + c : '');
+        return [
+          { label:'ยอดขายรวม (GMV)', value:'฿25,820', box: boxHi, valStyle: v() },
+          { label:'รับผ่านพร้อมเพย์', value:'฿17,620', box, valStyle: v() },
+          { label:'เงินสด (ไรเดอร์ถืออยู่)', value:'฿8,200', box, valStyle: v('#8A6A14') },
+          { label:'คืนเงินวันนี้', value:'฿350', box, valStyle: v('#D93A3A') },
+          { label:'ค้างจ่ายร้านค้า', value:'฿14,200', box, valStyle: v() },
+          { label:'ค้างจ่ายไรเดอร์', value:'฿4,850', box, valStyle: v() },
+          { label:'รายได้บ้านเฮา', value:'฿6,420', box, valStyle: v('#0F8B5F') },
+          { label:'รอโอนรอบถัดไป', value:'฿19,050', box, valStyle: v() }
+        ];
+      })(),
+      recon: [
+        { id:'PAY-000125', detail:'พร้อมเพย์ ฿130 · ผู้ให้บริการ = ระบบ = Ledger', status:'ตรงกัน', badge: badge('#E7F4EE','#0F8B5F'), row: row() },
+        { id:'PAY-000128', detail:'พร้อมเพย์ ฿198 · ตรงทุกชั้น', status:'ตรงกัน', badge: badge('#E7F4EE','#0F8B5F'), row: row(1) },
+        { id:'PAY-000129', detail:'ผู้ให้บริการแจ้งรับเงิน ฿145 · ระบบยัง PENDING', status:'ไม่ตรง', badge: badge('#FBE9E9','#D93A3A'), row: row() },
+        { id:'PAY-000133', detail:'ยังไม่ได้รับ webhook · รอครบ 10 นาที', status:'รอยืนยัน', badge: badge('#FDF3E6','#8A6A14'), row: row(1) },
+        { id:'CASH-00087', detail:'ไรเดอร์นำส่ง ฿610 · ตรงกับยอดที่ระบบบันทึก', status:'ตรงกัน', badge: badge('#E7F4EE','#0F8B5F'), row: row() }
+      ],
+      txTimeline: [
+        { time:'18:40:12', label:'สร้างรายการชำระเงิน (CREATED)' },
+        { time:'18:40:13', label:'ออก QR พร้อมเพย์ · หมดอายุ 18:50:13' },
+        { time:'18:41:03', label:'ได้รับ webhook จากผู้ให้บริการ · ตรวจลายเซ็นผ่าน' },
+        { time:'18:41:03', label:'ตรวจยอดและเลขออเดอร์ตรงกัน' },
+        { time:'18:41:04', label:'Payment = SUCCESS · บันทึก Ledger 4 รายการ' },
+        { time:'18:41:04', label:'ส่งออเดอร์ให้ร้าน + แจ้งเตือนลูกค้า' }
+      ],
+      edges: [
+        { case:'กดจ่ายซ้ำ / กด Back แล้วเข้ามาใหม่', system:'ใช้ payment reference เดิม ไม่สร้างรายการใหม่', ui:'พาไปหน้าสถานะเดิม ถ้าจ่ายแล้วขึ้นว่า "ออเดอร์นี้ชำระเงินแล้ว"', row: row() },
+        { case:'ผู้ให้บริการส่ง callback ซ้ำ', system:'ตรวจ reference ซ้ำ อ่านผลเดิม ไม่บันทึก Ledger ซ้ำ', ui:'ผู้ใช้ไม่เห็นอะไรเปลี่ยน', row: row(1) },
+        { case:'ปิดแอประหว่างรอ QR', system:'Payment ยังอยู่ในสถานะ PENDING จนหมดอายุ', ui:'เปิดแอปกลับมาเจอ QR เดิมพร้อมเวลาที่เหลือ', row: row() },
+        { case:'โอนแล้วแต่ webhook ช้า', system:'สถานะยังเป็น PROCESSING รอ webhook จริง', ui:'"กำลังตรวจสอบการชำระเงิน" พร้อมปุ่มตรวจสอบอีกครั้ง ห้ามขึ้นว่าสำเร็จ', row: row(1) },
+        { case:'QR หมดอายุ', system:'Payment = EXPIRED แต่ Order ยังอยู่ ไม่สร้างออเดอร์ใหม่', ui:'"QR นี้หมดอายุแล้ว" + สร้าง QR ใหม่ / เปลี่ยนวิธีจ่าย', row: row() },
+        { case:'โอนเกินหรือโอนขาด', system:'ยอดไม่ตรง เข้าคิว Reconciliation ให้แอดมินตัดสิน', ui:'ลูกค้าเห็น "กำลังตรวจสอบ" · แอดมินเห็นรายการไม่ตรง', row: row(1) },
+        { case:'ร้านยกเลิกหลังลูกค้าจ่ายแล้ว', system:'สร้าง Refund อัตโนมัติ · Order = CANCELLED, Payment = REFUND_PENDING', ui:'"กำลังดำเนินการคืนเงิน" พร้อมเลขอ้างอิงและวันที่คาดว่าจะได้รับ', row: row() },
+        { case:'ลูกค้าเงินสดไม่รับของ', system:'ไม่มีการเก็บเงิน ไม่ต้องคืนเงิน บันทึกเป็นออเดอร์เสียหาย', ui:'ไรเดอร์กด "ลูกค้าไม่รับของ" · แอดมินเห็นในรายการที่ต้องตรวจ', row: row(1) },
+        { case:'ไรเดอร์ถือเงินสดเกินวงเงิน', system:'หยุดจ่ายงานใหม่จนกว่าจะนำส่งเงิน', ui:'"กรุณานำส่งเงินสดก่อนรับงานเพิ่ม" พร้อมยอดที่ต้องนำส่ง', row: row() },
+        { case:'เน็ตหลุดตอนกดจ่าย', system:'ยังไม่สร้าง Payment หรือสร้างแล้วค้างที่ CREATED', ui:'"เชื่อมต่อไม่ได้ ยังไม่มีการตัดเงิน" + ลองอีกครั้ง', row: row(1) }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E}a:hover{color:#C2431F}
+</style>
+</helmet>
+
+<div style="max-width:1240px;margin:0 auto;padding:56px 40px 96px">
+
+  <div style="display:flex;align-items:center;gap:14px">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px">🏠</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.16em">BANHAO</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">บ้านเฮา · Product Architecture · Phase 1 อ.บุณฑริก จ.อุบลราชธานี</div>
+    </div>
+  </div>
+
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A;margin-top:44px">01 — STRATEGY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">กลยุทธ์ Phase 1</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <sc-for list="{{ strategy }}" as="s" hint-placeholder-count="3">
+      <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+        <div style="font-size:13px;font-weight:600;color:#E4572E;letter-spacing:.04em">{{ s.tag }}</div>
+        <div style="font-size:17px;font-weight:700;margin-top:8px;line-height:1.4">{{ s.title }}</div>
+        <div style="font-size:14px;color:#5A4E42;margin-top:10px;line-height:1.75;text-wrap:pretty">{{ s.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:18px 20px;border-radius:18px;background:#211B16;color:#E8DED2;font-size:15px;line-height:1.8">
+    หลักตัดสินใจตลอด Phase 1 — ถ้าฟีเจอร์ไหนทำให้เส้นทาง <b style="color:#fff">เปิดแอป → เลือกร้าน → เลือกอาหาร → สั่ง → รอ → รับ</b>
+    ยาวขึ้นแม้แต่หนึ่งจังหวะ ให้เลื่อนไป Phase ถัดไป บริการที่ยังไม่เปิดแสดงเป็นการ์ดจาง ๆ พร้อมคำว่า "เร็ว ๆ นี้" กดไม่ได้ ไม่ต้องมีหน้าปลายทาง
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — SITEMAP</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">แผนผังระบบทั้ง 4 Client</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:start">
+    <sc-for list="{{ sitemap }}" as="c" hint-placeholder-count="4">
+      <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+        <div style="{{ c.head }}">
+          <div style="font-size:15px;font-weight:700">{{ c.name }}</div>
+          <div style="font-size:12px;opacity:.75;margin-top:2px">{{ c.platform }}</div>
+        </div>
+        <div style="padding:14px 16px 18px">
+          <sc-for list="{{ c.groups }}" as="g" hint-placeholder-count="4">
+            <div style="margin-bottom:14px">
+              <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin-bottom:6px">{{ g.title }}</div>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <sc-for list="{{ g.items }}" as="i" hint-placeholder-count="5">
+                  <div style="font-size:13px;color:#4A4038;line-height:1.5">{{ i }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — ORDER STATE MACHINE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">สถานะออเดอร์ — แหล่งความจริงเดียวของทั้งระบบ</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:22px;max-width:760px;line-height:1.75">ทุก client อ่านจาก state เดียวกัน แต่แสดงคนละถ้อยคำ ตารางนี้คือสัญญาระหว่างดีไซน์กับ backend — ห้ามมีหน้าจอไหนคิดสถานะขึ้นเอง</div>
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:flex;padding:13px 20px;background:#F7F1E8;font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em">
+      <div style="width:170px;flex:0 0 170px">STATE</div>
+      <div style="flex:1">ลูกค้าเห็น</div>
+      <div style="flex:1">ไรเดอร์เห็น</div>
+      <div style="flex:1">ร้านเห็น</div>
+      <div style="width:150px;flex:0 0 150px">ใครเปลี่ยนสถานะ</div>
+    </div>
+    <sc-for list="{{ states }}" as="s" hint-placeholder-count="10">
+      <div style="{{ s.row }}">
+        <div style="width:170px;flex:0 0 170px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;{{ s.tone }}">{{ s.key }}</div>
+        <div style="flex:1;font-size:13px">{{ s.cust }}</div>
+        <div style="flex:1;font-size:13px;color:#5A4E42">{{ s.driver }}</div>
+        <div style="flex:1;font-size:13px;color:#5A4E42">{{ s.shop }}</div>
+        <div style="width:150px;flex:0 0 150px;font-size:12px;color:#9A8C7E">{{ s.actor }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+    <div style="border-radius:18px;border:1px solid #F0D6D6;background:#FDF6F6;padding:18px 20px">
+      <div style="font-size:15px;font-weight:700;color:#D93A3A">เส้นทางที่ผิดพลาดได้</div>
+      <div style="font-size:13.5px;color:#5A4E42;line-height:1.8;margin-top:8px">
+        NEW → REJECTED (ร้านปฏิเสธ ภายใน 3 นาที) · READY → NO_DRIVER (หาไรเดอร์ไม่ได้ 5 นาที) ·
+        ทุกสถานะก่อน PICKED_UP → CANCELLED โดยลูกค้าได้ · PAYMENT_FAILED เกิดได้เฉพาะช่วง PromptPay ยังไม่ยืนยัน
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #F0DFC4;background:#FDF3E6;padding:18px 20px">
+      <div style="font-size:15px;font-weight:700;color:#8A6A14">กฎการคืนเงิน</div>
+      <div style="font-size:13.5px;color:#5A4E42;line-height:1.8;margin-top:8px">
+        ยกเลิกก่อน PREPARING คืนเต็มจำนวนอัตโนมัติ · ยกเลิกระหว่าง PREPARING ต้องให้ร้านยืนยัน ·
+        หลัง PICKED_UP ยกเลิกไม่ได้ ต้องผ่านศูนย์ช่วยเหลือ
+      </div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — USER FLOW</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">เส้นทางหลักของแต่ละบทบาท</div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ flows }}" as="f" hint-placeholder-count="4">
+      <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:20px 22px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="{{ f.chip }}">{{ f.role }}</div>
+          <div style="font-size:14px;color:#7A6E64">{{ f.note }}</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+          <sc-for list="{{ f.steps }}" as="st" hint-placeholder-count="7">
+            <div style="{{ st.style }}">{{ st.label }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — WIREFRAMES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Driver App</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:22px">Mobile first · ใช้มือเดียว ปุ่มหลักอยู่ล่างสุดเสมอ เพราะไรเดอร์กดตอนจอดข้างทาง</div>
+  <div style="display:flex;gap:18px;flex-wrap:wrap">
+
+    <div style="width:268px;border-radius:26px;border:2px solid #1F1A16;background:#fff;overflow:hidden;flex:0 0 268px">
+      <div style="padding:10px 14px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">D-03 หน้าแรกไรเดอร์</div>
+      <div style="padding:14px">
+        <div style="height:56px;border:2px solid #0F8B5F;border-radius:14px;display:flex;align-items:center;justify-content:space-between;padding:0 14px">
+          <span style="font-size:14px;font-weight:600">พร้อมรับงาน</span>
+          <span style="width:46px;height:26px;border-radius:13px;background:#0F8B5F;display:flex;align-items:center;justify-content:flex-end;padding:0 3px"><span style="width:20px;height:20px;border-radius:10px;background:#fff"></span></span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:#9A8C7E">รายได้วันนี้</div><div style="font-size:17px;font-weight:700;margin-top:2px">฿480</div></div>
+          <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:#9A8C7E">งานสำเร็จ</div><div style="font-size:17px;font-weight:700;margin-top:2px">12</div></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:#9A8C7E">คะแนน</div><div style="font-size:17px;font-weight:700;margin-top:2px">4.9</div></div>
+          <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:#9A8C7E">ชั่วโมงออนไลน์</div><div style="font-size:17px;font-weight:700;margin-top:2px">5.2</div></div>
+        </div>
+        <div style="margin-top:14px;height:120px;border:1.5px dashed #C4B7A8;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9A8C7E">แผนที่ · ตำแหน่งฉัน + ร้านที่มีงานเยอะ</div>
+        <div style="margin-top:12px;height:44px;border-radius:12px;background:#EFE7DC;display:flex;align-items:center;justify-content:space-around;font-size:11px;color:#7A6E64">หน้าแรก · งาน · รายได้ · บัญชี</div>
+      </div>
+    </div>
+
+    <div style="width:268px;border-radius:26px;border:2px solid #1F1A16;background:#fff;overflow:hidden;flex:0 0 268px">
+      <div style="padding:10px 14px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">D-05 งานใหม่เข้า (นับถอยหลัง 20 วิ)</div>
+      <div style="padding:14px">
+        <div style="height:80px;border:1.5px dashed #C4B7A8;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9A8C7E">แผนที่ย่อ · ร้าน → ลูกค้า</div>
+        <div style="border:2px solid #E4572E;border-radius:16px;padding:14px;margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <span style="font-size:13px;font-weight:600">ส้มตำป้าทองดี</span>
+            <span style="font-size:20px;font-weight:700">฿38</span>
+          </div>
+          <div style="font-size:11px;color:#7A6E64;margin-top:8px;line-height:1.7">ไปรับ 0.9 กม. · ส่งต่ออีก 1.2 กม.<br>รวม 2.1 กม. · ประมาณ 18 นาที<br>ลูกค้าจ่ายเงินสด ฿130</div>
+          <div style="height:6px;border-radius:3px;background:#EFE7DC;margin-top:12px"><div style="width:62%;height:6px;border-radius:3px;background:#E4572E"></div></div>
+        </div>
+        <div style="height:52px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;margin-top:12px">รับงาน · 12 วิ</div>
+        <div style="height:44px;border-radius:14px;border:1.5px solid #E0D6C8;color:#7A6E64;display:flex;align-items:center;justify-content:center;font-size:14px;margin-top:8px">ปฏิเสธ</div>
+      </div>
+    </div>
+
+    <div style="width:268px;border-radius:26px;border:2px solid #1F1A16;background:#fff;overflow:hidden;flex:0 0 268px">
+      <div style="padding:10px 14px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">D-07 นำทาง · เปลี่ยนสถานะ</div>
+      <div style="padding:14px">
+        <div style="height:150px;border:1.5px dashed #C4B7A8;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#9A8C7E;text-align:center;line-height:1.6">แผนที่เต็มจอ<br>เส้นทาง + ETA<br>ปุ่มเปิด Google Maps</div>
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:12px;margin-top:12px">
+          <div style="font-size:11px;color:#9A8C7E">กำลังไปที่</div>
+          <div style="font-size:14px;font-weight:600;margin-top:2px">ส้มตำป้าทองดี</div>
+          <div style="font-size:11px;color:#7A6E64;margin-top:6px">ถ.ราษฎร์บำรุง · โทรหาร้าน</div>
+        </div>
+        <div style="height:52px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;margin-top:12px">ถึงร้านแล้ว</div>
+        <div style="font-size:10px;color:#9A8C7E;margin-top:10px;line-height:1.7">ปุ่มเดียวเปลี่ยนตามสถานะ:<br>ถึงร้านแล้ว → รับอาหารแล้ว → ถึงจุดส่ง → ส่งสำเร็จ</div>
+      </div>
+    </div>
+
+    <div style="width:268px;border-radius:26px;border:2px solid #1F1A16;background:#fff;overflow:hidden;flex:0 0 268px">
+      <div style="padding:10px 14px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">D-13 รายได้</div>
+      <div style="padding:14px">
+        <div style="display:flex;gap:6px">
+          <div style="flex:1;height:32px;border-radius:10px;background:#1F1A16;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px">วันนี้</div>
+          <div style="flex:1;height:32px;border-radius:10px;border:1.5px dashed #C4B7A8;display:flex;align-items:center;justify-content:center;font-size:11px;color:#7A6E64">สัปดาห์</div>
+          <div style="flex:1;height:32px;border-radius:10px;border:1.5px dashed #C4B7A8;display:flex;align-items:center;justify-content:center;font-size:11px;color:#7A6E64">เดือน</div>
+        </div>
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:14px;margin-top:12px;text-align:center">
+          <div style="font-size:11px;color:#9A8C7E">รายได้สุทธิวันนี้</div>
+          <div style="font-size:28px;font-weight:700;margin-top:2px">฿442</div>
+        </div>
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:12px;margin-top:10px;font-size:11.5px;line-height:2;color:#5A4E42">
+          ค่าส่ง 12 งาน<span style="float:right;font-weight:600">฿408</span><br>
+          โบนัสชั่วโมงเร่งด่วน<span style="float:right;font-weight:600">฿72</span><br>
+          ค่าธรรมเนียมแพลตฟอร์ม<span style="float:right;font-weight:600;color:#D93A3A">−฿38</span>
+        </div>
+        <div style="height:44px;border-radius:12px;border:1.5px solid #1F1A16;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;margin-top:12px">ถอนเงินเข้าบัญชี</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="font-size:26px;font-weight:700;margin:44px 0 8px">Merchant Web</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:22px">Desktop first · ร้านเปิดค้างไว้ทั้งวันบนแท็บเล็ตหลังเคาน์เตอร์ ออเดอร์ใหม่ต้องเห็นจากระยะ 2 เมตร</div>
+  <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden">
+    <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">M-05 จัดการออเดอร์ · Kanban</div>
+    <div style="display:flex">
+      <div style="width:170px;flex:0 0 170px;border-right:1.5px dashed #C4B7A8;padding:16px 14px">
+        <div style="height:34px;border:1.5px dashed #C4B7A8;border-radius:10px;display:flex;align-items:center;padding:0 10px;font-size:12px;color:#7A6E64">🥗 ส้มตำป้าทองดี</div>
+        <div style="height:40px;border:2px solid #0F8B5F;border-radius:10px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:12px;font-weight:600;margin-top:10px">ร้านเปิดอยู่ <span style="width:34px;height:20px;border-radius:10px;background:#0F8B5F"></span></div>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-top:14px;font-size:12.5px;color:#5A4E42;line-height:2">
+          <div style="font-weight:700;color:#E4572E">ออเดอร์</div><div>เมนู</div><div>ตัวเลือกอาหาร</div><div>เวลาเปิด-ปิด</div><div>ยอดขาย</div><div>รายงาน</div><div>พนักงาน</div><div>ตั้งค่าร้าน</div>
+        </div>
+      </div>
+      <div style="flex:1;padding:16px">
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <sc-for list="{{ merchantStats }}" as="s" hint-placeholder-count="4">
+            <div style="flex:1;border:1.5px dashed #C4B7A8;border-radius:12px;padding:11px 13px">
+              <div style="font-size:11px;color:#9A8C7E">{{ s.label }}</div>
+              <div style="font-size:20px;font-weight:700;margin-top:2px">{{ s.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <sc-for list="{{ kanban }}" as="k" hint-placeholder-count="6">
+            <div style="flex:1;min-width:0">
+              <div style="{{ k.head }}">{{ k.title }} · {{ k.count }}</div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+                <sc-for list="{{ k.cards }}" as="c" hint-placeholder-count="2">
+                  <div style="{{ c.style }}">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:#9A8C7E"><span>{{ c.id }}</span><span>{{ c.time }}</span></div>
+                    <div style="font-size:12.5px;font-weight:600;margin-top:5px;line-height:1.5">{{ c.items }}</div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                      <span style="font-size:13px;font-weight:700">฿{{ c.total }}</span>
+                      <span style="{{ c.cta }}">{{ c.ctaLabel }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="font-size:26px;font-weight:700;margin:44px 0 8px">Admin Web</div>
+  <div style="font-size:15px;color:#7A6E64;margin-bottom:22px">Desktop first · หน้าที่ใช้ทุกวันคือ Live Map และคิวอนุมัติ ไม่ใช่กราฟ</div>
+  <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:16px">
+    <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden">
+      <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">A-03 Live Map</div>
+      <div style="padding:16px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="padding:6px 11px;border-radius:9px;background:#E7F4EE;color:#0F8B5F;font-size:11.5px;font-weight:600">🟢 ว่าง 14</div>
+          <div style="padding:6px 11px;border-radius:9px;background:#FDF3E6;color:#8A6A14;font-size:11.5px;font-weight:600">🟡 กำลังส่ง 9</div>
+          <div style="padding:6px 11px;border-radius:9px;background:#F3EDE4;color:#7A6E64;font-size:11.5px;font-weight:600">⚪ ออฟไลน์ 22</div>
+          <div style="padding:6px 11px;border-radius:9px;background:#FDECE6;color:#C2431F;font-size:11.5px;font-weight:600">📍 ออเดอร์ค้าง 3</div>
+        </div>
+        <div style="height:230px;border-radius:14px;overflow:hidden;border:1.5px solid #E9E0D5">
+          <iframe src="tracking-map.html" style="width:100%;height:100%;border:0"></iframe>
+        </div>
+        <div style="border:1.5px dashed #C4B7A8;border-radius:14px;padding:13px;margin-top:12px;font-size:12px;color:#5A4E42;line-height:1.9">
+          คลิกไรเดอร์ → แผงข้างขวา: ชื่อ สถานะ ออเดอร์ปัจจุบัน งานวันนี้ รายได้วันนี้ คะแนน ปุ่มโทร ปุ่มบังคับปลดงาน
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden">
+        <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">A-02 Dashboard</div>
+        <div style="padding:16px">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <sc-for list="{{ adminStats }}" as="a" hint-placeholder-count="8">
+              <div style="border:1.5px dashed #C4B7A8;border-radius:11px;padding:10px">
+                <div style="font-size:10px;color:#9A8C7E">{{ a.label }}</div>
+                <div style="font-size:16px;font-weight:700;margin-top:2px">{{ a.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="height:96px;border:1.5px dashed #C4B7A8;border-radius:14px;margin-top:12px;display:flex;align-items:flex-end;gap:5px;padding:12px">
+            <sc-for list="{{ bars }}" as="b" hint-placeholder-count="14">
+              <div style="{{ b }}"></div>
+            </sc-for>
+          </div>
+          <div style="font-size:11px;color:#9A8C7E;margin-top:8px">ออเดอร์ต่อวัน 14 วันล่าสุด · สลับดู GMV / ลูกค้าใหม่ / ไรเดอร์ออนไลน์</div>
+        </div>
+      </div>
+      <div style="border-radius:20px;border:2px solid #1F1A16;background:#fff;overflow:hidden">
+        <div style="padding:10px 16px;background:#1F1A16;color:#fff;font-size:11px;font-weight:600;letter-spacing:.06em">A-12 คิวอนุมัติ</div>
+        <div style="padding:8px 16px 16px">
+          <sc-for list="{{ approvals }}" as="a" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px dashed #E0D6C8">
+              <div style="width:32px;height:32px;border-radius:10px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:15px">{{ a.icon }}</div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600">{{ a.name }}</div>
+                <div style="font-size:11px;color:#9A8C7E;margin-top:2px">{{ a.meta }}</div>
+              </div>
+              <div style="padding:6px 11px;border-radius:9px;border:1.5px solid #1F1A16;font-size:11.5px;font-weight:600">ดูเอกสาร</div>
+              <div style="padding:6px 11px;border-radius:9px;background:#0F8B5F;color:#fff;font-size:11.5px;font-weight:600">อนุมัติ</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:44px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — SCALING</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">ขยายไปอีก 3 บริการโดยไม่รื้อระบบ</div>
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:flex;padding:13px 20px;background:#F7F1E8;font-size:12px;font-weight:600;color:#7A6E64">
+      <div style="width:150px;flex:0 0 150px">Entity กลาง</div>
+      <div style="flex:1">🍜 Food (Phase 1)</div><div style="flex:1">📦 Delivery (Phase 2)</div>
+      <div style="flex:1">🚗 Ride (Phase 3)</div><div style="flex:1">🛒 Shopping (Phase 4)</div>
+    </div>
+    <sc-for list="{{ entities }}" as="e" hint-placeholder-count="5">
+      <div style="display:flex;padding:13px 20px;border-top:1px solid #F5EEE4;font-size:13px">
+        <div style="width:150px;flex:0 0 150px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:#E4572E">{{ e.key }}</div>
+        <div style="flex:1">{{ e.food }}</div><div style="flex:1;color:#5A4E42">{{ e.delivery }}</div>
+        <div style="flex:1;color:#5A4E42">{{ e.ride }}</div><div style="flex:1;color:#5A4E42">{{ e.shop }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:18px 20px;border-radius:18px;background:#211B16;color:#E8DED2;font-size:14.5px;line-height:1.85">
+    สิ่งที่ต้องเพิ่มตอนขยาย มีแค่สามอย่างต่อบริการ — ไอคอนบริการบนหน้าแรก, หน้าเลือกรายละเอียดเฉพาะบริการ (เช่น ขนาดพัสดุ หรือประเภทรถ),
+    และสูตรคิดราคา ส่วน Cart, Checkout, Tracking, Rating, Order History และแอปไรเดอร์ ใช้ของเดิมทั้งหมด
+    เพราะทุกหน้าอ่านจาก Order state machine เดียวกัน
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  renderVals() {
+    const step = (label, kind) => ({
+      label,
+      style: 'padding:9px 14px;border-radius:12px;font-size:13px;font-weight:500;' +
+        (kind === 'end' ? 'background:#E7F4EE;color:#0F8B5F;font-weight:600'
+         : kind === 'bad' ? 'background:#FBE9E9;color:#D93A3A;font-weight:600'
+         : kind === 'key' ? 'background:#E4572E;color:#fff;font-weight:600'
+         : 'background:#F3EDE4;color:#4A4038')
+    });
+    const arrow = { label: '→', style: 'font-size:14px;color:#C4B7A8' };
+    const chip = c => 'padding:6px 12px;border-radius:10px;font-size:12.5px;font-weight:600;background:' + c + ';color:#fff';
+
+    const row = (tone, alt) => 'display:flex;padding:12px 20px;border-top:1px solid #F5EEE4;align-items:center;' + (alt ? 'background:#FDFAF6' : '');
+
+    return {
+      strategy: [
+        { tag:'ตำแหน่งในตลาด', title:'เจ้าแรกที่ลงพื้นที่จริง',
+          body:'บุณฑริกยังไม่มีแอปสั่งอาหารเจาะพื้นที่ ข้อได้เปรียบคือรู้จักร้านและถนนจริง ไม่ใช่ระบบส่วนกลางที่คำนวณค่าส่งผิด สิ่งที่ต้องชนะคือความแม่นของค่าส่งและเวลา ไม่ใช่จำนวนฟีเจอร์' },
+        { tag:'ขอบเขต MVP', title:'อาหารอย่างเดียว จนกว่าจะมีร้าน 80 ร้าน',
+          body:'เปิดด้วยร้านตั้งต้น 20–30 ร้านในรัศมี 3 กม. รอบตลาดสดบุณฑริก ไรเดอร์ 8–12 คน จ่ายเงินสดกับพร้อมเพย์เท่านั้น ยังไม่ทำกระเป๋าเงินในแอปเพราะมีภาระกำกับดูแลและ UI เพิ่มอีกชั้น' },
+        { tag:'ตัวชี้วัด', title:'อัตราสั่งซ้ำภายใน 14 วัน',
+          body:'ไม่ใช่ยอดดาวน์โหลด ตลาดท้องถิ่นมีผู้ใช้จำกัด ความสำเร็จคือคนกลุ่มเดิมสั่งซ้ำ เป้า Phase 1 คือ 35% สั่งซ้ำใน 14 วัน และออเดอร์ที่ยกเลิกเพราะไม่มีไรเดอร์ต่ำกว่า 5%' }
+      ],
+      sitemap: [
+        { name:'Customer App', platform:'Mobile · Flutter', head:'padding:14px 16px;background:#E4572E;color:#fff', groups:[
+          { title:'เข้าใช้งาน', items:['Splash','Onboarding 3 จอ','เข้าสู่ระบบด้วยเบอร์','ยืนยัน OTP'] },
+          { title:'หน้าแรก (Tab 1)', items:['ที่อยู่จัดส่ง','ค้นหา + ผลลัพธ์','หมวดอาหาร','ร้านแนะนำ / ใกล้ฉัน','โปรโมชั่น','การ์ดออเดอร์ที่กำลังเดิน'] },
+          { title:'สั่งอาหาร', items:['หน้าร้าน + เมนู','รายละเอียดเมนู','เลือกตัวเลือก + หมายเหตุ','ตะกร้า','ยืนยันการสั่ง','ที่อยู่จัดส่ง / เพิ่มที่อยู่','พร้อมเพย์ QR','สั่งสำเร็จ'] },
+          { title:'ออเดอร์ (Tab 2)', items:['ติดตามแบบเรียลไทม์','รายละเอียดออเดอร์','ประวัติ + สั่งอีกครั้ง','ให้คะแนนร้าน/ไรเดอร์'] },
+          { title:'แจ้งเตือน (Tab 3)', items:['สถานะออเดอร์','โปรโมชั่น'] },
+          { title:'บัญชี (Tab 4)', items:['โปรไฟล์','ที่อยู่ของฉัน','วิธีชำระเงิน','ร้านโปรด','คูปอง','ศูนย์ช่วยเหลือ','เงื่อนไข / ความเป็นส่วนตัว'] }
+        ]},
+        { name:'Driver App', platform:'Mobile · Flutter', head:'padding:14px 16px;background:#1F1A16;color:#fff', groups:[
+          { title:'เข้าใช้งาน', items:['เข้าสู่ระบบ','ยืนยันตัวตน + เอกสาร','ข้อมูลรถ','รออนุมัติ'] },
+          { title:'หน้าแรก', items:['สวิตช์รับงาน','สรุปรายได้วันนี้','แผนที่จุดที่มีงาน'] },
+          { title:'งาน', items:['งานใหม่ + นับถอยหลัง','รายละเอียดงาน','นำทางไปร้าน','ถึงร้าน / รับอาหาร','นำทางไปลูกค้า','ยืนยันส่งสำเร็จ + ถ่ายรูป','งานเสร็จ'] },
+          { title:'รายได้', items:['วันนี้ / สัปดาห์ / เดือน','แยกค่าส่ง โบนัส ค่าธรรมเนียม','ถอนเงิน'] },
+          { title:'บัญชี', items:['โปรไฟล์ + คะแนน','เอกสาร','ข้อมูลรถ','แจ้งเตือน','ติดต่อทีมงาน'] }
+        ]},
+        { name:'Merchant Web', platform:'Responsive · Desktop first', head:'padding:14px 16px;background:#0F8B5F;color:#fff', groups:[
+          { title:'เข้าใช้งาน', items:['เข้าสู่ระบบร้าน','สมัครร้านใหม่','รออนุมัติ'] },
+          { title:'ประจำวัน', items:['Dashboard ยอดวันนี้','ออเดอร์แบบ Kanban','รายละเอียดออเดอร์','พิมพ์ใบออเดอร์','เปิด/ปิดร้านชั่วคราว'] },
+          { title:'เมนู', items:['หมวดเมนู','รายการอาหาร','ตัวเลือกและของเพิ่ม','ราคา + สถานะขาย','รูปอาหาร'] },
+          { title:'ร้าน', items:['โปรไฟล์ร้าน','เวลาเปิด-ปิด','ยอดขั้นต่ำ / รัศมีส่ง','บัญชีธนาคาร','พนักงาน','ตั้งค่าแจ้งเตือน'] },
+          { title:'รายงาน', items:['ยอดขายรายวัน','เมนูขายดี','เวลาทำอาหารเฉลี่ย','คะแนนและรีวิว'] }
+        ]},
+        { name:'Admin Web', platform:'Desktop first', head:'padding:14px 16px;background:#2E6FB7;color:#fff', groups:[
+          { title:'ภาพรวม', items:['Dashboard GMV / ออเดอร์','กราฟรายวัน','ออเดอร์ที่มีปัญหา'] },
+          { title:'ปฏิบัติการ', items:['Live Map ไรเดอร์','ออเดอร์ทั้งหมด','รายละเอียดออเดอร์','จ่ายงานด้วยมือ'] },
+          { title:'คน & ร้าน', items:['ลูกค้า','ไรเดอร์ + เอกสาร','ร้านค้า + เอกสาร','คิวอนุมัติ','ระงับ / ปลดระงับ'] },
+          { title:'การเงิน', items:['ยอดโอนให้ร้าน','ยอดโอนให้ไรเดอร์','ค่าธรรมเนียมแพลตฟอร์ม','คืนเงิน'] },
+          { title:'ระบบ', items:['โปรโมชั่นและคูปอง','ประกาศ / แจ้งเตือน','โซนให้บริการ + สูตรค่าส่ง','ตั้งค่าและสิทธิ์ผู้ใช้'] }
+        ]}
+      ],
+      states: [
+        { key:'NEW', cust:'ส่งออเดอร์ให้ร้านแล้ว', driver:'—', shop:'ออเดอร์ใหม่ · กดรับใน 3 นาที', actor:'ระบบ', row: row(), tone:'color:#7A6E64' },
+        { key:'ACCEPTED', cust:'ร้านรับออเดอร์แล้ว', driver:'—', shop:'รับแล้ว รอเริ่มทำ', actor:'ร้าน', row: row(0,1), tone:'color:#8A6A14' },
+        { key:'PREPARING', cust:'ร้านกำลังเตรียมอาหาร', driver:'งานถูกจับคู่ · ไปที่ร้าน', shop:'กำลังทำ', actor:'ร้าน', row: row(), tone:'color:#8A6A14' },
+        { key:'READY', cust:'อาหารพร้อมแล้ว', driver:'อาหารพร้อม · รับได้เลย', shop:'รอไรเดอร์', actor:'ร้าน', row: row(0,1), tone:'color:#0F8B5F' },
+        { key:'DRIVER_ASSIGNED', cust:'ไรเดอร์กำลังไปรับอาหาร', driver:'กำลังไปที่ร้าน', shop:'ไรเดอร์กำลังมา', actor:'ระบบ', row: row(), tone:'color:#C2431F' },
+        { key:'PICKED_UP', cust:'ไรเดอร์รับอาหารแล้ว', driver:'รับแล้ว · ไปส่งลูกค้า', shop:'ส่งออกจากร้านแล้ว', actor:'ไรเดอร์', row: row(0,1), tone:'color:#C2431F' },
+        { key:'DELIVERING', cust:'อาหารกำลังเดินทางมาหาคุณ', driver:'กำลังไปหาลูกค้า', shop:'—', actor:'ไรเดอร์', row: row(), tone:'color:#C2431F' },
+        { key:'COMPLETED', cust:'ส่งสำเร็จ · ให้คะแนนหน่อย', driver:'งานเสร็จ · ได้ ฿38', shop:'เสร็จสิ้น', actor:'ไรเดอร์', row: row(0,1), tone:'color:#0F8B5F' },
+        { key:'NO_DRIVER', cust:'ยังหาไรเดอร์ไม่ได้', driver:'—', shop:'ยังไม่มีไรเดอร์รับ', actor:'ระบบ (5 นาที)', row: row(), tone:'color:#D93A3A' },
+        { key:'PAYMENT_FAILED', cust:'ชำระเงินไม่สำเร็จ', driver:'—', shop:'—', actor:'ระบบชำระเงิน', row: row(0,1), tone:'color:#D93A3A' },
+        { key:'REJECTED', cust:'ร้านไม่สามารถรับออเดอร์ได้', driver:'—', shop:'ปฏิเสธแล้ว', actor:'ร้าน', row: row(), tone:'color:#D93A3A' },
+        { key:'CANCELLED', cust:'ออเดอร์ถูกยกเลิก · คืนเงินแล้ว', driver:'งานถูกยกเลิก', shop:'ยกเลิก', actor:'ลูกค้า / แอดมิน', row: row(0,1), tone:'color:#D93A3A' }
+      ],
+      flows: [
+        { role:'ลูกค้า', chip: chip('#E4572E'), note:'เส้นทางหลัก · 6 จังหวะจากเปิดแอปถึงกดสั่ง', steps:[
+          step('เปิดแอป'), arrow, step('ยืนยันที่อยู่'), arrow, step('เลือกร้าน','key'), arrow, step('เลือกเมนู + ตัวเลือก'), arrow,
+          step('ตะกร้า'), arrow, step('เลือกวิธีจ่าย'), arrow, step('สั่ง','key'), arrow, step('ติดตาม'), arrow, step('รับอาหาร','end'), arrow, step('ให้คะแนน','end')
+        ]},
+        { role:'ลูกค้า · สั่งซ้ำ', chip: chip('#D6A419'), note:'ทางลัดจากประวัติ · 3 จังหวะ', steps:[
+          step('แท็บออเดอร์'), arrow, step('สั่งอีกครั้ง','key'), arrow, step('ยืนยันตะกร้าเดิม'), arrow, step('สั่ง','end')
+        ]},
+        { role:'ไรเดอร์', chip: chip('#1F1A16'), note:'ปุ่มเดียวต่อหนึ่งสถานะเสมอ', steps:[
+          step('เปิดรับงาน'), arrow, step('งานใหม่เข้า','key'), arrow, step('รับงาน'), arrow, step('ไปร้าน'), arrow,
+          step('ถึงร้าน'), arrow, step('รับอาหาร'), arrow, step('ไปหาลูกค้า'), arrow, step('ส่งสำเร็จ','end')
+        ]},
+        { role:'ร้านอาหาร', chip: chip('#0F8B5F'), note:'มีเสียงเตือนดังจนกว่าจะกดรับ', steps:[
+          step('ออเดอร์ใหม่ + เสียง','key'), arrow, step('รับ / ปฏิเสธ'), arrow, step('กำลังทำ'), arrow,
+          step('อาหารพร้อม'), arrow, step('ส่งให้ไรเดอร์','end')
+        ]},
+        { role:'ทางที่ผิดพลาด', chip: chip('#D93A3A'), note:'ทุกทางต้องจบด้วยการคืนเงินและทางเลือกถัดไป', steps:[
+          step('ร้านปฏิเสธ','bad'), arrow, step('แจ้งลูกค้าทันที'), arrow, step('คืนเงินอัตโนมัติ'), arrow, step('แนะนำร้านใกล้เคียง','end')
+        ]}
+      ],
+      merchantStats: [
+        { label:'ยอดขายวันนี้', value:'฿4,280' }, { label:'ออเดอร์วันนี้', value:'32' },
+        { label:'เวลาทำเฉลี่ย', value:'11 นาที' }, { label:'คะแนนร้าน', value:'4.8' }
+      ],
+      kanban: (function(){
+        const head = c => 'padding:8px 10px;border-radius:10px;font-size:11px;font-weight:700;letter-spacing:.04em;background:' + c.bg + ';color:' + c.fg;
+        const card = (border) => 'border:1.5px ' + border + ';border-radius:12px;padding:10px';
+        const cta = (bg, fg) => 'padding:5px 10px;border-radius:8px;font-size:11px;font-weight:600;background:' + bg + ';color:' + fg;
+        return [
+          { title:'ใหม่', count:2, head: head({bg:'#FDECE6',fg:'#C2431F'}), cards:[
+            { id:'#24817', time:'0:42', items:'ตำซั่ว ×1, ไก่ย่าง ×1', total:130, style: card('solid #E4572E'), cta: cta('#E4572E','#fff'), ctaLabel:'รับออเดอร์' },
+            { id:'#24818', time:'1:10', items:'ส้มตำไทย ×2', total:120, style: card('solid #E4572E'), cta: cta('#E4572E','#fff'), ctaLabel:'รับออเดอร์' }
+          ]},
+          { title:'รับแล้ว', count:1, head: head({bg:'#FDF3E6',fg:'#8A6A14'}), cards:[
+            { id:'#24815', time:'3 นาที', items:'กะเพราหมู ×2', total:110, style: card('dashed #C4B7A8'), cta: cta('#F3EDE4','#5A4E42'), ctaLabel:'เริ่มทำ' }
+          ]},
+          { title:'กำลังทำ', count:2, head: head({bg:'#FDF3E6',fg:'#8A6A14'}), cards:[
+            { id:'#24812', time:'7 นาที', items:'ไก่ย่าง ×1, ข้าวเหนียว ×2', total:110, style: card('dashed #C4B7A8'), cta: cta('#0F8B5F','#fff'), ctaLabel:'อาหารพร้อม' }
+          ]},
+          { title:'รอไรเดอร์', count:1, head: head({bg:'#E7F4EE',fg:'#0F8B5F'}), cards:[
+            { id:'#24809', time:'2 นาที', items:'ตำถาด ×1', total:180, style: card('dashed #C4B7A8'), cta: cta('#F3EDE4','#5A4E42'), ctaLabel:'รอ' }
+          ]},
+          { title:'ไรเดอร์รับแล้ว', count:1, head: head({bg:'#FDECE6',fg:'#C2431F'}), cards:[
+            { id:'#24805', time:'12 นาที', items:'น้ำอ้อย ×3', total:75, style: card('dashed #C4B7A8'), cta: cta('#F3EDE4','#5A4E42'), ctaLabel:'ติดตาม' }
+          ]},
+          { title:'เสร็จแล้ว', count:27, head: head({bg:'#F3EDE4',fg:'#7A6E64'}), cards:[
+            { id:'#24801', time:'18:02', items:'ตำซั่ว ×1', total:65, style: card('dashed #E0D6C8'), cta: cta('#F3EDE4','#9A8C7E'), ctaLabel:'ดู' }
+          ]}
+        ];
+      })(),
+      adminStats: [
+        { label:'ออเดอร์วันนี้', value:'318' }, { label:'GMV', value:'฿41.2K' },
+        { label:'รายได้แพลตฟอร์ม', value:'฿4.9K' }, { label:'ลูกค้าใช้งาน', value:'1,204' },
+        { label:'ไรเดอร์ออนไลน์', value:'23' }, { label:'ร้านเปิด', value:'54' },
+        { label:'ออเดอร์ค้าง', value:'3' }, { label:'ยกเลิกวันนี้', value:'2.1%' }
+      ],
+      bars: [42,55,48,63,71,58,66,74,69,81,77,88,84,95].map(h =>
+        'flex:1;border-radius:4px 4px 0 0;background:#E4572E;opacity:.85;height:' + h + '%'),
+      approvals: [
+        { icon:'🛵', name:'ประยุทธ์ แสนสุข', meta:'ไรเดอร์ · ใบขับขี่ + ทะเบียนรถ · ส่ง 2 ชม.ที่แล้ว' },
+        { icon:'🍲', name:'ก๋วยเตี๋ยวป้าแดง', meta:'ร้านค้า · ทะเบียนพาณิชย์ · ส่งเมื่อวาน' },
+        { icon:'🛵', name:'อนุชา ทองแท้', meta:'ไรเดอร์ · เอกสารไม่ชัด ต้องขอใหม่' },
+        { icon:'🍗', name:'ไก่ย่างวิเชียร สาขา 2', meta:'ร้านค้า · บัญชีธนาคาร · ส่ง 3 วันที่แล้ว' }
+      ],
+      entities: [
+        { key:'Merchant', food:'ร้านอาหาร', delivery:'จุดรับพัสดุ', ride:'—', shop:'ร้านค้า / ตลาด' },
+        { key:'Product', food:'เมนูอาหาร', delivery:'พัสดุ + ขนาด', ride:'ประเภทรถ', shop:'สินค้า + สต็อก' },
+        { key:'Order', food:'ออเดอร์อาหาร', delivery:'งานส่งของ', ride:'การเดินทาง', shop:'คำสั่งซื้อ' },
+        { key:'Delivery', food:'ส่งจากร้านถึงบ้าน', delivery:'ต้นทาง → ปลายทาง', ride:'จุดรับ → จุดส่ง', shop:'ส่งจากร้านถึงบ้าน' },
+        { key:'Driver', food:'ไรเดอร์มอเตอร์ไซค์', delivery:'ไรเดอร์ / กระบะ', ride:'คนขับรับส่ง', shop:'ไรเดอร์' }
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>

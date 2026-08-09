@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#211B16;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E}
+  a:hover{color:#C2431F}
+  ::-webkit-scrollbar{width:0;height:0}
+  @keyframes shimmer{0%{background-position:-320px 0}100%{background-position:320px 0}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<div style="display:flex;gap:32px;padding:32px;min-height:100vh;box-sizing:border-box;color:#F5EFE7">
+
+  <div style="width:236px;flex:0 0 236px;position:sticky;top:32px;align-self:flex-start;max-height:calc(100vh - 64px);overflow:auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <div style="width:34px;height:34px;border-radius:11px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:17px">🏠</div>
+      <div>
+        <div style="font-size:15px;font-weight:700;letter-spacing:.14em">BANHAO</div>
+        <div style="font-size:11px;color:#A8988A;margin-top:-2px">บ้านเฮา · อ.บุณฑริก จ.อุบลราชธานี</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#8C7C6E;line-height:1.6;margin:12px 0 18px">Customer App · Phase 1 Food<br>คลิกที่จอเพื่อใช้งานได้จริง</div>
+    <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="4">
+      <div style="margin-bottom:14px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.16em;color:#8C7C6E;margin-bottom:6px">{{ g.title }}</div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="5">
+            <div onClick="{{ it.go }}" style="{{ it.style }}">{{ it.label }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:14px">
+    <div style="width:390px;height:844px;border-radius:46px;background:#FBF7F1;overflow:hidden;position:relative;box-shadow:0 40px 90px rgba(0,0,0,.55),0 0 0 11px #16110D,0 0 0 12px #3A302A;color:#1F1A16;display:flex;flex-direction:column">
+
+      <div style="height:52px;flex:0 0 52px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 6px;font-size:13px;font-weight:600;position:relative;z-index:5">
+        <span>18:42</span>
+        <span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span>
+      </div>
+
+      <div style="flex:1;overflow:auto;position:relative">
+
+        <sc-if value="{{ isSplash }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;background:#E4572E;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px">
+            <div style="width:96px;height:96px;border-radius:30px;background:#FBF7F1;color:#E4572E;display:flex;align-items:center;justify-content:center;font-size:46px">🏠</div>
+            <div style="text-align:center">
+              <div style="font-size:34px;font-weight:700;letter-spacing:.2em">BANHAO</div>
+              <div style="font-size:19px;margin-top:2px;opacity:.9">บ้านเฮา</div>
+            </div>
+            <div style="font-size:15px;opacity:.85">สั่งอาหารร้านโปรดในบุณฑริก</div>
+            <div style="position:absolute;bottom:56px;font-size:13px;opacity:.7">กำลังเตรียมความพร้อม…</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isOnboard }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;padding:0 24px 28px;box-sizing:border-box">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px">
+              <div style="width:100%;height:280px;border-radius:28px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:76px">🛵</div>
+              <div style="text-align:center">
+                <div style="font-size:26px;font-weight:700;line-height:1.35">สั่งจากร้านใกล้บ้าน<br>ส่งถึงมือใน 25 นาที</div>
+                <div style="font-size:15px;color:#7A6E64;margin-top:10px;line-height:1.6">ร้านในบุณฑริกให้เลือกเพียบ<br>ค่าส่งเริ่มต้น 10 บาท รู้ราคาก่อนสั่งเสมอ</div>
+              </div>
+              <div style="display:flex;gap:7px">
+                <div style="width:22px;height:6px;border-radius:3px;background:#E4572E"></div>
+                <div style="width:6px;height:6px;border-radius:3px;background:#E0D6C8"></div>
+                <div style="width:6px;height:6px;border-radius:3px;background:#E0D6C8"></div>
+              </div>
+            </div>
+            <div onClick="{{ goLogin }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" style-hover="background:#C2431F">ถัดไป</div>
+            <div onClick="{{ goLogin }}" style="height:46px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#7A6E64;cursor:pointer">ข้าม</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;padding:24px 24px 28px;box-sizing:border-box">
+            <div style="width:64px;height:64px;border-radius:20px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;margin-top:20px">🏠</div>
+            <div style="font-size:26px;font-weight:700;margin-top:22px">เข้าสู่ระบบ</div>
+            <div style="font-size:15px;color:#7A6E64;margin-top:6px;line-height:1.6">ใส่เบอร์มือถือ เราจะส่งรหัส 6 หลักไปให้</div>
+            <div style="font-size:13px;font-weight:600;color:#7A6E64;margin:26px 0 8px">เบอร์มือถือ</div>
+            <div style="display:flex;align-items:center;gap:10px;height:58px;border:1.5px solid #E9E0D5;border-radius:16px;background:#fff;padding:0 16px">
+              <span style="font-size:16px;color:#7A6E64">🇹🇭 +66</span>
+              <span style="width:1px;height:24px;background:#E9E0D5"></span>
+              <span style="font-size:19px;font-weight:600;letter-spacing:1px">081 234 5678</span>
+            </div>
+            <div onClick="{{ goOtp }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;margin-top:20px;cursor:pointer" style-hover="background:#C2431F">ขอรหัส OTP</div>
+            <div style="flex:1"></div>
+            <div style="font-size:12px;color:#9A8C7E;text-align:center;line-height:1.7">การเข้าสู่ระบบถือว่ายอมรับ<br><a href="#">เงื่อนไขการใช้งาน</a> และ <a href="#">นโยบายความเป็นส่วนตัว</a></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isOtp }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;padding:8px 24px 28px;box-sizing:border-box">
+            <div onClick="{{ goLogin }}" style="font-size:24px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center">←</div>
+            <div style="font-size:26px;font-weight:700;margin-top:18px">ใส่รหัส 6 หลัก</div>
+            <div style="font-size:15px;color:#7A6E64;margin-top:6px">ส่งไปที่ 081 234 5678 แล้ว</div>
+            <div style="display:flex;gap:9px;margin-top:28px">
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #1F1A16;background:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600">4</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #1F1A16;background:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600">8</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #1F1A16;background:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600">1</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #E4572E;background:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;box-shadow:0 0 0 3px rgba(228,87,46,.14)">2</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #E9E0D5;background:#fff"></div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #E9E0D5;background:#fff"></div>
+            </div>
+            <div style="font-size:14px;color:#7A6E64;margin-top:18px">ขอรหัสใหม่อีกครั้งใน <b style="color:#1F1A16">0:42</b></div>
+            <div onClick="{{ goHome }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;margin-top:22px;cursor:pointer" style-hover="background:#C2431F">ยืนยัน</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isHomeLoading }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:12px 20px 24px">
+            <div style="height:20px;width:120px;border-radius:6px;background:linear-gradient(90deg,#EFE7DC 25%,#F8F2E9 50%,#EFE7DC 75%);background-size:320px 100%;animation:shimmer 1.2s infinite linear"></div>
+            <div style="height:52px;border-radius:16px;margin-top:16px;background:linear-gradient(90deg,#EFE7DC 25%,#F8F2E9 50%,#EFE7DC 75%);background-size:320px 100%;animation:shimmer 1.2s infinite linear"></div>
+            <div style="display:flex;gap:12px;margin-top:20px">
+              <div style="flex:1;height:78px;border-radius:18px;background:#EFE7DC;animation:pulse 1.4s infinite"></div>
+              <div style="flex:1;height:78px;border-radius:18px;background:#EFE7DC;animation:pulse 1.4s infinite"></div>
+              <div style="flex:1;height:78px;border-radius:18px;background:#EFE7DC;animation:pulse 1.4s infinite"></div>
+              <div style="flex:1;height:78px;border-radius:18px;background:#EFE7DC;animation:pulse 1.4s infinite"></div>
+            </div>
+            <div style="height:200px;border-radius:22px;margin-top:24px;background:linear-gradient(90deg,#EFE7DC 25%,#F8F2E9 50%,#EFE7DC 75%);background-size:320px 100%;animation:shimmer 1.2s infinite linear"></div>
+            <div style="height:200px;border-radius:22px;margin-top:16px;background:#EFE7DC;animation:pulse 1.4s infinite"></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isHomeError }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 40px;text-align:center">
+            <div style="width:88px;height:88px;border-radius:28px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:40px">📡</div>
+            <div style="font-size:20px;font-weight:700">เชื่อมต่ออินเทอร์เน็ตไม่ได้</div>
+            <div style="font-size:15px;color:#7A6E64;line-height:1.6">ลองเช็กสัญญาณ Wi-Fi หรือเน็ตมือถือ แล้วกดลองใหม่อีกครั้ง</div>
+            <div onClick="{{ goHome }}" style="height:52px;padding:0 34px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;font-size:16px;font-weight:600;margin-top:8px;cursor:pointer">ลองอีกครั้ง</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:0 0 24px">
+            <div style="padding:6px 20px 14px;display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <div style="font-size:11px;color:#7A6E64;font-weight:600;letter-spacing:.05em">ส่งไปที่</div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:17px;font-weight:700;margin-top:1px">📍 บ้านของฉัน <span style="font-size:12px;color:#7A6E64">▾</span></div>
+              </div>
+              <div onClick="{{ goNotif }}" style="width:44px;height:44px;border-radius:14px;background:#fff;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:18px;position:relative;cursor:pointer">🔔<span style="position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:4px;background:#E4572E"></span></div>
+            </div>
+
+            <div onClick="{{ goSearch }}" style="margin:0 20px;height:52px;border-radius:16px;background:#fff;border:1px solid #E9E0D5;display:flex;align-items:center;gap:10px;padding:0 16px;cursor:pointer">
+              <span style="font-size:18px">🔍</span><span style="font-size:15px;color:#9A8C7E">ค้นหาร้านหรือเมนูอาหาร</span>
+            </div>
+
+            <div style="display:flex;gap:10px;padding:18px 20px 4px">
+              <div style="flex:1;border-radius:18px;background:#E4572E;color:#fff;padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:26px">🍜</div>
+                <div style="font-size:15px;font-weight:600">สั่งอาหาร</div>
+              </div>
+              <div style="flex:1;border-radius:18px;background:#F3EDE4;color:#A2968A;padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:26px;filter:grayscale(1);opacity:.5">📦</div>
+                <div style="font-size:13px;font-weight:600">ส่งของ</div>
+                <div style="font-size:10px">เร็วๆ นี้</div>
+              </div>
+              <div style="flex:1;border-radius:18px;background:#F3EDE4;color:#A2968A;padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:26px;filter:grayscale(1);opacity:.5">🚗</div>
+                <div style="font-size:13px;font-weight:600">เรียกรถ</div>
+                <div style="font-size:10px">เร็วๆ นี้</div>
+              </div>
+              <div style="flex:1;border-radius:18px;background:#F3EDE4;color:#A2968A;padding:14px 12px;display:flex;flex-direction:column;gap:6px">
+                <div style="font-size:26px;filter:grayscale(1);opacity:.5">🛒</div>
+                <div style="font-size:13px;font-weight:600">ซื้อของ</div>
+                <div style="font-size:10px">เร็วๆ นี้</div>
+              </div>
+            </div>
+
+            <div style="margin:20px 20px 0;border-radius:20px;background:#1F1A16;color:#F5EFE7;padding:16px 18px;display:flex;align-items:center;gap:14px">
+              <div style="width:44px;height:44px;border-radius:14px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:22px">🛵</div>
+              <div style="flex:1">
+                <div style="font-size:13px;color:#B7A899">กำลังจัดส่ง · ถึงใน 12 นาที</div>
+                <div style="font-size:15px;font-weight:600;margin-top:2px">ส้มตำป้าทองดี (ตัวอย่าง)</div>
+              </div>
+              <div onClick="{{ goTrack }}" style="padding:9px 14px;border-radius:12px;background:#F5EFE7;color:#1F1A16;font-size:13px;font-weight:600;cursor:pointer">ติดตาม</div>
+            </div>
+
+            <div style="font-size:18px;font-weight:700;padding:24px 20px 12px">หมวดอาหาร</div>
+            <div style="display:flex;gap:12px;overflow:auto;padding:0 20px 4px">
+              <sc-for list="{{ categories }}" as="c" hint-placeholder-count="6">
+                <div onClick="{{ c.go }}" style="flex:0 0 78px;cursor:pointer;text-align:center">
+                  <div style="width:78px;height:78px;border-radius:22px;background:#fff;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:34px" style-hover="border-color:#E4572E">{{ c.icon }}</div>
+                  <div style="font-size:12px;font-weight:500;margin-top:7px;line-height:1.3">{{ c.name }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="margin:24px 20px 0;border-radius:20px;background:linear-gradient(105deg,#D6A419,#E4572E);color:#fff;padding:18px;display:flex;align-items:center;gap:14px">
+              <div style="font-size:34px">🎉</div>
+              <div style="flex:1">
+                <div style="font-size:16px;font-weight:700">ส่งฟรี 7 วันแรก</div>
+                <div style="font-size:13px;opacity:.92;margin-top:2px">สั่งครบ 100 บาท ใส่โค้ด BANHAO7</div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:baseline;justify-content:space-between;padding:26px 20px 12px">
+              <div style="font-size:18px;font-weight:700">ร้านแนะนำใกล้คุณ</div>
+              <div style="font-size:13px;color:#E4572E;font-weight:600">ดูทั้งหมด</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:16px;padding:0 20px">
+              <sc-for list="{{ restaurants }}" as="r" hint-placeholder-count="3">
+                <div onClick="{{ r.go }}" style="border-radius:22px;background:#fff;border:1px solid #E9E0D5;overflow:hidden;cursor:pointer" style-hover="border-color:#E4572E">
+                  <div style="height:132px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:52px;position:relative">
+                    {{ r.emoji }}
+                    <div style="position:absolute;left:12px;top:12px;padding:5px 10px;border-radius:9px;background:rgba(31,26,22,.78);color:#fff;font-size:11px;font-weight:600">{{ r.badge }}</div>
+                  </div>
+                  <div style="padding:12px 14px 14px">
+                    <div style="display:flex;align-items:center;gap:9px">
+                      <div style="width:34px;height:34px;border-radius:11px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:17px">{{ r.emoji }}</div>
+                      <div style="flex:1;font-size:16px;font-weight:700">{{ r.name }}</div>
+                      <div style="font-size:13px;font-weight:600">⭐ {{ r.rating }}</div>
+                    </div>
+                    <div style="font-size:12px;color:#7A6E64;margin-top:8px">{{ r.meta }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSearch }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 0 24px">
+            <div style="display:flex;align-items:center;gap:10px;padding:6px 20px 14px">
+              <div onClick="{{ goHome }}" style="font-size:22px;cursor:pointer">←</div>
+              <div style="flex:1;height:48px;border-radius:15px;background:#fff;border:1.5px solid #E4572E;display:flex;align-items:center;gap:9px;padding:0 14px">
+                <span style="font-size:16px">🔍</span><span style="font-size:15px">ส้มตำ</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;padding:0 20px 16px;overflow:auto">
+              <div style="flex:0 0 auto;padding:8px 14px;border-radius:12px;background:#1F1A16;color:#fff;font-size:13px;font-weight:600">ทั้งหมด</div>
+              <div style="flex:0 0 auto;padding:8px 14px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;font-size:13px">ใกล้ที่สุด</div>
+              <div style="flex:0 0 auto;padding:8px 14px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;font-size:13px">ส่งเร็ว</div>
+              <div style="flex:0 0 auto;padding:8px 14px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;font-size:13px">เรตติ้งสูง</div>
+            </div>
+            <div style="font-size:13px;font-weight:600;color:#7A6E64;padding:0 20px 10px">เจอ 3 ร้าน · 12 เมนู</div>
+            <div style="display:flex;flex-direction:column;gap:10px;padding:0 20px">
+              <sc-for list="{{ searchResults }}" as="s" hint-placeholder-count="4">
+                <div onClick="{{ s.go }}" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:18px;background:#fff;border:1px solid #E9E0D5;cursor:pointer" style-hover="border-color:#E4572E">
+                  <div style="width:56px;height:56px;border-radius:16px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:26px">{{ s.emoji }}</div>
+                  <div style="flex:1">
+                    <div style="font-size:15px;font-weight:600">{{ s.name }}</div>
+                    <div style="font-size:12px;color:#7A6E64;margin-top:3px">{{ s.meta }}</div>
+                  </div>
+                  <div style="font-size:13px;font-weight:600">⭐ {{ s.rating }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isShop }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 0 24px">
+            <div style="height:190px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:70px;position:relative;margin-top:-52px;padding-top:52px;box-sizing:content-box">
+              🥗
+              <div onClick="{{ goHome }}" style="position:absolute;left:16px;top:60px;width:40px;height:40px;border-radius:14px;background:rgba(251,247,241,.94);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer">←</div>
+              <div style="position:absolute;right:16px;top:60px;width:40px;height:40px;border-radius:14px;background:rgba(251,247,241,.94);display:flex;align-items:center;justify-content:center;font-size:18px">♡</div>
+            </div>
+            <div style="margin:-24px 16px 0;border-radius:22px;background:#fff;border:1px solid #E9E0D5;padding:22px 24px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;font-size:21px;font-weight:700">ส้มตำป้าทองดี (ตัวอย่าง)</div>
+                <div style="padding:5px 10px;border-radius:9px;background:#E7F4EE;color:#0F8B5F;font-size:12px;font-weight:600">เปิดอยู่</div>
+              </div>
+              <div style="font-size:13px;color:#7A6E64;margin-top:7px">⭐ 4.8 (326 รีวิว) · อาหารอีสาน · ฿฿</div>
+              <div style="display:flex;gap:18px;margin-top:14px;padding-top:14px;border-top:1px solid #F0E8DD">
+                <div><div style="font-size:11px;color:#7A6E64">ระยะทาง</div><div style="font-size:14px;font-weight:600;margin-top:2px">1.2 กม.</div></div>
+                <div><div style="font-size:11px;color:#7A6E64">เวลาส่ง</div><div style="font-size:14px;font-weight:600;margin-top:2px">20–25 นาที</div></div>
+                <div><div style="font-size:11px;color:#7A6E64">ค่าส่ง</div><div style="font-size:14px;font-weight:600;margin-top:2px">฿15</div></div>
+              </div>
+              <div style="font-size:12px;color:#7A6E64;margin-top:12px;line-height:1.6">🕐 เปิด 09:00–20:00 ทุกวัน<br>📍 ใกล้ตลาดสดบุณฑริก ต.บุณฑริก อ.บุณฑริก (ที่อยู่ตัวอย่าง)</div>
+            </div>
+            <div style="display:flex;gap:8px;padding:18px 16px 12px;overflow:auto;position:sticky;top:0;background:#FBF7F1;z-index:3">
+              <div style="flex:0 0 auto;padding:9px 15px;border-radius:12px;background:#1F1A16;color:#fff;font-size:13px;font-weight:600">แนะนำ</div>
+              <div style="flex:0 0 auto;padding:9px 15px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;font-size:13px">อาหารจานเดียว</div>
+              <div style="flex:0 0 auto;padding:9px 15px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;font-size:13px">ส้มตำ</div>
+              <div style="flex:0 0 auto;padding:9px 15px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;font-size:13px">เครื่องดื่ม</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px">
+              <sc-for list="{{ menu }}" as="m" hint-placeholder-count="5">
+                <div onClick="{{ m.go }}" style="display:flex;gap:12px;padding:12px;border-radius:18px;background:#fff;border:1px solid #E9E0D5;cursor:pointer" style-hover="border-color:#E4572E">
+                  <div style="flex:1">
+                    <div style="font-size:16px;font-weight:600">{{ m.name }}</div>
+                    <div style="font-size:12px;color:#7A6E64;margin-top:4px;line-height:1.5">{{ m.desc }}</div>
+                    <div style="font-size:16px;font-weight:700;margin-top:8px">฿{{ m.price }}</div>
+                  </div>
+                  <div style="width:84px;height:84px;border-radius:16px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:34px;position:relative;flex:0 0 84px">
+                    {{ m.emoji }}
+                    <div style="position:absolute;right:-6px;bottom:-6px;width:32px;height:32px;border-radius:11px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:600">+</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isClosed }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 0 24px">
+            <div style="height:190px;background:#E6DED3;display:flex;align-items:center;justify-content:center;font-size:70px;position:relative;filter:grayscale(.7);margin-top:-52px;padding-top:52px;box-sizing:content-box">🍗
+              <div onClick="{{ goHome }}" style="position:absolute;left:16px;top:60px;width:40px;height:40px;border-radius:14px;background:rgba(251,247,241,.94);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer">←</div>
+            </div>
+            <div style="margin:-24px 16px 0;border-radius:22px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;font-size:21px;font-weight:700;color:#7A6E64">ไก่ทอดเจ๊หมวย</div>
+                <div style="padding:5px 10px;border-radius:9px;background:#F3EDE4;color:#7A6E64;font-size:12px;font-weight:600">ปิดอยู่</div>
+              </div>
+              <div style="font-size:13px;color:#7A6E64;margin-top:7px">⭐ 4.6 (198 รีวิว) · ของทอด</div>
+            </div>
+            <div style="margin:16px;border-radius:20px;background:#FDF3E6;border:1px solid #F0DFC4;padding:18px;text-align:center">
+              <div style="font-size:34px">🌙</div>
+              <div style="font-size:17px;font-weight:700;margin-top:8px">ร้านปิดอยู่ตอนนี้</div>
+              <div style="font-size:14px;color:#7A6E64;margin-top:6px;line-height:1.6">ร้านจะเปิดอีกครั้งพรุ่งนี้ 10:00 น.<br>กดแจ้งเตือนไว้ เดี๋ยวเราบอกตอนร้านเปิด</div>
+              <div style="display:flex;gap:10px;margin-top:14px">
+                <div style="flex:1;height:48px;border-radius:14px;border:1.5px solid #1F1A16;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">แจ้งเตือนฉัน</div>
+                <div onClick="{{ goHome }}" style="flex:1;height:48px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">ดูร้านอื่น</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isItem }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 0 20px">
+            <div style="height:220px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:80px;position:relative;margin-top:-52px;padding-top:52px;box-sizing:content-box">🍳
+              <div onClick="{{ goShop }}" style="position:absolute;left:16px;top:60px;width:40px;height:40px;border-radius:14px;background:rgba(251,247,241,.94);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer">←</div>
+            </div>
+            <div style="padding:18px 20px 0">
+              <div style="display:flex;align-items:baseline;gap:10px">
+                <div style="flex:1;font-size:23px;font-weight:700">ผัดกะเพราหมูสับ</div>
+                <div style="font-size:20px;font-weight:700">฿50</div>
+              </div>
+              <div style="font-size:14px;color:#7A6E64;margin-top:6px;line-height:1.6">กะเพราใบใหญ่หอมๆ ผัดไฟแรง เสิร์ฟพร้อมข้าวสวยร้อน</div>
+            </div>
+
+            <div style="padding:22px 20px 0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-size:16px;font-weight:700">เลือกเนื้อสัตว์</div>
+                <div style="padding:3px 8px;border-radius:7px;background:#FDECE6;color:#E4572E;font-size:11px;font-weight:600">ต้องเลือก</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+                <sc-for list="{{ meatOpts }}" as="o" hint-placeholder-count="3">
+                  <div onClick="{{ o.pick }}" style="{{ o.style }}">
+                    <span style="flex:1">{{ o.label }}</span>
+                    <span style="font-size:14px;color:#7A6E64">{{ o.extra }}</span>
+                    <span style="{{ o.dot }}">{{ o.mark }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="padding:20px 20px 0">
+              <div style="font-size:16px;font-weight:700">ระดับความเผ็ด</div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+                <sc-for list="{{ spicyOpts }}" as="o" hint-placeholder-count="4">
+                  <div onClick="{{ o.pick }}" style="{{ o.style }}">
+                    <span style="flex:1">{{ o.label }}</span>
+                    <span style="font-size:14px;color:#7A6E64">{{ o.extra }}</span>
+                    <span style="{{ o.dot }}">{{ o.mark }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="padding:20px 20px 0">
+              <div style="font-size:16px;font-weight:700">เพิ่มไข่</div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+                <sc-for list="{{ eggOpts }}" as="o" hint-placeholder-count="3">
+                  <div onClick="{{ o.pick }}" style="{{ o.style }}">
+                    <span style="flex:1">{{ o.label }}</span>
+                    <span style="font-size:14px;color:#7A6E64">{{ o.extra }}</span>
+                    <span style="{{ o.dot }}">{{ o.mark }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="padding:20px 20px 0">
+              <div style="font-size:16px;font-weight:700">หมายเหตุถึงร้าน</div>
+              <div style="margin-top:10px;min-height:62px;border-radius:16px;border:1.5px solid #E9E0D5;background:#fff;padding:14px 16px;font-size:15px;color:#7A6E64">ไม่ใส่ผัก ขอน้ำปลาพริกเพิ่ม</div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:16px;padding:22px 20px 0">
+              <div onClick="{{ decQty }}" style="width:44px;height:44px;border-radius:14px;border:1.5px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer">−</div>
+              <div style="font-size:19px;font-weight:700;min-width:24px;text-align:center">{{ qty }}</div>
+              <div onClick="{{ incQty }}" style="width:44px;height:44px;border-radius:14px;border:1.5px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer">+</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isCart }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 0 20px">
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 16px">
+              <div onClick="{{ goShop }}" style="font-size:22px;cursor:pointer">←</div>
+              <div style="font-size:20px;font-weight:700">ตะกร้าของฉัน</div>
+            </div>
+            <sc-if value="{{ cartEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:70px 40px;text-align:center">
+                <div style="font-size:56px">🧺</div>
+                <div style="font-size:19px;font-weight:700;margin-top:14px">ตะกร้ายังว่างอยู่</div>
+                <div style="font-size:14px;color:#7A6E64;margin-top:6px;line-height:1.6">เลือกร้านที่ชอบแล้วใส่อาหารลงตะกร้าได้เลย</div>
+                <div onClick="{{ goHome }}" style="height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;margin-top:20px;cursor:pointer">เลือกร้านอาหาร</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ cartHasItems }}" hint-placeholder-val="{{ true }}">
+              <div style="margin:0 16px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:14px 16px;display:flex;align-items:center;gap:12px">
+                <div style="width:40px;height:40px;border-radius:13px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:19px">🥗</div>
+                <div style="flex:1"><div style="font-size:15px;font-weight:700">ส้มตำป้าทองดี (ตัวอย่าง)</div><div style="font-size:12px;color:#7A6E64;margin-top:2px">1.2 กม. · 20–25 นาที</div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px;margin:12px 16px 0">
+                <sc-for list="{{ cart }}" as="c" hint-placeholder-count="2">
+                  <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:14px 16px">
+                    <div style="display:flex;gap:12px">
+                      <div style="flex:1">
+                        <div style="font-size:16px;font-weight:600">{{ c.name }}</div>
+                        <div style="font-size:12px;color:#7A6E64;margin-top:5px;line-height:1.6">{{ c.opts }}</div>
+                        <div style="font-size:12px;color:#9A8C7E;margin-top:3px">{{ c.note }}</div>
+                      </div>
+                      <div style="font-size:16px;font-weight:700">฿{{ c.sum }}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+                      <div onClick="{{ c.dec }}" style="width:36px;height:36px;border-radius:12px;border:1.5px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer">−</div>
+                      <div style="font-size:16px;font-weight:600;min-width:20px;text-align:center">{{ c.qty }}</div>
+                      <div onClick="{{ c.inc }}" style="width:36px;height:36px;border-radius:12px;border:1.5px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer">+</div>
+                      <div style="flex:1"></div>
+                      <div onClick="{{ c.del }}" style="font-size:13px;color:#D93A3A;font-weight:600;cursor:pointer">ลบ</div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div onClick="{{ goShop }}" style="margin:12px 16px 0;height:48px;border-radius:14px;border:1.5px dashed #D9CDBE;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#7A6E64;cursor:pointer">+ เพิ่มรายการ</div>
+              <div style="margin:16px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span style="color:#7A6E64">ค่าอาหาร</span><span style="font-weight:600">฿{{ subtotal }}</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span style="color:#7A6E64">ค่าส่ง (1.2 กม.)</span><span style="font-weight:600">฿15</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span style="color:#7A6E64">ค่าบริการ</span><span style="font-weight:600">฿5</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0;color:#0F8B5F"><span>ส่วนลด BANHAO7</span><span style="font-weight:600">−฿10</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding-top:12px;margin-top:8px;border-top:1px solid #F0E8DD"><span>รวมทั้งหมด</span><span>฿{{ total }}</span></div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isCheckout }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 0 20px">
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 16px">
+              <div onClick="{{ goCart }}" style="font-size:22px;cursor:pointer">←</div>
+              <div style="font-size:20px;font-weight:700">ยืนยันการสั่ง</div>
+            </div>
+            <div style="margin:0 16px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em">ส่งไปที่</div>
+              <div onClick="{{ goAddress }}" style="display:flex;align-items:flex-start;gap:10px;margin-top:9px;cursor:pointer">
+                <div style="font-size:19px">📍</div>
+                <div style="flex:1">
+                  <div style="font-size:16px;font-weight:600">บ้านของฉัน</div>
+                  <div style="font-size:13px;color:#7A6E64;margin-top:3px;line-height:1.6">88 หมู่ 4 บ้านบุณฑริก ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี 34230 (ที่อยู่ตัวอย่าง)</div>
+                  <div style="font-size:13px;color:#7A6E64;margin-top:4px">สมหญิง · 081 234 5678</div>
+                </div>
+                <div style="font-size:13px;color:#E4572E;font-weight:600">เปลี่ยน</div>
+              </div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em">รายการอาหาร</div>
+              <div style="display:flex;flex-direction:column;gap:9px;margin-top:10px">
+                <sc-for list="{{ cart }}" as="c" hint-placeholder-count="2">
+                  <div style="display:flex;gap:10px;font-size:14px">
+                    <span style="font-weight:600;color:#7A6E64">{{ c.qty }}×</span>
+                    <span style="flex:1">{{ c.name }}<div style="font-size:12px;color:#9A8C7E;margin-top:2px">{{ c.opts }}</div></span>
+                    <span style="font-weight:600">฿{{ c.sum }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em">วิธีชำระเงิน</div>
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+                <sc-for list="{{ payOpts }}" as="p" hint-placeholder-count="2">
+                  <div onClick="{{ p.pick }}" style="{{ p.style }}">
+                    <span style="font-size:20px">{{ p.icon }}</span>
+                    <div style="flex:1">
+                      <div>{{ p.label }}</div>
+                      <div style="font-size:12px;color:#7A6E64;margin-top:2px">{{ p.hint }}</div>
+                    </div>
+                    <span style="{{ p.dot }}">{{ p.mark }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ isCash }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:14px;padding-top:14px;border-top:1px solid #F0E8DD">
+                  <div style="font-size:13px;font-weight:600">เตรียมเงินมาเท่าไหร่ เผื่อไรเดอร์เตรียมเงินทอน</div>
+                  <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                    <sc-for list="{{ cashOpts }}" as="c" hint-placeholder-count="4">
+                      <div onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:13px;color:#0F8B5F;margin-top:10px">{{ changeNote }}</div>
+                </div>
+              </sc-if>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px;display:flex;align-items:center;gap:10px">
+              <span style="font-size:19px">🎟️</span>
+              <div style="flex:1"><div style="font-size:15px;font-weight:600">BANHAO7</div><div style="font-size:12px;color:#0F8B5F;margin-top:2px">ลด 10 บาท</div></div>
+              <div style="font-size:13px;color:#E4572E;font-weight:600">เปลี่ยน</div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ค่าอาหาร</span><span style="font-weight:600">฿{{ subtotal }}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ค่าส่ง</span><span style="font-weight:600">฿15</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ค่าบริการ</span><span style="font-weight:600">฿5</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0;color:#0F8B5F"><span>ส่วนลด</span><span style="font-weight:600">−฿10</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding-top:12px;margin-top:8px;border-top:1px solid #F0E8DD"><span>ยอดที่ต้องจ่าย</span><span>฿{{ total }}</span></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isAddress }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:0 0 24px">
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 16px">
+              <div onClick="{{ goCheckout }}" style="font-size:22px;cursor:pointer">←</div>
+              <div style="font-size:20px;font-weight:700">เลือกที่อยู่จัดส่ง</div>
+            </div>
+            <div style="margin:0 16px;height:160px;border-radius:20px;overflow:hidden;border:1px solid #E9E0D5">
+              <iframe src="tracking-map.html" style="width:100%;height:100%;border:0"></iframe>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin:16px 16px 0">
+              <sc-for list="{{ addresses }}" as="a" hint-placeholder-count="3">
+                <div onClick="{{ a.pick }}" style="{{ a.style }}">
+                  <span style="font-size:20px">{{ a.icon }}</span>
+                  <div style="flex:1">
+                    <div style="font-size:15px;font-weight:600">{{ a.label }}</div>
+                    <div style="font-size:12px;color:#7A6E64;margin-top:3px;line-height:1.5">{{ a.detail }}</div>
+                  </div>
+                  <span style="{{ a.dot }}"></span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin:12px 16px 0;height:52px;border-radius:16px;border:1.5px dashed #D9CDBE;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600;color:#7A6E64;cursor:pointer">+ เพิ่มที่อยู่ใหม่</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isQr }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;padding:8px 20px 24px;box-sizing:border-box">
+            <div onClick="{{ goCheckout }}" style="font-size:22px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center">←</div>
+            <div style="font-size:22px;font-weight:700;margin-top:8px">สแกนจ่ายด้วยพร้อมเพย์</div>
+            <div style="font-size:14px;color:#7A6E64;margin-top:6px">เปิดแอปธนาคารของคุณแล้วสแกน QR ด้านล่าง</div>
+            <div style="margin-top:16px;border-radius:24px;background:#fff;border:1px solid #E9E0D5;padding:20px;text-align:center">
+              <div style="font-size:13px;color:#7A6E64">ยอดชำระ</div>
+              <div style="font-size:32px;font-weight:700;margin-top:2px">฿{{ total }}</div>
+              <div style="font-size:12px;color:#9A8C7E;margin-top:4px">ออเดอร์ #BH000125</div>
+              <div style="width:172px;height:172px;margin:16px auto 0;border-radius:16px;background:repeating-conic-gradient(#1F1A16 0% 25%,#fff 0% 50%) 0 0/14px 14px;border:8px solid #fff;box-shadow:0 0 0 1px #E9E0D5"></div>
+              <div style="font-size:13px;color:#7A6E64;margin-top:14px">บ้านเฮา เดลิเวอรี่ (ตัวอย่าง)</div>
+              <div style="font-size:14px;font-weight:600;margin-top:4px">กรุณาชำระภายใน 9:58 นาที</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:13px 15px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4">
+              <span style="width:18px;height:18px;border-radius:9px;border:2.5px solid #E8D5AE;border-top-color:#D6A419;animation:spin .9s linear infinite;display:inline-block"></span>
+              <div style="flex:1;font-size:13.5px;color:#5A4E42;line-height:1.6">กำลังรอการชำระเงิน — เราจะยืนยันให้อัตโนมัติเมื่อธนาคารแจ้งเข้ามา</div>
+            </div>
+            <div style="flex:1"></div>
+            <div onClick="{{ goPayCheck }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer">ฉันโอนแล้ว ตรวจสอบให้หน่อย</div>
+            <div onClick="{{ goCheckout }}" style="height:50px;border-radius:16px;border:1.5px solid #E0D6C8;color:#5A4E42;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;margin-top:10px;cursor:pointer">เปลี่ยนวิธีชำระเงิน</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPayCheck }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 34px;text-align:center">
+            <span style="width:56px;height:56px;border-radius:28px;border:5px solid #F0E5D5;border-top-color:#E4572E;animation:spin .9s linear infinite;display:inline-block"></span>
+            <div style="font-size:20px;font-weight:700;margin-top:6px">กำลังตรวจสอบการชำระเงิน</div>
+            <div style="font-size:14.5px;color:#7A6E64;line-height:1.7">เรากำลังรอธนาคารยืนยันยอด ฿{{ total }}<br>ปกติใช้เวลาไม่เกิน 30 วินาที อย่าเพิ่งปิดหน้านี้</div>
+            <div style="width:100%;padding:13px 15px;border-radius:16px;background:#fff;border:1px solid #E9E0D5;font-size:12.5px;color:#7A6E64;line-height:1.7;text-align:left">
+              ระบบยังไม่ตัดเงินจนกว่าธนาคารจะยืนยัน หากคุณโอนไปแล้วแต่ยังไม่ขึ้นสถานะ เงินจะไม่หาย และจะไม่ถูกเรียกเก็บซ้ำ
+            </div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:4px">
+              <div onClick="{{ goPaySuccess }}" style="height:54px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">ตรวจสอบอีกครั้ง</div>
+              <div onClick="{{ goCheckout }}" style="height:54px;border-radius:16px;border:1.5px solid #E0D6C8;color:#5A4E42;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">เปลี่ยนวิธีชำระเงิน</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPaySuccess }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:0 32px;text-align:center">
+            <div style="width:100px;height:100px;border-radius:34px;background:#E7F4EE;color:#0F8B5F;display:flex;align-items:center;justify-content:center;font-size:46px;font-weight:700">✓</div>
+            <div style="font-size:23px;font-weight:700;margin-top:6px">ชำระเงินสำเร็จ</div>
+            <div style="font-size:14.5px;color:#7A6E64">ธนาคารยืนยันแล้ว ส่งออเดอร์ให้ร้านเรียบร้อย</div>
+            <div style="width:100%;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px;margin-top:10px;text-align:left">
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span style="color:#7A6E64">ยอดชำระ</span><span style="font-weight:700">฿{{ total }}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span style="color:#7A6E64">วิธีชำระ</span><span style="font-weight:600">พร้อมเพย์</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span style="color:#7A6E64">เวลา</span><span style="font-weight:600">18:41 น.</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span style="color:#7A6E64">ออเดอร์</span><span style="font-weight:600">#BH000125</span></div>
+            </div>
+            <div onClick="{{ goTrack }}" style="width:100%;height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;margin-top:12px;cursor:pointer">ติดตามออเดอร์</div>
+            <div onClick="{{ goPayDetail }}" style="font-size:14px;color:#7A6E64;cursor:pointer;padding:8px">ดูรายละเอียดการชำระเงิน</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPayExpired }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:0 34px;text-align:center">
+            <div style="width:88px;height:88px;border-radius:28px;background:#F3EDE4;display:flex;align-items:center;justify-content:center;font-size:40px">⏱️</div>
+            <div style="font-size:21px;font-weight:700">QR นี้หมดอายุแล้ว</div>
+            <div style="font-size:14.5px;color:#7A6E64;line-height:1.7">ยังไม่มีการตัดเงิน ออเดอร์ของคุณยังอยู่<br>กดสร้าง QR ใหม่เพื่อจ่ายต่อได้เลย</div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:6px">
+              <div onClick="{{ goQr }}" style="height:54px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">สร้าง QR ใหม่</div>
+              <div onClick="{{ goCheckout }}" style="height:54px;border-radius:16px;border:1.5px solid #1F1A16;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">เปลี่ยนวิธีชำระเงิน</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPayDup }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:0 34px;text-align:center">
+            <div style="width:88px;height:88px;border-radius:28px;background:#E7F4EE;color:#0F8B5F;display:flex;align-items:center;justify-content:center;font-size:40px">✓</div>
+            <div style="font-size:21px;font-weight:700">ออเดอร์นี้ชำระเงินแล้ว</div>
+            <div style="font-size:14.5px;color:#7A6E64;line-height:1.7">เราได้รับเงิน ฿{{ total }} สำหรับออเดอร์ #BH000125 แล้ว<br>ระบบจะไม่เรียกเก็บซ้ำ ถ้าคุณโอนไปสองครั้ง ทีมงานจะคืนให้อัตโนมัติ</div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:6px">
+              <div onClick="{{ goTrack }}" style="height:54px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">ดูออเดอร์ของฉัน</div>
+              <div onClick="{{ goPayDetail }}" style="height:54px;border-radius:16px;border:1.5px solid #E0D6C8;color:#5A4E42;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">ดูรายละเอียดการชำระเงิน</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isRefund }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 0 24px">
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 16px">
+              <div onClick="{{ goOrders }}" style="font-size:22px;cursor:pointer">←</div>
+              <div style="font-size:20px;font-weight:700">การคืนเงิน</div>
+            </div>
+            <div style="margin:0 16px;border-radius:22px;background:#fff;border:1px solid #E9E0D5;padding:20px;text-align:center">
+              <div style="width:72px;height:72px;border-radius:24px;background:#FDF3E6;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto">💸</div>
+              <div style="font-size:19px;font-weight:700;margin-top:12px">กำลังดำเนินการคืนเงิน</div>
+              <div style="font-size:14px;color:#7A6E64;margin-top:6px;line-height:1.65">เงินจะเข้าบัญชีเดิมที่ใช้จ่าย ภายใน 1–3 วันทำการ<br>เราจะแจ้งเตือนเมื่อธนาคารยืนยันแล้ว</div>
+              <div style="font-size:30px;font-weight:700;margin-top:14px">฿{{ total }}</div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <sc-for list="{{ refundSteps }}" as="r" hint-placeholder-count="4">
+                <div style="display:flex;gap:12px;padding:8px 0">
+                  <span style="{{ r.dot }}"></span>
+                  <div style="flex:1">
+                    <div style="{{ r.label }}">{{ r.name }}</div>
+                    <div style="font-size:12px;color:#9A8C7E;margin-top:2px">{{ r.time }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span style="color:#7A6E64">สาเหตุ</span><span style="font-weight:600">ร้านยกเลิกออเดอร์</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span style="color:#7A6E64">วิธีคืนเงิน</span><span style="font-weight:600">คืนเข้าพร้อมเพย์เดิม</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span style="color:#7A6E64">วันที่ขอคืน</span><span style="font-weight:600">9 ส.ค. 18:52 น.</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span style="color:#7A6E64">เลขอ้างอิง</span><span style="font-weight:600">RF-BH000125</span></div>
+            </div>
+            <div style="margin:12px 16px 0;height:52px;border-radius:16px;border:1.5px solid #1F1A16;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">ติดต่อฝ่ายช่วยเหลือ</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPayDetail }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 0 24px">
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 16px">
+              <div onClick="{{ goOrders }}" style="font-size:22px;cursor:pointer">←</div>
+              <div style="font-size:20px;font-weight:700">รายละเอียดการชำระเงิน</div>
+            </div>
+            <div style="margin:0 16px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:18px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="padding:6px 11px;border-radius:10px;background:#E7F4EE;color:#0F8B5F;font-size:12.5px;font-weight:600">ชำระเงินแล้ว</div>
+                <div style="font-size:12.5px;color:#9A8C7E">ออเดอร์ #BH000125</div>
+              </div>
+              <div style="font-size:30px;font-weight:700;margin-top:12px">฿{{ total }}</div>
+              <div style="font-size:13px;color:#7A6E64;margin-top:4px">พร้อมเพย์ · 9 ส.ค. 2569 เวลา 18:41 น.</div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em">ยอดที่ชำระประกอบด้วย</div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;margin-top:6px"><span style="color:#7A6E64">ค่าอาหาร</span><span style="font-weight:600">฿{{ subtotal }}</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0"><span style="color:#7A6E64">ค่าส่ง</span><span style="font-weight:600">฿15</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0"><span style="color:#7A6E64">ค่าบริการ</span><span style="font-weight:600">฿5</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;color:#0F8B5F"><span>ส่วนลด BANHAO7</span><span style="font-weight:600">−฿10</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;padding-top:11px;margin-top:7px;border-top:1px solid #F0E8DD"><span>รวม</span><span>฿{{ total }}</span></div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em;margin-bottom:10px">ไทม์ไลน์</div>
+              <sc-for list="{{ payTimeline }}" as="t" hint-placeholder-count="5">
+                <div style="display:flex;gap:12px;padding:6px 0">
+                  <div style="font-size:12.5px;color:#9A8C7E;width:52px;flex:0 0 52px">{{ t.time }}</div>
+                  <div style="font-size:13.5px;flex:1">{{ t.label }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin:14px 16px 0;font-size:12px;color:#9A8C7E;line-height:1.7">เลขอ้างอิงการชำระเงิน PAY-BH000125 · หากยอดไม่ตรง ติดต่อฝ่ายช่วยเหลือได้ทุกวัน 08:00–21:00 น.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPayFail }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 36px;text-align:center">
+            <div style="width:88px;height:88px;border-radius:28px;background:#FBE9E9;display:flex;align-items:center;justify-content:center;font-size:40px">💳</div>
+            <div style="font-size:21px;font-weight:700">ยังยืนยันการชำระเงินไม่ได้</div>
+            <div style="font-size:15px;color:#7A6E64;line-height:1.65">เรายังไม่ได้รับการยืนยันยอด ฿{{ total }} จากธนาคาร<br>ยังไม่มีการตัดเงินจากบัญชีของคุณ</div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:10px">
+              <div onClick="{{ goQr }}" style="height:54px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">ลองชำระอีกครั้ง</div>
+              <div onClick="{{ goCheckout }}" style="height:54px;border-radius:16px;border:1.5px solid #1F1A16;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">เปลี่ยนวิธีชำระเงิน</div>
+              <div style="height:50px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#7A6E64;cursor:pointer">ติดต่อฝ่ายช่วยเหลือ</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isConfirm }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:0 34px;text-align:center">
+            <div style="width:104px;height:104px;border-radius:34px;background:#E7F4EE;display:flex;align-items:center;justify-content:center;font-size:48px">✅</div>
+            <div style="font-size:23px;font-weight:700;margin-top:6px">ส่งออเดอร์ให้ร้านแล้ว</div>
+            <div style="font-size:15px;color:#7A6E64;line-height:1.65">ร้านกำลังยืนยัน สักครู่เราจะแจ้งให้ทราบ<br>เลขออเดอร์ <b style="color:#1F1A16">#BH-24817</b></div>
+            <div style="width:100%;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px;margin-top:12px;text-align:left">
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ร้าน</span><span style="font-weight:600">ส้มตำป้าทองดี (ตัวอย่าง)</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ถึงประมาณ</span><span style="font-weight:600">18:42 น.</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ยอดรวม</span><span style="font-weight:600">฿{{ total }}</span></div>
+            </div>
+            <div onClick="{{ goTrack }}" style="width:100%;height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;margin-top:14px;cursor:pointer">ติดตามออเดอร์</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isTrack }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column">
+            <div style="flex:1;position:relative;min-height:300px">
+              <iframe src="tracking-map.html" style="width:100%;height:100%;border:0;display:block"></iframe>
+              <div onClick="{{ goHome }}" style="position:absolute;left:16px;top:12px;width:42px;height:42px;border-radius:15px;background:#FBF7F1;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;box-shadow:0 4px 14px rgba(31,26,22,.2)">←</div>
+              <div style="position:absolute;right:16px;top:12px;padding:10px 14px;border-radius:15px;background:#1F1A16;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 14px rgba(31,26,22,.2)">#BH-24817</div>
+            </div>
+            <div style="flex:0 0 auto;border-radius:28px 28px 0 0;background:#FBF7F1;margin-top:-28px;position:relative;z-index:2;padding:14px 20px 22px;box-shadow:0 -8px 30px rgba(31,26,22,.16)">
+              <div style="width:44px;height:5px;border-radius:3px;background:#E0D6C8;margin:0 auto 14px"></div>
+              <div style="font-size:13px;color:#7A6E64;font-weight:600">อาหารกำลังเดินทางมาหาคุณ</div>
+              <div style="font-size:25px;font-weight:700;margin-top:2px">ถึงใน 12 นาที</div>
+              <div style="display:flex;gap:5px;margin-top:14px">
+                <div style="flex:1;height:5px;border-radius:3px;background:#0F8B5F"></div>
+                <div style="flex:1;height:5px;border-radius:3px;background:#0F8B5F"></div>
+                <div style="flex:1;height:5px;border-radius:3px;background:#0F8B5F"></div>
+                <div style="flex:1;height:5px;border-radius:3px;background:#E4572E"></div>
+                <div style="flex:1;height:5px;border-radius:3px;background:#E5DCD0"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:#9A8C7E;margin-top:6px">
+                <span>ร้านรับออเดอร์</span><span>ทำอาหาร</span><span>ไรเดอร์รับ</span><span style="color:#E4572E;font-weight:600">กำลังส่ง</span><span>ถึงแล้ว</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;margin-top:18px;padding:14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5">
+                <div style="width:52px;height:52px;border-radius:17px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:24px">🧑</div>
+                <div style="flex:1">
+                  <div style="font-size:16px;font-weight:700">ไรเดอร์ตัวอย่าง: พี่สมชาย</div>
+                  <div style="font-size:12px;color:#7A6E64;margin-top:3px">⭐ 4.9 · Honda Wave · กข 1234 อุบลราชธานี (ตัวอย่าง)</div>
+                </div>
+                <div style="width:44px;height:44px;border-radius:14px;background:#E7F4EE;display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer">📞</div>
+                <div style="width:44px;height:44px;border-radius:14px;background:#F3EDE4;display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer">💬</div>
+              </div>
+              <div onClick="{{ goRating }}" style="height:52px;border-radius:16px;border:1.5px solid #1F1A16;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;margin-top:12px;cursor:pointer">ได้รับอาหารแล้ว</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isNoDriver }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 36px;text-align:center">
+            <div style="width:88px;height:88px;border-radius:28px;background:#FDF3E6;display:flex;align-items:center;justify-content:center;font-size:40px">🛵</div>
+            <div style="font-size:21px;font-weight:700">ยังหาไรเดอร์ไม่ได้</div>
+            <div style="font-size:15px;color:#7A6E64;line-height:1.65">ขณะนี้ยังไม่มีไรเดอร์ว่างในบริเวณนี้<br>เรากำลังหาต่อให้อีก 3 นาที</div>
+            <div style="width:100%;padding:14px 16px;border-radius:18px;background:#fff;border:1px solid #E9E0D5;font-size:13px;color:#7A6E64;line-height:1.6;text-align:left">อาหารของคุณยังไม่ถูกปรุง หากยกเลิกตอนนี้จะได้เงินคืนเต็มจำนวน</div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:6px">
+              <div onClick="{{ goTrack }}" style="height:54px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">รอต่ออีกสักครู่</div>
+              <div onClick="{{ goCancelled }}" style="height:54px;border-radius:16px;border:1.5px solid #E0D6C8;color:#7A6E64;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">ยกเลิกออเดอร์</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isCancelled }}" hint-placeholder-val="{{ false }}">
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:0 36px;text-align:center">
+            <div style="width:88px;height:88px;border-radius:28px;background:#F3EDE4;display:flex;align-items:center;justify-content:center;font-size:40px">🚫</div>
+            <div style="font-size:21px;font-weight:700">ออเดอร์ถูกยกเลิก</div>
+            <div style="font-size:15px;color:#7A6E64;line-height:1.65">ออเดอร์ #BH-24817 ถูกยกเลิกแล้ว<br>เงิน ฿130 จะคืนเข้าบัญชีภายใน 1–3 วันทำการ</div>
+            <div style="width:100%;padding:14px 16px;border-radius:18px;background:#fff;border:1px solid #E9E0D5;text-align:left">
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:#7A6E64">เหตุผล</span><span style="font-weight:600">ไม่มีไรเดอร์ว่าง</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:#7A6E64">คืนเงิน</span><span style="font-weight:600;color:#0F8B5F">฿130 · กำลังดำเนินการ</span></div>
+            </div>
+            <div style="width:100%;display:flex;flex-direction:column;gap:10px;margin-top:6px">
+              <div onClick="{{ goShop }}" style="height:54px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">สั่งอีกครั้ง</div>
+              <div onClick="{{ goHome }}" style="height:54px;border-radius:16px;border:1.5px solid #E0D6C8;color:#7A6E64;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;cursor:pointer">กลับหน้าแรก</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isRating }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px 20px 24px">
+            <div style="font-size:23px;font-weight:700">อาหารเป็นยังไงบ้าง</div>
+            <div style="font-size:14px;color:#7A6E64;margin-top:6px">คะแนนของคุณช่วยให้ร้านและไรเดอร์ดีขึ้น</div>
+            <div style="margin-top:20px;border-radius:22px;background:#fff;border:1px solid #E9E0D5;padding:18px;text-align:center">
+              <div style="width:56px;height:56px;border-radius:18px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto">🥗</div>
+              <div style="font-size:17px;font-weight:700;margin-top:10px">ส้มตำป้าทองดี (ตัวอย่าง)</div>
+              <div style="display:flex;justify-content:center;gap:10px;margin-top:12px;font-size:34px">
+                <span>⭐</span><span>⭐</span><span>⭐</span><span>⭐</span><span style="opacity:.25">⭐</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px">
+                <div style="padding:9px 14px;border-radius:12px;background:#1F1A16;color:#fff;font-size:13px;font-weight:600">อาหารอร่อย</div>
+                <div style="padding:9px 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13px">ตรงตามสั่ง</div>
+                <div style="padding:9px 14px;border-radius:12px;background:#1F1A16;color:#fff;font-size:13px;font-weight:600">แพ็กดี</div>
+                <div style="padding:9px 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13px">ปริมาณคุ้มค่า</div>
+              </div>
+            </div>
+            <div style="margin-top:14px;border-radius:22px;background:#fff;border:1px solid #E9E0D5;padding:18px;text-align:center">
+              <div style="width:56px;height:56px;border-radius:18px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto">🧑</div>
+              <div style="font-size:17px;font-weight:700;margin-top:10px">ไรเดอร์ตัวอย่าง: พี่สมชาย</div>
+              <div style="display:flex;justify-content:center;gap:10px;margin-top:12px;font-size:34px">
+                <span>⭐</span><span>⭐</span><span>⭐</span><span>⭐</span><span>⭐</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px">
+                <div style="padding:9px 14px;border-radius:12px;background:#1F1A16;color:#fff;font-size:13px;font-weight:600">ส่งเร็ว</div>
+                <div style="padding:9px 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13px">สุภาพ</div>
+                <div style="padding:9px 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13px">ขับปลอดภัย</div>
+              </div>
+            </div>
+            <div onClick="{{ goOrders }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;margin-top:16px;cursor:pointer">ส่งคะแนน</div>
+            <div onClick="{{ goOrders }}" style="height:46px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#7A6E64;cursor:pointer">ข้ามไปก่อน</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isOrders }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 0 24px">
+            <div style="font-size:22px;font-weight:700;padding:0 20px 14px">ออเดอร์ของฉัน</div>
+            <div style="display:flex;gap:8px;padding:0 20px 16px">
+              <div style="padding:9px 16px;border-radius:12px;background:#1F1A16;color:#fff;font-size:14px;font-weight:600">กำลังดำเนินการ</div>
+              <div style="padding:9px 16px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;font-size:14px">ประวัติ</div>
+            </div>
+            <div onClick="{{ goTrack }}" style="margin:0 16px;border-radius:22px;background:#1F1A16;color:#F5EFE7;padding:18px;cursor:pointer">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="width:46px;height:46px;border-radius:15px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:22px">🛵</div>
+                <div style="flex:1">
+                  <div style="font-size:12px;color:#B7A899">#BH-24817 · กำลังจัดส่ง</div>
+                  <div style="font-size:16px;font-weight:700;margin-top:2px">ส้มตำป้าทองดี (ตัวอย่าง)</div>
+                </div>
+                <div style="text-align:right"><div style="font-size:12px;color:#B7A899">ถึงใน</div><div style="font-size:17px;font-weight:700">12 น.</div></div>
+              </div>
+            </div>
+            <div style="font-size:13px;font-weight:600;color:#7A6E64;padding:22px 20px 10px">ก่อนหน้านี้</div>
+            <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px">
+              <sc-for list="{{ history }}" as="h" hint-placeholder-count="3">
+                <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:14px 16px">
+                  <div style="display:flex;align-items:center;gap:11px">
+                    <div style="width:42px;height:42px;border-radius:14px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:20px">{{ h.emoji }}</div>
+                    <div style="flex:1">
+                      <div style="font-size:15px;font-weight:700">{{ h.name }}</div>
+                      <div style="font-size:12px;color:#7A6E64;margin-top:2px">{{ h.date }}</div>
+                    </div>
+                    <div style="{{ h.badge }}">{{ h.status }}</div>
+                  </div>
+                  <div style="font-size:13px;color:#7A6E64;margin-top:10px;line-height:1.5">{{ h.items }}</div>
+                  <div style="display:flex;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid #F0E8DD">
+                    <div style="flex:1;font-size:16px;font-weight:700">฿{{ h.total }}</div>
+                    <div onClick="{{ h.reorder }}" style="padding:10px 16px;border-radius:12px;border:1.5px solid #1F1A16;font-size:14px;font-weight:600;cursor:pointer">สั่งอีกครั้ง</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isNotif }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 0 24px">
+            <div style="font-size:22px;font-weight:700;padding:0 20px 16px">การแจ้งเตือน</div>
+            <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px">
+              <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="4">
+                <div style="{{ n.style }}">
+                  <div style="width:42px;height:42px;border-radius:14px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 42px">{{ n.icon }}</div>
+                  <div style="flex:1">
+                    <div style="font-size:15px;font-weight:600">{{ n.title }}</div>
+                    <div style="font-size:13px;color:#7A6E64;margin-top:3px;line-height:1.55">{{ n.body }}</div>
+                    <div style="font-size:11px;color:#9A8C7E;margin-top:5px">{{ n.time }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 0 24px">
+            <div style="font-size:22px;font-weight:700;padding:0 20px 16px">บัญชีของฉัน</div>
+            <div style="margin:0 16px;border-radius:22px;background:#1F1A16;color:#F5EFE7;padding:18px;display:flex;align-items:center;gap:14px">
+              <div style="width:56px;height:56px;border-radius:18px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:24px">🙋‍♀️</div>
+              <div style="flex:1">
+                <div style="font-size:18px;font-weight:700">สมหญิง ใจดี</div>
+                <div style="font-size:13px;color:#B7A899;margin-top:2px">081 234 5678</div>
+              </div>
+              <div style="padding:9px 13px;border-radius:12px;background:rgba(245,239,231,.14);font-size:13px;font-weight:600;cursor:pointer">แก้ไข</div>
+            </div>
+            <div style="display:flex;gap:10px;margin:12px 16px 0">
+              <div style="flex:1;border-radius:18px;background:#fff;border:1px solid #E9E0D5;padding:14px;text-align:center"><div style="font-size:20px;font-weight:700">28</div><div style="font-size:12px;color:#7A6E64;margin-top:2px">ออเดอร์</div></div>
+              <div style="flex:1;border-radius:18px;background:#fff;border:1px solid #E9E0D5;padding:14px;text-align:center"><div style="font-size:20px;font-weight:700">6</div><div style="font-size:12px;color:#7A6E64;margin-top:2px">ร้านโปรด</div></div>
+              <div style="flex:1;border-radius:18px;background:#fff;border:1px solid #E9E0D5;padding:14px;text-align:center"><div style="font-size:20px;font-weight:700">2</div><div style="font-size:12px;color:#7A6E64;margin-top:2px">คูปอง</div></div>
+            </div>
+            <div style="margin:16px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;overflow:hidden">
+              <sc-for list="{{ profileRows }}" as="p" hint-placeholder-count="8">
+                <div style="display:flex;align-items:center;gap:12px;padding:15px 16px;border-bottom:1px solid #F5EEE4;cursor:pointer" style-hover="background:#FBF7F1">
+                  <span style="font-size:19px;width:24px;text-align:center">{{ p.icon }}</span>
+                  <span style="flex:1;font-size:15px">{{ p.label }}</span>
+                  <span style="color:#C4B7A8;font-size:16px">›</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin:14px 16px 0;height:52px;border-radius:16px;border:1.5px solid #F0D6D6;color:#D93A3A;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">ออกจากระบบ</div>
+            <div style="text-align:center;font-size:11px;color:#B0A294;margin-top:14px">BANHAO v1.0.0 · อ.บุณฑริก จ.อุบลราชธานี</div>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <sc-if value="{{ showItemBar }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:0 0 auto;padding:12px 20px 26px;background:#FBF7F1;border-top:1px solid #EFE6DA;box-shadow:0 -6px 20px rgba(31,26,22,.06)">
+          <div onClick="{{ addToCart }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;font-size:17px;font-weight:600;cursor:pointer" style-hover="background:#C2431F">เพิ่มลงตะกร้า · ฿{{ itemTotal }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showShopBar }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:0 0 auto;padding:12px 20px 26px;background:#FBF7F1;border-top:1px solid #EFE6DA">
+          <div onClick="{{ goCart }}" style="height:56px;border-radius:16px;background:#1F1A16;color:#fff;display:flex;align-items:center;padding:0 18px;gap:12px;font-size:16px;font-weight:600;cursor:pointer">
+            <span style="width:28px;height:28px;border-radius:9px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:14px">{{ cartCount }}</span>
+            <span style="flex:1">ดูตะกร้า</span><span>฿{{ total }}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showCartBar }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:0 0 auto;padding:12px 20px 26px;background:#FBF7F1;border-top:1px solid #EFE6DA">
+          <div onClick="{{ goCheckout }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" style-hover="background:#C2431F">สั่งอาหาร ฿{{ total }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showPayBar }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:0 0 auto;padding:12px 20px 26px;background:#FBF7F1;border-top:1px solid #EFE6DA">
+          <div onClick="{{ placeOrder }}" style="height:56px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" style-hover="background:#C2431F">{{ payCta }}</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:0 0 auto;display:flex;background:#FBF7F1;border-top:1px solid #EFE6DA;padding:8px 8px 20px">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+            <div onClick="{{ t.go }}" style="{{ t.style }}">
+              <div style="font-size:21px">{{ t.icon }}</div>
+              <div style="font-size:11px;font-weight:600">{{ t.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+    </div>
+    <div style="font-size:12px;color:#8C7C6E">{{ screenTitle }}</div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:980}}">
+const PRICE = { 'หมู':0, 'ไก่':0, 'เนื้อ':10, 'ไม่เพิ่ม':0, 'ไข่ดาว':10, 'ไข่เจียว':15 };
+
+class Component extends DCLogic {
+  state = {
+    screen: 'home',
+    meat: 'หมู', spicy: 'เผ็ดน้อย', egg: 'ไข่ดาว', qty: 1,
+    pay: 'promptpay', addr: 'home', cash: 0,
+    cart: [
+      { name:'ส้มตำไทยไข่เค็ม', base:60, opts:'เผ็ดน้อย · ไม่ใส่ถั่ว', note:'', qty:1 },
+      { name:'ผัดกะเพราหมูสับ', base:50, opts:'หมู · เผ็ดน้อย · ไข่ดาว +10', note:'หมายเหตุ: ไม่ใส่ผัก', qty:1 }
+    ]
+  };
+
+  go = (s) => () => this.setState({ screen: s });
+
+  opt(group, list, key) {
+    return list.map(o => {
+      const sel = this.state[key] === o.l;
+      return {
+        label: o.l, extra: o.p ? '+' + o.p : '',
+        pick: () => this.setState({ [key]: o.l }),
+        style: 'display:flex;align-items:center;gap:12px;height:54px;padding:0 16px;border-radius:16px;background:#fff;cursor:pointer;font-size:15px;border:1.5px solid ' +
+          (sel ? '#E4572E' : '#E9E0D5'),
+        dot: 'width:22px;height:22px;border-radius:7px;flex:0 0 22px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;line-height:1;color:#fff;' +
+          (sel ? 'background:#E4572E;border:2px solid #E4572E' : 'background:#fff;border:2px solid #D9CDBE'),
+        mark: sel ? '✓' : ''
+      };
+    });
+  }
+
+  itemUnit() {
+    return 50 + (PRICE[this.state.meat] || 0) + (PRICE[this.state.egg] || 0);
+  }
+
+  subtotal() {
+    return this.state.cart.reduce((s, c) => s + this.lineSum(c), 0);
+  }
+  lineSum(c) { return c.base * c.qty; }
+  total() { return Math.max(0, this.subtotal() + 15 + 5 - 10); }
+
+  renderVals() {
+    const s = this.state.screen, go = this.go;
+    const nav = [
+      { title:'เข้าใช้งาน', items:[['splash','01 Splash'],['onboard','02 Onboarding'],['login','03 เข้าสู่ระบบ'],['otp','04 ยืนยัน OTP']] },
+      { title:'ค้นหา & สั่ง', items:[['home','05 หน้าแรก'],['search','06 ค้นหา'],['shop','07 หน้าร้าน'],['item','08 เลือกตัวเลือกอาหาร'],['cart','09 ตะกร้า'],['checkout','10 ยืนยันการสั่ง'],['address','11 ที่อยู่จัดส่ง'],['qr','12 พร้อมเพย์ QR'],['confirm','13 สั่งสำเร็จ']] },
+      { title:'การชำระเงิน', items:[['paycheck','12b กำลังตรวจสอบ'],['paysuccess','12c ชำระสำเร็จ'],['payfail','12d ยืนยันไม่ได้'],['payexpired','12e QR หมดอายุ'],['paydup','12f จ่ายซ้ำ / จ่ายแล้ว'],['paydetail','12g รายละเอียดการจ่าย'],['refund','12h การคืนเงิน']] },
+      { title:'หลังสั่ง', items:[['track','14 ติดตามออเดอร์'],['rating','15 ให้คะแนน'],['orders','16 ออเดอร์ของฉัน'],['notif','17 แจ้งเตือน'],['profile','18 บัญชีของฉัน']] },
+      { title:'States', items:[['homeLoading','⏳ กำลังโหลด'],['homeError','📡 เน็ตมีปัญหา'],['closed','🌙 ร้านปิด'],['cartEmptyS','🧺 ตะกร้าว่าง'],['nodriver','🛵 ไม่มีไรเดอร์'],['cancelled','🚫 ออเดอร์ถูกยกเลิก']] }
+    ];
+    const navGroups = nav.map(g => ({
+      title: g.title,
+      items: g.items.map(([id, label]) => ({
+        label, go: go(id),
+        style: 'padding:8px 11px;border-radius:10px;font-size:13px;cursor:pointer;transition:background .12s;' +
+          (s === id ? 'background:#E4572E;color:#fff;font-weight:600' : 'color:#CDBFB1')
+      }))
+    }));
+    const titles = {};
+    nav.forEach(g => g.items.forEach(([id, l]) => titles[id] = l));
+
+    const tabs = [
+      ['home','หน้าแรก','🏠'], ['orders','ออเดอร์','🧾'], ['notif','แจ้งเตือน','🔔'], ['profile','บัญชี','👤']
+    ].map(([id, label, icon]) => ({
+      label, icon, go: go(id),
+      style: 'flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border-radius:14px;cursor:pointer;' +
+        (s === id ? 'color:#E4572E' : 'color:#A2968A')
+    }));
+
+    const cart = this.state.cart.map((c, i) => ({
+      name: c.name, opts: c.opts, note: c.note, qty: c.qty, sum: this.lineSum(c),
+      inc: () => this.setState(st => ({ cart: st.cart.map((x, j) => j === i ? { ...x, qty: x.qty + 1 } : x) })),
+      dec: () => this.setState(st => ({ cart: st.cart.map((x, j) => j === i ? { ...x, qty: Math.max(1, x.qty - 1) } : x) })),
+      del: () => this.setState(st => ({ cart: st.cart.filter((x, j) => j !== i) }))
+    }));
+
+    const badge = (bg, col) => 'padding:5px 10px;border-radius:9px;font-size:11px;font-weight:600;background:' + bg + ';color:' + col;
+
+    return {
+      navGroups, tabs, cart,
+      screenTitle: titles[s] || '',
+      isSplash: s==='splash', isOnboard: s==='onboard', isLogin: s==='login', isOtp: s==='otp',
+      isHome: s==='home', isHomeLoading: s==='homeLoading', isHomeError: s==='homeError',
+      isSearch: s==='search', isShop: s==='shop', isClosed: s==='closed', isItem: s==='item',
+      isCart: s==='cart' || s==='cartEmptyS', isCheckout: s==='checkout', isAddress: s==='address',
+      isQr: s==='qr', isPayFail: s==='payfail', isConfirm: s==='confirm', isTrack: s==='track',
+      isPayCheck: s==='paycheck', isPaySuccess: s==='paysuccess', isPayExpired: s==='payexpired',
+      isPayDup: s==='paydup', isPayDetail: s==='paydetail', isRefund: s==='refund',
+      isCash: this.state.pay === 'cash',
+      isNoDriver: s==='nodriver', isCancelled: s==='cancelled', isRating: s==='rating',
+      isOrders: s==='orders', isNotif: s==='notif', isProfile: s==='profile',
+
+      cartEmpty: s === 'cartEmptyS' || this.state.cart.length === 0,
+      cartHasItems: s !== 'cartEmptyS' && this.state.cart.length > 0,
+      cartCount: this.state.cart.reduce((n, c) => n + c.qty, 0),
+      subtotal: this.subtotal(), total: this.total(), itemTotal: this.itemUnit() * this.state.qty,
+      qty: this.state.qty,
+
+      showTabs: ['home','orders','notif','profile','homeLoading','homeError'].indexOf(s) >= 0,
+      showItemBar: s === 'item',
+      showShopBar: s === 'shop' && this.state.cart.length > 0,
+      showCartBar: s === 'cart' && this.state.cart.length > 0,
+      showPayBar: s === 'checkout',
+      payCta: this.state.pay === 'promptpay' ? 'ไปสแกนจ่าย ฿' + this.total() : 'ยืนยันสั่ง ฿' + this.total() + ' (เงินสด)',
+
+      goHome: go('home'), goLogin: go('login'), goOtp: go('otp'), goSearch: go('search'),
+      goShop: go('shop'), goCart: go('cart'), goCheckout: go('checkout'), goAddress: go('address'),
+      goQr: go('qr'), goConfirm: go('confirm'), goTrack: go('track'), goRating: go('rating'),
+      goOrders: go('orders'), goNotif: go('notif'), goCancelled: go('cancelled'),
+      goPayCheck: go('paycheck'), goPaySuccess: go('paysuccess'), goPayDetail: go('paydetail'),
+
+      cashOpts: [0, 100, 200, 500].map(v => ({
+        label: v === 0 ? 'จ่ายพอดี' : '฿' + v,
+        pick: () => this.setState({ cash: v }),
+        style: 'padding:11px 16px;border-radius:13px;font-size:14px;font-weight:600;cursor:pointer;border:1.5px solid ' +
+          (this.state.cash === v ? '#E4572E;background:#FDECE6;color:#C2431F' : '#E9E0D5;background:#fff;color:#1F1A16')
+      })),
+      changeNote: this.state.cash === 0
+        ? 'ไรเดอร์จะไม่เตรียมเงินทอนให้'
+        : this.state.cash < this.total()
+          ? 'เงินที่เตรียมน้อยกว่ายอดที่ต้องจ่าย'
+          : 'ไรเดอร์จะเตรียมเงินทอน ฿' + (this.state.cash - this.total()) + ' มาให้',
+
+      refundSteps: [
+        { name:'ได้รับคำขอคืนเงิน', time:'9 ส.ค. 18:52 น.', done:1 },
+        { name:'ส่งคำขอไปที่ธนาคาร', time:'9 ส.ค. 18:53 น.', done:1 },
+        { name:'ธนาคารกำลังดำเนินการ', time:'กำลังดำเนินการ', done:2 },
+        { name:'เงินเข้าบัญชีแล้ว', time:'ประมาณ 12 ส.ค.', done:0 }
+      ].map(r => ({
+        name: r.name, time: r.time,
+        dot: 'width:12px;height:12px;border-radius:6px;margin-top:5px;flex:0 0 12px;background:' +
+          (r.done === 1 ? '#0F8B5F' : r.done === 2 ? '#D6A419' : '#E0D6C8'),
+        label: 'font-size:14px;font-weight:' + (r.done ? '600' : '400') + ';color:' + (r.done ? '#1F1A16' : '#9A8C7E')
+      })),
+
+      payTimeline: [
+        { time:'18:40', label:'สร้างรายการชำระเงิน' },
+        { time:'18:40', label:'สร้าง QR พร้อมเพย์' },
+        { time:'18:41', label:'ธนาคารแจ้งรับเงินเข้า' },
+        { time:'18:41', label:'ยืนยันการชำระเงิน' },
+        { time:'18:41', label:'ส่งออเดอร์ให้ร้าน' }
+      ],
+
+      placeOrder: () => this.setState({ screen: this.state.pay === 'promptpay' ? 'qr' : 'confirm' }),
+      incQty: () => this.setState(st => ({ qty: st.qty + 1 })),
+      decQty: () => this.setState(st => ({ qty: Math.max(1, st.qty - 1) })),
+      addToCart: () => this.setState(st => ({
+        screen: 'cart',
+        cart: st.cart.concat([{
+          name: 'ผัดกะเพราหมูสับ', base: this.itemUnit(),
+          opts: st.meat + ' · ' + st.spicy + (st.egg === 'ไม่เพิ่ม' ? '' : ' · ' + st.egg),
+          note: 'หมายเหตุ: ไม่ใส่ผัก ขอน้ำปลาพริกเพิ่ม', qty: st.qty
+        }])
+      })),
+
+      meatOpts: this.opt('meat', [{l:'หมู'},{l:'ไก่'},{l:'เนื้อ',p:10}], 'meat'),
+      spicyOpts: this.opt('spicy', [{l:'ไม่เผ็ด'},{l:'เผ็ดน้อย'},{l:'เผ็ดกลาง'},{l:'เผ็ดมาก'}], 'spicy'),
+      eggOpts: this.opt('egg', [{l:'ไม่เพิ่ม'},{l:'ไข่ดาว',p:10},{l:'ไข่เจียว',p:15}], 'egg'),
+
+      payOpts: [
+        { id:'cash', label:'เงินสด', icon:'💵', hint:'จ่ายให้ไรเดอร์ตอนได้รับอาหาร' },
+        { id:'promptpay', label:'พร้อมเพย์ QR', icon:'📱', hint:'สแกนจ่ายทันทีจากแอปธนาคาร' }
+      ].map(p => ({
+        label: p.label, icon: p.icon, hint: p.hint,
+        pick: () => this.setState({ pay: p.id }),
+        style: 'display:flex;align-items:center;gap:12px;min-height:62px;padding:12px 15px;border-radius:16px;cursor:pointer;font-size:15px;background:#fff;border:1.5px solid ' + (this.state.pay === p.id ? '#E4572E' : '#E9E0D5'),
+        dot: 'width:22px;height:22px;border-radius:7px;flex:0 0 22px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;line-height:1;color:#fff;' + (this.state.pay === p.id ? 'background:#E4572E;border:2px solid #E4572E' : 'background:#fff;border:2px solid #D9CDBE'),
+        mark: this.state.pay === p.id ? '✓' : ''
+      })),
+
+      addresses: [
+        { id:'home', icon:'🏠', label:'บ้านของฉัน', detail:'88 หมู่ 4 บ้านบุณฑริก ต.บุณฑริก อ.บุณฑริก (ตัวอย่าง)' },
+        { id:'work', icon:'🏢', label:'ที่ทำงาน', detail:'ใกล้ที่ว่าการอำเภอบุณฑริก (ตัวอย่าง)' },
+        { id:'mom', icon:'💗', label:'บ้านแม่', detail:'บ้านโนนสมบูรณ์ ต.บุณฑริก (ตัวอย่าง)' }
+      ].map(a => ({
+        icon:a.icon, label:a.label, detail:a.detail,
+        pick: () => this.setState({ addr: a.id }),
+        style: 'display:flex;align-items:center;gap:12px;padding:15px;border-radius:18px;cursor:pointer;background:#fff;border:1.5px solid ' + (this.state.addr === a.id ? '#E4572E' : '#E9E0D5'),
+        dot: 'width:22px;height:22px;border-radius:11px;flex:0 0 22px;' + (this.state.addr === a.id ? 'border:7px solid #E4572E;background:#fff' : 'border:2px solid #D9CDBE')
+      })),
+
+      categories: [
+        {icon:'🍜',name:'ตามสั่ง'},{icon:'🍗',name:'ไก่ทอด'},{icon:'🍲',name:'ก๋วยเตี๋ยว'},
+        {icon:'🍛',name:'ข้าวราดแกง'},{icon:'🥤',name:'เครื่องดื่ม'},{icon:'🍰',name:'ของหวาน'},{icon:'🥗',name:'ส้มตำ'}
+      ].map(c => ({ ...c, go: go('search') })),
+
+      restaurants: [
+        { name:'ส้มตำป้าทองดี (ตัวอย่าง)', emoji:'🥗', rating:'4.8', badge:'ส่งฟรี', meta:'อาหารอีสาน · 1.1 กม. · 15–20 นาที · ค่าส่ง ฿10', go: go('shop') },
+        { name:'ก๋วยเตี๋ยวลุงหนวด (ตัวอย่าง)', emoji:'🍜', rating:'4.7', badge:'ขายดี', meta:'ก๋วยเตี๋ยว · 0.6 กม. · 10–15 นาที · ค่าส่ง ฿10', go: go('shop') },
+        { name:'ไก่ย่างเจ๊หมวย (ตัวอย่าง)', emoji:'🍗', rating:'4.6', badge:'ปิดอยู่', meta:'ของทอด · 1.8 กม. · เปิดพรุ่งนี้ 10:00', go: go('closed') }
+      ],
+
+      searchResults: [
+        { name:'ส้มตำป้าทองดี (ตัวอย่าง)', emoji:'🥗', rating:'4.8', meta:'ร้าน · 1.1 กม. · 15–20 นาที', go: go('shop') },
+        { name:'ส้มตำไทยไข่เค็ม', emoji:'🥗', rating:'4.8', meta:'เมนู · ส้มตำป้าทองดี · ฿60', go: go('shop') },
+        { name:'ตำซั่วปูปลาร้า', emoji:'🦀', rating:'4.9', meta:'เมนู · ส้มตำป้าทองดี · ฿65', go: go('shop') },
+        { name:'ครัวป้าน้อยตำแซ่บ (ตัวอย่าง)', emoji:'🌶️', rating:'4.5', meta:'ร้าน · 2.3 กม. · 20–25 นาที', go: go('shop') }
+      ],
+
+      menu: [
+        { name:'ส้มตำไทยไข่เค็ม', desc:'ตำไทยรสกลมกล่อม ใส่ไข่เค็มแท้', price:60, emoji:'🥗', go: go('item') },
+        { name:'ผัดกะเพราหมูสับ', desc:'ผัดไฟแรง กะเพราใบใหญ่ เสิร์ฟพร้อมข้าวสวย', price:50, emoji:'🍳', go: go('item') },
+        { name:'ตำซั่วปูปลาร้า', desc:'เส้นขนมจีน ปูดอง ปลาร้าต้มสุก', price:65, emoji:'🦀', go: go('item') },
+        { name:'ไก่ย่างไม้มะดัน', desc:'ย่างเตาถ่าน หอมสมุนไพร ครึ่งตัว', price:90, emoji:'🍗', go: go('item') },
+        { name:'ข้าวเหนียวนึ่งใหม่', desc:'ห่อใบตอง นึ่งร้อนทั้งวัน', price:10, emoji:'🍚', go: go('item') },
+        { name:'น้ำอ้อยสด', desc:'คั้นสด ไม่เติมน้ำตาล', price:25, emoji:'🥤', go: go('item') }
+      ],
+
+      history: [
+        { name:'ก๋วยเตี๋ยวลุงหนวด (ตัวอย่าง)', emoji:'🍜', date:'เมื่อวาน 12:14 น.', status:'ส่งสำเร็จ', total:95,
+          items:'ก๋วยเตี๋ยวเรือน้ำตก ×2, เกี๊ยวทอด ×1', badge: badge('#E7F4EE','#0F8B5F'), reorder: go('shop') },
+        { name:'ไก่ย่างเจ๊หมวย (ตัวอย่าง)', emoji:'🍗', date:'6 ส.ค. 19:02 น.', status:'ส่งสำเร็จ', total:170,
+          items:'ไก่ทอดน่องบน ×3, ข้าวเหนียว ×2', badge: badge('#E7F4EE','#0F8B5F'), reorder: go('shop') },
+        { name:'ส้มตำป้าทองดี (ตัวอย่าง)', emoji:'🥗', date:'2 ส.ค. 18:20 น.', status:'ยกเลิก', total:130,
+          items:'ตำซั่ว ×1, ไก่ย่าง ×1 · ไม่มีไรเดอร์', badge: badge('#F3EDE4','#7A6E64'), reorder: go('shop') }
+      ],
+
+      notifs: [
+        { icon:'🛵', title:'ไรเดอร์กำลังมาส่ง', body:'ไรเดอร์กำลังนำอาหารจากส้มตำป้าทองดีมาส่ง ถึงใน 12 นาที', time:'เมื่อสักครู่',
+          style:'display:flex;gap:12px;padding:15px;border-radius:18px;background:#fff;border:1.5px solid #E4572E' },
+        { icon:'👨‍🍳', title:'ร้านกำลังเตรียมอาหาร', body:'ส้มตำป้าทองดีรับออเดอร์ #BH-24817 แล้ว', time:'18:14 น.',
+          style:'display:flex;gap:12px;padding:15px;border-radius:18px;background:#fff;border:1px solid #E9E0D5' },
+        { icon:'🎟️', title:'ส่งฟรี 7 วันแรก', body:'ใส่โค้ด BANHAO7 ลด 10 บาท เมื่อสั่งครบ 100 บาท', time:'เมื่อวาน',
+          style:'display:flex;gap:12px;padding:15px;border-radius:18px;background:#fff;border:1px solid #E9E0D5' },
+        { icon:'⭐', title:'ให้คะแนนออเดอร์ล่าสุด', body:'บอกเราหน่อยว่าก๋วยเตี๋ยวเรือลุงหนวดเป็นยังไง', time:'เมื่อวาน',
+          style:'display:flex;gap:12px;padding:15px;border-radius:18px;background:#fff;border:1px solid #E9E0D5' }
+      ],
+
+      profileRows: [
+        {icon:'📍',label:'ที่อยู่ของฉัน'},{icon:'💳',label:'วิธีชำระเงิน'},{icon:'🧾',label:'ประวัติการสั่ง'},
+        {icon:'❤️',label:'ร้านโปรด'},{icon:'🎟️',label:'คูปองของฉัน'},{icon:'🔔',label:'ตั้งค่าการแจ้งเตือน'},
+        {icon:'💬',label:'ศูนย์ช่วยเหลือ'},{icon:'📄',label:'เงื่อนไขและความเป็นส่วนตัว'}
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>
