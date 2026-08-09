@@ -1,4 +1,4 @@
-import { colors, spacing } from '@banhao/ui';
+import { colors, spacing } from '@banhao/ui/theme';
 
 /**
  * Admin — foundation only.

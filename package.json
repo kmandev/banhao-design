@@ -16,6 +16,15 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
+  "reactVersionPolicy": "One React version across the monorepo. Expo 52 / RN 0.76 pin React 18.3.1 and Next 15 supports React 18, so pinning here stops two sets of @types/react colliding inside shared packages like @banhao/ui. Enforced by the pnpm.overrides below.",
+  "pnpm": {
+    "overrides": {
+      "@types/react": "~18.3.12",
+      "@types/react-dom": "~18.3.1",
+      "react": "18.3.1",
+      "react-dom": "18.3.1"
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
