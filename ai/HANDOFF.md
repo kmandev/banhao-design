@@ -16,11 +16,11 @@ Branch: `feature/app-foundation` (not merged to `main`).
 
 ## Last Completed Work
 
-Application Foundation — see EVENT-006 in [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md) and the session log.
+Application Foundation (EVENT-006), then pre-merge review fixes (EVENT-007): `profiles` RLS hardened and **verified by execution** against PostgreSQL 16 + PostGIS — 13 assertions, wired into CI. Customer screen count aligned to 18 across all docs.
 
 ## Current Work
 
-None active. Awaiting Product Owner review of the `feature/app-foundation` branch.
+None active. Review fixes are applied and committed; awaiting Product Owner merge of `feature/app-foundation`.
 
 ## Immediate Next Step
 
@@ -68,13 +68,14 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Recent Session
 
-2026-08-09, four sessions (Claude Code): Memory v1 → Memory v2 → architecture research → application foundation. Full record: [`ai/SESSION_LOG/2026-08-09.md`](SESSION_LOG/2026-08-09.md).
+2026-08-09, five sessions (Claude Code): Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes. Full record: [`ai/SESSION_LOG/2026-08-09.md`](SESSION_LOG/2026-08-09.md).
 
 ## Warnings
 
 - **`NullPaymentProvider` throws on every call by design.** Don't "fix" it by returning fake success — that would let money paths appear to work untested.
 - The API needs real Supabase credentials in `.env` to start. `/health` has no auth dependency; `/api/v1/me` needs a valid Supabase JWT *and* a `profiles` row.
-- Tests do not cover a real Supabase connection — auth is tested with mocks. End-to-end auth against a live Supabase project has not been exercised.
+- API auth tests use mocks. **RLS is verified by real execution** (`./supabase/tests/run-rls-tests.sh`), but against a plain Postgres container with a Supabase auth shim — GoTrue, real JWT issuance, and PostgREST are NOT exercised. End-to-end auth against a live Supabase project remains unverified.
+- `profiles.phone` is deliberately not client-writable: it mirrors the Auth identity. Self-service phone change must go through Supabase Auth's OTP-verified flow, not a direct table update.
 - `support.js` is intentionally duplicated 4× (FACT-010) — don't "clean it up".
 
 ## Do Not Do

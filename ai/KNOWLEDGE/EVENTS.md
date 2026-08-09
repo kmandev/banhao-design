@@ -101,3 +101,27 @@ Built: pnpm/Turborepo monorepo; NestJS API with global Supabase JWT auth guard a
 **Q-001 (payment provider) deliberately remains `OPEN`** — the foundation ships a `PaymentProvider` interface whose only implementation throws on every call, so no money path can silently appear functional.
 
 Verified: 37 tests pass, lint/typecheck/build pass across 15 workspace tasks, and the API was started to confirm `/health` returns 200 and `/api/v1/me` returns 401 without a valid token.
+
+---
+
+## EVENT-007
+
+```yaml
+id: EVENT-007
+type: EVENT
+date: 2026-08-09
+source: this session; branch feature/app-foundation
+confidence: HIGH
+```
+
+**Pre-merge review fixes.** A foundation review returned PASS WITH MINOR FIXES, flagging possible recursion and privilege escalation in the `profiles` RLS policy and a screen-count discrepancy.
+
+Both RLS concerns were **measured, not reasoned about**, by executing the policies against PostgreSQL 16 + PostGIS in Docker with a Supabase auth shim. Neither was an active bug: the self-referencing subquery terminated (the SELECT policy did not reference `profiles`), and role escalation, INSERT of a fabricated ADMIN row, DELETE, and id changes were all already rejected.
+
+Testing did find a genuine gap the review had not flagged: **`profiles.phone` was client-writable**, letting a user's profile drift from the Supabase Auth identity used for OTP login.
+
+Migration `20260809000003_harden_profiles_rls.sql` adds three defence layers — column privileges limiting clients to `display_name`, non-recursive RLS policies, and an immutability trigger for `role`/`id`/`phone` — plus a service-role-only `set_user_role()` as the trusted role-assignment path. It also removes the *latent* recursion risk: the old policy only avoided recursion because no SELECT policy referenced `profiles`, which the next policy someone writes would likely break.
+
+13 executable assertions added (`supabase/tests/`), wired into CI. The suite was validated against a negative control with the hardening migration removed, where it correctly fails — an earlier draft passed in that control because its fixture re-applied the grants it claimed to verify.
+
+Customer screen count settled at **18**, verified by counting screen labels in the design canvas; only root `README.md` still said 17.

@@ -30,7 +30,7 @@ Food Delivery
   - `07-operations/` — runbooks and operational process
 - **`design/`** — Visual/interactive design work, one folder per surface:
   - `design-system/` — the shared design system (colors, type, components, tokens)
-  - `customer/` — Customer App (Phase 1, done — 17-screen flow)
+  - `customer/` — Customer App (Phase 1, done — 18-screen flow)
   - `driver/`, `merchant/`, `admin/` — not yet designed (sitemap-only today, see `docs/05-architecture`)
   - `payment/` — payment-specific UI (currently inline inside `customer/`)
   - `tracking/` — delivery tracking / map prototype
@@ -43,7 +43,7 @@ Food Delivery
 
 | Area | Status | Notes |
 |---|---|---|
-| Product Design — Customer App | DONE | 17-screen Phase 1 flow, `design/customer/` |
+| Product Design — Customer App | DONE | 18-screen Phase 1 flow, `design/customer/` |
 | Product Design — Driver App | TODO | Sitemap only, `docs/05-architecture/` |
 | Product Design — Merchant Web | TODO | Sitemap only, `docs/05-architecture/` |
 | Product Design — Admin Web | TODO | Sitemap only, `docs/05-architecture/` |

@@ -44,6 +44,19 @@ jobs:
       - name: Build
         run: pnpm build
 
+  rls:
+    name: Verify database RLS policies
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run RLS verification
+        # Applies the auth shim and every migration to a throwaway Postgres,
+        # then asserts the authorization rules. Fails the build on any
+        # regression in profile access control.
+        run: ./supabase/tests/run-rls-tests.sh
+
   docker:
     name: Build API image
     runs-on: ubuntu-latest

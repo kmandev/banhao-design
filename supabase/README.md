@@ -10,6 +10,7 @@ Applied in filename order. Naming: `YYYYMMDDHHMMSS_description.sql`.
 |---|---|
 | `20260809000001_enable_extensions.sql` | `uuid-ossp`, PostGIS |
 | `20260809000002_profiles_and_roles.sql` | `user_role` enum, `profiles` table, signup trigger, RLS |
+| `20260809000003_harden_profiles_rls.sql` | Column privileges, non-recursive policies, immutability trigger, `set_user_role()` |
 
 ## What exists so far
 
@@ -50,12 +51,49 @@ supabase migration new <name>
 
 ## RLS
 
-Enabled on `profiles`. Policies are intentionally minimal at this stage:
-a user may read their own profile and update it **except** their role.
+Enabled on `profiles`, with three layers so no single mistake re-opens access:
 
-Profile creation is handled by the `on_auth_user_created` trigger and deletion
-cascades from `auth.users`, so no client-facing INSERT or DELETE policy exists.
+1. **Column privileges** — `authenticated` may write only `display_name`.
+2. **RLS policies** — a user may only read and update their own row. The
+   policies do not reference `profiles`, so they cannot recurse.
+3. **Trigger** — `enforce_profile_immutable_columns()` rejects any client change
+   to `role`, `id`, or `phone`, as a backstop against a future over-broad GRANT.
 
-The API uses the service-role key and bypasses RLS by design — it enforces
-authorization in its own guards. RLS is the second line of defence protecting
-the table from direct anon-key access.
+Clients have no INSERT or DELETE path: creation is the `on_auth_user_created`
+trigger, deletion cascades from `auth.users`. `anon` cannot read `profiles`.
+
+Role assignment goes through `public.set_user_role(uuid, user_role)`, which is
+service-role only — one auditable entry point instead of ad-hoc updates.
+
+The API uses the service-role key and bypasses RLS by design; it enforces
+authorization in its own guards. RLS is the second line of defence for direct
+client access.
+
+> **Why not enforce "role unchanged" inside the policy?** RLS `WITH CHECK` only
+> sees the new row, so the original policy had to query `profiles` from inside a
+> `profiles` policy. That worked, but only because no SELECT policy referenced
+> `profiles` — adding one (e.g. "admins can read all profiles") would make it
+> genuinely recursive and break every update. Column privileges express the same
+> rule declaratively and cannot recurse.
+
+### Verifying RLS
+
+```bash
+./supabase/tests/run-rls-tests.sh
+```
+
+Starts a throwaway PostgreSQL 16 + PostGIS container, applies the auth shim and
+every migration, then runs 13 assertions covering SELECT own/other, UPDATE
+own/other, role escalation, phone and id immutability, INSERT, DELETE, anon
+access, recursion, and the `set_user_role` path. Exits non-zero on any failure.
+
+**Limitations — this does NOT verify:**
+
+- Supabase's own GoTrue auth service, real JWT issuance, or PostgREST. The shim
+  reproduces only `auth.uid()` and the three database roles.
+- Anything against a live Supabase project. End-to-end auth is still unverified.
+- Storage or Realtime policies (none exist yet).
+
+The suite has been checked against a negative control (running it with the
+hardening migration removed), where it correctly fails — so it measures the
+migrations rather than its own fixture.

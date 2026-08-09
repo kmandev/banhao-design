@@ -34,7 +34,7 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
-- Review and merge the `feature/app-foundation` branch (P0)
+- Review and merge the `feature/app-foundation` branch (P0) — review fixes applied, RLS verified by execution
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design
 - Decide payment provider/settlement model (P0)
@@ -48,7 +48,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-6 events logged, EVENT-001 through EVENT-006 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → **application foundation**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+7 events logged, EVENT-001 through EVENT-007 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → **pre-merge review fixes**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Important Architecture Rules
 
