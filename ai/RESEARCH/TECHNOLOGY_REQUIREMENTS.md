@@ -1,0 +1,25 @@
+# Technology Requirements
+
+Business/product requirements from `ai/KNOWLEDGE/REQUIREMENTS.md`, `ai/KNOWLEDGE/CONSTRAINTS.md`, and `docs/ARCHITECTURE.md`, translated into technical requirements. This is translation, not new decision-making — every row traces back to an existing REQ/CON/DEC entry. Technology *choices* are out of scope here; see the comparison documents for those.
+
+| # | Business Requirement | Source | Technical Requirement |
+|---|---|---|---|
+| TR-001 | Order status must be visible, consistently, across Customer/Driver/Merchant/Admin apps | REQ-002 | A single backend-owned order state store with a mechanism (real-time or near-real-time) to propagate state changes to all connected clients — see `ai/RESEARCH/REALTIME.md` |
+| TR-002 | Order State and Payment State must never be collapsed into one field | CON-001 | The database schema must model Order and Payment as two related but independently-updatable structures (e.g. separate tables/collections with a foreign key or reference, not a single merged status column) |
+| TR-003 | Payment must only be confirmed by a verified backend event, never client state | CON-002, DEC-003 | Webhook-based payment confirmation: an inbound HTTPS endpoint that verifies a provider's signature before trusting the payload — see `ai/RESEARCH/SECURITY_ARCHITECTURE.md` and `ai/RESEARCH/PAYMENT_RESEARCH.md` |
+| TR-004 | Duplicate webhook callbacks must not double-process a payment | REQ-003 | Idempotency keyed on a single payment reference — requires either a database unique constraint on the reference, or an idempotency-key pattern at the application layer |
+| TR-005 | Every order's ledger must balance to exactly zero | CON-003 | An append-only (or at minimum strongly audited) ledger structure capable of transactional writes — favors a database with strong ACID guarantees for the ledger tables specifically, even if other data is stored more loosely — see `ai/RESEARCH/DATABASE_COMPARISON.md` |
+| TR-006 | Cash collected by drivers must be tracked separately from driver earnings | REQ-001 | A distinct ledger entry type / liability account per driver, queryable independently from earnings — a modeling requirement, not a specific technology requirement |
+| TR-007 | Domain model must generalize across Food/Parcel/Ride/Shopping without a rewrite | REQ-004, DEC-005 | Schema design around generic entities (Merchant, Product, Order, Delivery, Driver) with phase-specific attributes stored flexibly (e.g. JSON/JSONB columns or an EAV-like pattern) rather than rigid per-phase tables |
+| TR-008 | Driver needs live navigation and ETA | Design: wireframe `D-07` | Routing/directions API and distance/ETA calculation — see `ai/RESEARCH/MAPS_LOCATION.md` |
+| TR-009 | Customer/Admin need to see driver location in near-real-time | Design: wireframe `A-03 Live Map`, tracking prototype | Location-update ingestion (driver app pings position) + a way to push updates to viewers — overlaps with TR-001's real-time mechanism |
+| TR-010 | Customer login uses phone + OTP | Design: screens `03`, `04` (FACT observation, not an explicit "must") | SMS OTP delivery capability — see `ai/RESEARCH/AUTHENTICATION.md` and `ai/RESEARCH/NOTIFICATIONS.md` |
+| TR-011 | Merchant needs an always-open, glanceable order queue ("visible from 2 meters") | Design: `docs/05-architecture` Merchant Web notes | Fast-updating Kanban-style UI, implying the same real-time mechanism as TR-001 rather than a separate requirement |
+| TR-012 | Admin needs a live operational map, not just historical reports | Design: wireframe `A-03` | Same real-time/location requirement as TR-009, applied to an operations dashboard |
+| TR-013 | System must survive a webhook or provider outage without corrupting state | CON-002 (implied) | Retry/backoff and a queue for webhook processing rather than synchronous inline handling — see `ai/RESEARCH/QUEUE_ARCHITECTURE.md` |
+| TR-014 | No secrets/credentials in Git; no hardcoded payment credentials | CON-005, `AGENTS.md` | Environment/config-based secret injection, plus a secret-management approach appropriate to whatever hosting is chosen — see `ai/RESEARCH/SECURITY_ARCHITECTURE.md` |
+| TR-015 | Restaurant/product images need to be uploaded and served | Design: implied by Merchant/Product cards in the design system (no explicit screen for upload yet) | Object storage + CDN — see `ai/RESEARCH/STORAGE.md` |
+
+## Notes on translation method
+
+Each row above starts from something already accepted in the repository (a `REQ`, `CON`, `DEC`, or an explicit design artifact) and states only what technical *capability* is implied — never which specific product provides it. Rows TR-008 through TR-012 are derived from wireframe/UI evidence rather than an explicit prose "must" statement in the design docs; they're included because the UI cannot function without the implied capability, but they carry slightly lower evidentiary weight than TR-001 through TR-007 (which quote explicit constraints). No technical requirement here should be read as a stack choice — that's still fully open (Q-006, Q-007, Q-001).

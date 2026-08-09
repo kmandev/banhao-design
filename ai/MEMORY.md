@@ -28,21 +28,28 @@ No application code exists yet — this is a design-and-documentation-only repos
 
 ## Open Questions
 
-8 open questions, Q-001 through Q-008. The three blocking everything else: **Q-001** (payment provider), **Q-006** (backend stack), **Q-007** (database). Full list: [`ai/KNOWLEDGE/QUESTIONS.md`](KNOWLEDGE/QUESTIONS.md).
+20 open questions, Q-001 through Q-020. The blocking set: **Q-002** (legal/settlement model), **Q-020** (🚨 PromptPay refund mechanism — no provider supports native refunds), **Q-001** (payment provider), **Q-006** (backend stack), **Q-007** (database), **Q-010** (platform fee). Full list: [`ai/KNOWLEDGE/QUESTIONS.md`](KNOWLEDGE/QUESTIONS.md).
 
 ## Active Tasks
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
+- **Commission Thai legal/compliance review (P0)** — recommended first action; has external lead time
+- Decide PromptPay refund mechanism (P0) — contradicts documented design
 - Decide payment provider/settlement model (P0)
-- Decide backend technology stack (P0)
-- Decide database technology (P0)
+- Decide backend technology stack (P0) — needs team-capability input first
+- Decide database technology (P0) — recommendation is HIGH confidence, needs approval only
+- Decide platform fee percentage/formula (P0) — ledger cannot balance without it
 - Design Driver/Merchant/Admin apps past wireframe stage (P1)
-- Legal/compliance review for payments (P1)
+- Field-test map coverage in Buntharik (P1) — cannot be done remotely
+
+## Technology Research
+
+Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start with [`EXECUTIVE_SUMMARY.md`](RESEARCH/EXECUTIVE_SUMMARY.md); decisions get recorded in [`HUMAN_DECISION_SHEET.md`](RESEARCH/HUMAN_DECISION_SHEET.md). **All contents are recommendations, not decisions** — every price/capability was checked 2026-08-09 and will age.
 
 ## Recent Events
 
-4 events logged, EVENT-001 through EVENT-004 (design drop → repo reorg → Memory v1 → Memory v2). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+5 events logged, EVENT-001 through EVENT-005 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Important Architecture Rules
 
