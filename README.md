@@ -64,3 +64,14 @@ The `.dc.html` files are self-contained interactive design canvases — open the
 - [`design/tracking/tracking-map.html`](design/tracking/tracking-map.html)
 
 See [AGENTS.md](AGENTS.md) for rules AI coding agents must follow in this repo, and [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes.
+
+## AI Collaboration
+
+This repository contains a shared AI memory system so multiple AI tools (Claude Code, ChatGPT, Gemini, Codex, Cursor, or others) can work on BANHAO in the same context without losing history.
+
+Before working:
+
+1. Read [`ai/HANDOFF.md`](ai/HANDOFF.md)
+2. Read [`ai/MEMORY.md`](ai/MEMORY.md)
+3. Read [`docs/AI_CONTEXT.md`](docs/AI_CONTEXT.md)
+4. Follow [`ai/README.md`](ai/README.md)

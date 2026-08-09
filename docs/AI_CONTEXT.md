@@ -67,11 +67,24 @@ design/              Visual/interactive design canvases, one folder per surface
 assets/              brand/ icons/ illustrations/ (all empty — inline in canvases today) + screenshots/ (QA captures)
 specs/               Functional/behavioral specs per surface — all empty placeholders (TODO)
 archive/             Deprecated/superseded content — empty, nothing archived yet
-ai/                  AI operating protocol, session logs, audit prompts (this system)
+ai/                  AI Memory System v2 — operating protocol, typed knowledge base, session logs,
+                     conversation import, handoff file (see AI Memory System below)
 README.md, AGENTS.md, CONTRIBUTING.md, CHANGELOG.md   Root-level project docs
 ```
 
 Full explanation of every top-level directory: root [`README.md`](../README.md).
+
+## AI Memory System
+
+This file is intentionally kept concise — for the full multi-agent memory system, start with:
+
+- [`ai/HANDOFF.md`](../ai/HANDOFF.md) — short, actionable: current state, next step, what not to do
+- [`ai/MEMORY.md`](../ai/MEMORY.md) — indexed knowledge, links to everything else
+- [`ai/KNOWLEDGE/`](../ai/KNOWLEDGE/) — typed, ID'd entries: `FACTS.md`, `REQUIREMENTS.md`, `CONSTRAINTS.md`, `ASSUMPTIONS.md`, `QUESTIONS.md`, `PROPOSALS.md`, `EVENTS.md`, `ARCHITECTURE.md` (cross-reference index)
+- [`ai/CONVERSATIONS/`](../ai/CONVERSATIONS/) — knowledge imported from conversations held outside this repository
+- [`ai/README.md`](../ai/README.md) — the full operating protocol (context-loading levels, memory update workflow, conflict handling)
+
+This `AI_CONTEXT.md` file will not be expanded further to hold that content — new structured knowledge belongs in `ai/KNOWLEDGE/`, not here.
 
 ## Current Architecture
 
@@ -149,7 +162,7 @@ Make the payment-provider and backend-technology decisions blocking all further 
 
 # Instructions for AI Agents
 
-1. Read `docs/AI_CONTEXT.md` (this file) before doing any work.
+1. Read `ai/HANDOFF.md`, then `ai/MEMORY.md`, then `docs/AI_CONTEXT.md` (this file) — before doing any work.
 2. Read `docs/CURRENT_STATUS.md`.
 3. Read `docs/ARCHITECTURE.md`.
 4. Read `docs/DECISIONS.md`.
@@ -164,4 +177,4 @@ Make the payment-provider and backend-technology decisions blocking all further 
 13. Business/product decisions are product truth.
 14. If you are not sure, stop and ask before changing anything important.
 
-See also [`ai/README.md`](../ai/README.md) for the full before/during/after protocol, and [`ai/PROMPTS/AI_AUDIT.md`](../ai/PROMPTS/AI_AUDIT.md) for a ready-made audit prompt.
+See also [`ai/README.md`](../ai/README.md) for the full context-loading protocol, memory-update workflow, conversation-import process, and conflict handling; [`ai/PROMPTS/AI_AUDIT.md`](../ai/PROMPTS/AI_AUDIT.md) for a ready-made audit prompt; and [`ai/KNOWLEDGE/`](../ai/KNOWLEDGE/) for the typed knowledge base (facts, requirements, constraints, assumptions, open questions, proposals, events).
