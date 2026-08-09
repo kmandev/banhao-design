@@ -151,3 +151,30 @@ Five `DESIGN_QUESTION` items (DQ-01…DQ-05) were recorded rather than guessed, 
 Verified: 84 tests pass (33 customer, 14 UI component, 37 pre-existing); lint, typecheck, and build pass. The app was built and driven on an iPhone 16 Pro simulator — screens 01–03 confirmed visually; **04–18 were NOT visually verified** because no Supabase project is configured, recorded honestly in `docs/CUSTOMER_APP_VISUAL_QA.md`.
 
 Also fixed during this work: the monorepo now pins one React version (`pnpm.overrides`) after two `@types/react` majors collided, and `@banhao/ui` exposes framework-agnostic tokens on a `./theme` subpath so the Next.js admin does not bundle React Native.
+
+---
+
+## EVENT-009
+
+```yaml
+id: EVENT-009
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/customer-app
+confidence: HIGH
+```
+
+**Customer App final QA before merge.** The one MUST-FIX from review — IBM Plex Sans Thai not applied — is resolved.
+
+All four design weights (400/500/600/700) are now **bundled with the app** via `@expo-google-fonts/ibm-plex-sans-thai` + `expo-font`; Metro packages the TTF files at build time and nothing is fetched from Google at runtime. `App.tsx` holds the splash until fonts resolve, and falls through to the platform face if loading fails rather than hanging.
+
+Weights are selected by **family name**, not `fontWeight` — React Native registers each weight as a separate family and Android ignores `fontWeight` alongside a custom `fontFamily`. All 19 component and screen files were converted.
+
+**A false alarm was investigated and dismissed rather than reported.** At moderate zoom the heading "สั่งอาหารในบุณฑริก" appeared to be missing its ไม้เอก. Verified three ways — maximum-magnification crop of the running app, the bundled TTFs rendered in a browser at all four weights, and the same character combination at weight 400 in the app — all correct. The marks merge visually when downscaled. No defect exists; recorded so the next agent does not re-raise it.
+
+Visual QA: **4 / 31 states verified by screenshot** (01 Splash, 02 Onboarding, 03 Login, 04 OTP) on iPhone 16 Pro, with 03 also verified on iPhone SE. The remaining 22 screens and 6 state variants are **UNVERIFIED** — `RootNavigator` gates them behind a session and no Supabase project is configured. No fake session was created.
+
+Authentication: **NOT VERIFIED — Supabase environment not configured.**
+Android: **UNVERIFIED** — no Android SDK on this machine.
+
+84 tests pass; lint, typecheck and build pass. No MAJOR or BLOCKER differences among inspected screens.

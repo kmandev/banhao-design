@@ -36,7 +36,8 @@ P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
 - Review the `feature/customer-app` branch (P0) — Customer App UI complete, awaiting review
 - Answer DQ-01…DQ-05 design questions in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` (P1)
-- Complete visual QA for screens 04–18 (needs a Supabase project) — `docs/CUSTOMER_APP_VISUAL_QA.md` (P1)
+- Complete visual QA for the 22 unverified screens (needs a Supabase project) — `docs/CUSTOMER_APP_VISUAL_QA.md` (P1)
+- Verify the app on Android — per-weight font families are untested there (P1)
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design
 - Decide payment provider/settlement model (P0)
@@ -50,7 +51,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-8 events logged, EVENT-001 through EVENT-008 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → **Customer App implementation**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+9 events logged, EVENT-001 through EVENT-009 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → **final QA / typography**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Important Architecture Rules
 

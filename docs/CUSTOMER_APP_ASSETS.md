@@ -17,30 +17,37 @@ placeholder is documented rather than quietly shipped.
 **No real asset was replaced by a placeholder.** Every glyph the app renders is
 the glyph the design specifies.
 
-## Fonts — the one genuine gap
+## Fonts — RESOLVED
 
-The design specifies **IBM Plex Sans Thai** (weights 400/500/600/700), loaded
-from Google Fonts in the `.dc.html` canvases:
+The design specifies **IBM Plex Sans Thai** at weights 400/500/600/700. All
+four are now **bundled with the app**.
 
-```html
-family=IBM+Plex+Sans+Thai:wght@400;500;600;700
+| Item | Detail |
+|---|---|
+| Package | `@expo-google-fonts/ibm-plex-sans-thai@0.4.1` + `expo-font@~13.0.4` |
+| Files | Real `.ttf` files ship inside the package and are packaged by Metro at build time |
+| Runtime fetch | **None.** Nothing is requested from Google at runtime |
+| Loading | `useFonts` in `App.tsx`; the splash screen is held until fonts resolve, so no frame paints in the fallback face |
+| Failure behaviour | On font error the app still starts in the platform face rather than hanging on the splash — a wrong typeface beats an unusable app |
+
+**Weights are selected by family name, not `fontWeight`.** React Native
+registers each weight as its own family, and Android ignores `fontWeight` when
+a custom `fontFamily` is set. `packages/ui/src/theme/tokens.ts` therefore
+exposes:
+
+```ts
+fontFamily.regular  // IBMPlexSansThai_400Regular
+fontFamily.medium   // IBMPlexSansThai_500Medium
+fontFamily.semibold // IBMPlexSansThai_600SemiBold
+fontFamily.bold     // IBMPlexSansThai_700Bold
 ```
 
-**The font files are not vendored, and the app does not load them.**
-`packages/ui/src/theme/tokens.ts` declares the family name, but React Native
-falls back to the platform Thai face at runtime.
+Any new text style must set one of these. A style with `fontSize` but no
+`fontFamily` silently falls back to the system face.
 
-Consequence: Thai text renders correctly and legibly, but not in the designed
-typeface. Classified **MINOR** in `docs/CUSTOMER_APP_VISUAL_QA.md`.
-
-To close it:
-
-1. Add `expo-font` and vendor the four weights under `apps/customer/assets/fonts/`.
-2. Load them at startup and keep the splash visible until they resolve.
-3. Confirm `fontFamily.sans` in the token file matches the loaded family name.
-
-Not done in this step because it changes app startup behaviour (font loading
-gates first render) and the brief scoped this step to UI implementation.
+Verified on iPhone 16 Pro and iPhone SE — see `docs/CUSTOMER_APP_VISUAL_QA.md`,
+including a recorded false alarm about Thai tone-mark stacking that turned out
+to be a magnification artefact, not a defect.
 
 ## Intentional placeholders
 

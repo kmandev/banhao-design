@@ -1,80 +1,109 @@
 # Customer App — Visual QA
 
-Date: 2026-08-09 · Device: iPhone 16 Pro simulator (iOS, 402×874 pt) · Expo dev build
+Date: 2026-08-10 · Expo SDK 52 dev build
+Devices: **iPhone 16 Pro** (402×874 pt) and **iPhone SE 3rd gen** (375×667 pt)
 
-**This is a partial pass, and the limits are stated plainly below rather than
-implied.** The app was genuinely built, launched, and driven on a simulator —
-not only read as source — but not every screen could be reached visually.
+Everything below was executed — the app was built, launched, and driven on
+simulators. Screens that could not be reached are labelled `UNVERIFIED`, not
+inferred from source.
 
-## What was actually executed
+## Typography — now PASS
 
-```
-Metro bundle:  iOS Bundled 6653ms apps/customer/index.ts (994 modules)
-```
+**IBM Plex Sans Thai is bundled and applied.** Weights 400/500/600/700 ship as
+TTF assets inside `@expo-google-fonts/ibm-plex-sans-thai` and are packaged by
+Metro at build time. Nothing is fetched from Google at runtime. Rendering is
+held on the splash screen until fonts resolve, so no frame paints in the
+fallback face.
 
-The app launches, renders, and navigates on a real simulator. Screens reached
-and inspected by screenshot:
+Bundle grew 994 → **1012 modules** after adding the font assets.
 
-| # | Screen | Result | Notes |
+### A false alarm worth recording
+
+At moderate zoom the heading "สั่งอาหารในบุณฑริก" appeared to be missing its
+ไม้เอก, reading as "สัง". At full magnification the mark is present — the
+ไม้เอก sits directly above the ไม้หันอากาศ and the two merge visually when
+downscaled.
+
+Confirmed three ways before concluding:
+
+1. Maximum-magnification crop of the running app —
+   [`typography-thai-marks-zoom.png`](qa/customer-app/typography-thai-marks-zoom.png)
+   shows both stacked marks.
+2. The **exact bundled TTF files** rendered in a browser at all four weights —
+   "สั่ง", "ที่", "ง่าย", "เข้าสู่" all correct at 400/500/600/700.
+3. Body copy at weight 400 in the app ("รู้ราคาก่อนสั่งเสมอ") renders the same
+   combination correctly.
+
+**No mark-positioning defect exists.** Recorded because the initial reading was
+wrong, and a false `MAJOR` would have been worse than the real finding.
+
+## Screens verified by screenshot
+
+| # | Screen | Device | Result |
 |---|---|---|---|
-| 01 | Splash | **MATCH** | Brand mark, `#E4572E` tile, centred layout, spinner. Shown while the session resolves, then replaced — verified in the navigation test too. |
-| 02 | Onboarding | **MATCH** | Copy renders verbatim from the design: "สั่งอาหารในบุณฑริก ง่ายกว่าที่เคย" and "ร้านในบุณฑริกให้เลือกเพียบ / ค่าส่งเริ่มต้น 10 บาท รู้ราคาก่อนสั่งเสมอ". Safe-area top and home-indicator bottom both respected. CTA pinned to the bottom. |
-| 03 | เข้าสู่ระบบ | **MATCH** | `+66` prefix renders inside the field; CTA correctly **disabled** until a valid Thai number is entered (validated by the shared `thaiPhoneSchema`); dev-mode notice shows because Supabase is unconfigured. |
+| 01 | Splash | 16 Pro | **MATCH** — brand tile `#E4572E`, centred, spinner |
+| 02 | Onboarding | 16 Pro | **MATCH** — design copy verbatim, safe areas respected, CTA pinned above home indicator |
+| 03 | เข้าสู่ระบบ | 16 Pro **and SE** | **MATCH** — `+66` prefix, CTA correctly disabled until the number validates, dev-mode notice |
+| 04 | ยืนยัน OTP | 16 Pro | **MATCH** — 6-digit field, error state (red border + red alert text), resend countdown elapsing to an enabled "ขอรหัสใหม่" |
 
-Screenshot artifact: [`docs/qa/customer-app/03-login.png`](qa/customer-app/03-login.png)
+Artifacts in [`docs/qa/customer-app/`](qa/customer-app/).
 
-## What could NOT be visually verified, and why
+## Screens NOT verified — `UNVERIFIED`
 
-**Screens 04–18 and the payment sub-states were not reached on the simulator.**
+**05, 06, 07, 08, 09, 10, 11, 12, 12b, 12c, 12d, 12e, 12f, 12g, 12h, 13, 14,
+15, 16, 17, 18** — 22 screens, plus the 6 state variants behind them.
 
-Two blockers, both honest:
+Reason: `RootNavigator` selects the customer tree from session state, and **no
+Supabase project is configured**, so authentication cannot complete. Faking a
+session would have produced screenshots that prove nothing about the real app
+and would violate the instruction not to create a fake session.
 
-1. **No Supabase project is configured.** `RootNavigator` branches on session
-   state, so the authenticated tree (Home, Search, Shop, Cart, Checkout,
-   payment, tracking, Orders, Notifications, Profile) is unreachable without a
-   real sign-in. Faking a session would have meant adding non-production code
-   purely to make QA look complete, which is worse than reporting the gap.
-2. **Simulator text entry did not register** on the phone field, so even the
-   OTP screen (04) could not be reached by driving the UI. The field and its
-   validation are exercised by tests instead.
+They are covered by **29 automated smoke tests** that mount each screen and
+assert its root renders, including every state variant. That is real evidence
+of *not crashing*; it is **not** evidence of visual fidelity. Spacing, colour,
+and typography on those screens remain unverified against the design artifact.
 
-These screens are covered by **28 automated smoke tests** that mount each one
-and assert its root testID renders, including every state variant. That is
-weaker evidence than a screenshot for *visual* fidelity — spacing, colour, and
-typography on those screens remain **unverified against the design artifact**.
+**Visual QA total: 4 / 31 verified.**
+
+## Authentication QA — `NOT VERIFIED — Supabase environment not configured`
+
+None of session persistence, logout, profile loading, invalid OTP, expired OTP,
+or resend-OTP was tested against a real backend.
+
+What *was* observed: the OTP screen's error path renders correctly when
+verification fails, and the resend countdown completes and re-enables. Both are
+UI behaviours, not backend verification.
 
 ## Difference classification
 
-Per brief §26. `MAJOR` and `BLOCKER` must be fixed before this step closes.
-
 | Difference | Class | Status |
 |---|---|---|
-| IBM Plex Sans Thai not applied — the design specifies it, but no font files are vendored, so RN falls back to the system Thai face | **MINOR** | Open. Tracked in `docs/CUSTOMER_APP_ASSETS.md`. Thai text renders correctly and legibly; only the typeface differs. |
-| Shop/product imagery uses emoji glyphs | **MATCH** | Not a difference — the design artifact itself uses emoji as image placeholders. |
-| PromptPay QR is a labelled placeholder, not a scannable code | **MINOR (intentional)** | Generating a real QR requires a payment provider; Q-001 is `OPEN`. A fake scannable code would be worse than an obvious placeholder. |
-| Tracking map is a labelled placeholder | **MINOR (intentional)** | Needs a maps provider; Q-018 (rural Buntharik coverage) is unverified. |
-| Screens 04–18 not visually compared | **UNVERIFIED** | Not classifiable without a screenshot. See blockers above. |
+| Thai tone-mark stacking | **MATCH** | Verified three ways (above). Not a defect. |
+| IBM Plex Sans Thai applied | **MATCH** | Bundled, loaded at startup, all four weights |
+| Emoji used for shop/product imagery | **MATCH** | The design artifact itself uses emoji placeholders |
+| PromptPay QR is a labelled placeholder | **MINOR (intentional)** | Needs a provider; Q-001 `OPEN`. A fake scannable code would be actively dangerous |
+| Tracking map is a labelled placeholder | **MINOR (intentional)** | Needs a maps provider; Q-018 unverified |
+| App icon / splash image not configured | **MINOR** | Expo defaults; needs brand assets that don't exist |
+| 22 screens + 6 variants not visually compared | **UNVERIFIED** | Not classifiable without screenshots |
 
-**No MAJOR or BLOCKER differences were found among the screens that could be
-inspected.** Nothing is claimed about the screens that could not be.
+**MAJOR: none. BLOCKER: none** — among what could be inspected. Nothing is
+claimed about the 22 unverified screens.
 
-## Device and layout checks performed
+## Device checks
 
-- **Safe area** — top inset (Dynamic Island) and bottom home indicator both
-  respected on every inspected screen, via the shared `Screen` component.
-- **Bottom CTA** — pinned above the home indicator, not overlapping it.
-- **Thai typography** — renders without clipping; multi-line Thai wraps
-  correctly with the design's line heights.
-- **Touch targets** — Button/Stepper/star controls are ≥44 pt (`sizes.touchTarget`).
-- **Keyboard avoidance** — implemented via `KeyboardAvoidingView`, but **not
-  visually confirmed**, since text entry did not register.
+| Device | Result | Notes |
+|---|---|---|
+| iPhone 16 Pro (402×874) | **PASS** | Dynamic Island inset and home indicator respected; bottom CTA never overlaps |
+| iPhone SE 3rd gen (375×667) | **PASS** | Login renders without clipping or overflow at the smallest current iPhone width; Thai wraps correctly |
+| Android | **UNVERIFIED** | No Android SDK or emulator on this machine. ⚠️ Android is the platform most likely to differ: it ignores `fontWeight` with a custom `fontFamily`, which is why weights are selected by family name — but that mapping is untested there. |
 
-## To complete this pass
+Keyboard avoidance is implemented via `KeyboardAvoidingView` but **not visually
+confirmed** — simulator text entry did not register on the phone field.
+
+## To finish this pass
 
 1. Configure a Supabase project (`EXPO_PUBLIC_SUPABASE_URL`,
-   `EXPO_PUBLIC_SUPABASE_ANON_KEY`) and enable the Phone provider, then sign in
-   and screenshot screens 04–18 and 12b–12h against the design canvas.
-2. Vendor IBM Plex Sans Thai (see `docs/CUSTOMER_APP_ASSETS.md`) and re-check
-   typography.
-3. Re-run on a small device (e.g. iPhone SE) and on Android for layout
-   differences — only iPhone 16 Pro was checked.
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY`), enable the Phone provider, sign in, then
+   screenshot the 22 remaining screens against the design canvas.
+2. Run on an Android emulator — verify per-weight font families resolve.
+3. Confirm keyboard avoidance on a device where text entry works.

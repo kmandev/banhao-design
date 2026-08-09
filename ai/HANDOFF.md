@@ -4,7 +4,7 @@ Read this right after `docs/AI_CONTEXT.md`. Kept short and actionable on purpose
 
 ## Current Date
 
-2026-08-09
+2026-08-10
 
 ## Current Project State
 
@@ -14,11 +14,11 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-Customer App implementation (EVENT-008). Design audit found the artifact holds **31 addressable states**, not 18 — see `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`. All implemented. 84 tests pass; app built and driven on an iPhone 16 Pro simulator.
+Customer App final QA (EVENT-009). **IBM Plex Sans Thai is now bundled** (all four weights, no runtime fetch) — the review's one MUST-FIX. 84 tests pass. Visual QA reached **4 of 31 states**; the rest are gated behind a Supabase session that does not exist.
 
 ## Current Work
 
-None active. Awaiting review of `feature/customer-app`.
+None active. Awaiting review of `feature/customer-app`. **Not ready for merge** — 22 screens are UNVERIFIED and authentication was never tested against a real backend.
 
 ## Immediate Next Step
 
@@ -75,7 +75,9 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - API auth tests use mocks. **RLS is verified by real execution** (`./supabase/tests/run-rls-tests.sh`), but against a plain Postgres container with a Supabase auth shim — GoTrue, real JWT issuance, and PostgREST are NOT exercised. End-to-end auth against a live Supabase project remains unverified.
 - `profiles.phone` is deliberately not client-writable: it mirrors the Auth identity. Self-service phone change must go through Supabase Auth's OTP-verified flow, not a direct table update.
 - `support.js` is intentionally duplicated 4× (FACT-010) — don't "clean it up".
-- **Customer App screens 04–18 have NOT been visually verified** against the design — no Supabase project means the authenticated tree can't be reached on a simulator. They pass smoke tests only. See `docs/CUSTOMER_APP_VISUAL_QA.md`.
+- **22 Customer App screens are UNVERIFIED** against the design — no Supabase project means the authenticated tree can't be reached. They pass smoke tests only, which proves they don't crash, not that they look right. See `docs/CUSTOMER_APP_VISUAL_QA.md`.
+- **Android is untested.** Font weights are selected by family name specifically because Android ignores `fontWeight` with a custom `fontFamily` — that mapping has never run on Android.
+- Thai tone-mark stacking was investigated and is **correct**; do not re-raise it. The marks merge visually at low zoom. Evidence: `docs/qa/customer-app/typography-thai-marks-zoom.png`.
 - The monorepo pins one React version via `pnpm.overrides`. Bumping React in one app without the others will reintroduce a `@types/react` collision.
 - `@banhao/ui` imports React Native. Web consumers must import tokens from `@banhao/ui/theme`, never the barrel, or Next will try to bundle RN.
 
@@ -86,6 +88,8 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not merge Order state and Payment state, use floats for money, or let Realtime/cache be financial truth.
 - Do not re-design the Customer App. The design artifact is the source of truth; record a `DESIGN_QUESTION` instead of guessing.
 - Do not put mock data inside a UI component — it goes in `src/mocks/` behind a repository.
+- Do not add a text style with `fontSize` but no `fontFamily` — it silently falls back to the system face.
+- Do not create a fake Supabase session to make visual QA look complete.
 - Do not build Merchant, Driver, or Admin apps without an explicit instruction.
 - Do not commit `.env` or any credential — CI fails the build on this.
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.

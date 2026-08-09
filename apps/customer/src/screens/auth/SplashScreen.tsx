@@ -1,5 +1,10 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, fontWeight, spacing } from '@banhao/ui';
+import {
+  colors,
+  fontFamily,
+  fontSize,
+  spacing,
+} from '@banhao/ui';
 
 /**
  * 01 Splash.
@@ -37,13 +42,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  markGlyph: { fontSize: 34 },
+  markGlyph: { fontFamily: fontFamily.regular, fontSize: 34 },
   brand: {
     fontSize: fontSize.h1,
-    fontWeight: fontWeight.bold,
+    fontFamily: fontFamily.bold,
     letterSpacing: 4,
     color: colors.textPrimary,
   },
-  subtitle: { fontSize: fontSize.md, color: colors.textMuted },
+  subtitle: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
   spinner: { marginTop: spacing.xl },
 });

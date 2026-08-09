@@ -10,8 +10,8 @@ import {
   PriceRow,
   SectionHeader,
   colors,
+  fontFamily,
   fontSize,
-  fontWeight,
   spacing,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
@@ -137,11 +137,11 @@ export function CheckoutScreen() {
 const styles = StyleSheet.create({
   items: { gap: spacing.md },
   itemRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
-  itemQty: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.textMuted },
+  itemQty: { fontSize: fontSize.md, fontFamily: fontFamily.semibold, color: colors.textMuted },
   itemBody: { flex: 1, gap: 2 },
-  itemName: { fontSize: fontSize.md, color: colors.textPrimary },
-  itemOptions: { fontSize: fontSize.sm, color: colors.textMuted },
-  itemPrice: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.textPrimary },
+  itemName: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textPrimary },
+  itemOptions: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
+  itemPrice: { fontSize: fontSize.md, fontFamily: fontFamily.semibold, color: colors.textPrimary },
   methods: { gap: spacing.sm },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
 });

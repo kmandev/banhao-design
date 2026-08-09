@@ -1,5 +1,13 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, SectionHeader, StateView, colors, fontSize, fontWeight, spacing } from '@banhao/ui';
+import {
+  Card,
+  SectionHeader,
+  StateView,
+  colors,
+  fontFamily,
+  fontSize,
+  spacing,
+} from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
@@ -55,10 +63,10 @@ const styles = StyleSheet.create({
   // Unread rows get the design's warm tint rather than a heavier treatment.
   cardUnread: { backgroundColor: colors.primarySoft, borderColor: colors.surfaceAccent },
   row: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
-  glyph: { fontSize: 24 },
+  glyph: { fontFamily: fontFamily.regular, fontSize: 24 },
   body: { flex: 1, gap: 3 },
-  title: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.textPrimary },
-  text: { fontSize: fontSize.md, color: colors.textMuted, lineHeight: 20 },
-  time: { fontSize: fontSize.sm, color: colors.textSubtle },
+  title: { fontSize: fontSize.lg, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  text: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted, lineHeight: 20 },
+  time: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSubtle },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, marginTop: 6 },
 });

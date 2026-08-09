@@ -8,8 +8,8 @@ import {
   Card,
   SectionHeader,
   colors,
+  fontFamily,
   fontSize,
-  fontWeight,
   radius,
   spacing,
 } from '@banhao/ui';
@@ -107,10 +107,10 @@ function StarRow({
 
 const styles = StyleSheet.create({
   block: { gap: spacing.md },
-  label: { fontSize: fontSize.xxl, fontWeight: fontWeight.semibold, color: colors.textPrimary },
+  label: { fontSize: fontSize.xxl, fontFamily: fontFamily.semibold, color: colors.textPrimary },
   starRow: { flexDirection: 'row', gap: spacing.sm },
   star: { padding: spacing.xs, minWidth: 44, minHeight: 44, justifyContent: 'center' },
-  starGlyph: { fontSize: 32 },
+  starGlyph: { fontFamily: fontFamily.regular, fontSize: 32 },
   comment: {
     minHeight: 96,
     padding: spacing.lg,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    fontSize: fontSize.lg,
+    fontFamily: fontFamily.regular, fontSize: fontSize.lg,
     color: colors.textPrimary,
     textAlignVertical: 'top',
   },

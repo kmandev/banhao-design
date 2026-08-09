@@ -55,7 +55,7 @@ matches the numbered count.
 | Accent bg | `#F3E7D6` | 14 |
 | Radius | 12, 14, 16, 18, 20, 22, 28 px | 16px most common (41×) |
 | Font sizes | 11–26 px; 13px most common (51×) | — |
-| Font | IBM Plex Sans Thai, weights 400/500/600/700 | Google Fonts link in `<head>` |
+| Font | IBM Plex Sans Thai, weights 400/500/600/700 | Google Fonts link in `<head>`. **Bundled with the app** since 2026-08-10 — weights are selected by family name, not `fontWeight`. See `docs/CUSTOMER_APP_ASSETS.md` |
 | Shadow (bottom bar) | `0 -6px 20px rgba(31,26,22,.06)` | — |
 | Shadow (sheet) | `0 -8px 30px rgba(31,26,22,.16)` | — |
 | Focus ring | `0 0 0 3px rgba(228,87,46,.14)` | — |

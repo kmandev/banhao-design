@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Input, colors, fontSize, fontWeight, spacing } from '@banhao/ui';
+import {
+  Button,
+  Input,
+  colors,
+  fontFamily,
+  fontSize,
+  spacing,
+} from '@banhao/ui';
 import { thaiPhoneSchema } from '@banhao/validation';
 import { Screen } from '../../components/Screen';
 import { useAuth } from '../../hooks/useAuth';
@@ -91,10 +98,10 @@ export function LoginScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.xxl, paddingBottom: spacing.lg, gap: spacing.sm },
-  title: { fontSize: fontSize.h2, fontWeight: fontWeight.bold, color: colors.textPrimary },
-  copy: { fontSize: fontSize.lg, color: colors.textMuted },
+  title: { fontSize: fontSize.h2, fontFamily: fontFamily.bold, color: colors.textPrimary },
+  copy: { fontFamily: fontFamily.regular, fontSize: fontSize.lg, color: colors.textMuted },
   notice: {
-    fontSize: fontSize.sm,
+    fontFamily: fontFamily.regular, fontSize: fontSize.sm,
     color: colors.textSubtle,
     textAlign: 'center',
     marginTop: spacing.md,

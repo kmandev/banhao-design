@@ -9,8 +9,8 @@ import {
   StateView,
   StatusTimeline,
   colors,
+  fontFamily,
   fontSize,
-  fontWeight,
   radius,
   spacing,
 } from '@banhao/ui';
@@ -150,9 +150,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  mapGlyph: { fontSize: 48 },
-  mapNote: { fontSize: fontSize.sm, color: colors.textMuted },
+  mapGlyph: { fontFamily: fontFamily.regular, fontSize: 48 },
+  mapNote: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
   summary: { gap: spacing.xs },
-  orderId: { fontSize: fontSize.xl, fontWeight: fontWeight.semibold, color: colors.textPrimary },
-  eta: { fontSize: fontSize.md, color: colors.textMuted },
+  orderId: { fontSize: fontSize.xl, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  eta: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
 });

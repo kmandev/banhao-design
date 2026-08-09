@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, fontSize, fontWeight, sizes, spacing } from '../theme/tokens';
+import { colors, fontFamily, fontSize, radius, sizes, spacing } from '../theme/tokens';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 
@@ -86,9 +86,9 @@ const styles = StyleSheet.create({
   },
   fullWidth: { alignSelf: 'stretch' },
   content: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  icon: { fontSize: fontSize.xl },
-  label: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold },
-  trailing: { fontSize: fontSize.lg, fontWeight: fontWeight.bold },
+  icon: { fontFamily: fontFamily.regular, fontSize: fontSize.xl },
+  label: { fontSize: fontSize.lg, fontFamily: fontFamily.semibold },
+  trailing: { fontSize: fontSize.lg, fontFamily: fontFamily.bold },
 
   primary: { backgroundColor: colors.primary },
   primaryPressed: { backgroundColor: colors.primaryPressed },

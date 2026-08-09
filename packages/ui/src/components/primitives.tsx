@@ -8,7 +8,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, fontSize, fontWeight, sizes, spacing, shadows } from '../theme/tokens';
+import { colors, fontFamily, fontSize, radius, shadows, sizes, spacing } from '../theme/tokens';
 
 /* ------------------------------------------------------------------ Card */
 
@@ -56,7 +56,7 @@ export function Avatar({ glyph, size = sizes.avatarMd }: { glyph: string; size?:
       accessible={false}
       style={[styles.avatar, { width: size, height: size, borderRadius: size / 3 }]}
     >
-      <Text style={{ fontSize: size * 0.5 }}>{glyph}</Text>
+      <Text style={{ fontFamily: fontFamily.regular, fontSize: size * 0.5 }}>{glyph}</Text>
     </View>
   );
 }
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     alignSelf: 'flex-start',
   },
-  badgeText: { fontSize: fontSize.xs, fontWeight: fontWeight.semibold },
+  badgeText: { fontSize: fontSize.xs, fontFamily: fontFamily.semibold },
   badge_neutral: { backgroundColor: colors.surfaceAlt },
   badgeText_neutral: { color: colors.textMuted },
   badge_success: { backgroundColor: colors.successSoft },
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
   },
 
   inputBlock: { gap: spacing.sm },
-  inputLabel: { fontSize: fontSize.base, color: colors.textMuted },
+  inputLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.base, color: colors.textMuted },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -243,9 +243,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   inputWrapError: { borderColor: colors.danger },
-  inputPrefix: { fontSize: fontSize.xl, color: colors.textMuted },
-  input: { flex: 1, fontSize: fontSize.xl, color: colors.textPrimary, paddingVertical: spacing.md },
-  inputError: { fontSize: fontSize.sm, color: colors.danger },
+  inputPrefix: { fontFamily: fontFamily.regular, fontSize: fontSize.xl, color: colors.textMuted },
+  input: { flex: 1, fontFamily: fontFamily.regular, fontSize: fontSize.xl, color: colors.textPrimary, paddingVertical: spacing.md },
+  inputError: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.danger },
 
   stepper: {
     flexDirection: 'row',
@@ -263,10 +263,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
   },
   stepperBtnDisabled: { opacity: 0.4 },
-  stepperGlyph: { fontSize: fontSize.h3, color: colors.textPrimary },
+  stepperGlyph: { fontFamily: fontFamily.regular, fontSize: fontSize.h3, color: colors.textPrimary },
   stepperValue: {
     fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamily.semibold,
     color: colors.textPrimary,
     minWidth: 24,
     textAlign: 'center',
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: fontSize.xxl,
-    fontWeight: fontWeight.bold,
+    fontFamily: fontFamily.bold,
     color: colors.textPrimary,
   },
 
@@ -290,14 +290,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 5,
   },
-  priceLabel: { fontSize: fontSize.md, color: colors.textMuted },
+  priceLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
   priceLabelEmphasis: {
     color: colors.textPrimary,
     fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamily.semibold,
   },
-  priceAmount: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.textPrimary },
-  priceAmountEmphasis: { fontSize: fontSize.h3, fontWeight: fontWeight.bold },
+  priceAmount: { fontSize: fontSize.md, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  priceAmountEmphasis: { fontSize: fontSize.h3, fontFamily: fontFamily.bold },
   priceDiscount: { color: colors.success },
 
   bottomBar: {

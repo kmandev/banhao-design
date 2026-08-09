@@ -84,21 +84,34 @@ export const fontSize = {
   h1: 26,
 } as const;
 
+/**
+ * IBM Plex Sans Thai — the design's typeface, bundled with the app.
+ *
+ * React Native does NOT synthesize weights from a single family: each weight is
+ * registered under its own family name. Android in particular ignores
+ * `fontWeight` when a custom `fontFamily` is set. So styles select a weight by
+ * choosing a family here, not by setting `fontWeight`.
+ *
+ * Names match the exports of @expo-google-fonts/ibm-plex-sans-thai, whose TTF
+ * files are bundled by Metro at build time — nothing is fetched at runtime.
+ */
+export const fontFamily = {
+  regular: 'IBMPlexSansThai_400Regular',
+  medium: 'IBMPlexSansThai_500Medium',
+  semibold: 'IBMPlexSansThai_600SemiBold',
+  bold: 'IBMPlexSansThai_700Bold',
+} as const;
+
+/**
+ * Numeric weights, kept for reference against the design (which specifies
+ * 400/500/600/700). Prefer `fontFamily` above in React Native styles — see the
+ * note there.
+ */
 export const fontWeight = {
   regular: '400',
   medium: '500',
   semibold: '600',
   bold: '700',
-} as const;
-
-/**
- * IBM Plex Sans Thai is the design's typeface. The font files are not vendored
- * yet — see docs/CUSTOMER_APP_ASSETS.md. Until then React Native falls back to
- * the platform default, which is a known visual difference, not an oversight.
- */
-export const fontFamily = {
-  sans: 'IBMPlexSansThai',
-  mono: 'IBMPlexMono',
 } as const;
 
 /** Shadows transcribed from the artifact's box-shadow declarations. */

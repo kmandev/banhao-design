@@ -10,8 +10,8 @@ import {
   StateView,
   Stepper,
   colors,
+  fontFamily,
   fontSize,
-  fontWeight,
   spacing,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
@@ -113,12 +113,12 @@ const styles = StyleSheet.create({
   line: { gap: spacing.md },
   lineHeader: { flexDirection: 'row', gap: spacing.md },
   lineBody: { flex: 1, gap: 3 },
-  lineName: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.textPrimary },
-  lineOptions: { fontSize: fontSize.sm, color: colors.textMuted },
-  lineNote: { fontSize: fontSize.sm, color: colors.textSubtle, fontStyle: 'italic' },
-  lineTotal: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.textPrimary },
+  lineName: { fontSize: fontSize.lg, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  lineOptions: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
+  lineNote: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSubtle, fontStyle: 'italic' },
+  lineTotal: { fontSize: fontSize.xl, fontFamily: fontFamily.bold, color: colors.textPrimary },
   lineActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  remove: { fontSize: fontSize.md, color: colors.danger, padding: spacing.sm },
+  remove: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.danger, padding: spacing.sm },
   summary: { marginTop: spacing.md },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
 });

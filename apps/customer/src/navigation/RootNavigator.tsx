@@ -2,7 +2,12 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, fontWeight, sizes } from '@banhao/ui';
+import {
+  colors,
+  fontFamily,
+  fontSize,
+  sizes,
+} from '@banhao/ui';
 import { useAuth } from '../hooks/useAuth';
 import type { AuthStackParamList, CustomerStackParamList, CustomerTabParamList } from './types';
 
@@ -95,7 +100,7 @@ function CustomerTabs() {
 const headerOptions = {
   headerStyle: { backgroundColor: colors.surface },
   headerTintColor: colors.textPrimary,
-  headerTitleStyle: { fontSize: fontSize.xl, fontWeight: fontWeight.semibold },
+  headerTitleStyle: { fontSize: fontSize.xl, fontFamily: fontFamily.semibold },
   headerShadowVisible: false,
 } as const;
 
@@ -212,7 +217,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   tabItem: { alignItems: 'center', gap: 3, width: 72 },
-  tabIcon: { fontSize: 20 },
-  tabLabel: { fontSize: fontSize.xs, color: colors.textFaint },
-  tabLabelActive: { color: colors.primary, fontWeight: fontWeight.semibold },
+  tabIcon: { fontFamily: fontFamily.regular, fontSize: 20 },
+  tabLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textFaint },
+  tabLabelActive: { color: colors.primary, fontFamily: fontFamily.semibold },
 });

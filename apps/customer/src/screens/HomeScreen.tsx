@@ -8,8 +8,8 @@ import {
   ShopCard,
   StateView,
   colors,
+  fontFamily,
   fontSize,
-  fontWeight,
   radius,
   spacing,
 } from '@banhao/ui';
@@ -131,8 +131,8 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.lg, gap: spacing.xs },
-  greeting: { fontSize: fontSize.h2, fontWeight: fontWeight.bold, color: colors.textPrimary },
-  location: { fontSize: fontSize.md, color: colors.textMuted },
+  greeting: { fontSize: fontSize.h2, fontFamily: fontFamily.bold, color: colors.textPrimary },
+  location: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginVertical: spacing.md,
   },
-  searchIcon: { fontSize: fontSize.xl },
-  searchPlaceholder: { fontSize: fontSize.lg, color: colors.textFaint },
+  searchIcon: { fontFamily: fontFamily.regular, fontSize: fontSize.xl },
+  searchPlaceholder: { fontFamily: fontFamily.regular, fontSize: fontSize.lg, color: colors.textFaint },
   chipRow: { gap: spacing.sm, paddingBottom: spacing.sm },
 });

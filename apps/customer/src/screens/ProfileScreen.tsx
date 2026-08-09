@@ -8,8 +8,8 @@ import {
   ListRow,
   SectionHeader,
   colors,
+  fontFamily,
   fontSize,
-  fontWeight,
   spacing,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
@@ -118,9 +118,9 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   identityBody: { flex: 1, gap: spacing.xs },
-  name: { fontSize: fontSize.h3, fontWeight: fontWeight.bold, color: colors.textPrimary },
-  phone: { fontSize: fontSize.md, color: colors.textMuted },
+  name: { fontSize: fontSize.h3, fontFamily: fontFamily.bold, color: colors.textPrimary },
+  phone: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
   editCard: { gap: spacing.md },
-  error: { fontSize: fontSize.sm, color: colors.danger },
+  error: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.danger },
   signOut: { marginTop: spacing.xl },
 });

@@ -1,6 +1,12 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, colors, fontSize, fontWeight, spacing } from '@banhao/ui';
+import {
+  Button,
+  colors,
+  fontFamily,
+  fontSize,
+  spacing,
+} from '@banhao/ui';
 import { Screen } from '../../components/Screen';
 import type { AuthStackParamList } from '../../navigation/types';
 
@@ -38,16 +44,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  markGlyph: { fontSize: 42 },
+  markGlyph: { fontFamily: fontFamily.regular, fontSize: 42 },
   title: {
     fontSize: fontSize.h1,
-    fontWeight: fontWeight.bold,
+    fontFamily: fontFamily.bold,
     color: colors.textPrimary,
     textAlign: 'center',
     lineHeight: 36,
   },
   copy: {
-    fontSize: fontSize.lg,
+    fontFamily: fontFamily.regular, fontSize: fontSize.lg,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 26,

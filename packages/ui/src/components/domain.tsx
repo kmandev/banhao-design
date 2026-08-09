@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, fontSize, fontWeight, sizes, spacing } from '../theme/tokens';
+import { colors, fontFamily, fontSize, radius, sizes, spacing } from '../theme/tokens';
 import { Badge, Card, type BadgeTone } from './primitives';
 import { Button } from './Button';
 
@@ -236,23 +236,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shopGlyph: { fontSize: 30 },
+  shopGlyph: { fontFamily: fontFamily.regular, fontSize: 30 },
   shopBody: { flex: 1, gap: 2 },
   shopTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   shopName: {
     flexShrink: 1,
     fontSize: fontSize.xl,
-    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamily.semibold,
     color: colors.textPrimary,
   },
-  shopRating: { fontSize: fontSize.base, color: colors.textMuted },
-  shopMeta: { fontSize: fontSize.sm, color: colors.textSubtle, lineHeight: 18 },
+  shopRating: { fontFamily: fontFamily.regular, fontSize: fontSize.base, color: colors.textMuted },
+  shopMeta: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSubtle, lineHeight: 18 },
 
   menuRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   menuBody: { flex: 1, gap: 3 },
-  menuName: { fontSize: fontSize.lg, fontWeight: fontWeight.semibold, color: colors.textPrimary },
-  menuDesc: { fontSize: fontSize.sm, color: colors.textMuted, lineHeight: 18 },
-  menuPrice: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.textPrimary },
+  menuName: { fontSize: fontSize.lg, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  menuDesc: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted, lineHeight: 18 },
+  menuPrice: { fontSize: fontSize.xl, fontFamily: fontFamily.bold, color: colors.textPrimary },
   menuThumb: {
     width: 56,
     height: 56,
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menuGlyph: { fontSize: 26 },
+  menuGlyph: { fontFamily: fontFamily.regular, fontSize: 26 },
 
   chip: {
     alignItems: 'center',
@@ -275,9 +275,9 @@ const styles = StyleSheet.create({
     minWidth: 72,
   },
   chipSelected: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  chipIcon: { fontSize: 22 },
-  chipLabel: { fontSize: fontSize.sm, color: colors.textMuted },
-  chipLabelSelected: { color: colors.primary, fontWeight: fontWeight.semibold },
+  chipIcon: { fontFamily: fontFamily.regular, fontSize: 22 },
+  chipLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
+  chipLabelSelected: { color: colors.primary, fontFamily: fontFamily.semibold },
 
   listRow: {
     flexDirection: 'row',
@@ -293,12 +293,12 @@ const styles = StyleSheet.create({
   },
   listRowSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   listRowPressed: { backgroundColor: colors.surfaceAlt },
-  listLeading: { fontSize: 22 },
+  listLeading: { fontFamily: fontFamily.regular, fontSize: 22 },
   listBody: { flex: 1, gap: 2 },
-  listTitle: { fontSize: fontSize.lg, color: colors.textPrimary, fontWeight: fontWeight.medium },
-  listSubtitle: { fontSize: fontSize.sm, color: colors.textMuted, lineHeight: 18 },
-  listTrailing: { fontSize: fontSize.md, color: colors.textMuted },
-  listCheck: { fontSize: fontSize.xl, color: colors.primary, fontWeight: fontWeight.bold },
+  listTitle: { fontSize: fontSize.lg, color: colors.textPrimary, fontFamily: fontFamily.medium },
+  listSubtitle: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted, lineHeight: 18 },
+  listTrailing: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
+  listCheck: { fontSize: fontSize.xl, color: colors.primary, fontFamily: fontFamily.bold },
 
   stateView: {
     flex: 1,
@@ -307,15 +307,15 @@ const styles = StyleSheet.create({
     padding: spacing.xxl,
     gap: spacing.md,
   },
-  stateGlyph: { fontSize: 48 },
+  stateGlyph: { fontFamily: fontFamily.regular, fontSize: 48 },
   stateTitle: {
     fontSize: fontSize.h3,
-    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamily.semibold,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   stateMessage: {
-    fontSize: fontSize.md,
+    fontFamily: fontFamily.regular, fontSize: fontSize.md,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   timelineLine: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 4 },
   timelineLineDone: { backgroundColor: colors.success },
   timelineBody: { flex: 1, paddingBottom: spacing.xl, gap: 2 },
-  timelineLabel: { fontSize: fontSize.lg, color: colors.textMuted },
-  timelineLabelActive: { color: colors.textPrimary, fontWeight: fontWeight.semibold },
-  timelineCaption: { fontSize: fontSize.sm, color: colors.textSubtle },
+  timelineLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.lg, color: colors.textMuted },
+  timelineLabelActive: { color: colors.textPrimary, fontFamily: fontFamily.semibold },
+  timelineCaption: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSubtle },
 });
