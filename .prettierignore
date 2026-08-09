@@ -1,0 +1,9 @@
+node_modules
+dist
+.next
+coverage
+pnpm-lock.yaml
+design/**/support.js
+design/**/*.dc.html
+docs/**/support.js
+docs/**/*.dc.html

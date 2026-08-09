@@ -8,7 +8,7 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 ## Current Reality
 
-No application code exists yet — this is a design-and-documentation-only repository (verified by full-repo search, 2026-08-09). Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md).
+**Application foundation exists and works** (branch `feature/app-foundation`): pnpm/Turborepo monorepo, NestJS API with auth + RBAC, Supabase migrations with RLS, five shared packages, four minimal app shells, Docker, CI. No product features are implemented yet — deliberately. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md).
 
 ## Permanent Facts
 
@@ -16,7 +16,7 @@ No application code exists yet — this is a design-and-documentation-only repos
 
 ## Critical Decisions
 
-8 decisions logged, DEC-001 through DEC-008, all `ACCEPTED`. The two most load-bearing: Order State and Payment State are separate (DEC-002), and payment confirmation is webhook-only (DEC-003). Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
+15 decisions logged, DEC-001 through DEC-015, all `ACCEPTED`. Product rules: Order and Payment State separate (DEC-002), webhook-only confirmation (DEC-003), driver cash is a liability (DEC-004). Stack (2026-08-09): modular monolith (DEC-009), Supabase (DEC-010), NestJS (DEC-011), Expo + Next.js (DEC-012, supersedes DEC-006), monorepo (DEC-013), PostgreSQL as financial system of record (DEC-014), payment abstraction only (DEC-015). Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Critical Constraints
 
@@ -28,17 +28,16 @@ No application code exists yet — this is a design-and-documentation-only repos
 
 ## Open Questions
 
-20 open questions, Q-001 through Q-020. The blocking set: **Q-002** (legal/settlement model), **Q-020** (🚨 PromptPay refund mechanism — no provider supports native refunds), **Q-001** (payment provider), **Q-006** (backend stack), **Q-007** (database), **Q-010** (platform fee). Full list: [`ai/KNOWLEDGE/QUESTIONS.md`](KNOWLEDGE/QUESTIONS.md).
+18 open of 20 logged. **Q-006 and Q-007 are RESOLVED** (DEC-011 NestJS, DEC-010 Supabase). Still blocking payment work: **Q-002** (legal/settlement model), **Q-020** (🚨 PromptPay refund mechanism — no provider supports native refunds), **Q-001** (payment provider — `OPEN` by design, see DEC-015), **Q-010** (platform fee). Full list: [`ai/KNOWLEDGE/QUESTIONS.md`](KNOWLEDGE/QUESTIONS.md).
 
 ## Active Tasks
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
-- **Commission Thai legal/compliance review (P0)** — recommended first action; has external lead time
+- Review and merge the `feature/app-foundation` branch (P0)
+- **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design
 - Decide payment provider/settlement model (P0)
-- Decide backend technology stack (P0) — needs team-capability input first
-- Decide database technology (P0) — recommendation is HIGH confidence, needs approval only
 - Decide platform fee percentage/formula (P0) — ledger cannot balance without it
 - Design Driver/Merchant/Admin apps past wireframe stage (P1)
 - Field-test map coverage in Buntharik (P1) — cannot be done remotely
@@ -49,7 +48,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-5 events logged, EVENT-001 through EVENT-005 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+6 events logged, EVENT-001 through EVENT-006 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → **application foundation**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Important Architecture Rules
 
@@ -70,6 +69,7 @@ Full architecture (state tables, diagrams): [`docs/ARCHITECTURE.md`](../docs/ARC
 | Structured knowledge | `ai/KNOWLEDGE/*.md` | Typed, ID'd, cross-referenceable facts/requirements/constraints/etc. |
 | Historical context | `docs/PROJECT_HISTORY.md`, `ai/SESSION_LOG/`, `ai/CONVERSATIONS/` | Read when you need "why" or "when" |
 | Canonical design | `design/`, `specs/` | The actual product design, not a summary of it |
+| Application code | `apps/`, `packages/`, `supabase/` | See `docs/DEVELOPMENT.md`; AI rules in `ai/DEVELOPMENT_RULES.md` |
 
 Full protocol: [`ai/README.md`](README.md).
 

@@ -361,3 +361,275 @@ None.
 ## Historical decisions not verified
 
 No other product or architecture decisions have recorded evidence in this repository (e.g. why อ.บุณฑริก was chosen as the launch area, why Phase order is Food → Parcel → Ride → Shopping, why PromptPay specifically). These are treated as given product facts from the project brief, not decisions this log can source or date. `Historical decision not verified.`
+
+---
+
+## DEC-009 — Modular Monolith backend architecture
+
+**Status:** ACCEPTED
+**Date:** 2026-08-09
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The backend is a single deployable NestJS service organised into internal modules (auth, users, merchants, restaurants, catalog, orders, payments, refunds, ledger, settlements, drivers, delivery, notifications, admin). Microservices are explicitly excluded.
+
+### Why
+
+CON-001 and CON-003 — the project's two hardest constraints — are about transactional correctness between Order, Payment, and Ledger. A monolith gets that from a single database transaction; a service split would require distributed-transaction patterns to achieve the same guarantee. Stage 1–2 volumes present no scaling problem microservices would solve, and the team is one founder using AI.
+
+### Alternatives
+
+Microservices, serverless, and distributed event-driven were all researched (`ai/RESEARCH/ARCHITECTURE_PATTERN.md`) and rejected as disproportionate to current scale and harmful to the money-correctness constraints.
+
+### Consequences
+
+Module boundaries must be enforced by discipline — no cross-module table access. A module can be extracted later if a concrete scaling need appears.
+
+### Evidence
+
+Product Owner instruction, 2026-08-09 session. Research basis: `ai/RESEARCH/ARCHITECTURE_PATTERN.md`, PROP-001.
+
+### Related Requirements
+
+REQ-002
+
+### Related Architecture
+
+`apps/api/src/modules/README.md`
+
+### Supersedes / Superseded By
+
+PROP-001 (accepted) / None.
+
+---
+
+## DEC-010 — Supabase (PostgreSQL + PostGIS) as database and platform
+
+**Status:** ACCEPTED
+**Date:** 2026-08-09
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+Supabase provides PostgreSQL, PostGIS, Auth, Storage, and Realtime. This resolves **Q-007**.
+
+### Why
+
+PostgreSQL was the highest-confidence recommendation in the research: the only option best-in-class on all three criteria BANHAO's constraints weight — Serializable Snapshot Isolation for ledger integrity, PostGIS indexed KNN for driver matching, and GIN-indexed `jsonb` for phase-generic entities. Supabase bundles auth, storage, and realtime, which suits a solo founder.
+
+### Alternatives
+
+MySQL/MariaDB and MongoDB were researched (`ai/RESEARCH/DATABASE_COMPARISON.md`). MongoDB was rejected because multi-document transactions work against the grain of a financial ledger.
+
+### Consequences
+
+PostgreSQL is the system of record for financial data (DEC-014). Row Level Security must be maintained as a second line of defence. PgBouncer-style connection pooling will be needed as load grows — Supabase provides this.
+
+### Evidence
+
+Product Owner instruction, 2026-08-09. Research basis: `ai/RESEARCH/DATABASE_COMPARISON.md`.
+
+### Related Requirements
+
+REQ-004
+
+### Related Architecture
+
+`supabase/README.md`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-011 — NestJS + TypeScript for the backend
+
+**Status:** ACCEPTED
+**Date:** 2026-08-09
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The API is NestJS with TypeScript, exposing REST with OpenAPI. This resolves **Q-006**.
+
+### Why
+
+Research found a genuine three-way trade (NestJS / Laravel / Go) with no objective winner, and identified team capability as the deciding input. The Product Owner is a solo founder using AI as the development team — NestJS's enforced structure and TypeScript's compile-time feedback are the strongest fit for AI-assisted development, and TypeScript is shared with all four client apps.
+
+### Alternatives
+
+Laravel (deepest Thai hiring pool, best queue tooling) and Go (best real-time efficiency, runs at Grab) — see `ai/RESEARCH/BACKEND_COMPARISON.md`.
+
+### Consequences
+
+One language across backend and all clients, so shared packages work without a language boundary. Note Laravel's Horizon has no NestJS equivalent — queue supervision will need assembling when background jobs are built.
+
+### Evidence
+
+Product Owner instruction, 2026-08-09. Research basis: `ai/RESEARCH/BACKEND_COMPARISON.md`.
+
+### Related Requirements
+
+REQ-002, REQ-003
+
+### Related Architecture
+
+`apps/api/`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-012 — React Native + Expo for mobile; Next.js for admin
+
+**Status:** ACCEPTED
+**Date:** 2026-08-09
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+Customer, Merchant, and Driver apps are React Native + Expo with TypeScript. Admin is Next.js with TypeScript.
+
+### Why
+
+Keeps one language (TypeScript) across every surface, so `@banhao/types`, `@banhao/validation`, and `@banhao/api-client` are shared directly rather than duplicated or generated across a language boundary.
+
+### Alternatives
+
+Flutter for the Driver App was the previously documented design-time intention (DEC-006), with no recorded rationale.
+
+### Consequences
+
+**This supersedes DEC-006's Flutter intention.** Sharing types across all four apps is now a compile-time guarantee. The Merchant app is React Native rather than the "Responsive · Desktop first" web the design sitemap assumed — worth revisiting against the design's tablet-behind-the-counter use case when Merchant UI work starts.
+
+### Evidence
+
+Product Owner instruction, 2026-08-09.
+
+### Related Architecture
+
+`apps/customer/`, `apps/merchant/`, `apps/driver/`, `apps/admin/`
+
+### Supersedes / Superseded By
+
+Supersedes DEC-006 (Flutter driver-app intention) / None.
+
+---
+
+## DEC-013 — Monorepo with pnpm and Turborepo
+
+**Status:** ACCEPTED
+**Date:** 2026-08-09
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+One repository containing all apps and shared packages, managed with pnpm workspaces and Turborepo.
+
+### Why
+
+CON-001 and REQ-002 require all four clients to agree on the same Order and Payment state values. A shared types package makes that a compile-time guarantee rather than a process one. Also preserves this repository as the single source of truth, which the AI Memory System depends on.
+
+### Alternatives
+
+Multiple repositories — rejected because it fragments the memory system and weakens the shared-contract guarantee (`ai/RESEARCH/REPOSITORY_STRATEGY.md`).
+
+### Consequences
+
+CI must stay scoped as the repo grows; Turborepo caching handles this.
+
+### Evidence
+
+Product Owner instruction, 2026-08-09. Research basis: PROP-002.
+
+### Related Architecture
+
+`pnpm-workspace.yaml`, `turbo.json`
+
+### Supersedes / Superseded By
+
+PROP-002 (accepted) / None.
+
+---
+
+## DEC-014 — PostgreSQL is the system of record for financial data
+
+**Status:** ACCEPTED
+**Date:** 2026-08-09
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+PostgreSQL is the sole system of record for `orders`, `payments`, `refunds`, `ledger_entries`, and `settlements`. Supabase Realtime, Redis, and frontend state are projections and must never be treated as financial truth. Every financial operation must be idempotent, auditable, and transactional.
+
+### Why
+
+CON-003 requires every order's ledger to balance to exactly zero. That guarantee is only meaningful if one store is authoritative. Realtime and caches are lossy by design.
+
+### Alternatives
+
+Not documented — this follows directly from CON-003.
+
+### Consequences
+
+Financial tables need unique constraints on operation keys (idempotency), append-only ledger entries corrected by reversing entries, and order/ledger changes committed in one transaction. This applies from the first financial migration, not retrofitted.
+
+### Evidence
+
+Product Owner instruction, 2026-08-09. Constraint basis: CON-003, REQ-003.
+
+### Related Requirements
+
+REQ-003
+
+### Related Architecture
+
+`supabase/README.md`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-015 — Payment provider access via abstraction layer only
+
+**Status:** ACCEPTED
+**Date:** 2026-08-09
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+All payment provider access goes through a `PaymentProvider` interface. No business logic may import a provider SDK directly. **No provider is selected — Q-001 remains OPEN.**
+
+### Why
+
+Q-001 (provider) is downstream of Q-002 (legal/settlement model), which needs Thai legal review. The abstraction lets the foundation be built now without prejudging that answer, and keeps provider choice reversible.
+
+### Alternatives
+
+Integrating a provider now — rejected as premature given the open legal question and the finding that no provider supports native PromptPay refunds (Q-020).
+
+### Consequences
+
+`NullPaymentProvider` throws on every operation deliberately, so money paths cannot silently appear functional. Provider SDK imports are confined to `payments/providers/`.
+
+### Evidence
+
+Product Owner instruction, 2026-08-09. Research basis: `ai/RESEARCH/PAYMENT_RESEARCH.md`.
+
+### Related Requirements
+
+REQ-003
+
+### Related Architecture
+
+`apps/api/src/modules/payments/payment-provider.interface.ts`
+
+### Supersedes / Superseded By
+
+None / None.

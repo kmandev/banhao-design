@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "BANHAO",
+    "slug": "banhao-customer",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "banhao",
+    "ios": { "supportsTablet": false, "bundleIdentifier": "app.banhao.customer" },
+    "android": { "package": "app.banhao.customer" }
+  }
+}

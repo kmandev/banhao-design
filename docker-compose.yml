@@ -1,0 +1,28 @@
+# BANHAO — local development
+#
+# Only the API is containerised. Supabase runs via the Supabase CLI
+# (`supabase start`), and the mobile/admin apps run on the host where their
+# dev servers and device tooling work properly. Containerising those would add
+# friction without buying anything.
+#
+#   docker compose up --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      # Supplied from .env — never hardcode secrets here.
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
+    env_file:
+      - .env
+    restart: unless-stopped

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "BANHAO Driver",
+    "slug": "banhao-driver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "banhaodriver",
+    "ios": { "supportsTablet": false, "bundleIdentifier": "app.banhao.driver" },
+    "android": { "package": "app.banhao.driver" }
+  }
+}

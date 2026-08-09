@@ -79,3 +79,25 @@ Three findings that changed the project's understanding of its own design:
 1. **No payment provider examined supports native PromptPay refunds** — contradicting the refund state machine documented in `docs/04-payment` (Q-020).
 2. **The payment-facilitation licensing boundary is unresolved** — BANHAO's own split/transfer-round/cash-liability design may constitute regulated activity even when using a licensed PSP (Q-002).
 3. **AWS and GCP both now have Bangkok regions, and both are cheaper than Singapore** — latency, PDPA data residency, and cost align rather than trade off.
+
+---
+
+## EVENT-006
+
+```yaml
+id: EVENT-006
+type: EVENT
+date: 2026-08-09
+source: this session; branch feature/app-foundation
+confidence: HIGH
+```
+
+**Application Foundation Started.** The repository moved from documentation-only to containing working application code for the first time.
+
+Product Owner approved the technology stack, resolving **Q-006** (NestJS + TypeScript, DEC-011) and **Q-007** (Supabase PostgreSQL + PostGIS, DEC-010). Six decisions recorded as `ACCEPTED`: DEC-009 (modular monolith), DEC-010 (Supabase), DEC-011 (NestJS), DEC-012 (React Native/Expo + Next.js, superseding DEC-006's Flutter intention), DEC-013 (monorepo/pnpm/Turborepo), DEC-014 (PostgreSQL as financial system of record), DEC-015 (payment provider abstraction only).
+
+Built: pnpm/Turborepo monorepo; NestJS API with global Supabase JWT auth guard and RBAC role guard, `GET /health` and `GET /api/v1/me`, OpenAPI; shared packages (`types`, `validation`, `config`, `api-client`, `ui`); Supabase migrations for PostGIS, the `user_role` enum, `profiles`, a signup trigger, and RLS; four minimal app shells; Docker for the API; GitHub Actions CI; setup/development docs; `ai/DEVELOPMENT_RULES.md`.
+
+**Q-001 (payment provider) deliberately remains `OPEN`** — the foundation ships a `PaymentProvider` interface whose only implementation throws on every call, so no money path can silently appear functional.
+
+Verified: 37 tests pass, lint/typecheck/build pass across 15 workspace tasks, and the API was started to confirm `/health` returns 200 and `/api/v1/me` returns 401 without a valid token.

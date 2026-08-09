@@ -21,7 +21,9 @@ source: docs/04-payment/BANHAO Payment Architecture.dc.html, closing note; docs/
 
 **Blocking:** Payment implementation, provider webhook integration, REQ-003, CON-002.
 
-**Candidates:** None documented in repository.
+**Note (2026-08-09):** still `OPEN` by deliberate choice. The application foundation ships a `PaymentProvider` abstraction with no real implementation (DEC-015), so this question can be answered later without rework. Provider choice remains downstream of Q-002 (legal/settlement model) and Q-020 (refund mechanism).
+
+**Candidates:** Xendit is the only researched provider with documented THB marketplace splits and individual-driver onboarding; Omise has the strongest webhook security but no natural-person KYB; Beam is collection-only. Stripe is disqualified. See `ai/RESEARCH/PAYMENT_RESEARCH.md`.
 
 **Decision:** TBD
 
@@ -124,8 +126,10 @@ source: UNKNOWN / NOT VERIFIED — not mentioned anywhere in the repository
 ```yaml
 id: Q-006
 type: OPEN_QUESTION
-status: OPEN
+status: RESOLVED
 priority: P0
+resolved_by: DEC-011
+resolved_date: 2026-08-09
 date: 2026-08-09
 source: docs/TODO.md P0; docs/AI_CONTEXT.md § Technology Stack
 ```
@@ -134,11 +138,11 @@ source: docs/TODO.md P0; docs/AI_CONTEXT.md § Technology Stack
 
 **Why it matters:** No implementation of any kind can begin until this is decided. This task's scope explicitly excludes making this choice (see `docs/DECISIONS.md` — no such decision has been recorded).
 
-**Blocking:** All implementation work.
+**Blocking:** ~~All implementation work.~~ Unblocked.
 
-**Candidates:** None documented in repository.
+**Candidates:** NestJS / Laravel / Go — see `ai/RESEARCH/BACKEND_COMPARISON.md`.
 
-**Decision:** TBD
+**Decision:** **NestJS + TypeScript**, REST with OpenAPI. Accepted by the Product Owner 2026-08-09 — see DEC-011.
 
 ---
 
@@ -147,8 +151,10 @@ source: docs/TODO.md P0; docs/AI_CONTEXT.md § Technology Stack
 ```yaml
 id: Q-007
 type: OPEN_QUESTION
-status: OPEN
+status: RESOLVED
 priority: P0
+resolved_by: DEC-010
+resolved_date: 2026-08-09
 date: 2026-08-09
 source: docs/TODO.md P0; docs/AI_CONTEXT.md § Technology Stack
 ```
@@ -157,11 +163,11 @@ source: docs/TODO.md P0; docs/AI_CONTEXT.md § Technology Stack
 
 **Why it matters:** The Order and Payment state machines are fully specified at the product level and ready to become a schema once this is decided.
 
-**Blocking:** All implementation work.
+**Blocking:** ~~All implementation work.~~ Unblocked.
 
-**Candidates:** None documented in repository.
+**Candidates:** PostgreSQL / MySQL / MongoDB — see `ai/RESEARCH/DATABASE_COMPARISON.md`.
 
-**Decision:** TBD
+**Decision:** **Supabase (PostgreSQL + PostGIS)**, also providing Auth, Storage, and Realtime. Accepted by the Product Owner 2026-08-09 — see DEC-010.
 
 ---
 
