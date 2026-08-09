@@ -8,7 +8,7 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 ## Current Reality
 
-**Application foundation exists and works** (branch `feature/app-foundation`): pnpm/Turborepo monorepo, NestJS API with auth + RBAC, Supabase migrations with RLS, five shared packages, four minimal app shells, Docker, CI. No product features are implemented yet — deliberately. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md).
+Foundation is merged to `main`. **Customer App UI is implemented** on branch `feature/customer-app`: all 31 design states (18 numbered screens + 7 payment sub-states + 6 state variants), design tokens, shared RN components, 4-tab navigation, Supabase auth + profile. Everything except auth and `profiles` is mock-backed — no order, payment, dispatch, or settlement logic exists. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md) and [`docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`](../docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md).
 
 ## Permanent Facts
 
@@ -34,7 +34,9 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
-- Review and merge the `feature/app-foundation` branch (P0) — review fixes applied, RLS verified by execution
+- Review the `feature/customer-app` branch (P0) — Customer App UI complete, awaiting review
+- Answer DQ-01…DQ-05 design questions in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` (P1)
+- Complete visual QA for screens 04–18 (needs a Supabase project) — `docs/CUSTOMER_APP_VISUAL_QA.md` (P1)
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design
 - Decide payment provider/settlement model (P0)
@@ -48,7 +50,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-7 events logged, EVENT-001 through EVENT-007 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → **pre-merge review fixes**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+8 events logged, EVENT-001 through EVENT-008 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → **Customer App implementation**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Important Architecture Rules
 

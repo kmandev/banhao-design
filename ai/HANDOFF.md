@@ -8,23 +8,21 @@ Read this right after `docs/AI_CONTEXT.md`. Kept short and actionable on purpose
 
 ## Current Project State
 
-**Application foundation exists and works.** The repository now contains real code, not just documentation. A pnpm/Turborepo monorepo with a NestJS API (auth + RBAC + `/health` + `/api/v1/me`), five shared packages, Supabase migrations with RLS, four minimal app shells, Docker, and CI.
+Foundation is merged to `main`. **The Customer App UI is now implemented** on `feature/customer-app` (not merged): all 31 states from the design artifact — 18 numbered screens, 7 payment sub-states, 6 state variants — with design tokens, shared React Native components, 4-tab navigation, and Supabase auth + profile.
 
-No product features are implemented — no ordering, cart, checkout, dispatch, payment integration, or map UI. That is deliberate; this was foundation-only scope.
-
-Branch: `feature/app-foundation` (not merged to `main`).
+Still no business logic: no order creation, payment integration, dispatch, or settlement. Everything except authentication and `profiles` is mock-backed via `apps/customer/src/repositories/`.
 
 ## Last Completed Work
 
-Application Foundation (EVENT-006), then pre-merge review fixes (EVENT-007): `profiles` RLS hardened and **verified by execution** against PostgreSQL 16 + PostGIS — 13 assertions, wired into CI. Customer screen count aligned to 18 across all docs.
+Customer App implementation (EVENT-008). Design audit found the artifact holds **31 addressable states**, not 18 — see `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`. All implemented. 84 tests pass; app built and driven on an iPhone 16 Pro simulator.
 
 ## Current Work
 
-None active. Review fixes are applied and committed; awaiting Product Owner merge of `feature/app-foundation`.
+None active. Awaiting review of `feature/customer-app`.
 
 ## Immediate Next Step
 
-Product Owner reviews and merges the branch. In parallel, the highest-value unblocking action is still **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) — it has external lead time and gates all payment work.
+Review `feature/customer-app`, and answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time.
 
 ## Important Decisions
 
@@ -77,13 +75,18 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - API auth tests use mocks. **RLS is verified by real execution** (`./supabase/tests/run-rls-tests.sh`), but against a plain Postgres container with a Supabase auth shim — GoTrue, real JWT issuance, and PostgREST are NOT exercised. End-to-end auth against a live Supabase project remains unverified.
 - `profiles.phone` is deliberately not client-writable: it mirrors the Auth identity. Self-service phone change must go through Supabase Auth's OTP-verified flow, not a direct table update.
 - `support.js` is intentionally duplicated 4× (FACT-010) — don't "clean it up".
+- **Customer App screens 04–18 have NOT been visually verified** against the design — no Supabase project means the authenticated tree can't be reached on a simulator. They pass smoke tests only. See `docs/CUSTOMER_APP_VISUAL_QA.md`.
+- The monorepo pins one React version via `pnpm.overrides`. Bumping React in one app without the others will reintroduce a `@types/react` collision.
+- `@banhao/ui` imports React Native. Web consumers must import tokens from `@banhao/ui/theme`, never the barrel, or Next will try to bundle RN.
 
 ## Do Not Do
 
 - Do not select a payment provider — Q-001 is `OPEN` on purpose (DEC-015).
 - Do not import a provider SDK outside `apps/api/src/modules/payments/providers/`.
 - Do not merge Order state and Payment state, use floats for money, or let Realtime/cache be financial truth.
-- Do not build feature UI (ordering, cart, checkout, dispatch, maps) without an explicit instruction — foundation scope ended deliberately short of it.
+- Do not re-design the Customer App. The design artifact is the source of truth; record a `DESIGN_QUESTION` instead of guessing.
+- Do not put mock data inside a UI component — it goes in `src/mocks/` behind a repository.
+- Do not build Merchant, Driver, or Admin apps without an explicit instruction.
 - Do not commit `.env` or any credential — CI fails the build on this.
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
 

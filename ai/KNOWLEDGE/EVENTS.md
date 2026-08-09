@@ -125,3 +125,29 @@ Migration `20260809000003_harden_profiles_rls.sql` adds three defence layers —
 13 executable assertions added (`supabase/tests/`), wired into CI. The suite was validated against a negative control with the hardening migration removed, where it correctly fails — an earlier draft passed in that control because its fixture re-applied the grants it claimed to verify.
 
 Customer screen count settled at **18**, verified by counting screen labels in the design canvas; only root `README.md` still said 17.
+
+---
+
+## EVENT-008
+
+```yaml
+id: EVENT-008
+type: EVENT
+date: 2026-08-09
+source: this session; branch feature/customer-app
+confidence: HIGH
+```
+
+**Customer App Implementation Started.** The Customer App UI was implemented in React Native + Expo from the design artifact, which was treated as the source of truth throughout.
+
+**Design audit finding:** the design registry contains **31 addressable states**, not 18 — 18 numbered screens (01–18), plus 7 payment sub-states (12b–12h, mapping onto the Payment State Machine), plus 6 state variants (loading, network error, shop closed, empty cart, no driver, cancelled). All 31 are implemented; the 18 numbered screens are the primary routes and the other 13 are states of them. Documented in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`.
+
+Built: design tokens extracted by frequency analysis of the artifact (`packages/ui/src/theme/tokens.ts`); shared RN components (Button, Card, Input, Badge, Avatar, Stepper, PriceRow, BottomBar, ShopCard, MenuRow, CategoryChip, ListRow, StateView, StatusTimeline); 4-tab navigation matching the design's own tab bar; Supabase auth with session persistence and a profile screen wired to the real `profiles` table under RLS; a repository layer with typed mock data behind swappable interfaces.
+
+**No business logic was implemented** — no order creation, payment integration, dispatch, or settlement. Everything outside authentication and `profiles` is mock-backed.
+
+Five `DESIGN_QUESTION` items (DQ-01…DQ-05) were recorded rather than guessed, covering the cash payment path, the duplicate-payment trigger, the refund entry point, address editing, and search ranking.
+
+Verified: 84 tests pass (33 customer, 14 UI component, 37 pre-existing); lint, typecheck, and build pass. The app was built and driven on an iPhone 16 Pro simulator — screens 01–03 confirmed visually; **04–18 were NOT visually verified** because no Supabase project is configured, recorded honestly in `docs/CUSTOMER_APP_VISUAL_QA.md`.
+
+Also fixed during this work: the monorepo now pins one React version (`pnpm.overrides`) after two `@types/react` majors collided, and `@banhao/ui` exposes framework-agnostic tokens on a `./theme` subpath so the Next.js admin does not bundle React Native.
