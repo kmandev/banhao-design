@@ -43,3 +43,6 @@ service-account*.json
 # Expo
 .expo/
 .expo-shared/
+
+# Supabase CLI local state (linked project ref, versions)
+supabase/.temp/
