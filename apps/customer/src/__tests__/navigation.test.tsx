@@ -5,6 +5,13 @@ import { CartProvider } from '../hooks/useCart';
 import { RootNavigator } from '../navigation/RootNavigator';
 
 /**
+ * MOCK TEST — no network, no Supabase project, no real session.
+ *
+ * These assert that the app routes correctly given a session object. They are
+ * NOT evidence that authentication works. Live end-to-end auth against the real
+ * project is verified by hand (docs/CUSTOMER_APP_VISUAL_QA.md) and live RLS by
+ * `node supabase/tests/live-rls-check.mjs`.
+ *
  * Navigation tests: which tree the app shows is decided by session state, not
  * by anything the UI holds.
  *
