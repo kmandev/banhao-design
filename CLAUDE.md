@@ -1,6 +1,6 @@
 # CLAUDE.md — BANHAO project state
 
-Orientation file for AI agents. Written 2026-08-10.
+Orientation file for AI agents. Written 2026-08-10, updated 2026-08-10 after merge.
 
 **Read these first, in order:** [`ai/HANDOFF.md`](ai/HANDOFF.md) →
 [`ai/MEMORY.md`](ai/MEMORY.md) → [`docs/AI_CONTEXT.md`](docs/AI_CONTEXT.md) →
@@ -37,13 +37,16 @@ Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 ## 3. Current branch
 
 ```
-feature/supabase-customer-auth   ← YOU ARE HERE (uncommitted work)
-  └── branched from feature/customer-app @ f01c8b38 (pushed, NOT merged)
-        └── main @ 01d6cf75 (foundation + RLS hardening)
+main @ c4927b25   ← YOU ARE HERE — feature/supabase-customer-auth merged, PUSHED
+  (merge commit: Merge feature/supabase-customer-auth into main)
 ```
 
-`main` has the foundation only. The Customer App lives on
-`feature/customer-app` awaiting review. **Never merge without explicit approval.**
+`feature/supabase-customer-auth` (which already contained everything from
+`feature/customer-app`) was reviewed by the Product Owner and merged into `main`
+on 2026-08-10 via `git merge --no-ff`. The full quality gate (lint, typecheck,
+test, build) was re-run on `main` after the merge and passed. **Both feature
+branches still exist remotely but are now fully contained in `main` — new work
+should branch from `main`, not from either of them.**
 
 ## 4. Completed work
 
@@ -56,7 +59,9 @@ feature/supabase-customer-auth   ← YOU ARE HERE (uncommitted work)
 | EVENT-007 | Pre-merge RLS hardening, verified by execution |
 | EVENT-008 | Customer App — all 31 design states implemented |
 | EVENT-009 | Typography fix (IBM Plex Sans Thai bundled) + visual QA |
-| **EVENT-010** | **In progress** — Supabase dev project + live customer auth |
+| EVENT-010 | Supabase dev project + live customer auth verification |
+| EVENT-011 | DEF-01…DEF-05 fixed, re-verified; visual QA 31/31 |
+| **—** | **Reviewed and merged to `main`** (this update) |
 
 ## 5. Current implementation status
 
@@ -74,6 +79,10 @@ feature/supabase-customer-auth   ← YOU ARE HERE (uncommitted work)
 
 **No business logic exists.** No order creation, payment integration, dispatch,
 or settlement. That is intentional, not an omission.
+
+**All 31 Customer states are verified by screenshot** and all five defects
+found in review (DEF-01…DEF-05) are fixed and re-verified on device — see
+§8 and `docs/CUSTOMER_APP_VISUAL_QA.md`.
 
 ## 6. Key files
 
@@ -129,29 +138,32 @@ run against the real project via real Auth sessions, not the pg shim):
 - `display_name` update → allowed
 - Signed-out client reads nothing
 
-## 8. Last completed task (EVENT-010, done)
+## 8. Last completed task (EVENT-011, done) — merged to main
 
-Connect the Customer App to the real Supabase dev project and QA it honestly.
-**Complete and pushed** to `feature/supabase-customer-auth` (5 commits, head
-`c6ff6135`). **Not merged.**
+Connect the Customer App to the real Supabase dev project, QA it honestly, fix
+everything review found, and merge. **All complete.**
 
 Verified live against `banhao-dev`: request OTP → wrong OTP rejected by the
 server → correct OTP → profile read under RLS → `display_name` write
 (`204 PATCH`) → session survives a full app restart → logout → logout persists
 across another restart. **No fake session was created.**
 
-Visual QA: **4/31 → 29/31 states verified by screenshot** (artifacts in
+Visual QA: **31/31 states verified by screenshot** (artifacts in
 `docs/qa/customer-app/`). Money arithmetic checked, not assumed.
 
-**Five defects recorded rather than quietly fixed** (`docs/CUSTOMER_APP_VISUAL_QA.md`):
+**Five defects found in review — all fixed and re-verified on device**
+(`docs/CUSTOMER_APP_VISUAL_QA.md`):
 
-| ID | Severity | Finding |
-|---|---|---|
-| DEF-01 | **MAJOR** | `PayExpired` (12e) unreachable — QR counts to zero and navigates nowhere |
-| DEF-02 | MINOR | `ขอรหัสใหม่` resets the countdown but never resends the OTP |
-| DEF-03 | MINOR | Back labels read "Tabs" / "Back" in English |
-| DEF-04 | MINOR | `✓` (U+2713) substitutes to a glyph reading as `√` |
-| DEF-05 | MINOR | Profile phone shown unformatted, without `+` |
+| ID | Severity | Finding | Fix |
+|---|---|---|---|
+| DEF-01 | **MAJOR** | `PayExpired` (12e) unreachable — QR counted to zero and navigated nowhere | `replace()`s to `PayExpired` at TTL 0; verified by letting the real 600s countdown elapse, not a shortened timer |
+| DEF-02 | MINOR | `ขอรหัสใหม่` reset the countdown but never resent the OTP | now calls `requestOtp`; countdown only resets on success |
+| DEF-03 | MINOR | Back labels read "Tabs" / "Back" in English | explicit `headerBackTitle: 'กลับ'` |
+| DEF-04 | MINOR | `✓` (U+2713) substituted to a glyph reading as `√` | check mark is now drawn, not typed — no font dependency |
+| DEF-05 | MINOR | Profile phone shown unformatted, without `+` | `formatThaiPhone` — presentation only, stored E.164 identity untouched |
+
+22 tests added for the fixes. Full quality gate (lint/typecheck/test/build) was
+re-run and passed both before and after the merge to `main`.
 
 ### ⚠️ iOS Simulator cannot hold HTTP/3 to Supabase
 
@@ -168,14 +180,19 @@ terminate/relaunch Expo Go — reloading is not enough.
 
 ## 9. Next steps
 
-1. **Review** `feature/customer-app` and `feature/supabase-customer-auth`.
-2. Fix **DEF-01**, then screenshot 12e to close the last reachable state.
-3. Answer DQ-01…DQ-05 in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`.
-4. Verify on an Android emulator — per-weight font families are untested there.
-5. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
+1. Answer DQ-01…DQ-05 in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`.
+2. Verify on an Android emulator — per-weight font families are untested there.
+3. Verify the search **results** list and keyboard avoidance on a device that
+   can type Thai (the Simulator cannot).
+4. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
    external lead time, gates all payment work.
+5. Decide the P0 product questions blocking payment work (§10): Q-001, Q-002,
+   Q-010, Q-020.
 
-**Do not merge without the Product Owner's review.**
+Merchant, Driver, and Admin apps, payment integration, order backend, dispatch,
+and settlement remain **out of scope** until those product decisions land — see
+the scope lock below. **Any of that work is a new decision, not a continuation
+of this merge — check in before starting it.**
 
 ## 10. Decisions and constraints
 
@@ -209,10 +226,10 @@ settlement model, Q-010 platform fee, Q-020 PromptPay refund mechanism (no
 provider supports native PromptPay refunds — see `ai/RESEARCH/PAYMENT_RESEARCH.md`).
 
 **Known gaps:** Android is **UNVERIFIED** (no SDK on this machine, and it is the
-platform most likely to differ on per-weight fonts). A physical iOS device and
-real SMS delivery are also unverified. 29/31 Customer states are now verified;
-12e is blocked by DEF-01 and the search results list by the simulator's
-inability to type Thai.
+platform most likely to differ on per-weight fonts). A physical iOS device, real
+SMS delivery, keyboard avoidance, the search **results** list, and four state
+variants (empty cart, loading, network error, no driver) are also unverified —
+see `docs/CUSTOMER_APP_VISUAL_QA.md`. All 31 states themselves are verified.
 
 **Scope lock:** do not start Merchant, Driver, or Admin apps, payment
 integration, order backend, dispatch, or settlement.

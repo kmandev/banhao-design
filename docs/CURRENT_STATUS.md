@@ -12,13 +12,14 @@
 
 ## Overall Status
 
-**Application code exists and runs.** The foundation is merged to `main`; the
-Customer App is implemented and its authentication is verified against a live
-Supabase project. **No business logic exists** — no order creation, payment
-integration, dispatch, or settlement. That is deliberate, not an omission.
+**Application code exists and runs.** The foundation, the Customer App, and its
+Supabase authentication are all **merged to `main`**, reviewed and approved by
+the Product Owner on 2026-08-10. **No business logic exists** — no order
+creation, payment integration, dispatch, or settlement. That is deliberate, not
+an omission.
 
-Two branches are awaiting Product Owner review and are **not merged**:
-`feature/customer-app` and `feature/supabase-customer-auth`.
+`feature/customer-app` and `feature/supabase-customer-auth` are fully merged;
+new work should branch from `main`.
 
 ## Current Phase
 
@@ -68,10 +69,9 @@ Phase 1 — Food Delivery. Customer App UI complete; backend is foundation-only.
 
 ## Known Bugs
 
-Five defects were found during the 2026-08-10 QA pass and **all five are fixed**
-on `feature/supabase-customer-auth` — see
-[`CUSTOMER_APP_VISUAL_QA.md`](CUSTOMER_APP_VISUAL_QA.md) for DEF-01…DEF-05 and
-the evidence for each.
+Five defects were found during the 2026-08-10 QA pass and **all five are fixed
+and merged to `main`** — see [`CUSTOMER_APP_VISUAL_QA.md`](CUSTOMER_APP_VISUAL_QA.md)
+for DEF-01…DEF-05 and the evidence for each.
 
 ## Technical Debt
 
@@ -156,7 +156,7 @@ payment work.
 
 ## Immediate Next Step
 
-Product Owner review of `feature/customer-app` and
-`feature/supabase-customer-auth`. Then answer DQ-01…DQ-05 in
-[`CUSTOMER_APP_IMPLEMENTATION_MAP.md`](CUSTOMER_APP_IMPLEMENTATION_MAP.md) and
-verify the app on Android.
+Answer DQ-01…DQ-05 in
+[`CUSTOMER_APP_IMPLEMENTATION_MAP.md`](CUSTOMER_APP_IMPLEMENTATION_MAP.md), verify
+the app on Android, and move the P0 product decisions below forward — they gate
+all payment work, not the code.

@@ -234,3 +234,27 @@ Deliberately unchanged: no payment provider, no webhook, no order backend, no di
 Still **UNVERIFIED**: Android, a physical iOS device, real SMS, keyboard avoidance, the search results list (the simulator cannot type Thai), and the empty-cart / loading / network-error / no-driver variants.
 
 Also corrected: `docs/CURRENT_STATUS.md` still said *"No application exists"* and *"implementation has not started"*, which had been false since 2026-08-09. It now describes the real state, with a historical note pointing at `PROJECT_HISTORY.md` rather than erasing the record.
+
+---
+
+## EVENT-012
+
+```yaml
+id: EVENT-012
+type: EVENT
+date: 2026-08-10
+source: this session; branch main
+confidence: HIGH
+```
+
+**`feature/supabase-customer-auth` reviewed, approved, and merged to `main`.** The Product Owner reviewed the branch (which already contained all of `feature/customer-app`'s history) and explicitly authorized the merge.
+
+`main` was fast-forward-clean relative to the merge base, so the merge (`git merge --no-ff`) applied without conflicts — 104 files changed. The full quality gate (`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`) was re-run on `main` **after** the merge, not assumed from the feature branch, and passed: 102 tests across 6 workspaces, 10/10 lint tasks, 15/15 typecheck tasks, 10/10 build tasks. No `.env` or secret is present in the merged tree — verified by `git ls-files` before pushing.
+
+`main` now carries: the application foundation, the Customer App (31/31 states implemented and verified by screenshot), Phone OTP authentication against the live `banhao-dev` Supabase project, `profiles` with RLS (14/14 live checks passing), and the five QA defects (DEF-01…DEF-05) fixed and re-verified. `git push origin main` succeeded (`01d6cf75..c4927b25`).
+
+**No new code was written for this event** — it is the merge itself, plus the documentation update it requires. `CLAUDE.md`, `ai/HANDOFF.md`, `ai/MEMORY.md`, and `docs/CURRENT_STATUS.md` were updated to stop describing the two feature branches as unmerged and pending review.
+
+`feature/customer-app` and `feature/supabase-customer-auth` remain on the remote (not deleted) but are now fully contained in `main`; any future work should branch from `main`.
+
+**Scope did not change.** No payment provider, no order backend, no dispatch, no settlement, and no Merchant/Driver/Admin app work was started as part of this merge — those all remain gated on the P0 product decisions in `docs/TODO.md`.

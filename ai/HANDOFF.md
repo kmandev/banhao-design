@@ -8,27 +8,25 @@ Read this right after `docs/AI_CONTEXT.md`. Kept short and actionable on purpose
 
 ## Current Project State
 
-Foundation is merged to `main`. **The Customer App UI is implemented** on `feature/customer-app` (not merged): all 31 states from the design artifact — 18 numbered screens, 7 payment sub-states, 6 state variants — with design tokens, shared React Native components, 4-tab navigation, and Supabase auth + profile.
+**Foundation, the Customer App, and its Supabase authentication are all merged to `main`.** `feature/customer-app` and `feature/supabase-customer-auth` were reviewed by the Product Owner and merged on 2026-08-10 (merge commit `c4927b25`, `git merge --no-ff`). All 31 states from the design artifact are implemented and verified by screenshot — 18 numbered screens, 7 payment sub-states, 6 state variants — with design tokens, shared React Native components, 4-tab navigation, and Supabase auth + profile.
 
-**A live dev Supabase project (`banhao-dev`) now exists**, and on `feature/supabase-customer-auth` (not merged) **authentication is verified end-to-end against it**. Neither branch is merged.
+**The live dev Supabase project (`banhao-dev`) is what the merged app authenticates against**, and that authentication is verified end-to-end against it.
 
 Still no business logic: no order creation, payment integration, dispatch, or settlement. Everything except authentication and `profiles` is mock-backed via `apps/customer/src/repositories/`.
 
 ## Last Completed Work
 
-Customer App defect fixes (EVENT-011). **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is now **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
+**Merge to `main`** (this update). The full quality gate (lint, typecheck, test, build) was re-run on `main` after the merge and passed. Before that: Customer App defect fixes (EVENT-011) — **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
 
-Before that: Supabase dev environment + live Customer authentication (EVENT-010). Project `banhao-dev` created in `ap-southeast-1` with Phone auth on **Supabase Test OTP**. Verified live: request OTP, wrong OTP rejected by the server, correct OTP, profile read under RLS, `display_name` write (`204 PATCH`), session persistence across a full app restart, logout, and logout persisting across another restart. **Live RLS: 14/14 passed.** Visual QA went from 4/31 to **29/31 states verified by screenshot**. No fake session was ever created.
-
-All five defects it found are now closed; the record of what each was and how it was verified is in `docs/CUSTOMER_APP_VISUAL_QA.md`.
+Before that: Supabase dev environment + live Customer authentication (EVENT-010). Project `banhao-dev` created in `ap-southeast-1` with Phone auth on **Supabase Test OTP**. Verified live: request OTP, wrong OTP rejected by the server, correct OTP, profile read under RLS, `display_name` write (`204 PATCH`), session persistence across a full app restart, logout, and logout persisting across another restart. **Live RLS: 14/14 passed.** No fake session was ever created.
 
 ## Current Work
 
-None active. Awaiting review of `feature/customer-app` and `feature/supabase-customer-auth`. **Neither is merged.**
+None active. The merge is done; new work should branch from `main`.
 
 ## Immediate Next Step
 
-Review both branches. Then answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed — and verify the app on Android. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time.
+Answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed — and verify the app on Android. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time. Merchant, Driver, Admin, and any payment/order/dispatch work remain out of scope until the P0 product decisions land — that is a new instruction to wait for, not something to infer from "the merge is done."
 
 ## Important Decisions
 
@@ -72,7 +70,7 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Recent Session
 
-2026-08-10 (Claude Code): Supabase dev environment, live auth verification, and authenticated visual QA. Full record: [`ai/SESSION_LOG/2026-08-10.md`](SESSION_LOG/2026-08-10.md). Earlier: 2026-08-09, five sessions — Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes ([`ai/SESSION_LOG/2026-08-09.md`](SESSION_LOG/2026-08-09.md)).
+2026-08-10 (Claude Code): Supabase dev environment, live auth verification, authenticated visual QA, defect fixes, and merge to `main`. Full record: [`ai/SESSION_LOG/2026-08-10.md`](SESSION_LOG/2026-08-10.md). Earlier: 2026-08-09, five sessions — Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes ([`ai/SESSION_LOG/2026-08-09.md`](SESSION_LOG/2026-08-09.md)).
 
 ## Warnings
 

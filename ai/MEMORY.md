@@ -8,9 +8,9 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 ## Current Reality
 
-Foundation is merged to `main`. **Customer App UI is implemented** on branch `feature/customer-app`: all 31 design states (18 numbered screens + 7 payment sub-states + 6 state variants), design tokens, shared RN components, 4-tab navigation, Supabase auth + profile. Everything except auth and `profiles` is mock-backed — no order, payment, dispatch, or settlement logic exists. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md) and [`docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`](../docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md).
+**Foundation, the Customer App, and its Supabase authentication are all merged to `main`** (reviewed and approved by the Product Owner, 2026-08-10, merge commit `c4927b25`). All 31 design states (18 numbered screens + 7 payment sub-states + 6 state variants) are implemented and verified by screenshot, with design tokens, shared RN components, 4-tab navigation, and Supabase auth + profile. Everything except auth and `profiles` is mock-backed — no order, payment, dispatch, or settlement logic exists. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md) and [`docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`](../docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md).
 
-A **live dev Supabase project (`banhao-dev`)** now exists, and on `feature/supabase-customer-auth` **authentication is verified end-to-end against it** — real OTP sign-in and resend, session persistence, profile read/write under RLS, logout — with **31 / 31 states verified by screenshot** and **14 / 14 live RLS checks passing**. The five defects found in QA (DEF-01…DEF-05) are **all fixed and re-verified**. Setup and the Simulator HTTP/3 caveat: [`docs/SUPABASE_DEVELOPMENT.md`](../docs/SUPABASE_DEVELOPMENT.md); QA record: [`docs/CUSTOMER_APP_VISUAL_QA.md`](../docs/CUSTOMER_APP_VISUAL_QA.md). **Android remains UNVERIFIED.**
+The live dev Supabase project (`banhao-dev`) is what the merged app authenticates against — real OTP sign-in and resend, session persistence, profile read/write under RLS, logout — with **31 / 31 states verified by screenshot** and **14 / 14 live RLS checks passing**. The five defects found in QA (DEF-01…DEF-05) are **all fixed and re-verified**. Setup and the Simulator HTTP/3 caveat: [`docs/SUPABASE_DEVELOPMENT.md`](../docs/SUPABASE_DEVELOPMENT.md); QA record: [`docs/CUSTOMER_APP_VISUAL_QA.md`](../docs/CUSTOMER_APP_VISUAL_QA.md). **Android remains UNVERIFIED.** New work should branch from `main`.
 
 ## Permanent Facts
 
@@ -36,7 +36,6 @@ A **live dev Supabase project (`banhao-dev`)** now exists, and on `feature/supab
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
-- Review `feature/customer-app` and `feature/supabase-customer-auth` (P0) — Customer App UI complete and auth verified live, awaiting review
 - Answer DQ-01…DQ-05 design questions in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` (P1)
 - Verify the app on Android — per-weight font families are untested there (P1)
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
