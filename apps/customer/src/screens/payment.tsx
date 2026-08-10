@@ -44,10 +44,18 @@ export function PromptPayQrScreen() {
   const [secondsLeft, setSecondsLeft] = useState(QR_TTL_SECONDS);
 
   useEffect(() => {
-    if (secondsLeft <= 0) return;
-    const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [secondsLeft]);
+    if (secondsLeft > 0) {
+      const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+
+    // TTL reached zero. A QR that has expired cannot be paid, so EXPIRED is the
+    // only honest next state — this decides nothing about money, it just stops
+    // showing a code that no longer works. `replace` rather than `navigate` so
+    // Back cannot return to a dead QR.
+    navigation.replace('PayExpired');
+    return undefined;
+  }, [secondsLeft, navigation]);
 
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = String(secondsLeft % 60).padStart(2, '0');

@@ -16,9 +16,11 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-Supabase dev environment + live Customer authentication (EVENT-010). Project `banhao-dev` created in `ap-southeast-1` with Phone auth on **Supabase Test OTP**. Verified live: request OTP, wrong OTP rejected by the server, correct OTP, profile read under RLS, `display_name` write (`204 PATCH`), session persistence across a full app restart, logout, and logout persisting across another restart. **Live RLS: 14/14 passed.** Visual QA went from 4/31 to **29/31 states verified by screenshot**. No fake session was ever created.
+Customer App defect fixes (EVENT-011). **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is now **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
 
-Five defects recorded rather than quietly fixed — DEF-01…DEF-05 in `docs/CUSTOMER_APP_VISUAL_QA.md`. One is MAJOR.
+Before that: Supabase dev environment + live Customer authentication (EVENT-010). Project `banhao-dev` created in `ap-southeast-1` with Phone auth on **Supabase Test OTP**. Verified live: request OTP, wrong OTP rejected by the server, correct OTP, profile read under RLS, `display_name` write (`204 PATCH`), session persistence across a full app restart, logout, and logout persisting across another restart. **Live RLS: 14/14 passed.** Visual QA went from 4/31 to **29/31 states verified by screenshot**. No fake session was ever created.
+
+All five defects it found are now closed; the record of what each was and how it was verified is in `docs/CUSTOMER_APP_VISUAL_QA.md`.
 
 ## Current Work
 
@@ -26,7 +28,7 @@ None active. Awaiting review of `feature/customer-app` and `feature/supabase-cus
 
 ## Immediate Next Step
 
-Review both branches. Then fix **DEF-01** (payment state 12e `PayExpired` is unreachable) and answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time.
+Review both branches. Then answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed — and verify the app on Android. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time.
 
 ## Important Decisions
 
@@ -81,8 +83,9 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - `EXPO_PUBLIC_*` is inlined at transform time — after editing `apps/customer/.env` you must restart Metro with `--clear` **and** terminate/relaunch Expo Go. Reloading is not enough.
 - `profiles.phone` is deliberately not client-writable: it mirrors the Auth identity. Self-service phone change must go through Supabase Auth's OTP-verified flow, not a direct table update.
 - `support.js` is intentionally duplicated 4× (FACT-010) — don't "clean it up".
-- **29 of 31 Customer App states are now verified by screenshot** against the design. Not verified: 12e (unreachable — DEF-01) and the search **results** list (simulator cannot type Thai). Four state variants — empty cart, loading, network error, no driver — have no reachable trigger yet. See `docs/CUSTOMER_APP_VISUAL_QA.md`.
-- **DEF-01 is MAJOR:** `PayExpired` (12e) is registered in the navigator but nothing routes to it; the QR screen counts down to zero and goes nowhere.
+- **31 of 31 Customer App states are verified by screenshot** against the design. Still not covered: the search **results** list (the simulator cannot type Thai) and four state variants — empty cart, loading, network error, no driver — which have no reachable trigger yet. See `docs/CUSTOMER_APP_VISUAL_QA.md`.
+- The selected-state check in `ListRow` is **drawn, not typed**. Do not "simplify" it back to `✓` — U+2713 is absent from IBM Plex Sans Thai and substitutes to a glyph that reads as `√`.
+- `formatThaiPhone` is **presentation only**. Never let it touch the stored E.164 identity.
 - **Android is untested.** Font weights are selected by family name specifically because Android ignores `fontWeight` with a custom `fontFamily` — that mapping has never run on Android.
 - Thai tone-mark stacking was investigated and is **correct**; do not re-raise it. The marks merge visually at low zoom. Evidence: `docs/qa/customer-app/typography-thai-marks-zoom.png`.
 - The monorepo pins one React version via `pnpm.overrides`. Bumping React in one app without the others will reintroduce a `@types/react` collision.

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 import { AuthProvider } from '../hooks/useAuth';
 import { CartProvider } from '../hooks/useCart';
-import { RootNavigator } from '../navigation/RootNavigator';
+import { RootNavigator, headerOptions } from '../navigation/RootNavigator';
 
 /**
  * MOCK TEST — no network, no Supabase project, no real session.
@@ -109,5 +109,21 @@ describe('RootNavigator', () => {
     await waitFor(() => {
       expect(mockMaybeSingle).toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * DEF-03. The back button used to fall back to the previous route's name — which
+ * surfaced as "Tabs" — or to iOS's generic English "Back" when the previous
+ * title was too long. Both are English text in a Thai-language app.
+ */
+describe('header back label', () => {
+  it('uses an explicit Thai label rather than the route name', () => {
+    expect(headerOptions.headerBackTitle).toBe('กลับ');
+    expect(headerOptions.headerBackTitle).not.toMatch(/[A-Za-z]/);
+  });
+
+  it('gives the back label a bundled font family', () => {
+    expect(headerOptions.headerBackTitleStyle.fontFamily).toMatch(/IBMPlexSansThai/);
   });
 });

@@ -14,6 +14,7 @@ import {
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { useAuth } from '../hooks/useAuth';
+import { formatThaiPhone } from '../lib/phone';
 
 /**
  * 18 บัญชีของฉัน.
@@ -32,7 +33,8 @@ export function ProfileScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const displayName = profile?.displayName ?? 'ยังไม่ได้ตั้งชื่อ';
-  const phone = profile?.phone ?? session?.user.phone ?? '—';
+  // Display only. The stored identity keeps its E.164 form.
+  const phone = formatThaiPhone(profile?.phone ?? session?.user.phone) || '—';
 
   async function onSave() {
     setSaving(true);

@@ -139,8 +139,23 @@ export function ListRow({
         {subtitle ? <Text style={styles.listSubtitle}>{subtitle}</Text> : null}
       </View>
       {trailing ? <Text style={styles.listTrailing}>{trailing}</Text> : null}
-      {selected ? <Text style={styles.listCheck}>✓</Text> : null}
+      {selected ? <CheckMark /> : null}
     </Pressable>
+  );
+}
+
+/**
+ * The selected-state check, drawn rather than typed.
+ *
+ * U+2713 (`✓`) is not in IBM Plex Sans Thai, so iOS substituted a glyph from a
+ * fallback face that reads as a square-root sign. Two borders rotated -45°
+ * produce the mark the design shows with no dependency on font coverage.
+ */
+export function CheckMark({ color = colors.primary }: { color?: string }) {
+  return (
+    <View style={styles.check} accessibilityElementsHidden importantForAccessibility="no">
+      <View style={[styles.checkStroke, { borderColor: color }]} />
+    </View>
   );
 }
 
@@ -298,7 +313,16 @@ const styles = StyleSheet.create({
   listTitle: { fontSize: fontSize.lg, color: colors.textPrimary, fontFamily: fontFamily.medium },
   listSubtitle: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted, lineHeight: 18 },
   listTrailing: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
-  listCheck: { fontSize: fontSize.xl, color: colors.primary, fontFamily: fontFamily.bold },
+  check: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
+  checkStroke: {
+    width: 13,
+    height: 7,
+    borderLeftWidth: 2.5,
+    borderBottomWidth: 2.5,
+    borderBottomLeftRadius: 1,
+    transform: [{ rotate: '-45deg' }],
+    marginTop: -4,
+  },
 
   stateView: {
     flex: 1,

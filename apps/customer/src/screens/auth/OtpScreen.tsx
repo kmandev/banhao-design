@@ -27,10 +27,11 @@ const RESEND_SECONDS = 60;
  */
 export function OtpScreen({ route, navigation }: Props) {
   const { phone } = route.params;
-  const { verifyOtp } = useAuth();
+  const { verifyOtp, requestOtp } = useAuth();
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
 
   useEffect(() => {
@@ -55,6 +56,30 @@ export function OtpScreen({ route, navigation }: Props) {
       setError(err instanceof Error ? err.message : 'รหัสไม่ถูกต้อง');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /**
+   * Asks Supabase Auth for a new code. The countdown is reset only if the
+   * request actually succeeded — resetting it on failure would tell the user a
+   * code is on its way when none was sent.
+   */
+  async function onResend() {
+    setError(null);
+    setResending(true);
+
+    try {
+      if (!isSupabaseConfigured) {
+        setError('ยังไม่ได้ตั้งค่า Supabase — ขอรหัสใหม่ไม่ได้ในโหมดตัวอย่าง');
+        return;
+      }
+      await requestOtp(phone);
+      setToken('');
+      setSecondsLeft(RESEND_SECONDS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ขอรหัสใหม่ไม่สำเร็จ');
+    } finally {
+      setResending(false);
     }
   }
 
@@ -91,8 +116,10 @@ export function OtpScreen({ route, navigation }: Props) {
       <Button
         label={secondsLeft > 0 ? `ขอรหัสใหม่ใน ${secondsLeft} วินาที` : 'ขอรหัสใหม่'}
         variant="ghost"
-        disabled={secondsLeft > 0}
-        onPress={() => setSecondsLeft(RESEND_SECONDS)}
+        disabled={secondsLeft > 0 || resending}
+        loading={resending}
+        onPress={onResend}
+        testID="button-resend-otp"
       />
 
       <Button label="เปลี่ยนเบอร์" variant="ghost" onPress={() => navigation.goBack()} />

@@ -206,3 +206,31 @@ Five defects were recorded rather than quietly fixed (DEF-01…DEF-05 in `docs/C
 **An environment defect was diagnosed by measurement, not guesswork.** Every request to Supabase after the first failed with `Network request failed`. The Simulator's own log showed the requests had switched to QUIC after the first response advertised `alt-svc: h3`, then died with `NSURLErrorNetworkConnectionLost (-1005)`. `curl` inside the same Simulator runtime reached the host fine, and clearing Expo Go's `HTTPStorages` database bought exactly one more successful request. `scripts/sim-supabase-proxy.mjs` works around it by serving the Simulator plain HTTP and forwarding verbatim to the real project over HTTPS — a transport shim, not a mock. Documented in `docs/SUPABASE_DEVELOPMENT.md`.
 
 Still unverified: Android, a physical iOS device, real SMS delivery (Q-019), and the empty-cart / loading / network-error / no-driver state variants.
+
+---
+
+## EVENT-011
+
+```yaml
+id: EVENT-011
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/supabase-customer-auth
+confidence: HIGH
+```
+
+**Customer App defect fixes — DEF-01…DEF-05 closed.** The review of EVENT-010 returned PASS WITH FIXES. All five defects are fixed, tested, and re-verified by screenshot on device.
+
+**DEF-01 (MAJOR) — `PayExpired` (12e) was unreachable.** `PromptPayQrScreen` now `replace()`s to `PayExpired` when its TTL reaches zero; `replace` rather than `navigate` so Back cannot return to a dead QR. **No test hook and no shortened timer were added** — 12e was screenshotted by letting the real 600-second countdown run out. The transition decides nothing about money: CON-002 still means only a signature-verified provider webhook may confirm a payment, and the QR remains a labelled placeholder.
+
+**DEF-02 — `ขอรหัสใหม่` now resends.** It calls `requestOtp` on the existing auth layer rather than only resetting the countdown, and the countdown restarts **only on success**, so the UI never claims a code is coming when none was sent. Verified live: a second `200 POST /auth/v1/otp` reached Supabase. No custom OTP backend, no OTP stored, no OTP or token logged.
+
+**DEF-03** — explicit `headerBackTitle: 'กลับ'`; "Tabs" and "Back" no longer appear. **DEF-04** — the selected-state check is now drawn from two rotated borders instead of U+2713, which IBM Plex Sans Thai does not contain; no font dependency remains. **DEF-05** — `formatThaiPhone` presents `081 234 5678` per the design; the E.164 Auth identity and `profiles.phone` are untouched, and a client cannot write that column in any case.
+
+**Visual QA is now 31 / 31 states verified by screenshot.** 22 new tests (49 in the customer app, 16 in `packages/ui`); lint, typecheck, test and build all pass.
+
+Deliberately unchanged: no payment provider, no webhook, no order backend, no dispatch, no settlement. Q-001 stays `OPEN`.
+
+Still **UNVERIFIED**: Android, a physical iOS device, real SMS, keyboard avoidance, the search results list (the simulator cannot type Thai), and the empty-cart / loading / network-error / no-driver variants.
+
+Also corrected: `docs/CURRENT_STATUS.md` still said *"No application exists"* and *"implementation has not started"*, which had been false since 2026-08-09. It now describes the real state, with a historical note pointing at `PROJECT_HISTORY.md` rather than erasing the record.

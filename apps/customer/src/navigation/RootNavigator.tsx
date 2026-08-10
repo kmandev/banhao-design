@@ -97,11 +97,17 @@ function CustomerTabs() {
   );
 }
 
-const headerOptions = {
+/** Exported so the Thai back label can be asserted without driving the header. */
+export const headerOptions = {
   headerStyle: { backgroundColor: colors.surface },
   headerTintColor: colors.textPrimary,
   headerTitleStyle: { fontSize: fontSize.xl, fontFamily: fontFamily.semibold },
   headerShadowVisible: false,
+  // Without this the back button falls back to the previous route's name —
+  // which surfaced as "Tabs" — or to iOS's generic English "Back" when the
+  // previous title is too long. Neither belongs in a Thai-language app.
+  headerBackTitle: 'กลับ',
+  headerBackTitleStyle: { fontSize: fontSize.md, fontFamily: fontFamily.regular },
 } as const;
 
 function CustomerNavigator() {

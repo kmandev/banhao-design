@@ -1,6 +1,6 @@
 # Customer App — Visual QA
 
-Date: 2026-08-10 · Expo SDK 52 · Expo Go
+Date: 2026-08-10 (fix pass) · Expo SDK 52 · Expo Go
 Devices: **iPhone 16 Pro** (402×874 pt) and **iPhone SE 3rd gen** (375×667 pt)
 Backend: **live `banhao-dev` Supabase project** (see
 [`SUPABASE_DEVELOPMENT.md`](SUPABASE_DEVELOPMENT.md))
@@ -44,7 +44,7 @@ RLS was additionally verified by execution against the same live project —
 | 01 | Splash | **MATCH** | brand tile `#E4572E`, centred, spinner |
 | 02 | Onboarding | **MATCH** | design copy verbatim, CTA above home indicator |
 | 03 | เข้าสู่ระบบ | **MATCH** | `+66` prefix, CTA disabled until the number validates (16 Pro **and** SE) |
-| 04 | ยืนยัน OTP | **MATCH** | 6-digit field, real server error state, resend countdown elapsing to an enabled "ขอรหัสใหม่" |
+| 04 | ยืนยัน OTP | **MATCH** | 6-digit field, real server error state, countdown elapsing to an enabled "ขอรหัสใหม่" that now actually resends |
 | 05 | หน้าแรก | **MATCH** | location line, search, category rail, shop cards with `ส่งฟรี` / `ขายดี` / `ปิดอยู่` badges |
 | 06 | ค้นหา | **MATCH** (2 of 3 states) | empty prompt and "ไม่พบผลลัพธ์" verified; **results list UNVERIFIED** — see limitation below |
 | 07 | หน้าร้าน | **MATCH** | hero, rating, distance/time/fee row, hours, address, section chips, menu rows, cart bar |
@@ -56,6 +56,7 @@ RLS was additionally verified by execution against the same live project —
 | 12b | กำลังตรวจสอบ | **MATCH** | spinner + "ไม่ต้องปิดหน้านี้"; simulation controls explicitly prefixed `จำลอง:` |
 | 12c | ชำระสำเร็จ | **MATCH** | |
 | 12d | ยืนยันไม่ได้ | **MATCH** | reassurance copy + "เปลี่ยนเป็นเงินสด" |
+| 12e | QR หมดอายุ | **MATCH** | reached by letting the real 10-minute TTL elapse — see DEF-01 |
 | 12f | จ่ายซ้ำ / จ่ายแล้ว | **MATCH** | idempotency message (REQ-003) |
 | 12g | รายละเอียดการจ่าย | **MATCH** | payment id, order, amount, method, status, **masked** provider ref |
 | 12h | การคืนเงิน | **MATCH** | three-step refund progress |
@@ -66,7 +67,7 @@ RLS was additionally verified by execution against the same live project —
 | 17 | แจ้งเตือน | **MATCH** | unread rows tinted with a dot; read row plain |
 | 18 | บัญชีของฉัน | **MATCH** | real profile data, inline name editor, logout |
 
-**Verified by screenshot: 29 of 31 states.**
+**Verified by screenshot: 31 of 31 states.**
 
 ### State variants
 
@@ -81,21 +82,24 @@ RLS was additionally verified by execution against the same live project —
 
 | # | Screen | Why |
 |---|---|---|
-| 12e | QR หมดอายุ | **Unreachable — see DEF-01.** Registered in the navigator but nothing navigates to it. |
-| 06 | Search **results** list | Simulator text entry cannot produce Thai characters, and `simctl pbcopy` / `pbsync` mangle Thai on paste. The mock catalogue is Thai-only, so no query can match. Not a defect in the app. |
+| 06 | Search **results** list | Simulator text entry cannot produce Thai characters, and `simctl pbcopy` / `pbsync` mangle Thai on paste. The mock catalogue is Thai-only, so no query can match. Not a defect in the app — the screen's other two states are verified. |
 
-## Defects found
+## Defects — all five FIXED
 
-| ID | Severity | Finding |
-|---|---|---|
-| **DEF-01** | **MAJOR** | **`PayExpired` (12e) is unreachable.** `PromptPayQrScreen` counts `QR_TTL_SECONDS` down to zero but never navigates anywhere; nothing else in the app navigates to `PayExpired` either. A documented payment state has no path to it. `apps/customer/src/screens/payment.tsx` |
-| **DEF-02** | MINOR | **`ขอรหัสใหม่` does not resend the OTP.** On screen 04 it only resets the local countdown — no `signInWithOtp` call. A user whose code expired cannot get a new one without going back. `apps/customer/src/screens/auth/OtpScreen.tsx` |
-| **DEF-03** | MINOR | **Untranslated back-button labels.** Screens pushed from the tab navigator show **"Tabs"**, and `Refund` shows **"Back"**. Every other back label is correct Thai. |
-| **DEF-04** | MINOR | **`✓` renders as `√`.** `packages/ui/src/components/domain.tsx:142` uses U+2713, which IBM Plex Sans Thai does not contain; iOS substitutes a glyph that reads as a square-root sign. Affects the selected state on 08, 10 and 11. |
-| **DEF-05** | MINOR | **Profile phone shows `66812345678`** — no `+`, unformatted. It is rendered straight from the Auth identity. |
+| ID | Severity | Finding | Status | Evidence |
+|---|---|---|---|---|
+| **DEF-01** | **MAJOR** | `PayExpired` (12e) was unreachable — `PromptPayQrScreen` counted its TTL to zero and navigated nowhere. | **FIXED** | The QR screen now `replace()`s to `PayExpired` at TTL 0. Verified on device by letting the **real** 600-second TTL elapse — no shortened timer, no test hook: [`12e-pay-expired.png`](qa/customer-app/12e-pay-expired.png). Back from 12e lands on Checkout, not a dead QR. Tests: `payment-expiry.test.tsx` (3). |
+| **DEF-02** | MINOR | `ขอรหัสใหม่` reset the local countdown without requesting a new code. | **FIXED** | Now calls `requestOtp` on the existing auth layer. Verified live: a second `200 POST /auth/v1/otp` reached Supabase and the countdown restarted — [`04-otp-resend.png`](qa/customer-app/04-otp-resend.png). Tests: `otp-resend.test.tsx` (4). |
+| **DEF-03** | MINOR | Back labels read "Tabs" / "Back" in English. | **FIXED** | Explicit `headerBackTitle: 'กลับ'`. Visible on 08, 10, 11, 12, 12e. Tests: `navigation.test.tsx` (2). |
+| **DEF-04** | MINOR | `✓` (U+2713) is absent from IBM Plex Sans Thai; iOS substituted a glyph reading as `√`. | **FIXED** | The mark is now drawn from two rotated borders — no font dependency. Verified on 08, 10 and 11. Tests: `domain.spec.tsx` (2). |
+| **DEF-05** | MINOR | Profile phone shown as `66812345678`. | **FIXED** | `formatThaiPhone` renders `081 234 5678`, matching the design. **Presentation only** — the E.164 Auth identity and `profiles.phone` are untouched, and a client cannot write that column anyway. Tests: `phone.test.ts` (7). |
 
-None of these are BLOCKER. DEF-01 is MAJOR because a documented state cannot be
-reached at all; the rest are cosmetic or recoverable.
+**BLOCKER: none. MAJOR: none outstanding.**
+
+No payment provider was added and no payment path became real. The QR remains a
+labelled placeholder, and CON-002 still means only a signature-verified provider
+webhook may confirm a payment — the DEF-01 fix moves the UI to the EXPIRED state
+when a code stops being usable, which decides nothing about money.
 
 ## Money arithmetic — checked, not assumed
 
@@ -114,9 +118,9 @@ carried through 10 → 12 → 12g without drift. Integer satang throughout.
 | Tracking map is a labelled placeholder | **MINOR (intentional)** | Needs a maps provider; Q-018 unverified |
 | Payment simulation buttons on 12b | **MINOR (intentional)** | Prefixed `จำลอง:`; CON-002 means only a verified webhook may confirm a payment, so these can never become real client-side |
 | App icon / splash image not configured | **MINOR** | Expo defaults; needs brand assets that don't exist |
-| DEF-01 … DEF-05 | see table above | |
+| DEF-01 … DEF-05 | **FIXED** | see the defects table above |
 
-**BLOCKER: none. MAJOR: one (DEF-01).**
+**BLOCKER: none. MAJOR: none.**
 
 ## Device checks
 
@@ -141,8 +145,8 @@ substitutes nothing. Full diagnosis in
 
 ## To finish this pass
 
-1. Fix DEF-01 so 12e is reachable, then screenshot it.
-2. Run on an Android emulator — verify per-weight font families resolve.
-3. Confirm keyboard avoidance where text entry raises the keyboard.
-4. Reach the remaining state variants (empty cart, loading, network error, no
+1. Run on an Android emulator — verify per-weight font families resolve.
+2. Confirm keyboard avoidance where text entry raises the keyboard.
+3. Reach the remaining state variants (empty cart, loading, network error, no
    driver) once they have real triggers rather than mock data.
+4. Verify the search results list on a device that can type Thai.
