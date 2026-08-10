@@ -10,6 +10,8 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 Foundation is merged to `main`. **Customer App UI is implemented** on branch `feature/customer-app`: all 31 design states (18 numbered screens + 7 payment sub-states + 6 state variants), design tokens, shared RN components, 4-tab navigation, Supabase auth + profile. Everything except auth and `profiles` is mock-backed — no order, payment, dispatch, or settlement logic exists. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md) and [`docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`](../docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md).
 
+A **live dev Supabase project (`banhao-dev`)** now exists, and on `feature/supabase-customer-auth` **authentication is verified end-to-end against it** — real OTP sign-in, session persistence, profile read/write under RLS, logout — with **29 / 31 states verified by screenshot** and **14 / 14 live RLS checks passing**. Five defects recorded, one MAJOR (12e unreachable). Setup and the Simulator HTTP/3 caveat: [`docs/SUPABASE_DEVELOPMENT.md`](../docs/SUPABASE_DEVELOPMENT.md); QA record: [`docs/CUSTOMER_APP_VISUAL_QA.md`](../docs/CUSTOMER_APP_VISUAL_QA.md).
+
 ## Permanent Facts
 
 10 verified facts, indexed FACT-001 through FACT-010. Full list with evidence: [`ai/KNOWLEDGE/FACTS.md`](KNOWLEDGE/FACTS.md).
@@ -34,9 +36,10 @@ Foundation is merged to `main`. **Customer App UI is implemented** on branch `fe
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
-- Review the `feature/customer-app` branch (P0) — Customer App UI complete, awaiting review
+- Review `feature/customer-app` and `feature/supabase-customer-auth` (P0) — Customer App UI complete and auth verified live, awaiting review
 - Answer DQ-01…DQ-05 design questions in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` (P1)
-- Complete visual QA for the 22 unverified screens (needs a Supabase project) — `docs/CUSTOMER_APP_VISUAL_QA.md` (P1)
+- Fix DEF-01 — payment state 12e `PayExpired` is unreachable (P1) — `docs/CUSTOMER_APP_VISUAL_QA.md`
+- Fix DEF-02…DEF-05 — resend OTP is a no-op, English back labels, `✓` glyph, unformatted phone (P2)
 - Verify the app on Android — per-weight font families are untested there (P1)
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design
@@ -51,7 +54,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-9 events logged, EVENT-001 through EVENT-009 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → **final QA / typography**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+10 events logged, EVENT-001 through EVENT-010 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → **Supabase dev environment and live auth verification**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Important Architecture Rules
 

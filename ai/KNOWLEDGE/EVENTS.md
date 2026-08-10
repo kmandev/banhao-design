@@ -178,3 +178,31 @@ Authentication: **NOT VERIFIED — Supabase environment not configured.**
 Android: **UNVERIFIED** — no Android SDK on this machine.
 
 84 tests pass; lint, typecheck and build pass. No MAJOR or BLOCKER differences among inspected screens.
+
+---
+
+## EVENT-010
+
+```yaml
+id: EVENT-010
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/supabase-customer-auth
+confidence: HIGH
+```
+
+**Supabase dev environment created and Customer authentication verified end-to-end for the first time.**
+
+A Free-tier project `banhao-dev` was created in `ap-southeast-1` (Singapore), migrations pushed, and **Phone auth enabled with Supabase Test OTP** — the official no-SMS development path. No custom OTP backend was built and no OTP is stored in our database. Anon-key-only credentials live in the gitignored `apps/customer/.env`; the service role key appears nowhere in the app, the repository, or any document.
+
+**Authentication is no longer `NOT VERIFIED`.** Against the live project: request OTP, reject a wrong OTP with the server's own error, verify a correct OTP, read the `profiles` row under RLS, update `display_name` (`204 PATCH`), survive a full app restart with the session intact, log out, and stay logged out across another restart — all confirmed by screenshot and request log. **No fake session was created at any point.**
+
+**Live RLS verification: 14 / 14 passed** (`supabase/tests/live-rls-check.mjs`), signing in through real GoTrue with the anon key and then attempting what a hostile client would. This is distinct from the plain-PostgreSQL shim suite, and `supabase/tests/README.md` now states which is which.
+
+**Visual QA moved from 4/31 to 29/31 states verified by screenshot.** Money arithmetic was checked rather than assumed — ฿170 + ฿15 + ฿5 − ฿10 = ฿180, carried through checkout, QR and payment detail without drift.
+
+Five defects were recorded rather than quietly fixed (DEF-01…DEF-05 in `docs/CUSTOMER_APP_VISUAL_QA.md`). One is MAJOR: **`PayExpired` (12e) is unreachable** — the QR screen counts down to zero and navigates nowhere, and nothing else routes to it. No BLOCKER.
+
+**An environment defect was diagnosed by measurement, not guesswork.** Every request to Supabase after the first failed with `Network request failed`. The Simulator's own log showed the requests had switched to QUIC after the first response advertised `alt-svc: h3`, then died with `NSURLErrorNetworkConnectionLost (-1005)`. `curl` inside the same Simulator runtime reached the host fine, and clearing Expo Go's `HTTPStorages` database bought exactly one more successful request. `scripts/sim-supabase-proxy.mjs` works around it by serving the Simulator plain HTTP and forwarding verbatim to the real project over HTTPS — a transport shim, not a mock. Documented in `docs/SUPABASE_DEVELOPMENT.md`.
+
+Still unverified: Android, a physical iOS device, real SMS delivery (Q-019), and the empty-cart / loading / network-error / no-driver state variants.

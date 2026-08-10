@@ -8,21 +8,25 @@ Read this right after `docs/AI_CONTEXT.md`. Kept short and actionable on purpose
 
 ## Current Project State
 
-Foundation is merged to `main`. **The Customer App UI is now implemented** on `feature/customer-app` (not merged): all 31 states from the design artifact — 18 numbered screens, 7 payment sub-states, 6 state variants — with design tokens, shared React Native components, 4-tab navigation, and Supabase auth + profile.
+Foundation is merged to `main`. **The Customer App UI is implemented** on `feature/customer-app` (not merged): all 31 states from the design artifact — 18 numbered screens, 7 payment sub-states, 6 state variants — with design tokens, shared React Native components, 4-tab navigation, and Supabase auth + profile.
+
+**A live dev Supabase project (`banhao-dev`) now exists**, and on `feature/supabase-customer-auth` (not merged) **authentication is verified end-to-end against it**. Neither branch is merged.
 
 Still no business logic: no order creation, payment integration, dispatch, or settlement. Everything except authentication and `profiles` is mock-backed via `apps/customer/src/repositories/`.
 
 ## Last Completed Work
 
-Customer App final QA (EVENT-009). **IBM Plex Sans Thai is now bundled** (all four weights, no runtime fetch) — the review's one MUST-FIX. 84 tests pass. Visual QA reached **4 of 31 states**; the rest are gated behind a Supabase session that does not exist.
+Supabase dev environment + live Customer authentication (EVENT-010). Project `banhao-dev` created in `ap-southeast-1` with Phone auth on **Supabase Test OTP**. Verified live: request OTP, wrong OTP rejected by the server, correct OTP, profile read under RLS, `display_name` write (`204 PATCH`), session persistence across a full app restart, logout, and logout persisting across another restart. **Live RLS: 14/14 passed.** Visual QA went from 4/31 to **29/31 states verified by screenshot**. No fake session was ever created.
+
+Five defects recorded rather than quietly fixed — DEF-01…DEF-05 in `docs/CUSTOMER_APP_VISUAL_QA.md`. One is MAJOR.
 
 ## Current Work
 
-None active. Awaiting review of `feature/customer-app`. **Not ready for merge** — 22 screens are UNVERIFIED and authentication was never tested against a real backend.
+None active. Awaiting review of `feature/customer-app` and `feature/supabase-customer-auth`. **Neither is merged.**
 
 ## Immediate Next Step
 
-Review `feature/customer-app`, and answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time.
+Review both branches. Then fix **DEF-01** (payment state 12e `PayExpired` is unreachable) and answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time.
 
 ## Important Decisions
 
@@ -66,16 +70,19 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Recent Session
 
-2026-08-09, five sessions (Claude Code): Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes. Full record: [`ai/SESSION_LOG/2026-08-09.md`](SESSION_LOG/2026-08-09.md).
+2026-08-10 (Claude Code): Supabase dev environment, live auth verification, and authenticated visual QA. Full record: [`ai/SESSION_LOG/2026-08-10.md`](SESSION_LOG/2026-08-10.md). Earlier: 2026-08-09, five sessions — Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes ([`ai/SESSION_LOG/2026-08-09.md`](SESSION_LOG/2026-08-09.md)).
 
 ## Warnings
 
 - **`NullPaymentProvider` throws on every call by design.** Don't "fix" it by returning fake success — that would let money paths appear to work untested.
 - The API needs real Supabase credentials in `.env` to start. `/health` has no auth dependency; `/api/v1/me` needs a valid Supabase JWT *and* a `profiles` row.
-- API auth tests use mocks. **RLS is verified by real execution** (`./supabase/tests/run-rls-tests.sh`), but against a plain Postgres container with a Supabase auth shim — GoTrue, real JWT issuance, and PostgREST are NOT exercised. End-to-end auth against a live Supabase project remains unverified.
+- API auth tests and the customer navigation tests use **mocks** — they prove routing, not authentication. Two RLS suites exist and must not be conflated: `supabase/tests/live-rls-check.mjs` is **LIVE** (real GoTrue, real JWTs, PostgREST — 14/14 passed), `./supabase/tests/run-rls-tests.sh` is a plain-Postgres shim. See `supabase/tests/README.md`.
+- **The iOS Simulator cannot hold an HTTP/3 connection to Supabase.** The first HTTPS request succeeds, then every one after it fails with `Network request failed`. Diagnosed from the Simulator's own log (QUIC → `-1005`). Use `scripts/sim-supabase-proxy.mjs` for Simulator QA; it forwards verbatim to the real project and mocks nothing. Full write-up in `docs/SUPABASE_DEVELOPMENT.md`. Untested on hardware and on Android.
+- `EXPO_PUBLIC_*` is inlined at transform time — after editing `apps/customer/.env` you must restart Metro with `--clear` **and** terminate/relaunch Expo Go. Reloading is not enough.
 - `profiles.phone` is deliberately not client-writable: it mirrors the Auth identity. Self-service phone change must go through Supabase Auth's OTP-verified flow, not a direct table update.
 - `support.js` is intentionally duplicated 4× (FACT-010) — don't "clean it up".
-- **22 Customer App screens are UNVERIFIED** against the design — no Supabase project means the authenticated tree can't be reached. They pass smoke tests only, which proves they don't crash, not that they look right. See `docs/CUSTOMER_APP_VISUAL_QA.md`.
+- **29 of 31 Customer App states are now verified by screenshot** against the design. Not verified: 12e (unreachable — DEF-01) and the search **results** list (simulator cannot type Thai). Four state variants — empty cart, loading, network error, no driver — have no reachable trigger yet. See `docs/CUSTOMER_APP_VISUAL_QA.md`.
+- **DEF-01 is MAJOR:** `PayExpired` (12e) is registered in the navigator but nothing routes to it; the QR screen counts down to zero and goes nowhere.
 - **Android is untested.** Font weights are selected by family name specifically because Android ignores `fontWeight` with a custom `fontFamily` — that mapping has never run on Android.
 - Thai tone-mark stacking was investigated and is **correct**; do not re-raise it. The marks merge visually at low zoom. Evidence: `docs/qa/customer-app/typography-thai-marks-zoom.png`.
 - The monorepo pins one React version via `pnpm.overrides`. Bumping React in one app without the others will reintroduce a `@types/react` collision.
@@ -90,6 +97,9 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not put mock data inside a UI component — it goes in `src/mocks/` behind a repository.
 - Do not add a text style with `fontSize` but no `fontFamily` — it silently falls back to the system face.
 - Do not create a fake Supabase session to make visual QA look complete.
+- Do not put the service role key in any app, `.env` a client reads, or document.
+- Do not describe plain-Postgres shim results as live Supabase verification.
+- Do not leave `EXPO_PUBLIC_SUPABASE_URL` pointing at the Simulator proxy in anything that leaves this machine.
 - Do not build Merchant, Driver, or Admin apps without an explicit instruction.
 - Do not commit `.env` or any credential — CI fails the build on this.
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
