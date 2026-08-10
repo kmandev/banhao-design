@@ -21,6 +21,8 @@ owner: PRODUCT_OWNER
 
 Cash collected by a driver from a customer must be recorded as a liability owed to the platform ("Cash Collection") and displayed separately from the driver's actual earnings in any driver-facing UI.
 
+**⚠️ Dormant in Phase 1 (2026-08-10, DEC-016).** Cash on Delivery is disabled at launch, so no rider collects cash and this requirement has nothing to act on. **It remains ACCEPTED and must not be deleted** — it applies in full the moment COD is reintroduced. Same for DEC-004.
+
 ### Rationale
 
 Quoted: "ไรเดอร์เป็นคนถือเงินของแพลตฟอร์มไว้ชั่วคราว ระบบจึงต้องบันทึกเป็นหนี้ที่ไรเดอร์ต้องนำส่ง … ไม่งั้นไรเดอร์จะเข้าใจว่าเงินในกระเป๋าคือรายได้ทั้งหมด" — without this separation, a driver would mistake platform money for personal income.

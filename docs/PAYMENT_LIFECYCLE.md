@@ -2,25 +2,33 @@
 
 How money enters the system, how it is confirmed, and how it comes back out.
 
-Written 2026-08-10 (EVENT-013). Companion:
-[`BUSINESS_RULES.md`](BUSINESS_RULES.md) ·
+Written 2026-08-10 (EVENT-013), locked to the approved decisions 2026-08-10
+(EVENT-014). Companion: [`BUSINESS_RULES.md`](BUSINESS_RULES.md) ·
 [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md) ·
 [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) ·
 [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
 
-**No payment provider may be selected in this document** (DEC-015, Q-001).
-Nothing here is an integration design.
+**No payment provider is selected** (DEC-015, Q-001). Nothing here is an
+integration design, and nothing here may be implemented yet.
+
+## Status legend
+
+`ACCEPTED` — approved by the Product Owner (`DEC-NNN`) or accepted product truth
+· `PROPOSED` — awaiting approval · `OPEN` — undecided, do not guess ·
+`LEGAL_REVIEW_REQUIRED` — no agent may conclude this is lawful.
 
 ---
 
-## 0. The four rules that cannot bend
+## 0. The rules that cannot bend
 
 | Rule | Source | Consequence |
 |---|---|---|
-| Only a **signature-verified provider webhook** may set `SUCCESS` or `REFUNDED` | `DOCUMENTED` — CON-002 / DEC-003 | A client screen never decides that money arrived. *"แอปไม่ใช่ผู้ตัดสินว่าจ่ายสำเร็จหรือยัง"* |
-| Every operation is **idempotent on one payment reference** | `DOCUMENTED` — REQ-003 | A duplicate callback reads back the existing result; it never writes a second ledger entry |
-| Payment state is **separate** from Order state | `DOCUMENTED` — CON-001 | A cancelled order can still hold money until the refund finishes |
-| Provider access goes through the **`PaymentProvider` abstraction** only | `DOCUMENTED` — DEC-015 | No SDK import outside `apps/api/src/modules/payments/providers/` |
+| Only a **signature-verified provider webhook** may set `SUCCESS` or `REFUNDED` | `ACCEPTED` — CON-002 / DEC-003 | A client screen never decides that money arrived |
+| Payment operations are **idempotent**; a duplicate cannot create duplicate financial value | `ACCEPTED` — **DEC-028** / REQ-003 | Keys: `order_id`, `payment_reference`, `idempotency_key` |
+| Payment, Order, Delivery and Settlement are **four separate domains** | `ACCEPTED` — **DEC-018** / CON-001 | A cancelled order can still hold money until refunded |
+| `REFUNDED` is a **payment** state, never an order outcome | `ACCEPTED` — **DEC-027** | `Order = CANCELLED` **and** `Payment = REFUNDED` |
+| A duplicate payment **never increases an order's value** | `ACCEPTED` — **DEC-030** | ฿185 + ฿185 ≠ ฿370 |
+| Provider access only through the **`PaymentProvider` abstraction** | `ACCEPTED` — DEC-015 | No SDK import outside `payments/providers/` |
 
 The abstraction already exists in code
 (`apps/api/src/modules/payments/payment-provider.interface.ts`) and
@@ -29,106 +37,136 @@ appear to work untested. Do not "fix" it.
 
 ---
 
-## 1. Payment entities
+## 1. Phase 1 scope — online payment only
 
-`PROPOSED` shapes; the responsibilities are `DOCUMENTED`.
+`ACCEPTED` — **DEC-016**.
 
-| Entity | Purpose | Cardinality | Key rule |
-|---|---|---|---|
-| **`Payment`** | The payment intent for one order. Holds the canonical payment state | 1 per order | Kept out of `Order` by CON-001 |
-| **`PaymentAttempt`** | One try at collecting: one QR, one expiry | many per payment | **Regenerating a QR creates a new attempt, not a new payment** — the payment reference is stable |
-| **`PaymentMethod`** | `PROMPTPAY_QR` \| `CASH` | enum | No wallet, no cards in Phase 1 (`DOCUMENTED`) |
-| **`PaymentTransaction`** | A money movement the provider reports | many per attempt | Immutable once written |
-| **`PaymentWebhookEvent`** | The raw inbound callback plus its verification result | many per payment | **The idempotency anchor.** Persist *before* processing |
-| **`Refund`** | A refund request against a payment | many per payment | Its own state machine |
-| **`RefundTransaction`** | A movement executed for a refund | many per refund | Immutable |
+| Method | Phase 1 | Note |
+|---|---|---|
+| **Online (PromptPay QR)** | **Enabled** — the only method | Provider not selected (Q-001) |
+| **Cash on Delivery** | **Disabled** | Not removed from the model |
+| Wallet / stored value | Excluded | Would raise an e-money question (Q-002) |
+| Cards | Not in Phase 1 | — |
 
-Why `PaymentAttempt` exists as a separate entity: the design requires the QR to
-be regenerable (`สร้าง QR ใหม่` on the expiry screen) while the order and the
-payment reference survive (*"Payment = EXPIRED แต่ Order ยังอยู่ ไม่สร้าง
-ออเดอร์ใหม่"*). Without attempts, either the reference changes — breaking
-REQ-003 — or expiry history is lost.
+**COD must not be hard-coded as permanently unsupported.** `payment_method`
+stays an extensible concept so COD can return without redesigning Order,
+Payment, Delivery or Settlement. Concretely:
+
+- `PaymentMethod` remains an open enum, not a boolean "is PromptPay".
+- Payment states `CASH_PENDING` and `CASH_COLLECTED` stay in the model,
+  unreachable in Phase 1.
+- The cash money flow, the rider cash liability (DEC-004 / REQ-001) and the cash
+  refund path stay documented and dormant.
+
+⚠️ **Consequence the Product Owner should hold onto:** removing cash makes
+**Q-001** (provider) and **Q-020** (PromptPay refund mechanism) *more* blocking,
+not less. In Phase 1, 100% of revenue and 100% of refunds run through a rail
+whose provider is unchosen and whose native refund capability research says does
+not exist. There is no cash fallback for either.
+
+⚠️ The Customer App still renders a cash option at checkout and a
+cash-prepared-amount selector. **That UI contradicts DEC-016 and must be
+disabled** — follow-up work, not done in this documentation step.
 
 ---
 
-## 2. Payment state machine
+## 2. Payment entities
 
-`DOCUMENTED` — twelve states, `docs/04-payment` § 02. **Actors are part of the
-contract.**
+`PROPOSED` shapes; the responsibilities are `ACCEPTED`.
 
-| Payment state | Customer sees | Paired order state | Changed by |
+| Entity | Purpose | Cardinality | Key rule |
 |---|---|---|---|
-| `CREATED` | กำลังสร้างรายการชำระเงิน | `PENDING_PAYMENT` | System |
-| `PENDING` | รอการชำระเงิน · QR + countdown | `PENDING_PAYMENT` | Waiting on the user |
-| `PROCESSING` | กำลังตรวจสอบการชำระเงิน | `PENDING_PAYMENT` | Provider |
-| `SUCCESS` | ชำระเงินสำเร็จ | `NEW → COMPLETED` | **Webhook only** |
-| `FAILED` | ยังยืนยันการชำระเงินไม่ได้ | `PENDING_PAYMENT` | Provider |
-| `EXPIRED` | QR นี้หมดอายุแล้ว | `PENDING_PAYMENT` | System (10 min) |
-| `CANCELLED` | ยกเลิกรายการชำระเงิน | `CANCELLED` | Customer / System |
-| `REFUND_PENDING` | กำลังดำเนินการคืนเงิน | `CANCELLED` | System / Admin |
-| `REFUND_PROCESSING` | ธนาคารกำลังดำเนินการ | `CANCELLED` | Provider |
-| `REFUNDED` | คืนเงินสำเร็จ | `CANCELLED` | **Webhook only** |
-| `CASH_PENDING` | จ่ายเงินสดปลายทาง | `NEW → DELIVERING` | System |
-| `CASH_COLLECTED` | จ่ายเงินแล้ว ขอบคุณครับ | `COMPLETED` | Rider |
+| **`Payment`** | The payment intent for one order; holds the canonical payment state | 1 per order | Kept out of `Order` — DEC-018 |
+| **`PaymentAttempt`** | One try at collecting: one QR, one expiry | many per payment | **A regenerated QR is a new attempt, not a new payment** — the reference is stable (DEC-028) |
+| **`PaymentMethod`** | Extensible enum; Phase 1 allows online only | enum | DEC-016 |
+| **`PaymentTransaction`** | A movement the provider reports | many per attempt | Immutable |
+| **`PaymentWebhookEvent`** | Raw inbound callback + verification result | many per payment | **The idempotency anchor.** Persist *before* processing |
+| **`Refund`** | A refund request against a payment | many per payment | Own state machine — DEC-027 |
+| **`RefundTransaction`** | A movement executed for a refund | many per refund | Immutable |
 
-Note the `PENDING_PAYMENT` order state referenced here does not exist in the
-Order State Machine — that is **BQ-012**, open and P0.
+`PaymentAttempt` exists separately because the design requires the QR to be
+regenerable (`สร้าง QR ใหม่`) while the order and the payment reference survive
+(*"Payment = EXPIRED แต่ Order ยังอยู่ ไม่สร้างออเดอร์ใหม่"*). Without attempts,
+either the reference changes — breaking DEC-028 — or expiry history is lost.
+Attempts are also what make **DEC-029** (late payment) answerable: a late
+transfer must resolve to *which attempt*, not just which order.
+
+---
+
+## 3. Payment state machine
+
+`ACCEPTED` — the five core states named in the decision lock are **`PENDING`,
+`SUCCESS`, `FAILED`, `EXPIRED`, `REFUNDED`**. The remaining states from the
+2026-08-09 design canvas are retained and marked below.
+
+| Payment state | Status | Paired Order state (DEC-019 names) | Changed by |
+|---|---|---|---|
+| `CREATED` | retained | `CREATED` / `PENDING_PAYMENT` | System |
+| **`PENDING`** | **`ACCEPTED`** | `PENDING_PAYMENT` | Waiting on the user |
+| `PROCESSING` | retained | `PENDING_PAYMENT` | Provider |
+| **`SUCCESS`** | **`ACCEPTED`** | `PAID` … `DELIVERED` | **Webhook only** (CON-002) |
+| **`FAILED`** | **`ACCEPTED`** | `PENDING_PAYMENT` | Provider |
+| **`EXPIRED`** | **`ACCEPTED`** | `PENDING_PAYMENT` | System (10 min) |
+| `CANCELLED` | retained | `CANCELLED` | Customer / System |
+| `REFUND_PENDING` | retained | `CANCELLED` | System / Operator |
+| `REFUND_PROCESSING` | retained | `CANCELLED` | Provider |
+| **`REFUNDED`** | **`ACCEPTED`** | `CANCELLED` | **Webhook only** (CON-002) |
+| `CASH_PENDING` | **dormant** — DEC-016 | — | — |
+| `CASH_COLLECTED` | **dormant** — DEC-016 | — | — |
+
+**BQ-012 is resolved.** `PENDING_PAYMENT` is now a real Order state (DEC-019),
+so the pairing column above no longer references a state that does not exist.
 
 ```mermaid
 stateDiagram-v2
     [*] --> CREATED
     CREATED --> PENDING : QR issued
-    CREATED --> CASH_PENDING : cash order
-    PENDING --> PROCESSING : customer says paid / provider signals
+    PENDING --> PROCESSING : customer reports paid / provider signals
     PENDING --> EXPIRED : 10 minutes elapse
     PENDING --> CANCELLED : customer abandons
     PROCESSING --> SUCCESS : verified webhook
     PROCESSING --> FAILED : provider reports failure
-    FAILED --> PENDING : retry, new attempt
-    EXPIRED --> PENDING : new QR, new attempt
-    SUCCESS --> REFUND_PENDING : refund requested
-    CASH_PENDING --> CASH_COLLECTED : rider confirms collection
-    CASH_PENDING --> CANCELLED : order cancelled before collection
-    CASH_COLLECTED --> REFUND_PENDING : post-collection refund
-    REFUND_PENDING --> REFUND_PROCESSING : sent to provider
+    FAILED --> PENDING : retry — new attempt
+    EXPIRED --> PENDING : new QR — new attempt
+    SUCCESS --> REFUND_PENDING : refund requested (DEC-027)
+    REFUND_PENDING --> REFUND_PROCESSING : sent to the provider
     REFUND_PROCESSING --> REFUNDED : verified webhook
     SUCCESS --> [*]
-    CASH_COLLECTED --> [*]
     REFUNDED --> [*]
     CANCELLED --> [*]
 ```
 
 **`SUCCESS` and `REFUNDED` have exactly one inbound edge each, and both come
-from a verified webhook.** If a code path can reach either state any other way,
-that path is a bug (CON-002).
+from a verified webhook.** A code path reaching either state any other way is a
+bug (CON-002).
 
 ---
 
-## 3. The six documented money flows
+## 4. Money flows in Phase 1
 
-`DOCUMENTED` — `docs/04-payment` § 03.
+`ACCEPTED` — the online flows. The cash flows are retained and dormant
+(DEC-016).
 
-| Flow | Path |
-|---|---|
-| **PromptPay** | cart → confirm → choose PromptPay → create Payment → issue QR → wait → **bank confirms** → paid → send order to the merchant |
-| **Cash** | choose cash → declare the note carried → send order to the merchant → rider delivers → collect + change → **rider confirms** → order complete → record outstanding cash |
-| **Refund** | order cancelled → create refund request → send to provider → processing → **bank confirms** → refunded |
-| **Cash refund** | cancelled *before* collection → nothing to refund · cancelled *after* → cash adjustment entry → admin refunds the customer |
-| **Merchant payout** | order complete → merchant payable accrues → grouped into a transfer round → transferred |
-| **Rider payout** | delivered → rider earning recorded → **outstanding cash deducted** → grouped into a round → transferred |
+| Flow | Path | Phase 1 |
+|---|---|---|
+| **Online payment** | cart → confirm → create Payment → issue QR → wait → **bank confirms** → `PAID` → order sent to the merchant | **Active** |
+| **Refund** | order cancelled → refund request → provider → processing → **bank confirms** → refunded | Active in principle; **mechanism `OPEN` (Q-020)** |
+| **Merchant payout** | order `DELIVERED` → payable accrues → transfer round → transferred | Active — DEC-026, not implemented |
+| **Rider payout** | delivered → earning recorded → transfer round → transferred | Active — DEC-026, not implemented |
+| ~~Cash collection~~ | rider collects, confirms, remits | **Dormant — DEC-016** |
+| ~~Cash refund~~ | before/after collection split | **Dormant — DEC-016** |
 
-Two things this makes explicit and that implementations get wrong:
-**cash money enters the system when the rider confirms, not when the order is
-placed**; and **the platform never announces a refund succeeded until the bank
-confirms it** (*"ไม่ประกาศว่าคืนสำเร็จจนกว่าธนาคารยืนยัน"*).
+Two rules that survive from the original design and must not be lost: the
+platform **never announces a refund succeeded until the bank confirms it**
+(*"ไม่ประกาศว่าคืนสำเร็จจนกว่าธนาคารยืนยัน"*), and money is never assumed from
+client state.
 
 ---
 
-## 4. Webhook processing
+## 5. Webhook processing
 
-`DOCUMENTED` sequence, quoted from the source: *"ผู้ให้บริการยิงเข้ามา → ตรวจ
-ลายเซ็น → ตรวจยอดและ order → อัปเดต Payment → อัปเดต Order → บันทึก Ledger →
-แจ้งลูกค้า"*.
+`ACCEPTED` sequence — *"ผู้ให้บริการยิงเข้ามา → ตรวจลายเซ็น → ตรวจยอดและ order →
+อัปเดต Payment → อัปเดต Order → บันทึก Ledger → แจ้งลูกค้า"*.
 
 ```mermaid
 sequenceDiagram
@@ -142,12 +180,12 @@ sequenceDiagram
     API->>API: verify signature — reject on failure, touch nothing
     API->>DB: look up payment by reference
     API->>API: verify amount and order match
-    alt already processed (REQ-003)
+    alt already processed (DEC-028)
         API->>P: 200 OK — read back the existing result
     else new event
         API->>DB: BEGIN
         API->>DB: Payment → SUCCESS
-        API->>DB: Order → next state
+        API->>DB: Order → PAID
         API->>DB: append ledger entries (must sum to zero)
         API->>DB: COMMIT
         API->>C: notify
@@ -160,178 +198,160 @@ Non-negotiable properties:
 1. **Persist the raw event before processing.** An unverifiable event is still
    evidence.
 2. **A failed signature changes nothing** — not the payment, not the order, not
-   the ledger. Return an error and alert.
-3. **Amount and order must both match** before anything is written. A correct
+   the ledger.
+3. **Amount and order must both match** before anything is written. A valid
    signature on the wrong amount is a reconciliation case, not a success.
-4. **One transaction** covers Payment + Order + Ledger. This single requirement
-   is why DEC-009 chose a monolith.
-5. **Return 200 for a duplicate**, or the provider will keep retrying.
-6. **Never log a secret, a token or a full account number.** The design already
-   holds this line in the UI: *"แสดงเฉพาะเลขอ้างอิงบางส่วน ไม่แสดงเลขบัญชีเต็ม
-   คีย์ หรือข้อมูลลับ"*.
+4. **One transaction** covers Payment + Order + Ledger — the reason DEC-009
+   chose a monolith.
+5. **Return 200 for a duplicate**, or the provider retries forever.
+6. **Never log a secret, token or full account number.** The design already
+   holds this line: *"แสดงเฉพาะเลขอ้างอิงบางส่วน"*.
 
 ---
 
-## 5. Idempotency
+## 6. Idempotency
 
-`DOCUMENTED` — REQ-003. This is the property most likely to be quietly broken
-during implementation, so the rules are spelled out.
+`ACCEPTED` — **DEC-028** / REQ-003. Required concepts: `order_id`,
+`payment_reference`, `idempotency_key`.
 
 | Operation | Idempotency key | Duplicate behaviour |
 |---|---|---|
-| Create payment | The order's payment reference (`PAY-BH000125`) | Return the existing payment; **never create a second** |
-| Issue QR | Payment reference + attempt number | Return the live attempt if it has not expired |
-| Webhook delivery | Provider event id, plus payment reference | Read back the stored result, return 200 |
+| Create payment | The order's `payment_reference` (e.g. `PAY-BH000125`) | Return the existing payment; **never create a second** |
+| Issue QR | `payment_reference` + attempt number | Return the live attempt if unexpired |
+| Webhook delivery | Provider event id + `payment_reference` | Read back the stored result, return 200 |
 | Refund request | Refund reference | Return the existing refund |
-| Ledger write | Entry-group key | Unique constraint; a second insert must fail loudly, not silently |
+| Ledger write | Entry-group key | Unique constraint; a second insert **fails loudly**, never silently |
 
-The already-shipped `PaymentProvider` interface carries an explicit
-`idempotencyKey` on every operation, so this is enforced at the type level
+The shipped `PaymentProvider` interface already carries an explicit
+`idempotencyKey` on every operation, so DEC-028 is satisfied at the type level
 before any provider exists.
 
-**Duplicate customer payment** — the customer transfers twice for the same QR.
-`DOCUMENTED` UI promise (screen 12f): *"ระบบจะไม่เรียกเก็บซ้ำ ถ้าคุณโอนไปสองครั้ง
-ทีมงานจะคืนให้อัตโนมัติ"* — we will not double-charge, and a double transfer is
-refunded automatically. **That promise depends on Q-020**, because refunding it
-requires the very PromptPay refund capability no provider offers. Until Q-020 is
-answered, this is a commitment without a mechanism.
-
 ---
 
-## 6. Documented edge cases
+## 7. Duplicate and late payment
 
-`DOCUMENTED` — `docs/04-payment` § 06, reproduced because these are behavioural
-requirements, not examples.
+### Duplicate payment
 
-| Situation | System behaviour | What the user sees |
-|---|---|---|
-| Re-tap pay / navigate back in | Reuse the same payment reference; create nothing | Returned to the existing status; if paid, "ออเดอร์นี้ชำระเงินแล้ว" |
-| Provider sends a duplicate callback | Detect the repeat reference, read back, no second ledger entry | Nothing changes |
-| App closed while the QR is open | Payment stays `PENDING` until expiry | Reopening shows the same QR with the remaining time |
-| Transferred but the webhook is slow | Stay `PROCESSING` and wait for the real webhook | "กำลังตรวจสอบการชำระเงิน" + a re-check button. **Never show success** |
-| QR expires | Payment `EXPIRED`; **the order survives** | "QR นี้หมดอายุแล้ว" + new QR / change method |
-| Over- or under-payment | Mismatch → reconciliation queue for an admin | Customer sees "กำลังตรวจสอบ"; admin sees the mismatch |
-| Merchant cancels after payment | Refund created automatically; Order `CANCELLED`, Payment `REFUND_PENDING` | "กำลังดำเนินการคืนเงิน" with a reference and an expected date |
-| Cash customer refuses the order | Nothing collected, nothing to refund; recorded as a damaged order | Rider taps "ลูกค้าไม่รับของ"; admin reviews |
-| Rider over the cash limit | Stop assigning new jobs until remittance | "กรุณานำส่งเงินสดก่อนรับงานเพิ่ม" + the amount |
-| Connection drops at pay | No payment created, or one stuck at `CREATED` | "เชื่อมต่อไม่ได้ ยังไม่มีการตัดเงิน" + retry |
+`ACCEPTED` — **DEC-030**. If an order expects ฿185 and two ฿185 payments
+succeed, the order does **not** become ฿370. The order's value is authoritative
+and immutable at creation; received transactions are matched against it, and a
+surplus becomes a **refund obligation**, not order value.
 
-Every one of these is already implemented as a **screen** in the Customer App
-(12b–12h, verified by screenshot) with no backend behind it. The screens are
-correct; the behaviour is missing.
+The Customer App already promises this on screen 12f:
+*"ระบบจะไม่เรียกเก็บซ้ำ ถ้าคุณโอนไปสองครั้ง ทีมงานจะคืนให้อัตโนมัติ"*.
+🚨 **The promise exists ahead of the mechanism** — automatic return depends on
+Q-020.
 
----
+### Late payment
 
-## 7. PromptPay specifics
+`ACCEPTED` as a technical requirement — **DEC-029**. A payment that succeeds
+after the order or attempt has timed out must be resolvable:
 
-Required by §15 of the brief. **UI only today — nothing here may be
-implemented.**
-
-| Aspect | Position |
+| The system must determine | How |
 |---|---|
-| **QR generation** | A provider concern behind `PaymentProvider.createPayment()`, which already returns `presentation: { type: 'QR_STRING', value, expiresAt }`. The QR string is **not** a secret, but it is also not proof of anything |
-| **Expiry** | **10 minutes**, `DOCUMENTED`; implemented in the Customer App as a real 600 s countdown, and screen 12e was verified by letting it actually elapse |
-| **Verification** | Webhook only (CON-002). Polling may exist as a **UI affordance** — the design has "ฉันโอนแล้ว ตรวจสอบให้หน่อย" and "ตรวจสอบอีกครั้ง" — but polling asks the backend to re-read provider state; it never lets the client assert success |
-| **Duplicate payment** | See § 5. Detected by reference; refund path blocked on Q-020 |
-| **Wrong amount** | Reconciliation queue, admin decides. `DOCUMENTED` |
-| **Late payment** | Money arrives after `EXPIRED`. The design does not cover it. `PROPOSED`: treat as a reconciliation case — either revive the payment if the order is still viable, or refund. **Do not auto-resurrect an order the merchant has already been told is dead** |
-| **Refund** | 🚨 **No examined provider supports native PromptPay refunds** (Q-020). Omise states PromptPay charges cannot be voided or refunded; Beam excludes the method; Xendit marks it unsupported; Stripe only by emailing the customer for a bank account. **This is a property of the rail, not a provider quirk** |
+| Which order? | `payment_reference` resolves to an order for as long as the order exists |
+| Which payment attempt? | Attempts retain identity after expiry (§ 2) |
+| Current order state? | Read from the order domain (DEC-018) |
+| Accept, refund, or manual review? | **`OPEN` — the business policy is not decided** |
 
-### The refund contradiction, stated plainly
-
-The Customer App tells customers: *"เงินจะเข้าบัญชีเดิมที่ใช้จ่าย ภายใน
-1–3 วันทำการ"* — back to the account you paid from, within 1–3 business days.
-The refund detail screen states the method as `คืนเข้าพร้อมเพย์เดิม`.
-
-Research says that cannot be done natively. Candidate mechanisms, none chosen:
-
-| Candidate | Problem |
-|---|---|
-| Wallet / store credit | May itself be **regulated e-money** (Q-002); and the launch strategy already rejected an in-app wallet for exactly this reason |
-| Manual bank transfer | Requires collecting the customer's bank account — new PDPA surface, manual labour per refund |
-| Cash refund via rider | Only works when a rider is going there anyway |
-| Narrow the cancellation window | Reduces how often refunds are needed; does not remove the case (merchant rejection is not the customer's choice) |
-
-Until Q-020 is answered, **the app's refund copy is a promise the platform
-cannot keep.** That is a consumer-protection exposure (Q-017), not only an
-engineering gap.
+`PROPOSED` handling until the policy lands: surface late payments as a **distinct
+reconciliation category**, never as a generic mismatch, and never auto-apply
+them to an order that has already been cancelled and refunded.
 
 ---
 
-## 8. Refund state machine
+## 8. Refunds
 
-`DOCUMENTED` states, `PROPOSED` structure.
+`ACCEPTED` — **DEC-027**: refund lives in the payment domain.
+`Order = CANCELLED`, `Payment = REFUNDED`. Never a `REFUNDED` order status.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> REFUND_REQUESTED : cancellation / dispute / duplicate
-    REFUND_REQUESTED --> REFUND_PENDING : approved (auto or admin)
-    REFUND_REQUESTED --> REFUND_REJECTED : not eligible ➕
+    [*] --> REFUND_REQUESTED : cancellation / duplicate / dispute
+    REFUND_REQUESTED --> REFUND_PENDING : approved (auto or operator)
+    REFUND_REQUESTED --> REFUND_REJECTED : not eligible ⬦
     REFUND_PENDING --> REFUND_PROCESSING : sent to the provider
     REFUND_PROCESSING --> REFUNDED : verified webhook
-    REFUND_PROCESSING --> REFUND_FAILED : provider rejects ➕
-    REFUND_FAILED --> REFUND_PENDING : retried, or switched to a manual mechanism ➕
+    REFUND_PROCESSING --> REFUND_FAILED : provider rejects ⬦
+    REFUND_FAILED --> REFUND_PENDING : retry or switch to a manual mechanism ⬦
     REFUNDED --> [*]
     REFUND_REJECTED --> [*]
 ```
 
-➕ = `PROPOSED` addition. `REFUND_FAILED` is not optional in practice: with no
-native PromptPay refund, failure is the *expected* path until Q-020 is resolved.
+⬦ = `PROPOSED`. `REFUND_FAILED` is not optional in practice: with no native
+PromptPay refund, failure is the *expected* path until Q-020 is resolved.
 
-### Refund triggers and composition
+Four movements a refund must keep separate — see
+[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md): the **payment refund**, the
+**merchant settlement reversal**, **rider compensation** (normally *not* clawed
+back — the rider did the work), and the **platform fee reversal**.
 
-| Trigger | Auto or manual | Amount | Status |
-|---|---|---|---|
-| Customer cancels before `PREPARING` | Auto | Full | `DOCUMENTED` |
-| Customer cancels during `PREPARING` | Merchant confirms | Full | `DOCUMENTED` |
-| Merchant rejects / times out | Auto | Full | `DOCUMENTED` |
-| No rider, customer cancels | Auto | Full | `DOCUMENTED` |
-| Payment failed / expired | N/A | Nothing was taken | `DOCUMENTED` |
-| Duplicate transfer | Auto (promised) | The duplicate | `DOCUMENTED` promise, `OPEN` mechanism |
-| Missing or wrong item | Manual | Partial | `OPEN` — BQ-031 |
-| Delivery failed | Manual | `OPEN` | BQ-015, BQ-017 |
-| Quality complaint after delivery | Manual, support | `OPEN` | Q-003, BQ-016 |
+| Trigger | Amount | Status |
+|---|---|---|
+| Customer cancels before `PREPARING` | Full | `ACCEPTED` |
+| Customer cancels during `PREPARING` (merchant confirms) | Full | `ACCEPTED` |
+| Merchant rejects or times out | Full | `ACCEPTED` |
+| Operator cancels for no rider (DEC-022) | Full to the customer | `ACCEPTED`; **who absorbs the food cost is `OPEN` — BQ-015** |
+| Payment failed / expired | Nothing was taken | `ACCEPTED` |
+| Duplicate transfer | The duplicate | `ACCEPTED` (DEC-030); mechanism `OPEN` |
+| Missing or wrong item | Partial | `OPEN` — BQ-031 |
+| Delivery failed | — | `OPEN` — BQ-015, BQ-017 |
+| Quality complaint after delivery | — | `OPEN` — Q-003, BQ-016 |
 
-Four things a refund must keep separate — see
-[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § Refund impact: the **payment
-refund**, the **merchant settlement reversal**, **rider compensation** (normally
-*not* clawed back — the rider did the work), and the **platform fee reversal**.
+### 🚨 The refund mechanism is still open — Q-020
+
+The Customer App tells customers *"เงินจะเข้าบัญชีเดิมที่ใช้จ่าย ภายใน
+1–3 วันทำการ"* and states the method as `คืนเข้าพร้อมเพย์เดิม`. Research found
+**no examined provider supports native PromptPay refunds** — Omise states
+PromptPay charges cannot be voided or refunded, Beam excludes the method,
+Xendit marks it unsupported, Stripe only by emailing the customer for a bank
+account. **This is a property of the rail, not a provider quirk.**
+
+| Candidate mechanism | Problem |
+|---|---|
+| Wallet / store credit | May itself be regulated e-money (Q-002); the launch strategy already rejected an in-app wallet |
+| Manual bank transfer | Collects bank details — new PDPA surface; manual labour per refund |
+| Cash refund via rider | **No longer available in Phase 1** — DEC-016 removed cash entirely |
+| Narrow the cancellation window | Reduces frequency; does not remove merchant rejection or no-rider cases |
+
+Note that DEC-016 **deleted one of the four candidates**. Until Q-020 is
+answered, the app's refund copy is a promise the platform cannot keep — a
+consumer-protection exposure (Q-017), not only an engineering gap.
 
 ---
 
 ## 9. Reconciliation
 
-`DOCUMENTED` — the admin's daily screen is a reconciliation view, not a revenue
-chart: *"หน้าที่แอดมินเปิดทุกเช้าคือหน้ากระทบยอด ไม่ใช่กราฟรายได้"*.
-
-Two identities must both read **ตรงกัน ✓**:
+`ACCEPTED`. The operator's morning screen is a reconciliation view, not a
+revenue chart. With COD disabled the first identity simplifies:
 
 ```
-online received + cash held by riders            = total sales
-merchant payouts + rider payouts + platform revenue + refunds = total sales
+Phase 1:  online received                                        = total sales
+          merchant payouts + rider payouts + platform revenue + refunds
+                                                                 = total sales
 ```
+
+(The `+ cash held by riders` term returns with COD.)
 
 Documented per-payment statuses: `ตรงกัน` (matched), `รอยืนยัน` (awaiting — e.g.
-*"ยังไม่ได้รับ webhook · รอครบ 10 นาที"*), `ไม่ตรง` (mismatched — e.g.
-*"ผู้ให้บริการแจ้งรับเงิน ฿145 · ระบบยัง PENDING"*). A mismatch is resolved by
-manual matching or by refunding the customer.
+no webhook yet, 10-minute grace), `ไม่ตรง` (mismatched). Mismatches are resolved
+by manual matching or by refunding the customer — an operator capability under
+DEC-032.
 
-`PROPOSED`: run reconciliation as a scheduled job against the provider's
-settlement report, not only against inbound webhooks — a webhook that never
-arrived is exactly the failure reconciliation exists to catch.
+`PROPOSED`: reconcile against the **provider's settlement report** on a
+schedule, not only against inbound webhooks — a webhook that never arrived is
+exactly what this catches. Late payments (DEC-029) get their own queue.
 
 ---
 
 ## 10. Chargebacks
 
 `OPEN` — Q-011. Not mentioned anywhere in the design. A customer disputing with
-their bank rather than asking BANHAO can pull money back **after** the merchant
-and rider have been paid, leaving the platform short.
+their bank can pull money back **after** merchant and rider have been paid.
 
-PromptPay is a push-based bank transfer rather than a card rail, so the
-card-style chargeback may not apply in the same form — but "may not" is doing
-real work in that sentence, and the answer depends on the provider (Q-001) and
-the legal model (Q-002). Do not assume the risk is zero.
+PromptPay is a push-based bank transfer rather than a card rail, so a card-style
+chargeback may not apply in the same form — but that depends on the provider
+(Q-001) and the legal model (Q-002). Do not assume the risk is zero.
 
 ---
 
@@ -340,27 +360,34 @@ the legal model (Q-002). Do not assume the risk is zero.
 | Not now | Why |
 |---|---|
 | Any provider SDK integration | Q-001 `OPEN`, DEC-015 |
-| Anything that sets `SUCCESS` outside a verified webhook | CON-002 |
+| Anything setting `SUCCESS` outside a verified webhook | CON-002 |
 | A refund implementation | Q-020 — the mechanism does not exist yet |
-| A wallet or stored-value balance | Excluded at launch; possible e-money exposure (Q-002) |
-| Card payments | Not in Phase 1 |
-| Replacing `NullPaymentProvider` with a stub that returns success | It throws deliberately |
+| A wallet or stored-value balance | Excluded; possible e-money exposure (Q-002) |
+| Cash payment paths | **DEC-016** — disabled in Phase 1 |
+| Replacing `NullPaymentProvider` with a stub returning success | It throws deliberately |
 
-What **can** be built once the domain model is accepted, without prejudging
-Q-001: the payment, attempt, transaction, webhook-event and refund tables; the
-idempotency keys and unique constraints; the state machine and its guards; the
-ledger; and the reconciliation job. All of that is provider-agnostic, and all of
-it is where the correctness risk actually lives.
+What **can** be designed once the domain model is accepted, without prejudging
+Q-001: the payment, attempt, transaction, webhook-event and refund structures;
+idempotency keys and unique constraints (DEC-028); the state machine and its
+guards; the ledger; and the reconciliation process. That is where the
+correctness risk actually lives, and none of it depends on which provider wins.
+
+**Still no implementation in this step** — no schema, no migration, no module.
 
 ---
 
 ## 12. Open questions owned by this document
 
-**P0:** Q-001 (provider) · Q-002 (legal model) · Q-020 (PromptPay refund) ·
-BQ-012 (`PENDING_PAYMENT`) · BQ-027 (service fee refundability)
-**P1:** Q-011 (chargebacks) · BQ-031 (partial refund composition) ·
-Q-003 / BQ-016 (refund policy)
-**Design questions closed by this document:** DQ-02 — screen 12f's trigger is
-the documented duplicate-payment edge case (§ 5, § 6), i.e. re-entering payment
-for an already-`SUCCESS` payment reference. Recommend the Product Owner close it
-as documented rather than open.
+**Resolved by this lock:** BQ-012 (`PENDING_PAYMENT` — DEC-019) · the
+idempotency requirement (DEC-028) · duplicate-payment semantics (DEC-030) ·
+refund/order separation (DEC-027) · Phase 1 payment scope (DEC-016).
+
+**Still `OPEN` — and P0:** Q-001 (provider) · Q-002 (legal model,
+`LEGAL_REVIEW_REQUIRED`) · Q-020 (PromptPay refund mechanism) · BQ-027 (service
+fee refundability).
+**Still `OPEN` — P1:** Q-011 (chargebacks) · BQ-031 (partial refund
+composition) · Q-003 / BQ-016 (refund policy) · the late-payment business
+handling under DEC-029.
+
+**Design question closed by this document:** DQ-02 — screen 12f's trigger is the
+documented duplicate-payment case, now formalised by DEC-030.

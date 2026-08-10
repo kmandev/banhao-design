@@ -11,10 +11,10 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## P0 — Critical
 
-- [ ] Answer the 15 P0 business questions in [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
+- [ ] Answer the remaining **8** P0 business questions in [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
   - Priority: P0
-  - Source: EVENT-013
-  - Notes: Q-001, Q-002, Q-010, Q-020, BQ-010, BQ-012, BQ-014, BQ-015, BQ-019, BQ-023, BQ-025, BQ-026, BQ-027, BQ-028, BQ-030. Until these are answered, the Order, Payment and Settlement modules can only be guessed at. Two of them (BQ-012, BQ-014) are contradictions between accepted documents.
+  - Source: EVENT-013, narrowed by EVENT-014
+  - Notes: Q-001 (provider), Q-002 (legal), Q-010/BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). **Every structural question is now answered** by DEC-016…DEC-032; what remains is numbers, the provider, and legal. BQ-023, BQ-033 and Q-004 are **deferred with COD** (DEC-016), not answered.
 
 - [ ] Decide payment provider(s) and the marketplace/settlement model for Phase 1 PromptPay QR payments
   - Priority: P0
@@ -28,6 +28,11 @@ Every item cites where it comes from in the repository. Items with no in-repo so
   - **RESOLVED 2026-08-09 by DEC-010** — Supabase (PostgreSQL + PostGIS), Q-007. Three migrations are applied live. The **domain schema** is still unwritten and is deliberately blocked on the P0 business questions above; the proposed model is `docs/DOMAIN_MODEL.md`, status `PROPOSED`. *Entry was stale until EVENT-013 reconciled it.*
 
 ## P1 — High
+
+- [ ] Reconcile the Customer App with DEC-016 and DEC-019
+  - Priority: P1
+  - Source: EVENT-014
+  - Notes: two divergences the decision lock created, deliberately left in code. (a) `apps/customer/src/mocks/types.ts` encodes the superseded 12 order states — DEC-019 replaces them. (b) Checkout still offers a cash option and a cash-prepared-amount selector — DEC-016 disables COD. Needs the exception **state names** settled first (still `PROPOSED`).
 
 - [ ] Design the full Driver App UI (currently 4 wireframe-level screens only: D-03, D-05, D-07, D-13)
   - Priority: P1

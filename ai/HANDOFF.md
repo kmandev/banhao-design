@@ -16,7 +16,13 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-**Business Rules & Domain Modelling (EVENT-013), on `feature/business-rules`** — this update. Seven documents written, **zero production code**: `docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md`, `OPEN_BUSINESS_QUESTIONS.md`. Every rule is tagged `DOCUMENTED` / `PROPOSED` / `OPEN`; nothing was promoted to `ACCEPTED` and no `Q-NNN` was resolved. 39 business questions added (BQ-001…BQ-039), 15 of them P0. Six contradictions **inside accepted documents** were found — see EVENT-013 for all six; the two that matter most are a `PENDING_PAYMENT` order state that the payment machine references but the order machine does not contain (BQ-012), and a `NO_DRIVER` rule that the Customer App's own copy contradicts (BQ-014).
+**P0 Business Decisions v1 approved and locked (EVENT-014), on `feature/p0-decisions-v1`** — this update. The Product Owner approved a first tranche of business decisions in a workshop; they are now permanent decision records **DEC-016…DEC-032** in `docs/DECISIONS.md` (which also gained an index). **Documentation only — no code, no migration, no provider.**
+
+The seven business documents were rewritten against those decisions, and the status taxonomy is now `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections. **Only `ACCEPTED` may be built on.**
+
+Headline decisions: **online payment only, COD disabled but extensible** (DEC-016) · **one cart = one restaurant** (DEC-017) · **four separate state domains** (DEC-018) · a new Order lifecycle with **`PREPARING` and `RIDER_SEARCHING` in parallel** (DEC-019) · **broadcast → first accept** dispatch starting at `MERCHANT_ACCEPTED` (DEC-020) · **rider cancellation never cancels the order** (DEC-021) · **no-rider escalates to an operator, never auto-cancels** (DEC-022) · fee/commission **models only, every number still open** (DEC-023/024/025) · settlement as its own domain (DEC-026) · refund in the payment domain (DEC-027) · idempotency, late payment and duplicate payment (DEC-028/029/030) · manual operations and operator fallback as intentional Phase 1 capabilities (DEC-031/032).
+
+Before that: **Business Rules & Domain Modelling (EVENT-013), on `feature/business-rules`**. Seven documents written, **zero production code**: `docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md`, `OPEN_BUSINESS_QUESTIONS.md`. Every rule is tagged `DOCUMENTED` / `PROPOSED` / `OPEN`; nothing was promoted to `ACCEPTED` and no `Q-NNN` was resolved. 39 business questions added (BQ-001…BQ-039), 15 of them P0. Six contradictions **inside accepted documents** were found — see EVENT-013 for all six; the two that matter most are a `PENDING_PAYMENT` order state that the payment machine references but the order machine does not contain (BQ-012), and a `NO_DRIVER` rule that the Customer App's own copy contradicts (BQ-014).
 
 Before that: **merge to `main`**. The full quality gate (lint, typecheck, test, build) was re-run on `main` after the merge and passed. Before that: Customer App defect fixes (EVENT-011) — **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
 
@@ -24,11 +30,11 @@ Before that: Supabase dev environment + live Customer authentication (EVENT-010)
 
 ## Current Work
 
-`feature/business-rules` is written and **awaiting Product Owner review**. It is documentation only — no code, no migration, no provider.
+`feature/p0-decisions-v1` (from `feature/business-rules`, from `main`) is pushed and **ready for architecture review**. Documentation only. **Not merged to `main`.**
 
 ## Immediate Next Step
 
-**Product Owner review of `docs/OPEN_BUSINESS_QUESTIONS.md`, starting with the 15 P0 items.** Until those are answered, Order, Payment and Settlement cannot be implemented — only guessed at. The P0 set is Q-001, Q-002, Q-010, Q-020, plus BQ-010, BQ-012, BQ-014, BQ-015, BQ-019, BQ-023, BQ-025, BQ-026, BQ-027, BQ-028, BQ-030.
+**Architecture review of the locked decisions**, then the remaining **8 P0 business questions** in `docs/OPEN_BUSINESS_QUESTIONS.md`: Q-001 (provider), Q-002 (legal), Q-010 / BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). Every one is a number, a provider, or a legal question — **all the structural questions are now answered.**
 
 In parallel and unchanged: **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017, and now BQ-022 rider classification) still gates all payment work and has external lead time; DQ-01…DQ-05 need closing (all five are now addressed — see `OPEN_BUSINESS_QUESTIONS.md` § DQ table); Android is still unverified. Merchant, Driver, Admin, and any payment/order/dispatch code remain out of scope until the P0 decisions land — that is a new instruction to wait for, not something to infer from "the business rules are written."
 
@@ -55,8 +61,9 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Pending Decisions
 
-**Blocking payment work:** Q-002 (legal/settlement model), Q-020 (PromptPay refund mechanism), Q-001 (payment provider), Q-010 (platform fee — anchored but not decided; see BQ-028).
-**Blocking order/dispatch work (new, EVENT-013):** BQ-010 (one merchant per cart), BQ-012 (`PENDING_PAYMENT`), BQ-014 (`NO_DRIVER` semantics), BQ-015 (who pays for wasted food), BQ-019 (dispatch model), BQ-023 (rider cash float), BQ-025 (no-rider ladder), BQ-026/BQ-027 (delivery and service fees), BQ-030 (promotion funding).
+**Blocking payment work:** Q-002 (legal/settlement model), Q-020 (PromptPay refund mechanism), Q-001 (payment provider) — **all three got more urgent with DEC-016**, since online is now the only way to be paid or to refund.
+**Blocking money work:** every number. Q-010 / BQ-028 (commission rate), BQ-026 (delivery fee), BQ-027 (service fee), BQ-029 (rider earnings), BQ-030 (promotion funding), BQ-015 (who pays for wasted food).
+**Answered 2026-08-10 (EVENT-014):** BQ-010, BQ-012, BQ-014, BQ-019, BQ-025 and the model halves of BQ-026/027/028. **Deferred with COD:** BQ-023, BQ-033, Q-004.
 **Needed soon:** Q-015 (ETDA notification), Q-009 (hosting budget), Q-018 (map field test), Q-019 (SMS sender ID — ~2 week lead time), Q-012 (PDPA review), BQ-022 (rider contractor status).
 
 ## Blocking Issues
@@ -65,9 +72,11 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 🚨 **Payment-facilitation licensing boundary unresolved** — BANHAO's split/transfer-round/cash-liability design may itself be regulated activity. Q-002.
 
-🚨 **Two accepted documents contradict each other** (EVENT-013). The Payment State Machine pairs five states with an Order state `PENDING_PAYMENT` that the Order State Machine does not contain (BQ-012). The Order State Machine puts `NO_DRIVER` after `READY` — food cooked — while the Customer App tells the customer their food has *not* been cooked (BQ-014). Neither can be resolved by an agent; both change who pays for wasted food.
+✅ **Resolved 2026-08-10.** The two contradictions found in EVENT-013 are settled: `PENDING_PAYMENT` is now a real Order state (DEC-019), and rider search starts at `MERCHANT_ACCEPTED` so the `NO_DRIVER` conflict disappears (DEC-019, DEC-022). **The cost question they exposed — who pays for cooked-but-undelivered food — is still `OPEN` (BQ-015) and still P0.**
 
-🚨 **The cash design makes riders front their own money** — the rider pays the merchant ฿108 at pickup to earn ฿12, before collecting anything. Documented twice, never called out. With 8–12 riders total this is a recruitment barrier. BQ-023.
+🚨 **Two code divergences created by the lock, deliberately not fixed** (no code was touched). `apps/customer/src/mocks/types.ts` still encodes the superseded 12 order states (DEC-019), and the Customer App checkout still offers cash (DEC-016). Both are follow-up work for an implementation phase.
+
+⏸️ **The rider cash-float problem is deferred, not solved** — DEC-016 disables COD, so no rider fronts money in Phase 1. The underlying question (the rider pays the merchant ฿108 at pickup to earn ฿12) returns unchanged the day COD is switched back on. BQ-023.
 
 ## Important Files
 
@@ -113,7 +122,9 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not build Merchant, Driver, or Admin apps without an explicit instruction.
 - Do not commit `.env` or any credential — CI fails the build on this.
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
-- Do not implement anything tagged `PROPOSED` in `docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md` or `SETTLEMENT_MODEL.md`. Only `DOCUMENTED` rules are product truth.
+- Do not implement anything tagged `PROPOSED` or `OPEN` in the business documents. **Only `ACCEPTED` is product truth**, and `ACCEPTED — MODEL · OPEN — NUMBERS` means you may not pick the number.
+- Do not enable cash payment anywhere — DEC-016 disables COD in Phase 1. Equally, **do not delete the cash model**: `payment_method` must stay extensible, and DEC-004 / REQ-001 remain accepted.
+- Do not use the old order state names (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work — DEC-019 supersedes them.
 - Do not treat the design's sample figures as business rules — 10% commission, ฿15 delivery, ฿5 service, ฿10 coupon are all illustrative, and the payment canvas says so about itself.
 
 ## Recommended First Action

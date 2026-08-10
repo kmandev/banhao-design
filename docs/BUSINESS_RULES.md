@@ -20,14 +20,24 @@ Every rule carries a status. **Do not treat them as equivalent.**
 
 | Status | Meaning | May an agent build on it? |
 |---|---|---|
-| `DOCUMENTED` | Traceable to an accepted source — a design canvas, a `DEC-NNN`, a `CON-NNN`, or a `REQ-NNN`. This is product truth. | Yes. Changing it needs Product Owner approval. |
+| `ACCEPTED` | Approved by the Product Owner (a `DEC-NNN`), or accepted product truth (`CON-NNN`, `REQ-NNN`, design canvas). | Yes. Changing it needs Product Owner approval. |
 | `PROPOSED` | This analysis's suggestion. **Not approved.** | No. Implement only after the Product Owner accepts it. |
 | `OPEN` | Genuinely undecided. Tracked in `OPEN_BUSINESS_QUESTIONS.md`. | No. Do not guess — see `AGENTS.md`. |
+| `LEGAL_REVIEW_REQUIRED` | Cannot be concluded by an agent or an engineer at all. | **No.** Never mark it accepted. |
+
+A rule may be **`ACCEPTED` in model and `OPEN` in numbers** — that combination
+is deliberate and appears throughout the money sections. It means the direction
+of the money is decided and the amount is not.
+
+**On 2026-08-10 the Product Owner locked seventeen decisions, DEC-016 through
+DEC-032** (`docs/DECISIONS.md`, EVENT-014). Where a rule below cites a `DEC-01x`
+or `DEC-02x`/`DEC-03x`, it is approved and no longer merely proposed.
 
 Where a rule cites a number that came from the design's sample data, it is
 labelled `(sample)`. The design canvas states this about itself:
 *"ข้อมูลตัวเลขทั้งหมดในเอกสารเป็นข้อมูลตัวอย่างเพื่อการออกแบบ"* — every figure in
-that document is illustrative.
+that document is illustrative. **DEC-025 says so explicitly of the 10%
+commission example: it must not become a business rule by default.**
 
 Money is always **integer satang** (CON-003). Times are **Asia/Bangkok**.
 
@@ -35,7 +45,7 @@ Money is always **integer satang** (CON-003). Times are **Asia/Bangkok**.
 
 ## 1. What BANHAO is
 
-`DOCUMENTED`
+`ACCEPTED`
 
 A **three-sided local marketplace** for อำเภอบุณฑริก จังหวัดอุบลราชธานี. Phase 1
 is Food Delivery; Phases 2–4 (Parcel, Ride, Shopping) reuse the same domain
@@ -67,14 +77,14 @@ default and role changes restricted to a service-role-only function
 
 ### Launch parameters
 
-`DOCUMENTED` — `docs/05-architecture` § 01 STRATEGY
+`ACCEPTED` — `docs/05-architecture` § 01 STRATEGY
 
 | Parameter | Value |
 |---|---|
 | Opening merchants | 20–30 restaurants within a **3 km radius of ตลาดสดบุณฑริก** |
 | Merchant ceiling before Phase 2 | Food only until **80 restaurants** |
 | Rider pool | **8–12 riders** |
-| Payment methods | **Cash and PromptPay only.** No in-app wallet — deliberately excluded for regulatory burden and UI cost |
+| Payment methods | **Online payment only — DEC-016.** Cash on Delivery is **disabled** in Phase 1 (the design canvas's "cash + PromptPay" scope is superseded). No in-app wallet — deliberately excluded for regulatory burden and UI cost |
 | Success metric | **35% repeat-order rate within 14 days** — not downloads |
 | Failure ceiling | **Under 5%** of orders cancelled for lack of a rider |
 
@@ -85,7 +95,7 @@ detail.
 
 ### The scope rule that overrides feature requests
 
-`DOCUMENTED` — CON-004 / DEC-007
+`ACCEPTED` — CON-004 / DEC-007
 
 Any feature that lengthens the core path (open app → choose shop → choose food →
 order → wait → receive), **even by one step**, is deferred to a later phase.
@@ -98,15 +108,15 @@ destination screen.
 
 ### 2.1 What a customer needs in order to place an order
 
-`DOCUMENTED` where marked, otherwise `OPEN`
+`ACCEPTED` where marked, otherwise `OPEN`
 
 | Requirement | Status | Notes |
 |---|---|---|
-| A verified phone number | `DOCUMENTED` | Supabase Phone OTP; live and verified. `profiles.phone` mirrors the Auth identity and is **not client-writable** |
-| A `profiles` row | `DOCUMENTED` | Auto-created by trigger on signup; role defaults to `CUSTOMER` |
+| A verified phone number | `ACCEPTED` | Supabase Phone OTP; live and verified. `profiles.phone` mirrors the Auth identity and is **not client-writable** |
+| A `profiles` row | `ACCEPTED` | Auto-created by trigger on signup; role defaults to `CUSTOMER` |
 | A delivery address inside the service area | `OPEN` | BQ-001, BQ-003 |
 | A cart with one merchant's items meeting that merchant's minimum | `OPEN` | BQ-008, BQ-010 |
-| A payment method | `DOCUMENTED` | PromptPay QR or cash |
+| A payment method | `ACCEPTED` | PromptPay QR or cash |
 | A display name | Not required | Optional; `display_name` is the only column a client may write |
 
 No email, no password, no ID document. The whole customer identity is a phone
@@ -114,7 +124,7 @@ number.
 
 ### 2.2 Authentication
 
-`DOCUMENTED`
+`ACCEPTED`
 
 Phone + 6-digit OTP. Sessions persist across app restarts. A phone-number change
 must go through Supabase Auth's OTP-verified flow — never a direct table update.
@@ -134,7 +144,7 @@ where a past order went.
 
 ### 2.4 Cancellation and refunds — the customer's view
 
-`DOCUMENTED` — `docs/05-architecture` § 03
+`ACCEPTED` — `docs/05-architecture` § 03
 
 | When | Rule |
 |---|---|
@@ -153,7 +163,7 @@ answered, that copy is a commitment the platform cannot keep.
 
 ### 2.5 Ratings
 
-`DOCUMENTED` (structure) / `OPEN` (rules — BQ-036)
+`ACCEPTED` (structure) / `OPEN` (rules — BQ-036)
 
 After delivery the customer may rate the **restaurant** and the **rider**
 separately, 1–5 stars each, with predefined tag chips
@@ -164,7 +174,7 @@ review count (`⭐ 4.8 (326 รีวิว)`).
 
 ### 2.6 Support
 
-`DOCUMENTED` (the commitment) / `OPEN` (the mechanism — BQ-037)
+`ACCEPTED` (the commitment) / `OPEN` (the mechanism — BQ-037)
 
 The payment detail screen publishes support availability as
 **every day 08:00–21:00**. Post-pickup cancellations route here.
@@ -228,7 +238,7 @@ store instants in UTC and resolve business days in Bangkok local time.
 
 ### 3.4 Menu
 
-`DOCUMENTED` (structure) / `OPEN` (BQ-009)
+`ACCEPTED` (structure) / `OPEN` (BQ-009)
 
 - A restaurant's menu is organised into **sections/categories**
   (`แนะนำ`, `อาหารจานเดียว`, `ส้มตำ`, `เครื่องดื่ม`).
@@ -242,13 +252,13 @@ store instants in UTC and resolve business days in Bangkok local time.
 
 ### 3.5 Merchant-controlled settings
 
-`DOCUMENTED` that they exist (merchant sitemap), `OPEN` as to their rules:
+`ACCEPTED` that they exist (merchant sitemap), `OPEN` as to their rules:
 minimum order value (`ยอดขั้นต่ำ`), delivery radius (`รัศมีส่ง`), bank account,
 staff accounts, notification settings, opening hours, menu and prices.
 
 ### 3.6 The merchant's operating loop
 
-`DOCUMENTED`
+`ACCEPTED`
 
 New order arrives with **an alarm that keeps sounding until acknowledged**
 (`มีเสียงเตือนดังจนกว่าจะกดรับ`) → accept or reject **within 3 minutes** → start
@@ -260,19 +270,28 @@ designed to be readable from **2 metres away** on a tablet behind the counter.
 
 ## 4. Cart
 
-`OPEN` on every substantive question — BQ-010, BQ-011.
+### 4.1 One cart = one restaurant
+
+`ACCEPTED` — **DEC-017**. A customer **cannot** create a multi-restaurant cart
+in Phase 1. Adding an item from a different restaurant clears or blocks the
+cart, with an explicit prompt.
+
+Why: multi-merchant carts require multi-pickup routing against a pool of 8–12
+riders, and would lengthen the core path (CON-004). The Customer App is already
+built this way, so nothing needs rework. **Resolves BQ-010.**
+
+### 4.2 Everything else about the cart
 
 What the design shows: a cart headed by **one shop** with its distance and ETA,
 line items with options, notes and quantity steppers, a remove action, an
 `+ เพิ่มรายการ` action, an empty state, and a price breakdown of
 `ค่าอาหาร / ค่าส่ง / ค่าบริการ / ส่วนลด / รวมทั้งหมด`.
 
-`PROPOSED` rules, pending BQ-010/BQ-011:
+`PROPOSED`, pending BQ-011:
 
-1. **One merchant per cart.** Adding an item from a different shop prompts to
-   clear the cart.
-2. **The cart is a draft, not a contract.** Prices are re-validated at checkout.
-3. **The order is the contract.** At creation, an order snapshots every line
+1. **The cart is a draft, not a contract.** Prices, availability and opening
+   hours are re-validated at checkout.
+2. **The order is the contract.** At creation, an order snapshots every line
    price, fee and discount in satang. It is never recomputed from the catalogue
    afterwards — CON-003 depends on this.
 
@@ -282,7 +301,7 @@ line items with options, notes and quantity steppers, a remove action, an
 
 ### 5.1 The documented formula
 
-`DOCUMENTED` as a design **sample**, `OPEN` as business rule.
+`ACCEPTED` as a design **sample**, `OPEN` as business rule.
 
 ```
 total = subtotal + delivery_fee + service_fee − discount        (never below 0)
@@ -297,9 +316,14 @@ Sample values carried through the design and the implemented app:
 `ค่าส่ง ฿15` and label it `ค่าส่ง (1.2 กม.)`. Base-plus-distance would reconcile
 them, but no rule is stated.
 
-### 5.2 Delivery fee models under consideration
+### 5.2 Delivery fee — model accepted, numbers open
 
-`OPEN` — BQ-026
+`ACCEPTED — MODEL` — **DEC-023**: `Customer → delivery fee → rider earning`.
+The delivery fee is conceptually associated with delivery compensation.
+**`OPEN — NUMERIC PRICING`** — BQ-026. **No agent may invent a price or a
+band.**
+
+The models below are decision support for the pricing decision, not a decision:
 
 | Model | Complexity | Fairness | Needs good geodata? | Fit for Buntharik |
 |---|---|---|---|---|
@@ -311,10 +335,20 @@ them, but no rule is stated.
 Bands and prices belong in `ServiceArea` configuration, never hard-coded (§32 of
 the task brief).
 
-### 5.3 Service fee
+### 5.3 Service fee — model accepted, amount open
 
-`OPEN` — BQ-027. Documented only as a ฿5 (sample) line the customer pays, folded
-into platform revenue in the ledger.
+`ACCEPTED — MODEL` — **DEC-024**: `Customer → service fee → BANHAO`. It is
+platform revenue, distinct from commission and from the delivery fee.
+**`OPEN — NUMERIC PRICING`** — BQ-027, which also covers whether it survives a
+refund. The `฿5` in the design and in `apps/customer/src/mocks/pricing.ts` is a
+sample.
+
+### 5.4 Merchant commission — model accepted, rate open
+
+`ACCEPTED — MODEL` — **DEC-025**: `Merchant → commission → BANHAO`.
+**`OPEN — NUMERIC RATE`** — Q-010, BQ-028. DEC-025 states explicitly that the
+10% appearing throughout the design samples **must not become a business rule by
+default.** Model comparison: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § 5.
 
 ---
 
@@ -322,17 +356,31 @@ into platform revenue in the ledger.
 
 Full treatment: [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md).
 
-Load-bearing rules:
+**`ACCEPTED` — DEC-019, the core lifecycle:**
 
-- `DOCUMENTED` **CON-001** — Order state and Payment state are two separate
-  machines and must never be collapsed into one field.
-- `DOCUMENTED` **REQ-002** — every client reads the same canonical order state
-  and only varies the wording. No screen may compute its own status.
-- `DOCUMENTED` — merchant accept window **3 minutes**; rider search timeout
-  **5 minutes** → `NO_DRIVER`.
-- `OPEN` — the missing `PENDING_PAYMENT` order state (BQ-012), `NO_DRIVER`
-  semantics (BQ-014), who pays for wasted food (BQ-015), delivery failure
-  (BQ-017).
+```
+CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING
+        → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED
+```
+
+After `MERCHANT_ACCEPTED`, **`PREPARING` and `RIDER_SEARCHING` run in
+parallel.** The restaurant never waits for a rider before starting to cook.
+
+Other load-bearing rules:
+
+- `ACCEPTED` **DEC-018 / CON-001** — Order, Payment, Delivery and Settlement are
+  four separate state domains. **No giant Order status enum.**
+- `ACCEPTED` **REQ-002** — every client reads the same canonical order state and
+  only varies the wording. No screen may compute its own status.
+- `ACCEPTED` **DEC-027** — `REFUNDED` is a payment state, never an order
+  outcome. A refunded cancellation is `Order = CANCELLED` + `Payment = REFUNDED`.
+- `ACCEPTED` — merchant accept window **3 minutes**.
+- `ACCEPTED` **DEC-022** — no-rider is **not** an order state and never
+  auto-cancels an order.
+- **Resolved by the lock:** BQ-012 (`PENDING_PAYMENT` now exists) and BQ-014
+  (the `NO_DRIVER` contradiction).
+- `OPEN` — **who pays for wasted food (BQ-015, P0)**, merchant accept-timeout
+  behaviour (BQ-013), delivery failure (BQ-017), exception **state names**.
 
 ---
 
@@ -341,22 +389,38 @@ Load-bearing rules:
 Full treatment: [`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md).
 
 **Rider availability is a first-class business constraint, not an
-implementation detail.** With 8–12 riders for an entire district, the dispatch
-model (BQ-019) and the no-rider ladder (BQ-025) determine whether the product
-works at all.
+implementation detail.** With 8–12 riders for an entire district, dispatch
+decides whether the product works at all.
 
-Load-bearing rules:
+**`ACCEPTED` — the dispatch decisions:**
 
-- `DOCUMENTED` **DEC-004 / REQ-001** — cash a rider collects is a **platform
-  liability**, never rider income, and must be displayed as a separate number.
-- `DOCUMENTED` — a rider holding cash above a configured limit **stops being
-  assigned new jobs automatically**. The limit's value is `OPEN` (Q-004).
-- `DOCUMENTED` — rider earnings are netted against outstanding cash before a
-  transfer round.
-- `DOCUMENTED` — riders pay a platform fee out of their earnings
+- **DEC-020** — rider search starts at **`MERCHANT_ACCEPTED`**, in parallel with
+  cooking. The dispatch model is **broadcast to eligible online riders, first to
+  accept wins**. No scoring or route optimisation in Phase 1.
+- **DEC-021** — a rider who accepts and then cancels sends the delivery
+  `RIDER_ASSIGNED → RIDER_REASSIGNING → RIDER_SEARCHING → broadcast`. **The
+  order is not cancelled.**
+- **DEC-022** — no rider available means `retry → manual dispatch → operator
+  decision`. **An order is never auto-cancelled because a search failed.**
+  Operator options include continuing the search, merchant delivery, or
+  cancel + refund.
+
+Other rules:
+
+- `ACCEPTED` **DEC-023** — the delivery fee funds rider compensation. The
+  amounts are `OPEN` (BQ-026, BQ-029).
+- `ACCEPTED` **DEC-004 / REQ-001**, **dormant in Phase 1** — cash a rider
+  collects is a platform liability, never income, displayed separately. No rider
+  handles cash while COD is disabled (DEC-016), but the rule is not repealed.
+- `ACCEPTED`, dormant — the cash-limit dispatch block and cash netting. Limit
+  value still `OPEN` (Q-004).
+- `ACCEPTED` — riders pay a platform fee out of their earnings
   (`ค่าธรรมเนียมแพลตฟอร์ม −฿38` in `D-13`). The rate is `OPEN` (BQ-029).
-- `OPEN` — dispatch model, accept window, batching, compensation, and whether
-  the rider really fronts cash to the merchant at pickup (BQ-023).
+- `OPEN` — accept-window duration (BQ-020, the design contradicts itself),
+  batching (BQ-021), cancellation compensation (BQ-024), and **all rider
+  numbers**.
+- **Deferred with COD** — BQ-023, whether the rider fronts cash to the merchant
+  at pickup. Unanswered; it returns the day COD does.
 
 ---
 
@@ -364,17 +428,26 @@ Load-bearing rules:
 
 Full treatment: [`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md).
 
-- `DOCUMENTED` **CON-002** — only a **signature-verified provider webhook** may
+- `ACCEPTED` **DEC-016** — **Phase 1 is online payment only. COD is disabled**,
+  but `payment_method` stays extensible so COD returns without a redesign.
+- `ACCEPTED` **CON-002** — only a **signature-verified provider webhook** may
   move a payment to `SUCCESS` or `REFUNDED`. A client screen never decides that
   money arrived.
-- `DOCUMENTED` **REQ-003** — every webhook is idempotent on a single payment
-  reference. A duplicate callback reads back the existing result.
-- `DOCUMENTED` — PromptPay QR expires after **10 minutes**; expiry kills the QR,
+- `ACCEPTED` **DEC-028 / REQ-003** — payment operations are **idempotent** on
+  `order_id` + `payment_reference` + `idempotency_key`. A duplicate callback
+  reads back the existing result.
+- `ACCEPTED` **DEC-030** — a duplicate payment **never increases an order's
+  value**. ฿185 paid twice is not a ฿370 order; the surplus is a refund
+  obligation.
+- `ACCEPTED` **DEC-029** — a payment arriving after timeout must be resolvable
+  to an order and a payment attempt. Whether it is accepted, refunded or
+  manually reviewed is `OPEN`.
+- `ACCEPTED` **DEC-027** — refund lives in the payment domain.
+- `ACCEPTED` — PromptPay QR expires after **10 minutes**; expiry kills the QR,
   not the order.
-- `DOCUMENTED` — cash money enters the system when the **rider confirms
-  collection**, not when the customer places the order.
-- `DOCUMENTED` **DEC-015** — provider access only through the `PaymentProvider`
-  abstraction. **No provider is selected** (Q-001).
+- `ACCEPTED` **DEC-015** — provider access only through the `PaymentProvider`
+  abstraction. **No provider is selected** (Q-001) — and DEC-016 makes that
+  choice more urgent, since online is now the only way to be paid.
 
 ---
 
@@ -382,45 +455,70 @@ Full treatment: [`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md).
 
 Full treatment: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md).
 
-- `DOCUMENTED` **CON-003** — every order's ledger balances to exactly zero.
-- `DOCUMENTED` — merchants and riders are paid in **transfer rounds**
+- `ACCEPTED` **CON-003** — every order's ledger balances to exactly zero.
+- `ACCEPTED` **DEC-026** — settlement is a **separate financial domain**:
+  `customer payment → BANHAO financial records → merchant settlement / rider
+  settlement / BANHAO revenue`. ⛔ **Implementation not started, and blocked.**
+- `ACCEPTED` — merchants and riders are paid in **transfer rounds**
   (`รอบโอน`), weekly in the design's sample (`โอนทุกวันจันทร์ เวลา 10:00 น.`).
-- `DOCUMENTED` — **cash orders do not enter a merchant transfer round**; the
-  commission is netted from the next round instead.
-- `DOCUMENTED` — the admin's daily screen is a **reconciliation** view, not a
-  revenue chart, and must show two identities matching:
-  `online + cash-held = total sales` and
+- `ACCEPTED` — the operator's daily screen is a **reconciliation** view, not a
+  revenue chart. With COD disabled the Phase 1 identities are
+  `online received = total sales` and
   `merchant payouts + rider payouts + platform revenue + refunds = total sales`.
-- `OPEN` — commission rate (Q-010/BQ-028), cycle specifics (BQ-032), negative
-  balances (BQ-033, BQ-034).
+- **Simplified by DEC-016** — the cash-order rule (cash orders skip the transfer
+  round, commission netted from the next one) does not apply in Phase 1, so
+  BQ-033 is deferred with COD.
+- `OPEN` — commission rate (Q-010/BQ-028), delivery and service fee amounts
+  (BQ-026, BQ-027), promotion funding (BQ-030), cycle specifics (BQ-032),
+  negative balances (BQ-034).
+- ⚖️ `LEGAL_REVIEW_REQUIRED` — Q-002: merchant of record, settlement legal
+  structure, tax structure, regulatory classification, and whether BANHAO's own
+  split/transfer-round design is regulated payment facilitation.
 
 ---
 
-## 10. Cash on delivery
+## 10. Cash on delivery — disabled in Phase 1
 
-`DOCUMENTED` — cash is **in scope for Phase 1** and is not optional; the launch
-strategy names cash and PromptPay as the only two methods.
+`ACCEPTED` — **DEC-016. COD is disabled.** Phase 1 is **online payment only**.
+This supersedes the design canvas's Phase 1 scope
+(`Phase 1 เงินสด + พร้อมเพย์ QR`).
 
-| Aspect | Rule | Status |
-|---|---|---|
-| Customer declares the note they will pay with at checkout | `เตรียมเงินมาเท่าไหร่ เผื่อไรเดอร์เตรียมเงินทอน` | `DOCUMENTED` |
-| The system computes change; the rider does not do arithmetic | `ต้องทอน ฿370` from a declared ฿500 on a ฿130 order | `DOCUMENTED` |
-| Order becomes `COMPLETED` only when the rider confirms collection | | `DOCUMENTED` |
-| Collected cash becomes a rider liability immediately | DEC-004 | `DOCUMENTED` |
-| Rider has a "customer paid short / problem" escape | `ลูกค้าจ่ายไม่ครบ / มีปัญหา` | `DOCUMENTED` |
-| Customer refuses a cash order | No money collected, no refund needed, recorded as a **damaged order** (`ออเดอร์เสียหาย`) — but nobody is charged for the food | `DOCUMENTED` / cost allocation `OPEN` (BQ-015) |
-| Rider pays the merchant in cash at pickup | Implied twice by the design | `DOCUMENTED` but **flagged** — BQ-023 |
-| Missing cash / fraud | Not addressed anywhere | `OPEN` — BQ-034, Q-013 |
+**COD is disabled, not deleted.** The rule is that it must **not** be hard-coded
+as permanently unsupported:
 
-Cash also has a **regulatory** dimension: OCPB's "Dee-Delivery" initiative
-targets cash-on-delivery in delivery services specifically (Q-017).
-`LEGAL_REVIEW_REQUIRED`.
+| Must stay extensible | Why |
+|---|---|
+| `payment_method` is an open enum, not a boolean | COD returns without redesigning Order, Payment, Delivery or Settlement |
+| Payment states `CASH_PENDING` / `CASH_COLLECTED` remain in the model | Unreachable in Phase 1 |
+| `RiderCashBalance` remains in the model | Dormant |
+| **DEC-004 / REQ-001 remain ACCEPTED** | Cash is still a liability, still displayed separately, the moment COD returns. **Do not delete these records.** |
+
+What Phase 1 consequently does *not* have: rider cash floats, change
+calculation, cash remittance, cash reconciliation, cash-limit dispatch blocking,
+and cash-order commission netting.
+
+⚠️ **Two consequences worth holding onto:**
+
+1. **Q-001 and Q-020 became more blocking, not less.** With cash gone, 100% of
+   revenue and 100% of refunds depend on an unchosen provider and a PromptPay
+   refund mechanism research says does not exist natively. Removing cash also
+   removed one of the four candidate refund mechanisms (cash refund via rider).
+2. **A customer without a banking app cannot order at all.** A demand-side risk
+   to watch in a rural district, not resolved here.
+
+Deferred questions that return with COD, unanswered: **BQ-023** (rider fronting
+cash to the merchant at pickup), **Q-004** (cash remittance limit), **BQ-033**
+(cash fee netting), and the cash half of **BQ-034**.
+
+The regulatory dimension is deferred too but not closed: OCPB's "Dee-Delivery"
+initiative targets cash-on-delivery specifically (Q-017),
+`LEGAL_REVIEW_REQUIRED` before COD is ever enabled.
 
 ---
 
 ## 11. Promotions
 
-`DOCUMENTED` (one example) / `OPEN` (the model — BQ-030)
+`ACCEPTED` (one example) / `OPEN` (the model — BQ-030)
 
 The only documented promotion is `BANHAO7`: **฿10 off when the order reaches
 ฿100**, framed as "free delivery for the first 7 days" — a discount presented as
@@ -460,21 +558,30 @@ ledger:
 | **Rider compensation** | Whether the rider still gets paid — usually **yes** if they did the work |
 | **Platform fee reversal** | Whether BANHAO keeps its commission and service fee |
 
-`DOCUMENTED` cash refund rule: cancel **before** collection → nothing to refund;
-cancel **after** collection → create a cash-adjustment entry and admin refunds
-the customer.
+`ACCEPTED` **DEC-027** — refund belongs to the payment domain, and `REFUNDED` is
+never a substitute for order cancellation. The correct representation is
+`Order = CANCELLED` **and** `Payment = REFUNDED`.
+
+The cash refund rule (nothing to refund before collection; cash-adjustment entry
+plus an operator refund after) is dormant under DEC-016.
 
 🚨 `OPEN` and blocking (Q-020): PromptPay has **no native refund**. Candidate
 mechanisms — wallet credit (which may itself be regulated e-money), manual bank
-transfer, cash refund via rider, or narrowing the cancellation window. Note the
-launch strategy explicitly rejected an in-app wallet for regulatory reasons,
-which makes the wallet-credit workaround harder than it first appears.
+transfer, ~~cash refund via rider~~ (**removed by DEC-016**), or narrowing the
+cancellation window. The launch strategy already rejected an in-app wallet for
+regulatory reasons, so the wallet-credit workaround is harder than it first
+appears — and disabling COD has now removed one of the four candidates
+altogether.
+
+The refund **policy** — full versus partial, what each component contributes,
+and post-pickup outcomes — remains `OPEN` (Q-003, BQ-016, BQ-031). §29 of the
+decision lock keeps final refund policy explicitly out of scope.
 
 ---
 
 ## 13. Notifications
 
-`DOCUMENTED` (the events) / `OPEN` (channels — BQ-035)
+`ACCEPTED` (the events) / `OPEN` (channels — BQ-035)
 
 Events that must produce a notification, per actor:
 
@@ -490,9 +597,10 @@ Events that must produce a notification, per actor:
 | Picked up / delivering | ✓ | ✓ | — | — |
 | Delivered | ✓ (+ rating prompt) | ✓ | ✓ | — |
 | No rider found | ✓ | ✓ | — | ✓ |
+| Rider reassigning (DEC-021) | — | ✓ | ✓ | ✓ |
 | Cancelled | ✓ | ✓ | ✓ | ✓ |
 | Refund initiated / completed | ✓ | — | — | ✓ |
-| Cash limit reached | — | — | ✓ | ✓ |
+| ~~Cash limit reached~~ | — | — | dormant — DEC-016 | dormant |
 | Payout sent / failed | — | ✓ | ✓ | ✓ |
 
 The merchant's new-order alert is not an ordinary notification: the design
@@ -503,45 +611,54 @@ and Q-019.
 
 ---
 
-## 14. Manual operations and support
+## 14. Manual operations and operator fallback
 
-`DOCUMENTED` — required capabilities. **No Admin App is to be built now.**
+`ACCEPTED` — **DEC-031** and **DEC-032**. ⛔ **No Admin App is to be built now**
+— the capability is documented, the implementation is not started.
 
-Because BANHAO starts as one operator in one district, the system must assume a
-human will intervene, and every intervention must be recorded:
+**DEC-031 — manual operations are an intentional Phase 1 capability.** The
+system assumes ~50 restaurants, a small rider pool, local geography, a solo
+operator and low volume. **Automation is not a requirement for every edge case.**
+An edge case answered with "an operator handles it" is a design outcome, not a
+gap.
 
-| Capability | Source |
-|---|---|
-| Manual dispatch — assign a rider by hand | Admin sitemap `จ่ายงานด้วยมือ` |
-| Force-unassign a rider from a job | `A-03` Live Map side panel `ปุ่มบังคับปลดงาน` |
-| Cancel an order | Order state machine — `CANCELLED` actor is `ลูกค้า / แอดมิน` |
-| Issue a refund | Payment state machine — `REFUND_PENDING` actor is `ระบบ / แอดมิน` |
-| Match an unreconciled payment by hand | `P-A2` — "เปิดดูรายการเพื่อจับคู่ด้วยมือ" |
-| Approve or reject merchants and riders | `A-12` approval queue |
-| Suspend / reinstate an account | Admin sitemap `ระงับ / ปลดระงับ` |
-| Call merchant, rider or customer | `A-03` panel has a call button |
-| Review damaged orders | Cash edge case routes `ออเดอร์เสียหาย` to admin |
+**DEC-032 — the operator must be able to resolve exceptional situations
+manually**: no rider, rider cancellation, customer unreachable, restaurant
+issue, refund review.
 
-`PROPOSED`: **every manual override writes an audit record** — actor, timestamp,
-before and after state, and a reason. Sub-roles can wait (Q-014, BQ-038);
-missing audit trail cannot be reconstructed later.
+| Capability | Source | Status |
+|---|---|---|
+| Manual dispatch — assign a rider by hand | Admin sitemap `จ่ายงานด้วยมือ` | `ACCEPTED` — DEC-022, DEC-032 |
+| Force-unassign a rider from a job | `A-03` `ปุ่มบังคับปลดงาน` | `ACCEPTED` — routes via `RIDER_REASSIGNING` (DEC-021) |
+| Decide the outcome of a no-rider order | — | `ACCEPTED` — **DEC-022**, and the *only* way such an order ends |
+| Cancel an order | Order state machine | `ACCEPTED` |
+| Issue a refund / review a refund | Payment state machine | `ACCEPTED` — mechanism `OPEN` (Q-020) |
+| Match an unreconciled payment by hand | `P-A2` | `ACCEPTED` |
+| Handle a late payment | — | `ACCEPTED` — DEC-029; the policy is `OPEN` |
+| Approve or reject merchants and riders | `A-12` approval queue | `ACCEPTED` |
+| Suspend / reinstate an account | Admin sitemap `ระงับ / ปลดระงับ` | `ACCEPTED` |
+| Call merchant, rider or customer | `A-03` call button | `ACCEPTED` |
+
+`PROPOSED` and **not** part of the lock: **every manual override writes an audit
+record** — actor, timestamp, before and after state, and a reason. Sub-roles can
+wait (Q-014, BQ-038); a missing audit trail cannot be reconstructed later.
 
 ---
 
 ## 15. Business hours and time
 
-`DOCUMENTED` / `PROPOSED` as noted
+`ACCEPTED` / `PROPOSED` as noted
 
 | Rule | Status |
 |---|---|
 | Timezone is **Asia/Bangkok** for all business-day logic | `PROPOSED` (implied throughout; never stated) |
 | Store instants in UTC; resolve days, hours and settlement cutoffs in Bangkok time | `PROPOSED` |
-| Restaurant opening hours govern whether orders may be placed | `DOCUMENTED` |
-| Temporary close overrides opening hours | `DOCUMENTED` (setting exists) |
+| Restaurant opening hours govern whether orders may be placed | `ACCEPTED` |
+| Temporary close overrides opening hours | `ACCEPTED` (setting exists) |
 | Order cutoff = closing time − preparation time | `PROPOSED` — BQ-007 |
-| Average preparation time is tracked per merchant (`เวลาทำเฉลี่ย 11 นาที`) | `DOCUMENTED` (sample) |
-| Support hours 08:00–21:00 daily | `DOCUMENTED` |
-| Merchant transfer round: Mondays 10:00 | `DOCUMENTED` (sample) |
+| Average preparation time is tracked per merchant (`เวลาทำเฉลี่ย 11 นาที`) | `ACCEPTED` (sample) |
+| Support hours 08:00–21:00 daily | `ACCEPTED` |
+| Merchant transfer round: Mondays 10:00 | `ACCEPTED` (sample) |
 
 Thai holidays are **not** modelled and, per BQ-007, temporary close is proposed
 as sufficient for Phase 1.
@@ -550,10 +667,10 @@ as sufficient for Phase 1.
 
 ## 16. Service area and geography
 
-`OPEN` — BQ-003, BQ-026, Q-018
+`ACCEPTED` — **DEC-031**: the launch district must be **configuration, not
+code**. `OPEN` — the values: BQ-003, BQ-026, Q-018.
 
-`PROPOSED` model, per §32 of the task brief — **nothing about Buntharik may be
-hard-coded**:
+`PROPOSED` model — **nothing about Buntharik may be hard-coded**:
 
 | Concept | Purpose |
 |---|---|
@@ -587,10 +704,10 @@ access is narrower than ownership in every financial row.
 | Order items (snapshot) | BANHAO | Same as Order | Immutable after creation |
 | **Payment** | **BANHAO** | Customer (own), Admin | **Payment service only**; `SUCCESS`/`REFUNDED` by verified webhook only (CON-002) |
 | **Ledger entry** | **BANHAO** | Admin; aggregates to the party concerned | **Append-only.** Corrections are reversing entries (DEC-014) |
-| Delivery / assignment | BANHAO | Order parties, Admin | Dispatch service, Rider (own status), Admin |
+| **Delivery / assignment** | **BANHAO** | Order parties, Operator | Dispatch service, Rider (own progress only), Operator (force-unassign). **Its own domain — DEC-018; it never writes Order state** |
 | Rider profile + documents | Rider | Self, Admin | Self; Admin for approval |
 | Rider location | Rider | Admin; customer **only during an active delivery** | Rider device |
-| Settlement | BANHAO | Merchant (own), Rider (own), Admin | Settlement engine, Admin |
+| **Settlement** | **BANHAO** | Merchant (own), Rider (own), Operator | Settlement engine, Operator. **Its own domain — DEC-026; reads the ledger, not the order table** |
 | Rating | Customer (author) | Public in aggregate; Admin in detail | Author within an edit window (BQ-036) |
 | Notification | Recipient | Recipient, Admin | System |
 | Support ticket | Reporter | Reporter, Admin | Reporter, Admin |
@@ -609,18 +726,30 @@ Two rules that override the table:
 ## 18. Legal review required
 
 `LEGAL_REVIEW_REQUIRED` — **no AI agent may conclude that any of the following
-is lawful.** See `OPEN_BUSINESS_QUESTIONS.md` § Items requiring legal review for
-the full table with triggers. Areas: payment facilitation licensing (Q-002),
-ETDA platform notification (Q-015), PDPA including rider GPS and delivery photos
-(Q-012), rider worker classification (BQ-022), consumer protection and cash on
-delivery (Q-017), tax/VAT/withholding, refund enforceability (Q-020), and any
-stored-value mechanism.
+is lawful, and none of them was accepted by the 2026-08-10 decision lock.**
+
+**Explicitly excluded from the lock and still `OPEN`:**
+
+| Item | Status |
+|---|---|
+| Merchant of record | `OPEN` · `LEGAL_REVIEW_REQUIRED` — Q-002 |
+| Payment provider | **NOT SELECTED** — Q-001, DEC-015. Omise / 2C2P / Xendit / Stripe all unselected; **no integration** |
+| Settlement legal structure | `OPEN` · `LEGAL_REVIEW_REQUIRED` — Q-002 |
+| Tax structure | `OPEN` · `LEGAL_REVIEW_REQUIRED` |
+| Regulatory classification | `OPEN` · `LEGAL_REVIEW_REQUIRED` — Q-002, Q-015 |
+
+Full table with triggers: `OPEN_BUSINESS_QUESTIONS.md` § Items requiring legal
+review. Other areas: payment facilitation licensing (Q-002), ETDA platform
+notification (Q-015), PDPA including rider GPS and delivery photos (Q-012),
+rider worker classification (BQ-022), consumer protection and cash on delivery
+(Q-017 — deferred with COD but not closed), refund enforceability (Q-020), and
+any stored-value mechanism.
 
 ---
 
 ## 19. Cost and complexity discipline
 
-`DOCUMENTED` (DEC-009) / `PROPOSED` (the rest)
+`ACCEPTED` (DEC-009) / `PROPOSED` (the rest)
 
 Every proposal in these documents was checked against five costs — implementation
 complexity, infrastructure cost, operational complexity, maintenance burden, and
@@ -628,8 +757,12 @@ AI-development complexity — because BANHAO is one founder using AI as the team
 
 Consequences that show up repeatedly in these documents:
 
-- **Broadcast dispatch over zone dispatch** — less code, no zone maintenance,
-  better fit for 8–12 riders (BQ-019).
+- **Online payment only in Phase 1** (DEC-016) — removes cash reconciliation,
+  rider floats, remittance and cash-limit blocking from the launch entirely.
+- **Broadcast dispatch over zone dispatch** — `ACCEPTED` (DEC-020): less code,
+  no zone maintenance, better fit for 8–12 riders.
+- **Operator resolution instead of automated edge cases** — `ACCEPTED`
+  (DEC-031, DEC-032).
 - **Banded delivery fees over per-kilometre** — tolerates bad geodata, easier to
   explain, no routing service required (BQ-026).
 - **Weekly settlement over daily** — fewer transfers, fewer fees, one

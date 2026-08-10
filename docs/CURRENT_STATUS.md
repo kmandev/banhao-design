@@ -149,8 +149,8 @@ Do not read the above as full verification. These have not been tested:
 
 ## Business Rules Status
 
-**Documented, not approved** (EVENT-013, 2026-08-10, branch
-`feature/business-rules`). Seven documents describe how BANHAO works as a
+**Documented, and the P0 decisions are approved** (EVENT-014, 2026-08-10,
+branch `feature/p0-decisions-v1` — **DEC-016…DEC-032**, not merged to `main`). Seven documents describe how BANHAO works as a
 business: [`BUSINESS_RULES.md`](BUSINESS_RULES.md),
 [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md), [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md),
 [`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md),
@@ -158,27 +158,38 @@ business: [`BUSINESS_RULES.md`](BUSINESS_RULES.md),
 [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md),
 [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md).
 
-Every rule is tagged `DOCUMENTED` (accepted product truth) / `PROPOSED`
-(unapproved analysis) / `OPEN`. **Only `DOCUMENTED` may be implemented.** No
-decision was made, no question resolved, no code written.
+Every rule is tagged `ACCEPTED` / `PROPOSED` / `OPEN` /
+`LEGAL_REVIEW_REQUIRED`, with `ACCEPTED — MODEL · OPEN — NUMBERS` in the money
+sections. **Only `ACCEPTED` may be implemented.** Seventeen decisions were
+recorded; **no `Q-NNN` was resolved, no pricing was set, no provider was
+selected, and no code was written.**
+
+Two decisions change Phase 1 materially: **DEC-016** disables Cash on Delivery
+(online payment only, but the cash model stays extensible), and **DEC-019**
+replaces the Order state machine documented in 2026-08-09.
 
 ## Current Blockers
 
-Product-level, not technical. **15 P0 business decisions** —
+Product-level, not technical. **8 P0 business decisions remain, down from 15** —
 `docs/TODO.md` P0 and [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md):
-payment provider (Q-001), legal/settlement model (Q-002), platform fee
-(Q-010/BQ-028), PromptPay refund mechanism (Q-020), plus BQ-010, BQ-012, BQ-014,
-BQ-015, BQ-019, BQ-023, BQ-025, BQ-026, BQ-027, BQ-030. The Thai
-legal/compliance review has external lead time and gates all payment work.
+payment provider (Q-001), legal/settlement model (Q-002), commission **rate**
+(Q-010/BQ-028), PromptPay refund mechanism (Q-020), cost of wasted food
+(BQ-015), delivery and service fee **numbers** (BQ-026, BQ-027), and promotion
+funding (BQ-030). The Thai legal/compliance review has external lead time and
+gates all payment work.
 
-Two blockers are **contradictions between accepted documents**, found by
-EVENT-013 and not resolvable by an agent: the `PENDING_PAYMENT` order state that
-the payment machine references but the order machine lacks (BQ-012), and the
-`NO_DRIVER` rule the Customer App's own copy contradicts (BQ-014).
+⚠️ **DEC-016 made Q-001 and Q-020 more blocking, not less.** With cash removed,
+100% of Phase 1 revenue and 100% of refunds depend on an unselected provider and
+a PromptPay refund mechanism research says does not exist natively — and
+disabling COD removed one of the four candidate refund mechanisms.
+
+The two document contradictions found in EVENT-013 are **resolved** by DEC-019
+and DEC-022.
 
 ## Immediate Next Step
 
-**Product Owner review of the 15 P0 business questions.** Then close DQ-01…DQ-05
+**Architecture review of DEC-016…DEC-032, then the remaining 8 P0 business
+questions.** Then close DQ-01…DQ-05
 (all five are addressed — see the DQ table in
 [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)) and verify the app on
 Android.

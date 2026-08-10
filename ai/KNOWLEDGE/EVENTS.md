@@ -354,3 +354,114 @@ DEC-010 resolved them.
 **Nothing was implemented and nothing was decided.** The next step is Product
 Owner review of `docs/OPEN_BUSINESS_QUESTIONS.md`, starting with the fifteen P0
 items.
+
+---
+
+## EVENT-014
+
+```yaml
+id: EVENT-014
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/p0-decisions-v1
+confidence: HIGH
+```
+
+**BANHAO P0 Business Decisions v1 Approved.** The Product Owner reviewed the
+EVENT-013 business rules in a Business Decision Workshop and approved a first
+tranche of decisions. This event converts them into the project's permanent
+source of truth. **Documentation and decision records only — no production
+code, no migration, no API, no payment provider, no Merchant/Rider/Admin app.**
+
+### Approved — DEC-016 through DEC-032 (17 decisions)
+
+| ID | Decision |
+|---|---|
+| DEC-016 | Phase 1 is **online payment only**; **COD disabled** but `payment_method` stays extensible |
+| DEC-017 | **One cart = one restaurant** |
+| DEC-018 | **Order, Payment, Delivery and Settlement are four separate state domains** — no mega-enum |
+| DEC-019 | Order core lifecycle `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with **`PREPARING` and `RIDER_SEARCHING` in parallel** |
+| DEC-020 | Rider search starts at `MERCHANT_ACCEPTED`; dispatch is **broadcast → first accept** |
+| DEC-021 | Rider cancellation → `RIDER_REASSIGNING → RIDER_SEARCHING`. **The order is never cancelled** |
+| DEC-022 | No rider → retry → manual dispatch → **operator decision**. **Never auto-cancel** |
+| DEC-023 | Delivery fee funds rider compensation — **model only** |
+| DEC-024 | Service fee is BANHAO revenue — **model only** |
+| DEC-025 | Merchant commission is BANHAO revenue — **model only; the 10% example must not become the rate** |
+| DEC-026 | Settlement is a separate financial domain — **implementation not started** |
+| DEC-027 | Refund belongs to the payment domain: `Order = CANCELLED` + `Payment = REFUNDED` |
+| DEC-028 | Payment operations must be **idempotent** (`order_id`, `payment_reference`, `idempotency_key`) |
+| DEC-029 | **Late payment** must resolve to an order and attempt — technical requirement accepted, business handling open |
+| DEC-030 | A **duplicate payment never increases an order's value** |
+| DEC-031 | Buntharik-first: **manual operations are an intentional Phase 1 capability** |
+| DEC-032 | **Operator fallback** for exceptional situations — capability documented, no Admin App |
+
+### What this supersedes
+
+Two pieces of previously-accepted product truth were changed **by the Product
+Owner**, not by an agent, and both are recorded as supersessions rather than
+edits:
+
+1. **DEC-019 supersedes the Order State Machine** documented in
+   `docs/05-architecture` § 03 and restated in `docs/ARCHITECTURE.md` and
+   FACT-005. State names change (`NEW`→`PAID`/`MERCHANT_ACCEPTED`,
+   `READY`→`READY_FOR_PICKUP`, `COMPLETED`→`DELIVERED`), `DRIVER_ASSIGNED` moves
+   to the delivery domain, and `NO_DRIVER` stops being an Order state.
+   **FACT-005 stays VERIFIED as a statement about the 2026-08-09 design
+   artifact**, which is no longer the canonical machine.
+2. **DEC-016 supersedes the Phase 1 payment scope** (`เงินสด + พร้อมเพย์ QR`).
+   **DEC-004 and REQ-001 remain ACCEPTED but dormant** — rider-held cash is
+   still a liability, still displayed separately, the moment COD returns. They
+   were deliberately not deleted.
+
+### Questions closed, and questions deliberately left open
+
+**Answered:** BQ-010 (DEC-017), BQ-012 (DEC-019), BQ-014 (DEC-019/DEC-022),
+BQ-019 (DEC-020), BQ-025 shape (DEC-022), and the **model halves** of BQ-026
+(DEC-023), BQ-027 (DEC-024), BQ-028 (DEC-025).
+
+**Deferred by DEC-016, not answered:** BQ-023 (rider cash float), BQ-033 (cash
+fee netting), Q-004 (cash limit), the cash half of BQ-034. Each returns
+unchanged when COD does.
+
+**Still `OPEN`, and explicitly excluded from the lock:** every number — commission
+rate, service fee, delivery zone price, rider base and distance earnings,
+promotion budget — plus merchant of record, payment provider, settlement legal
+structure, tax structure, regulatory classification, and the final refund
+policy. **No `Q-NNN` was resolved by this event.**
+
+### Blockers after the lock
+
+**P0, down from fifteen to eight:** Q-001 (provider), Q-002 (legal), Q-010 /
+BQ-028 (commission rate), Q-020 (PromptPay refund mechanism), BQ-015 (who bears
+the cost of wasted food), BQ-026 and BQ-027 (fee numbers), BQ-030 (promotion
+funding).
+
+⚠️ **DEC-016 made Q-001 and Q-020 more blocking, not less.** With cash removed,
+100% of Phase 1 revenue and 100% of refunds run through a rail whose provider is
+unchosen and whose native refund capability research says does not exist —
+and disabling COD deleted one of the four candidate refund mechanisms (cash
+refund via rider). A secondary demand-side risk was recorded, not resolved: a
+customer without a banking app cannot order at all in Phase 1.
+
+### Two divergences the lock created in existing code
+
+No code was touched, deliberately. Both are recorded as follow-up work:
+
+- `apps/customer/src/mocks/types.ts` encodes the superseded twelve order states
+  (DEC-019).
+- The Customer App checkout still offers cash and a cash-prepared-amount
+  selector (DEC-016).
+
+### Documents updated
+
+`docs/DECISIONS.md` (index added, DEC-016…DEC-032 appended), `BUSINESS_RULES.md`,
+`DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`,
+`PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md`, `OPEN_BUSINESS_QUESTIONS.md`,
+plus `ai/MEMORY.md`, `ai/HANDOFF.md`, `ai/KNOWLEDGE/FACTS.md` (FACT-005/006
+provenance notes), `ai/KNOWLEDGE/CONSTRAINTS.md` and
+`ai/KNOWLEDGE/REQUIREMENTS.md` (cross-references), `CLAUDE.md`,
+`docs/CURRENT_STATUS.md`, `docs/TODO.md`, `docs/CHANGELOG.md`.
+
+The status taxonomy across the business documents is now `ACCEPTED` /
+`PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with the deliberate combination
+`ACCEPTED — MODEL · OPEN — NUMBERS` used throughout the money sections.

@@ -4,9 +4,13 @@ Business decisions that must be made by the **Product Owner** before the
 corresponding code can be written. Produced by EVENT-013 (Business Rules &
 Domain Modelling, 2026-08-10).
 
-**Nothing in this file is a decision.** Every entry is `OPEN` until the Product
-Owner answers it. Where a recommendation is given it is an argued suggestion
-from analysis, not an instruction — see `ai/DEVELOPMENT_RULES.md` rule 4.
+**Updated 2026-08-10 (EVENT-014)** after the Product Owner locked seventeen
+decisions, DEC-016…DEC-032. Entries answered by that lock are marked `ACCEPTED`
+with their `DEC-NNN`; everything else is still undecided.
+
+**An AI agent may never move a question out of `OPEN` on its own.** Where a
+recommendation is given it is an argued suggestion from analysis, not an
+instruction — see `ai/DEVELOPMENT_RULES.md` rule 4.
 
 ## How this file relates to the existing question log
 
@@ -26,44 +30,81 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 
 ## Status values
 
-`OPEN` · `ANSWERED` (Product Owner has answered; not yet written into a
-`DEC-NNN`) · `RESOLVED` (a `DEC-NNN` exists). **An AI agent may never move a
-question past `OPEN`.**
+| Status | Meaning |
+|---|---|
+| `OPEN` | Undecided. **An AI agent may never move a question out of this state.** |
+| `ACCEPTED` | Answered by the Product Owner and recorded as a `DEC-NNN` |
+| `ACCEPTED — MODEL · OPEN — …` | The relationship is decided; the number is not |
+| `DEFERRED` | Out of scope for Phase 1 by decision. **Not answered** — it returns when the scope does |
 
 ---
 
-## Summary — the decisions that block implementation
+## What the 2026-08-10 decision lock answered
+
+`ACCEPTED` — seventeen decisions, DEC-016…DEC-032 (`docs/DECISIONS.md`).
+
+| Question | Now | Decision |
+|---|---|---|
+| BQ-010 — one merchant per cart? | **ACCEPTED** — yes, one cart = one restaurant | DEC-017 |
+| BQ-012 — the missing `PENDING_PAYMENT` state | **ACCEPTED** — it exists in the approved lifecycle | DEC-019 |
+| BQ-014 — `NO_DRIVER` / "food not cooked" contradiction | **ACCEPTED** — search starts at `MERCHANT_ACCEPTED`; no-rider is not an order state | DEC-019, DEC-022 |
+| BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
+| BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
+| BQ-026 — delivery fee | **ACCEPTED (model)** — funds rider compensation. **Numbers `OPEN`** | DEC-023 |
+| BQ-027 — service fee | **ACCEPTED (model)** — BANHAO revenue. **Amount `OPEN`** | DEC-024 |
+| BQ-028 — merchant commission | **ACCEPTED (model)** — BANHAO revenue. **Rate `OPEN`** | DEC-025 |
+
+Also decided, and not previously tracked as a `BQ`: online-payment-only with
+COD disabled but extensible (DEC-016), four separate state domains (DEC-018),
+rider cancellation never cancels the order (DEC-021), settlement as its own
+domain (DEC-026), refund lives in the payment domain (DEC-027), payment
+idempotency (DEC-028), late-payment resolvability (DEC-029), duplicate-payment
+protection (DEC-030), manual operations as an intentional capability (DEC-031),
+and operator fallback (DEC-032).
+
+### Deferred by DEC-016, **not** answered
+
+**BQ-023** (rider cash float at pickup) · **BQ-033** (cash-order fee netting,
+negative merchant balance) · **Q-004** (cash remittance limit) · the cash half
+of **BQ-034**. Cash on Delivery is disabled in Phase 1, so none of these blocks
+launch — and every one of them returns unchanged the day COD is switched back
+on. **Decide them before then, not during.**
+
+---
+
+## Summary — what still blocks implementation
 
 ### P0 — nothing can be built correctly without these
 
 | ID | Decision needed | Blocks |
 |---|---|---|
-| Q-001 | Payment provider | Payment module, webhooks |
-| Q-002 | Legal / settlement model, merchant of record | Payment, settlement, onboarding terms |
-| Q-010 | Platform fee (extended by BQ-028) | Ledger, settlement |
-| Q-020 | PromptPay refund mechanism | Refund flow, customer refund UX |
-| BQ-010 | One merchant per cart? | Cart and Order schema |
-| BQ-012 | The missing `PENDING_PAYMENT` order state | Order state machine |
-| BQ-014 | `NO_DRIVER` semantics and the "food not cooked" contradiction | Order state machine, refunds |
-| BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms |
-| BQ-019 | Rider dispatch model | Dispatch engine, Driver App |
-| BQ-023 | Rider cash float at pickup | Cash ledger, rider terms |
-| BQ-025 | No-rider fallback policy | Dispatch, refunds, ops runbook |
-| BQ-026 | Delivery fee model and values | Pricing, checkout, ledger |
-| BQ-027 | Service fee — purpose and bearer | Pricing, ledger |
+| Q-001 | **Payment provider** — more urgent since DEC-016 made online the only method | Payment module, webhooks |
+| Q-002 | Legal / settlement model, merchant of record · `LEGAL_REVIEW_REQUIRED` | Payment, settlement, onboarding terms |
+| Q-010 / BQ-028 | Commission **rate** (model accepted, DEC-025) | Ledger, settlement |
+| Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
+| BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms. Sharpened by DEC-022: an operator cancelling a no-rider order needs this answer |
+| BQ-026 | Delivery fee **numbers** (model accepted, DEC-023) | Pricing, checkout, ledger |
+| BQ-027 | Service fee **amount** and refundability (model accepted, DEC-024) | Pricing, ledger |
 | BQ-030 | Who funds promotions and discounts | Ledger, settlement |
+
+**Eight remain, down from fifteen.** The seven cleared are BQ-010, BQ-012,
+BQ-014, BQ-019, BQ-023 (deferred), BQ-025 and the model halves of BQ-026/027/028.
 
 ### P1 — blocks a feature or launch readiness
 
-Q-003, Q-004, Q-009, Q-011, Q-012, Q-015, Q-016, Q-018, Q-019 ·
+Q-003, Q-009, Q-011, Q-012, Q-015, Q-016, Q-018, Q-019 ·
 BQ-001, BQ-002, BQ-003, BQ-005, BQ-006, BQ-007, BQ-008, BQ-011, BQ-013,
 BQ-016, BQ-017, BQ-018, BQ-020, BQ-021, BQ-022, BQ-024, BQ-029, BQ-031,
-BQ-032, BQ-033, BQ-034, BQ-035
+BQ-032, BQ-034, BQ-035
 
 ### P2 — refinement
 
 Q-005, Q-008, Q-013, Q-014, Q-017 · BQ-004, BQ-009, BQ-036, BQ-037, BQ-038,
 BQ-039
+
+### Deferred with COD
+
+Q-004 · BQ-023 · BQ-033 · the cash half of BQ-034
 
 ---
 
@@ -388,9 +429,13 @@ working around the limit by creating duplicate items.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED
+decision: DEC-017
 blocks: Cart schema, Order schema, delivery-fee model, dispatch
 ```
+
+> **DECIDED 2026-08-10 — DEC-017.** One cart = one restaurant. Option A.
+> A customer cannot build a multi-restaurant cart in Phase 1.
 
 **Question:** May a cart contain items from more than one restaurant?
 
@@ -457,10 +502,15 @@ consumer-protection issue (Q-017 territory), not just a bug.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED
+decision: DEC-019
 blocks: Order state machine, Payment pairing
 related: CON-001, REQ-002
 ```
+
+> **DECIDED 2026-08-10 — DEC-019.** Option A. `PENDING_PAYMENT` is a real
+> Order state in the approved core lifecycle, so the Payment State Machine no
+> longer references a state that does not exist.
 
 **Question:** Should `PENDING_PAYMENT` be added as an Order state before `NEW`?
 
@@ -531,10 +581,17 @@ of manual assist §22 of the brief anticipates.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED
+decision: DEC-019, DEC-022
 blocks: Order state machine, refund rules, dispatch
 related: BQ-015, BQ-025
 ```
+
+> **DECIDED 2026-08-10 — DEC-019 and DEC-022.** Option A. Rider search starts
+> at `MERCHANT_ACCEPTED`, in parallel with `PREPARING`, so the Customer App
+> copy is correct. `NO_DRIVER` is **not** an Order state — the condition is a
+> prolonged `RIDER_SEARCHING` in the delivery domain, and it never
+> auto-cancels. **The cost question (BQ-015) is still open.**
 
 **Question:** When exactly does `NO_DRIVER` occur, is it terminal, and is the
 food already cooked when it does?
@@ -726,10 +783,15 @@ photo retention.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED
+decision: DEC-020
 blocks: Dispatch engine, Driver App, admin manual dispatch
 related: BQ-020, BQ-025
 ```
+
+> **DECIDED 2026-08-10 — DEC-020.** Model C: broadcast to eligible online
+> riders, first to accept wins, with operator manual dispatch (DEC-032) as an
+> always-available override. No scoring or optimisation in Phase 1.
 
 **Question:** Which dispatch model does BANHAO use — first-available,
 zone-based, broadcast/first-accept, or manual?
@@ -861,10 +923,16 @@ zones arrive.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: DEFERRED — COD disabled in Phase 1
+decision: DEC-016 (defers, does not answer)
 blocks: Cash ledger, rider terms, dispatch eligibility
 related: Q-004, BQ-033, BQ-034
 ```
+
+> **DEFERRED 2026-08-10 — DEC-016 disables COD in Phase 1, which removes the
+> situation without answering the question.** No rider handles cash, so no
+> float is needed at launch. This returns unchanged the day COD is reintroduced
+> — decide it before then, not during.
 
 **Question:** On a cash order, does the rider pay the merchant in cash at
 pickup — before collecting anything from the customer?
@@ -940,10 +1008,18 @@ few shops.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED — POLICY SHAPE · OPEN — TIMINGS
+decision: DEC-022
 blocks: Dispatch, refunds, ops runbook
 related: BQ-014, BQ-015, BQ-019
 ```
+
+> **PARTLY DECIDED 2026-08-10 — DEC-022.** The shape is accepted:
+> `retry → manual dispatch → operator decision`, and an order is **never**
+> auto-cancelled because a search failed. Operator options include continuing
+> the search, merchant delivery, and cancel + refund. **Still open:** the retry
+> and escalation timings, whether merchant delivery is a per-merchant opt-in,
+> and who absorbs the cost when the operator cancels (BQ-015).
 
 **Question:** Paid order, merchant accepted, no rider available — what does the
 system do?
@@ -978,10 +1054,15 @@ ordering within 14 days).
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED — MODEL · OPEN — NUMERIC PRICING
+decision: DEC-023 (model only)
 blocks: Pricing, checkout, ledger, rider earnings
 related: Q-018, BQ-001, BQ-029
 ```
+
+> **PARTLY DECIDED 2026-08-10 — DEC-023.** The model is accepted:
+> `Customer → delivery fee → rider earning`. **The numbers are explicitly not
+> approved** — no agent may invent a price or a band (§22 of the decision lock).
 
 **Question:** How is the delivery fee computed, and what are the actual numbers?
 
@@ -1016,10 +1097,15 @@ rider economics (BQ-029) are built on the wrong base.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED — MODEL · OPEN — NUMERIC PRICING
+decision: DEC-024 (model only)
 blocks: Pricing, ledger, refunds
 related: BQ-028, BQ-031
 ```
+
+> **PARTLY DECIDED 2026-08-10 — DEC-024.** The model is accepted:
+> `Customer → service fee → BANHAO`. **The amount is not approved**, and
+> whether it survives a refund is still open.
 
 **Question:** What is the ฿5 `ค่าบริการ` for, is it platform revenue, and is it
 refunded on cancellation?
@@ -1050,10 +1136,16 @@ a district where word of mouth is the entire marketing channel.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED — MODEL · OPEN — NUMERIC RATE
+decision: DEC-025 (model only)
 blocks: Ledger, settlement, merchant terms
 related: Q-010 (extends it)
 ```
+
+> **PARTLY DECIDED 2026-08-10 — DEC-025.** The model is accepted:
+> `Merchant → commission → BANHAO`. **The rate is not approved, and DEC-025
+> states explicitly that the 10% design example must not become a business rule
+> by default.**
 
 **Question:** Percentage, fixed fee, hybrid, or subscription — and at what rate?
 
@@ -1246,10 +1338,15 @@ recovery procedure.
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER
-status: OPEN
+status: DEFERRED — COD disabled in Phase 1
+decision: DEC-016 (defers, does not answer)
 blocks: Settlement engine
 related: BQ-023, BQ-032
 ```
+
+> **DEFERRED 2026-08-10 — DEC-016.** With no cash orders, every merchant
+> payment flows through transfer rounds, so the "fee owed, no transfer due"
+> state does not arise in Phase 1. Returns with COD.
 
 **Question:** A cash order pays the merchant directly, so BANHAO's commission is
 deducted from the *next* transfer round. What happens when there is no next
@@ -1465,10 +1562,11 @@ Required by §29 of the task brief. Source:
 
 | DQ | Subject | Business status after this pass |
 |---|---|---|
-| **DQ-01** | Cash payment path after checkout | **Answerable from existing documents.** The payment canvas documents the cash flow as `เลือกเงินสด → แจ้งยอดที่เตรียมมา → ส่งออเดอร์ให้ร้าน` — no QR step, order goes straight to the merchant with Payment = `CASH_PENDING`. The implemented behaviour (cash → `13 สั่งสำเร็จ`) matches. **Remaining business content:** the cash-prepared amount drives change calculation (`P-D1`), which connects to BQ-023 and BQ-033. Recommend the Product Owner confirm and close DQ-01. |
+| **DQ-01** | Cash payment path after checkout | **Moot for Phase 1 — DEC-016 disables COD.** There is no cash path to design; the Customer App's cash option must be **disabled** instead, which is the actual follow-up. The documented cash flow (`เลือกเงินสด → แจ้งยอดที่เตรียมมา → ส่งออเดอร์ให้ร้าน`, Payment = `CASH_PENDING`) is retained for the phase that reintroduces COD, at which point DQ-01 reopens alongside BQ-023. |
 | **DQ-02** | What triggers `12f จ่ายซ้ำ / จ่ายแล้ว` | **Answerable from existing documents.** The payment canvas edge case `กดจ่ายซ้ำ / กด Back แล้วเข้ามาใหม่` specifies it exactly: reuse the same payment reference, create nothing new, and if already paid show "ออเดอร์นี้ชำระเงินแล้ว". So 12f is the UI for REQ-003 idempotency, reached whenever a client re-enters payment for an already-`SUCCESS` payment. Recorded in `docs/PAYMENT_LIFECYCLE.md` § Idempotency. Recommend closing DQ-02 as documented, not open. |
 | **DQ-03** | Refund entry point | **Blocked on business decision.** Reachability is a UI question, but *what a refund means* is Q-020 (no provider supports native PromptPay refunds) plus BQ-031 (partial composition). Keep DQ-03 open, tracked against **Q-020** and **BQ-031**. |
 | **DQ-04** | Address editing | **Superseded by business questions.** Tracked as **BQ-001** (address model) and **BQ-002** (multiple addresses, default, CRUD). DQ-04 should be closed in favour of those. |
+| **DQ-02 update** | Duplicate-payment trigger | Now formalised as **DEC-030** — a duplicate payment never increases an order's value; the surplus is a refund obligation. Screen 12f is the UI for it. |
 | **DQ-05** | Search scope and ranking | **Superseded by a business question.** Tracked as **BQ-039**. |
 
 ## Pre-existing questions — status after this pass
@@ -1502,7 +1600,10 @@ pass:
 | ETDA platform notification | BANHAO is an intermediary connecting business users and consumers | Q-015 |
 | PDPA — location, addresses, phone, delivery photos | Continuous rider GPS, saved addresses, proof-of-delivery photos | Q-012, BQ-004, BQ-018 |
 | Rider worker classification | Algorithmic dispatch, accept timer, auto-suspension on cash limit | BQ-022 |
-| Consumer protection / cash on delivery | Phase 1 includes cash; OCPB "Dee-Delivery" initiative | Q-017 |
+| Consumer protection / cash on delivery | **Deferred but not closed** — DEC-016 removed cash from Phase 1; OCPB "Dee-Delivery" applies again the day COD returns | Q-017 |
+| **Merchant of record** | Explicitly **not accepted** by the 2026-08-10 lock | Q-002 |
+| **Payment provider** | **NOT SELECTED.** Omise / 2C2P / Xendit / Stripe all unselected; no integration permitted | Q-001, DEC-015 |
+| **Settlement legal structure · tax structure · regulatory classification** | Explicitly **not accepted** by the lock | Q-002, Q-015 |
 | Tax, VAT, withholding | Commission revenue, merchant and rider payouts | Q-002 |
 | Refund policy enforceability | Customer UI promises refund "ภายใน 1–3 วันทำการ" to the original PromptPay account, which Q-020 found is not natively possible | Q-020 |
 | Stored value / wallet | Any wallet-credit refund workaround may itself be regulated e-money | Q-020, Q-002 |

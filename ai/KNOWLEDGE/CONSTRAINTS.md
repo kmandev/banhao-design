@@ -21,6 +21,8 @@ owner: PRODUCT_OWNER
 
 Order State and Payment State must remain two separate, independently-persisted state machines. They must never be collapsed into a single field.
 
+**Extended 2026-08-10 by DEC-018 (EVENT-014):** the separation now covers **four** domains — Order, Payment, **Delivery** and **Settlement**. A giant Order status enum containing every financial and delivery outcome is forbidden. CON-001 itself is unchanged and still binding.
+
 ### Why
 
 Quoted: "ออเดอร์หนึ่งใบมีสองสถานะเดินคู่กันเสมอ ห้ามยุบเป็นสถานะเดียว เพราะออเดอร์ที่ยกเลิกแล้วยังมีเงินค้างอยู่ในระบบจนกว่าจะคืนเสร็จ" — a cancelled order can still have money sitting in the system until the refund completes; a merged state would hide that.

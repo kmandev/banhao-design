@@ -2,372 +2,299 @@
 
 How an order moves from placed to delivered, and every way it can fail.
 
-Written 2026-08-10 (EVENT-013). Companion:
-[`BUSINESS_RULES.md`](BUSINESS_RULES.md) ·
+Written 2026-08-10 (EVENT-013), locked to the approved decisions 2026-08-10
+(EVENT-014). Companion: [`BUSINESS_RULES.md`](BUSINESS_RULES.md) ·
 [`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md) ·
 [`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md) ·
+[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) ·
 [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
 
 ---
 
-## Status of this document
+## Status legend
 
-| Part | Status |
-|---|---|
-| The **twelve documented states**, their per-role wording, and their actors | `DOCUMENTED` — accepted product truth from `docs/05-architecture` § 03, restated in `docs/ARCHITECTURE.md`, encoded in `apps/customer/src/mocks/types.ts`. **An agent must not change these.** |
-| The **three documented error paths** and the **three documented refund rules** | `DOCUMENTED` |
-| **Additional states, transitions, guards, timeouts and cause codes proposed below** | `PROPOSED` — needs Product Owner approval before any implementation |
+| Status | Meaning | May an agent build on it? |
+|---|---|---|
+| `ACCEPTED` | Approved by the Product Owner (a `DEC-NNN`) or accepted product truth (`CON`/`REQ`/design canvas) | **Yes** |
+| `PROPOSED` | Analysis awaiting approval | No |
+| `OPEN` | Undecided — see `OPEN_BUSINESS_QUESTIONS.md` | No. Do not guess |
 
-> Two rules override everything in this document.
-> **CON-001** — Order state and Payment state are separate machines. A cancelled
-> order still holds money until the refund completes.
-> **REQ-002** — every client reads the same state value and only the wording
+> Rules that override everything below.
+> **DEC-018 / CON-001** — Order, Payment, Delivery and Settlement are four
+> separate state domains. Never a single mega-enum.
+> **REQ-002** — every client reads the same Order state value; only the wording
 > differs. No screen computes its own status.
 
 ---
 
-## 1. The documented state machine
+## 1. The approved core lifecycle
 
-`DOCUMENTED`. Wording per role is part of the contract between design and
-backend, not decoration.
+`ACCEPTED` — **DEC-019**, Product Owner, 2026-08-10.
 
-| State | Customer sees | Rider sees | Merchant sees | Changed by |
-|---|---|---|---|---|
-| `NEW` | ส่งออเดอร์ให้ร้านแล้ว | — | ออเดอร์ใหม่ · กดรับใน 3 นาที | System |
-| `ACCEPTED` | ร้านรับออเดอร์แล้ว | — | รับแล้ว รอเริ่มทำ | Merchant |
-| `PREPARING` | ร้านกำลังเตรียมอาหาร | งานถูกจับคู่ · ไปที่ร้าน | กำลังทำ | Merchant |
-| `READY` | อาหารพร้อมแล้ว | อาหารพร้อม · รับได้เลย | รอไรเดอร์ | Merchant |
-| `DRIVER_ASSIGNED` | ไรเดอร์กำลังไปรับอาหาร | กำลังไปที่ร้าน | ไรเดอร์กำลังมา | System |
-| `PICKED_UP` | ไรเดอร์รับอาหารแล้ว | รับแล้ว · ไปส่งลูกค้า | ส่งออกจากร้านแล้ว | Rider |
-| `DELIVERING` | อาหารกำลังเดินทางมาหาคุณ | กำลังไปหาลูกค้า | — | Rider |
-| `COMPLETED` | ส่งสำเร็จ · ให้คะแนนหน่อย | งานเสร็จ · ได้ ฿38 | เสร็จสิ้น | Rider |
-| `NO_DRIVER` | ยังหาไรเดอร์ไม่ได้ | — | ยังไม่มีไรเดอร์รับ | System (5 min) |
-| `PAYMENT_FAILED` | ชำระเงินไม่สำเร็จ | — | — | Payment system |
-| `REJECTED` | ร้านไม่สามารถรับออเดอร์ได้ | — | ปฏิเสธแล้ว | Merchant |
-| `CANCELLED` | ออเดอร์ถูกยกเลิก · คืนเงินแล้ว | งานถูกยกเลิก | ยกเลิก | Customer / Admin |
+```
+CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING
+        → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED
+```
 
-**Documented error paths:** `NEW → REJECTED` (merchant declines within 3
-minutes) · `READY → NO_DRIVER` (no rider found within 5 minutes) · any state
-before `PICKED_UP` → `CANCELLED` by the customer · `PAYMENT_FAILED` can occur
-only while PromptPay is unconfirmed.
+| State | Meaning | Changed by |
+|---|---|---|
+| `CREATED` | Order exists; prices snapshotted; payment not yet initiated | System |
+| `PENDING_PAYMENT` | Awaiting the customer's online payment | System / waiting on user |
+| `PAID` | Payment confirmed by a verified webhook (CON-002). Sent to the merchant | **Webhook only** |
+| `MERCHANT_ACCEPTED` | Merchant accepted. **Rider search starts here** (DEC-020) | Merchant |
+| `PREPARING` | Kitchen is cooking. Runs **in parallel** with `RIDER_SEARCHING` | Merchant |
+| `READY_FOR_PICKUP` | Food is ready | Merchant |
+| `PICKED_UP` | Rider has collected the food | Rider |
+| `DELIVERING` | En route to the customer | Rider |
+| `DELIVERED` | Handed over. Terminal success | Rider |
 
-**Documented refund rules:** cancel before `PREPARING` → automatic full refund ·
-cancel during `PREPARING` → requires merchant confirmation · after `PICKED_UP` →
-cannot cancel, must go through the support centre.
+### The parallel branch
+
+`ACCEPTED` — **DEC-019**. After `MERCHANT_ACCEPTED`, two processes run at the
+same time in two different domains. **The restaurant never waits for a rider
+before starting to cook.**
+
+```mermaid
+flowchart TD
+    MA([MERCHANT_ACCEPTED])
+    subgraph ORDER["Order domain"]
+        P[PREPARING] --> R[READY_FOR_PICKUP]
+    end
+    subgraph DELIVERY["Delivery domain"]
+        RS[RIDER_SEARCHING] --> RA[RIDER_ASSIGNED]
+    end
+    MA --> P
+    MA --> RS
+    R --> J{Food ready<br/>AND rider present}
+    RA --> J
+    J --> PU([PICKED_UP])
+    PU --> D([DELIVERING]) --> DL([DELIVERED])
+```
+
+`PICKED_UP` is the **join point**: it requires both `READY_FOR_PICKUP` in the
+order domain and an assigned rider in the delivery domain. Either may arrive
+first, and neither blocks the other.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> NEW
-    NEW --> ACCEPTED : merchant accepts (≤3 min)
-    NEW --> REJECTED : merchant declines / 3 min elapses
-    ACCEPTED --> PREPARING : merchant starts cooking
-    PREPARING --> READY : food ready
-    READY --> DRIVER_ASSIGNED : rider accepts
-    READY --> NO_DRIVER : 5 min, no rider
-    DRIVER_ASSIGNED --> PICKED_UP : rider collects
+    [*] --> CREATED
+    CREATED --> PENDING_PAYMENT : payment initiated
+    PENDING_PAYMENT --> PAID : verified webhook (CON-002)
+    PAID --> MERCHANT_ACCEPTED : merchant accepts
+    MERCHANT_ACCEPTED --> PREPARING : kitchen starts
+    PREPARING --> READY_FOR_PICKUP : food ready
+    READY_FOR_PICKUP --> PICKED_UP : rider collects
     PICKED_UP --> DELIVERING : rider departs
-    DELIVERING --> COMPLETED : rider confirms delivery
-    NEW --> CANCELLED
-    ACCEPTED --> CANCELLED
-    PREPARING --> CANCELLED : merchant must confirm
-    READY --> CANCELLED
-    DRIVER_ASSIGNED --> CANCELLED
-    NO_DRIVER --> CANCELLED
-    NEW --> PAYMENT_FAILED
-    COMPLETED --> [*]
-    REJECTED --> [*]
-    CANCELLED --> [*]
-    PAYMENT_FAILED --> [*]
+    DELIVERING --> DELIVERED : handover confirmed
+    DELIVERED --> [*]
+
+    note right of MERCHANT_ACCEPTED
+        RIDER_SEARCHING starts here, in the
+        delivery domain, in parallel (DEC-020)
+    end note
 ```
 
----
+### What this supersedes
 
-## 2. Three gaps in the documented machine
+**DEC-019 replaces the Order State Machine documented on 2026-08-09.** The
+mapping, recorded so nothing is lost:
 
-These are not opinions — each is a contradiction or an omission inside accepted
-documents.
+| Old (design canvas, FACT-005) | New (DEC-019) | Note |
+|---|---|---|
+| `NEW` | `PAID` → `MERCHANT_ACCEPTED` | The old `NEW` conflated "paid" with "merchant has it" |
+| — | `CREATED`, `PENDING_PAYMENT` | New. **Resolves BQ-012** — the payment machine referenced `PENDING_PAYMENT` while the order machine lacked it |
+| `ACCEPTED` | `MERCHANT_ACCEPTED` | Renamed; also unambiguous against the `ACCEPTED` status token |
+| `PREPARING` | `PREPARING` | Unchanged, but now parallel with rider search |
+| `READY` | `READY_FOR_PICKUP` | Renamed |
+| `DRIVER_ASSIGNED` | *(delivery domain)* `RIDER_ASSIGNED` | **Moved out of the order domain** — DEC-018 |
+| `PICKED_UP`, `DELIVERING` | unchanged | |
+| `COMPLETED` | `DELIVERED` | Renamed |
+| `NO_DRIVER` | *(delivery domain)* prolonged `RIDER_SEARCHING` | **No longer an Order state** — DEC-022. **Resolves BQ-014** |
+| `PAYMENT_FAILED`, `REJECTED`, `CANCELLED` | exception states, § 3 | Names not yet approved |
 
-### Gap 1 — `PENDING_PAYMENT` is referenced but does not exist
+**FACT-005 remains VERIFIED as a statement about the 2026-08-09 design
+artifact.** It is no longer the canonical machine.
 
-**BQ-012, P0.** The Payment State Machine pairs five payment states with an
-Order state called **`PENDING_PAYMENT`**, which is not one of the twelve. So an
-order awaiting a PromptPay transfer is currently in no nameable state — and
-REQ-002 says every client must read a canonical state value.
-
-The design also requires the unpaid order to **survive**:
-- *"ปิดแอประหว่างรอ QR → Payment ยังอยู่ในสถานะ PENDING จนหมดอายุ … เปิดแอปกลับมา
-  เจอ QR เดิมพร้อมเวลาที่เหลือ"*
-- *"QR หมดอายุ → Payment = EXPIRED แต่ Order ยังอยู่ ไม่สร้างออเดอร์ใหม่"*
-
-An order must therefore exist before payment succeeds. `PROPOSED` resolution:
-add `PENDING_PAYMENT` as the initial state for prepaid orders, making `NEW`
-mean specifically *"the merchant has it"*.
-
-### Gap 2 — `NO_DRIVER` contradicts the Customer App
-
-**BQ-014, P0.** The state machine puts `NO_DRIVER` after `READY` — the food is
-cooked. The Customer App's no-rider screen says
-*"อาหารของคุณยังไม่ถูกปรุง หากยกเลิกตอนนี้จะได้เงินคืนเต็มจำนวน"* — your food has
-**not** been cooked, cancel now for a full refund.
-
-Both cannot be true, and the difference decides who pays for the food (BQ-015).
-Supporting evidence for the app's version: the state table's own `PREPARING` row
-already shows the rider seeing `งานถูกจับคู่ · ไปที่ร้าน` — matched **while the
-merchant is still cooking**.
-
-`PROPOSED` resolution: **dispatch begins at `ACCEPTED`**, in parallel with
-cooking, and `NO_DRIVER` becomes a **transient flag on a still-searching order**
-rather than a state the order rests in. That also removes the odd `NO_DRIVER →`
-dead end from the diagram above.
-
-### Gap 3 — no state for a failed delivery
-
-**BQ-017, P1.** The payment canvas already handles a customer refusing a cash
-order (`ลูกค้าเงินสดไม่รับของ → บันทึกเป็นออเดอร์เสียหาย`), and the Driver App
-has a `ลูกค้าจ่ายไม่ครบ / มีปัญหา` escape — but the order has nowhere to land.
-Reusing `CANCELLED` would erase the distinction the ledger needs: a cancellation
-and a failed delivery have different money outcomes and different rider
-compensation.
-
-`PROPOSED` resolution: add `DELIVERY_FAILED` as a terminal state with a cause
-code.
+⚠️ **The Customer App encodes the old twelve values** in
+`apps/customer/src/mocks/types.ts` and renders its tracking timeline from them.
+That code now diverges from the approved lifecycle and will need updating. **No
+code was changed in this step.**
 
 ---
 
-## 3. The proposed state machine
+## 2. Order state × Payment state
 
-**STATUS: PROPOSED.** Additions are marked ➕. Everything unmarked is
-`DOCUMENTED` and unchanged.
+`ACCEPTED` — DEC-018 / CON-001. The two columns move **independently**.
+
+| Order state | Typical Payment state | Note |
+|---|---|---|
+| `CREATED` | `CREATED` | Nothing charged |
+| `PENDING_PAYMENT` | `PENDING` · `PROCESSING` · `FAILED` · `EXPIRED` | Order survives a failed or expired attempt. A new QR is a **new attempt on the same payment** |
+| `PAID` … `DELIVERED` | `SUCCESS` | Money received |
+| `CANCELLED` | `SUCCESS` → `REFUND_PENDING` → `REFUNDED` | **DEC-027** — a cancelled order still holds money until the refund completes. This pairing is normal, not an inconsistency |
+
+**`REFUNDED` is never an Order state** (DEC-027). A refunded, cancelled order is
+`Order = CANCELLED` **and** `Payment = REFUNDED`.
+
+Because COD is disabled in Phase 1 (**DEC-016**), the payment states
+`CASH_PENDING` and `CASH_COLLECTED` are unreachable. They remain in the model
+for the phase that reintroduces COD.
+
+---
+
+## 3. Exception paths
+
+The **policies** below are `ACCEPTED` where marked. The **state names** for
+exceptions were not part of the DEC-019 approval and remain `PROPOSED`.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PENDING_PAYMENT : prepaid order created ➕
-    [*] --> NEW : cash order created
-
-    PENDING_PAYMENT --> NEW : payment webhook = SUCCESS
-    PENDING_PAYMENT --> PAYMENT_FAILED : provider reports failure
-    PENDING_PAYMENT --> CANCELLED : customer abandons / QR expiries exhausted ➕
-
-    NEW --> ACCEPTED : merchant accepts (≤3 min)
-    NEW --> REJECTED : merchant declines, or 3 min elapses
-
-    ACCEPTED --> PREPARING : merchant starts cooking
-    note right of ACCEPTED : rider search starts here ➕ (BQ-014)
-
-    PREPARING --> READY : food ready
-    READY --> DRIVER_ASSIGNED : rider accepted the offer
-    PREPARING --> DRIVER_ASSIGNED : rider accepted during cooking ➕
-
-    DRIVER_ASSIGNED --> PICKED_UP : rider collects the food
-    PICKED_UP --> DELIVERING : rider departs the shop
-    DELIVERING --> COMPLETED : delivery confirmed
-    DELIVERING --> DELIVERY_FAILED : customer unreachable / refuses ➕
-
-    ACCEPTED --> CANCELLED
-    PREPARING --> CANCELLED : merchant must confirm
-    READY --> CANCELLED
-    DRIVER_ASSIGNED --> CANCELLED
-    NEW --> CANCELLED
-
-    COMPLETED --> [*]
-    REJECTED --> [*]
-    CANCELLED --> [*]
-    PAYMENT_FAILED --> [*]
-    DELIVERY_FAILED --> [*]
+    [*] --> CREATED
+    CREATED --> PENDING_PAYMENT
+    PENDING_PAYMENT --> PAID
+    PENDING_PAYMENT --> PAYMENT_FAILED : provider failure ⬦
+    PENDING_PAYMENT --> PAYMENT_EXPIRED : all attempts expired ⬦
+    PENDING_PAYMENT --> CANCELLED : customer abandons ⬦
+    PAID --> MERCHANT_REJECTED : merchant declines / times out ⬦
+    PAID --> MERCHANT_ACCEPTED
+    MERCHANT_ACCEPTED --> CANCELLED : customer / operator ⬦
+    PREPARING --> CANCELLED : merchant confirms ⬦
+    READY_FOR_PICKUP --> CANCELLED : operator decision (DEC-022) ⬦
+    DELIVERING --> DELIVERY_FAILED : unreachable / refuses ⬦
+    MERCHANT_ACCEPTED --> PREPARING
+    PREPARING --> READY_FOR_PICKUP
+    READY_FOR_PICKUP --> PICKED_UP
+    PICKED_UP --> DELIVERING
+    DELIVERING --> DELIVERED
 ```
 
-`NO_DRIVER` is deliberately absent from the diagram: under the proposal it is a
-**searching flag** on `ACCEPTED`/`PREPARING`/`READY`, surfaced to clients as the
-documented `NO_DRIVER` display state so no client wording changes. If the
-Product Owner prefers to keep it a real state, it stays exactly where the
-documented machine puts it — that is BQ-014.
+⬦ = state name `PROPOSED`.
+
+| Situation | Policy | Status |
+|---|---|---|
+| **Payment failure** | Order stays alive in `PENDING_PAYMENT`; the customer may retry or change method | `ACCEPTED` — DEC-019 (the state exists), design canvas |
+| **Payment expiration** | QR expires after 10 minutes; **the order survives**; a new QR is a new attempt | `ACCEPTED` — design canvas |
+| **Late payment** | Must be resolvable to an order and attempt; accept / refund / manual review | `ACCEPTED` technically — DEC-029; **`OPEN`** for the policy |
+| **Merchant rejection** | 3-minute accept window; on rejection notify the customer, refund, suggest nearby shops | Window and flow `ACCEPTED` (design canvas); auto-reject-vs-escalate `OPEN` — BQ-013 |
+| **Customer cancellation** | Free before `PREPARING`; merchant confirmation during `PREPARING`; support-only after `PICKED_UP` | `ACCEPTED` — design canvas. Fees and post-pickup outcomes `OPEN` — Q-003, BQ-016 |
+| **Rider cancellation** | Delivery reassigns; **the order is not cancelled** | `ACCEPTED` — **DEC-021** |
+| **No rider** | Retry → manual dispatch → operator decision. **Never auto-cancel** | `ACCEPTED` — **DEC-022** |
+| **Delivery failure** | Rider escalates; order does not silently complete | `PROPOSED` — BQ-017 |
+| **Cost of wasted food** | Who pays when a cooked order fails | **`OPEN` — BQ-015** |
+
+### No-rider, in the order domain
+
+`ACCEPTED` — **DEC-022**. From the order's point of view, no-rider is **not a
+state**. The order sits in `PREPARING` or `READY_FOR_PICKUP` while the delivery
+domain keeps searching. Only an **operator decision** can end it, and cancelling
+is one option among several — see [`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md) § 7.
+
+The customer must still be told rather than left in silence; the existing
+5-minute notification with a 3-minute extension offer remains valid.
 
 ---
 
-## 4. Transition table
+## 4. Timeouts
 
-`PROPOSED` detail over `DOCUMENTED` transitions. "Guard" is what must be true
-before the transition may occur; "effects" are what else must happen inside the
-same database transaction.
+| Timer | Value | Status |
+|---|---|---|
+| Merchant accept window | 3 minutes | `ACCEPTED` (value) · behaviour at expiry `OPEN` — BQ-013 |
+| PromptPay QR validity | 10 minutes | `ACCEPTED` |
+| Webhook wait before reconciliation | 10 minutes | `ACCEPTED` |
+| Customer no-rider notification | 5 minutes | `ACCEPTED` |
+| Customer "keep waiting" extension | 3 minutes | `ACCEPTED` |
+| Rider accept window per offer | 20 s (title) vs 12 s (button) — contradictory | **`OPEN` — BQ-020** |
+| Rider search retry interval / escalation | — | **`OPEN`** — DEC-022 sets the shape, not the timings |
+| Rider wait at customer before failing | — | **`OPEN` — BQ-017** |
 
-| # | From → To | Trigger | Actor | Guard | Effects |
+All timers must be **configuration**, not constants (DEC-031).
+
+---
+
+## 5. Cancellation matrix
+
+`PROPOSED` except where a DEC is cited.
+
+| Order state | Customer | Merchant | Rider | Operator | Payment outcome |
 |---|---|---|---|---|---|
-| 1 | — → `PENDING_PAYMENT` ➕ | Customer confirms a prepaid order | Customer | Cart valid; merchant accepting orders; address in area | Snapshot prices; create `Payment` (`CREATED`) |
-| 2 | — → `NEW` | Customer confirms a cash order | Customer | as above | Snapshot prices; create `Payment` (`CASH_PENDING`); alert merchant |
-| 3 | `PENDING_PAYMENT` → `NEW` | Verified webhook, payment `SUCCESS` | **Webhook only** (CON-002) | Signature valid; amount and order match | Ledger entries; alert merchant; notify customer |
-| 4 | `PENDING_PAYMENT` → `PAYMENT_FAILED` | Provider reports failure | Payment system | — | Notify customer; offer retry or method change |
-| 5 | `PENDING_PAYMENT` → `CANCELLED` ➕ | Customer abandons, or QR attempts exhausted | Customer / System | No successful payment exists | Release nothing (no money moved) |
-| 6 | `NEW` → `ACCEPTED` | Merchant accepts | Merchant | Within 3 min; merchant still open | **Start rider search** ➕; notify customer |
-| 7 | `NEW` → `REJECTED` | Merchant declines or 3 min elapses | Merchant / System | — | Auto-refund if prepaid; notify; suggest nearby shops |
-| 8 | `ACCEPTED` → `PREPARING` | Merchant starts cooking | Merchant | — | Notify customer |
-| 9 | `PREPARING` → `READY` | Merchant marks food ready | Merchant | — | Escalate rider search priority ➕ |
-| 10 | `ACCEPTED`/`PREPARING`/`READY` → `DRIVER_ASSIGNED` | A rider accepts the offer | System | Rider online, not cash-blocked, within capacity | Bind `Delivery`; notify all three parties |
-| 11 | `DRIVER_ASSIGNED` → `PICKED_UP` | Rider confirms collection | Rider | Rider is the assigned one; food `READY` | Cash orders: record merchant hand-off per BQ-023 |
-| 12 | `PICKED_UP` → `DELIVERING` | Rider departs | Rider | — | Start customer-visible tracking |
-| 13 | `DELIVERING` → `COMPLETED` | Delivery confirmed (+ proof, BQ-018) | Rider | Cash: collection confirmed first | Ledger settles; rider earning recorded; cash becomes rider liability; prompt rating |
-| 14 | `DELIVERING` → `DELIVERY_FAILED` ➕ | Customer unreachable or refuses | Rider (+ admin review) | Wait rule satisfied | Cause code; cost allocation per BQ-015; no cash collected |
-| 15 | any pre-`PICKED_UP` → `CANCELLED` | Customer cancels | Customer | `PREPARING` requires merchant confirmation | Refund per rules; unassign rider; compensate rider (BQ-024) |
-| 16 | any pre-`COMPLETED` → `CANCELLED` | Admin cancels | Admin | Reason mandatory | Full audit record; refund; compensation |
-
-Transitions not in this table are **forbidden**. In particular: no transition
-skips backwards, and nothing re-enters a terminal state.
-
----
-
-## 5. Timeouts
-
-| Timer | Value | On expiry | Status |
-|---|---|---|---|
-| Merchant accept window | **3 minutes** | `REJECTED` (+ admin alert at ~90 s proposed) | Value `DOCUMENTED`; behaviour `OPEN` — BQ-013 |
-| Rider search | **5 minutes** | `NO_DRIVER` surfaced to the customer | Value `DOCUMENTED`; semantics `OPEN` — BQ-014 |
-| Customer "keep waiting" extension | **3 minutes** | Return to the choice, or cancel | `DOCUMENTED` (Customer App copy) |
-| Rider accept window per offer | 20 s (title) vs 12 s (button) | Offer expires, next round | **Contradictory in the design** — BQ-020 |
-| PromptPay QR validity | **10 minutes** | Payment `EXPIRED`; **order survives** | `DOCUMENTED` |
-| Webhook wait before reconciliation | **10 minutes** | Flagged for admin reconciliation | `DOCUMENTED` (`P-A2`) |
-| Rider wait at customer before failing | Not specified | — | `OPEN` — BQ-017 |
-
-All timers must be **configuration**, not constants — they are exactly the
-values that will be tuned against real Buntharik data.
-
----
-
-## 6. Cancellation matrix
-
-`PROPOSED`, derived from the three documented refund rules.
-
-| Order state | Customer | Merchant | Rider | Admin | Refund (prepaid) |
-|---|---|---|---|---|---|
-| `PENDING_PAYMENT` ➕ | ✅ free | — | — | ✅ | Nothing paid |
-| `NEW` | ✅ free | ✅ (= `REJECTED`) | — | ✅ | Full, automatic |
-| `ACCEPTED` | ✅ free | ⚠️ counts as merchant fault | — | ✅ | Full, automatic |
-| `PREPARING` | ⚠️ merchant must confirm | ⚠️ merchant fault | — | ✅ | Full if confirmed; otherwise `OPEN` (BQ-016) |
-| `READY` | ⚠️ merchant must confirm | ❌ | — | ✅ | Food is cooked — cost allocation `OPEN` (BQ-015) |
-| `DRIVER_ASSIGNED` | ⚠️ | ❌ | ⚠️ unassign, not cancel | ✅ | As `READY`, plus rider compensation (BQ-024) |
-| `PICKED_UP` onwards | ❌ support centre only | ❌ | ❌ | ✅ | `OPEN` — BQ-016 |
-| `COMPLETED` | ❌ | ❌ | ❌ | ✅ refund only | Partial refund path — BQ-031 |
+| `CREATED`, `PENDING_PAYMENT` | ✅ free | — | — | ✅ | Nothing charged |
+| `PAID` | ✅ free | ✅ (rejection) | — | ✅ | Full refund |
+| `MERCHANT_ACCEPTED` | ✅ free | ⚠️ merchant fault | — | ✅ | Full refund |
+| `PREPARING` | ⚠️ merchant confirms | ⚠️ merchant fault | ❌ **DEC-021** | ✅ | Full if confirmed; otherwise `OPEN` |
+| `READY_FOR_PICKUP` | ⚠️ merchant confirms | ❌ | ❌ **DEC-021** | ✅ **DEC-022** | Food cooked — cost allocation **`OPEN`, BQ-015** |
+| `PICKED_UP` onward | ❌ support only | ❌ | ❌ | ✅ | `OPEN` — BQ-016 |
+| `DELIVERED` | ❌ | ❌ | ❌ | ✅ refund only | Partial refund — BQ-031 |
 
 ✅ allowed · ⚠️ conditional · ❌ not allowed
 
+**A rider can never cancel the order** — DEC-021. A rider abandoning a job
+returns the *delivery* to `RIDER_SEARCHING`.
+
 ---
 
-## 7. Cause codes
+## 6. Cause codes
 
-`PROPOSED`. Every terminal failure carries one. This is what lets the ledger
-allocate cost (BQ-015) and lets ops answer "why did this fail?" without reading
-a timeline.
+`PROPOSED`. Every terminal failure carries one, so the ledger can allocate cost
+(BQ-015) and operations can answer "why?" without reading a timeline.
 
-| Code | Applies to | Fault |
+| Code | Terminal state | Fault |
 |---|---|---|
 | `CUSTOMER_CANCELLED` | `CANCELLED` | Customer |
 | `CUSTOMER_UNREACHABLE` | `DELIVERY_FAILED` | Customer |
 | `CUSTOMER_REFUSED` | `DELIVERY_FAILED` | Customer |
-| `MERCHANT_REJECTED` | `REJECTED` | Merchant |
-| `MERCHANT_TIMEOUT` | `REJECTED` | Merchant |
+| `MERCHANT_REJECTED` / `MERCHANT_TIMEOUT` | `MERCHANT_REJECTED` | Merchant |
 | `MERCHANT_CANCELLED_LATE` | `CANCELLED` | Merchant |
-| `MERCHANT_CLOSED` | `REJECTED` | Merchant |
-| `ITEM_UNAVAILABLE` | `REJECTED` / partial refund | Merchant |
-| `NO_RIDER` | `CANCELLED` | **Platform** |
-| `RIDER_CANCELLED` | reassignment, or `CANCELLED` if exhausted | Rider → platform |
-| `PAYMENT_EXPIRED` | `CANCELLED` | Customer / none |
+| `ITEM_UNAVAILABLE` | rejection or partial refund | Merchant |
+| `NO_RIDER_OPERATOR_CANCELLED` | `CANCELLED` | **Platform** — DEC-022 |
+| `PAYMENT_EXPIRED` | `PAYMENT_EXPIRED` | None |
 | `PAYMENT_FAILED` | `PAYMENT_FAILED` | Provider |
-| `ADMIN_CANCELLED` | `CANCELLED` | Platform (reason mandatory) |
-| `FORCE_MAJEURE` | any | None — write-off |
+| `OPERATOR_CANCELLED` | `CANCELLED` | Platform — reason mandatory (DEC-032) |
+
+Note there is **no `RIDER_CANCELLED` order cause code**: DEC-021 makes rider
+cancellation a delivery event, never an order outcome.
 
 ---
 
-## 8. Order state × Payment state
+## 7. Worked scenarios
 
-`DOCUMENTED` pairings from the payment canvas, plus the `PENDING_PAYMENT`
-proposal. **The two columns move independently** — that is the whole point of
-CON-001.
+**A. Happy path.** `CREATED` → `PENDING_PAYMENT` → webhook → `PAID` → merchant
+accepts → `MERCHANT_ACCEPTED` (**rider search begins**) → `PREPARING` ∥
+`RIDER_SEARCHING` → rider accepts → `RIDER_ASSIGNED` → `READY_FOR_PICKUP` →
+`PICKED_UP` → `DELIVERING` → `DELIVERED`.
 
-| Payment state | Valid order states | Note |
-|---|---|---|
-| `CREATED` | `PENDING_PAYMENT` ➕ | Payment record exists, no QR yet |
-| `PENDING` | `PENDING_PAYMENT` ➕ | QR shown, counting down |
-| `PROCESSING` | `PENDING_PAYMENT` ➕ | Customer says paid; awaiting webhook. **Never show success here** |
-| `SUCCESS` | `NEW` … `COMPLETED` | Webhook only (CON-002) |
-| `FAILED` | `PENDING_PAYMENT` ➕ / `PAYMENT_FAILED` | Retry allowed |
-| `EXPIRED` | `PENDING_PAYMENT` ➕ | **Order survives**; new QR = new attempt |
-| `CANCELLED` | `CANCELLED` | No money moved |
-| `REFUND_PENDING` | `CANCELLED`, `DELIVERY_FAILED` ➕, `COMPLETED` (partial) | Money still with the platform |
-| `REFUND_PROCESSING` | same | Bank in progress |
-| `REFUNDED` | same | Webhook only |
-| `CASH_PENDING` | `NEW` … `DELIVERING` | Cash order in flight |
-| `CASH_COLLECTED` | `COMPLETED` | Rider confirmed collection |
+**B. Rider accepts, then cancels.** Delivery goes `RIDER_ASSIGNED` →
+`RIDER_REASSIGNING` → `RIDER_SEARCHING` → broadcast. **The order does not
+move** — it stays in `PREPARING` or `READY_FOR_PICKUP` (DEC-021). Rider
+compensation is `OPEN` (BQ-024).
 
-The essential consequence, quoted from the source: a cancelled order still has
-money in the system until the refund completes. `CANCELLED` + `REFUND_PENDING`
-is a normal, common combination — not an inconsistency.
+**C. No rider found.** Search continues past the customer notification; an
+operator is alerted and chooses: keep searching, merchant delivery, or cancel +
+refund (DEC-022). Only the last moves the order, to `CANCELLED`. **Who pays for
+the cooked food is `OPEN` (BQ-015).**
 
----
+**D. Merchant never responds.** 3 minutes elapse → rejection → refund → nearby
+suggestions. Auto vs escalate is `OPEN` (BQ-013); the refund **mechanism** is
+`OPEN` (Q-020).
 
-## 9. What each client shows
+**E. Customer pays twice.** The order's value stays at the expected amount
+(**DEC-030**); the surplus becomes a refund obligation handled in the payment
+domain. Mechanism blocked on Q-020.
 
-`DOCUMENTED` — REQ-002. All four surfaces read the same value. The Customer App
-already implements this: its `OrderState` union in
-`apps/customer/src/mocks/types.ts` is exactly the twelve documented values, and
-its tracking screen renders the timeline
-`ร้านรับออเดอร์ · ทำอาหาร · ไรเดอร์รับ · กำลังส่ง · ถึงแล้ว` from state alone.
-
-Rules that follow, and that a reviewer should check every PR against:
-
-1. No screen may derive status from a timestamp, a payment result, or a rider's
-   position.
-2. Per-role wording differences are presentation. They never become extra
-   states.
-3. Adding a state means updating **all four** clients and the shared types
-   package — which is exactly why `@banhao/types` exists (DEC-013).
+**F. Payment arrives after expiry.** The system must identify the order and the
+attempt (**DEC-029**), then accept, refund or queue for review — which of those
+is `OPEN`.
 
 ---
 
-## 10. Worked failure scenarios
+## 8. Open questions owned by this document
 
-`PROPOSED` outcomes — each depends on an open decision, named inline.
+**Resolved by this lock:** BQ-012 (`PENDING_PAYMENT` — DEC-019) · BQ-014
+(`NO_DRIVER` contradiction — DEC-019, DEC-022) · BQ-010 (one cart, one
+restaurant — DEC-017).
 
-**A. Merchant never responds (prepaid).** 3 min elapses → `REJECTED`
-(`MERCHANT_TIMEOUT`) → automatic full refund → customer sees nearby suggestions.
-Money: payment refunded; no merchant payable; platform keeps nothing.
-*Blocked by:* BQ-013 (auto vs escalate), Q-020 (how a PromptPay refund actually
-happens).
+**Still `OPEN`:** BQ-013 (merchant accept timeout behaviour) · BQ-015 (**who
+bears the cost of wasted food** — P0) · BQ-016 / Q-003 (full cancellation and
+refund policy) · BQ-017 (delivery failure) · BQ-018 (proof of delivery) ·
+BQ-011 (cart revalidation) · exception **state names**.
 
-**B. No rider, food already cooked.** Search from `ACCEPTED` → 5 min → customer
-told → offered 3 more minutes → admin alerted for manual dispatch → if exhausted
-and the customer cancels: order `CANCELLED` (`NO_RIDER`), customer refunded in
-full, **merchant still paid** (the platform's failure, not theirs), platform
-books `PLATFORM_WRITE_OFF`.
-*Blocked by:* BQ-014, BQ-015, BQ-025.
-
-**C. Customer not home, prepaid.** Rider waits the defined period, calls twice →
-`DELIVERY_FAILED` (`CUSTOMER_UNREACHABLE`) → rider **is** paid, merchant **is**
-paid, customer refund is `OPEN`.
-*Blocked by:* BQ-017, BQ-015.
-
-**D. Customer refuses a cash order.** Documented: no money collected, no refund
-needed, recorded as `ออเดอร์เสียหาย` for admin review. The rider has already
-paid the merchant at pickup under the current design (BQ-023), so **the rider is
-out of pocket** unless compensated.
-*Blocked by:* BQ-023, BQ-015, BQ-024.
-
-**E. Duplicate PromptPay transfer.** Documented: the same payment reference is
-reused, no second payment record is created, and the customer sees
-*"ออเดอร์นี้ชำระเงินแล้ว"* (screen 12f) with the promise that a double transfer
-is refunded automatically. That promise is only keepable once Q-020 is answered.
-*Blocked by:* Q-020.
-
-**F. Merchant cancels after payment.** Documented: refund created automatically,
-Order = `CANCELLED`, Payment = `REFUND_PENDING`, customer sees a reference and
-an expected date.
-*Blocked by:* Q-020, BQ-015.
-
----
-
-## 11. Open questions owned by this document
-
-**P0:** BQ-012 (`PENDING_PAYMENT`) · BQ-014 (`NO_DRIVER` semantics) ·
-BQ-015 (who pays for wasted food)
-**P1:** BQ-013 (accept timeout) · BQ-016 (cancellation policy, extends Q-003) ·
-BQ-017 (delivery failure) · BQ-018 (proof of delivery)
-
-No transition in this document may be implemented while the question that
-governs it is `OPEN`.
+No exception-path code may be written while the policy governing it is `OPEN`.

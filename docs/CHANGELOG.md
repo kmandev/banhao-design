@@ -2,6 +2,29 @@
 
 > This is a detailed, dated development log for AI-memory purposes. For a shorter, release-facing summary see the root [`CHANGELOG.md`](../CHANGELOG.md) — the two are complementary, not duplicates: this file tracks documentation/process work in date-entry form as agents touch the repo; the root file tracks user-facing repository milestones.
 
+## 2026-08-10 (2) — P0 Decision Lock v1
+
+### Added
+
+- `docs/DECISIONS.md` — an **Index** table, plus **DEC-016 … DEC-032**: the seventeen business decisions the Product Owner approved in the Business Decision Workshop (EVENT-014). Existing DEC-001…DEC-015 untouched.
+- `ai/KNOWLEDGE/EVENTS.md` — EVENT-014, recording what was approved, what was superseded, what was deferred, and what stays open.
+
+### Changed
+
+- The seven business documents were rewritten against the approved decisions. Status taxonomy is now `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections.
+- `docs/ORDER_LIFECYCLE.md` — rewritten for DEC-019's lifecycle, with a full mapping from the superseded 2026-08-09 state machine so nothing is lost.
+- `docs/RIDER_LIFECYCLE.md` — `RIDER_SEARCHING` / `RIDER_ASSIGNED` / `RIDER_REASSIGNING` accepted; broadcast → first accept accepted; cash section marked dormant.
+- `docs/PAYMENT_LIFECYCLE.md`, `docs/SETTLEMENT_MODEL.md` — online-only Phase 1, idempotency/duplicate/late payment, settlement as its own domain. Cash paths retained and marked dormant.
+- `docs/DOMAIN_MODEL.md` — new § 2 "The four state domains"; sections renumbered.
+- `docs/OPEN_BUSINESS_QUESTIONS.md` — answered questions marked `ACCEPTED` with their `DEC-NNN`; COD-dependent questions marked `DEFERRED`; P0 count 15 → 8.
+- `ai/KNOWLEDGE/FACTS.md` — provenance notes on FACT-005 and FACT-006 (still VERIFIED as statements about the 2026-08-09 design artifact, no longer canonical).
+- `ai/KNOWLEDGE/CONSTRAINTS.md` — CON-001 cross-referenced to DEC-018's four-domain extension. `ai/KNOWLEDGE/REQUIREMENTS.md` — REQ-001 marked dormant under DEC-016, **not deleted**.
+- `ai/MEMORY.md`, `ai/HANDOFF.md`, `CLAUDE.md`, `docs/CURRENT_STATUS.md`, `docs/TODO.md` — updated for the lock.
+
+### Not done, deliberately
+
+No production code, no migration, no API, no payment provider, no Merchant/Rider/Admin app. No `Q-NNN` resolved. No pricing set. Two known code divergences (Customer App order states and the cash checkout option) were left in place and recorded as follow-up work.
+
 ## 2026-08-10
 
 ### Added

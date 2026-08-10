@@ -1,12 +1,17 @@
 # BANHAO — Domain Model
 
-**STATUS: PROPOSED.** Nothing in this document is an accepted schema. It is a
-domain model for the Product Owner to review, produced by EVENT-013
-(2026-08-10). No migration may be written from it until it is accepted.
+**The entity shapes remain PROPOSED. The domain boundaries are now ACCEPTED.**
+Produced by EVENT-013 (2026-08-10); domain separation locked by **DEC-018** in
+EVENT-014 (2026-08-10). **No database schema and no migration may be written
+from this document** — DEC-026 and the decision lock are explicit that
+implementation has not started.
 
-Where an entity or field restates something already accepted (`DEC-NNN`,
-`CON-NNN`, `REQ-NNN`, or a design canvas), it is marked `DOCUMENTED`. Everything
-else is this analysis's proposal.
+| Status | Meaning |
+|---|---|
+| `ACCEPTED` | Approved by the Product Owner (`DEC-NNN`) or accepted product truth (`CON`/`REQ`/design canvas) |
+| `PROPOSED` | This analysis's suggestion — entity shapes, field lists, names |
+| `OPEN` | Undecided; see `OPEN_BUSINESS_QUESTIONS.md` |
+| `LEGAL_REVIEW_REQUIRED` | No agent may conclude this is lawful |
 
 Companion: [`BUSINESS_RULES.md`](BUSINESS_RULES.md) ·
 [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md) ·
@@ -20,14 +25,14 @@ Companion: [`BUSINESS_RULES.md`](BUSINESS_RULES.md) ·
 
 | # | Principle | Source |
 |---|---|---|
-| 1 | **Generic entity names.** Merchant, Product, Order, Delivery, Driver — never `Restaurant`/`Dish` at the core. Food-phase names are aliases, not types. | `DOCUMENTED` — DEC-005, REQ-004 |
-| 2 | **Order state and Payment state are separate entities**, never one field. | `DOCUMENTED` — CON-001 |
-| 3 | **Money is integer satang.** No floating point, ever. | `DOCUMENTED` — CON-003 |
-| 4 | **The ledger is append-only.** Corrections are reversing entries. | `DOCUMENTED` — DEC-014 |
+| 1 | **Generic entity names.** Merchant, Product, Order, Delivery, Driver — never `Restaurant`/`Dish` at the core. Food-phase names are aliases, not types. | `ACCEPTED` — DEC-005, REQ-004 |
+| 2 | **Order, Payment, Delivery and Settlement are four separate state domains** — never one giant Order status enum. | `ACCEPTED` — **DEC-018**, extending DEC-002 / CON-001 |
+| 3 | **Money is integer satang.** No floating point, ever. | `ACCEPTED` — CON-003 |
+| 4 | **The ledger is append-only.** Corrections are reversing entries. | `ACCEPTED` — DEC-014 |
 | 5 | **Orders snapshot their prices.** An order never recomputes a total from the live catalogue. | `PROPOSED` — required by CON-003 |
 | 6 | **Geography is configuration, not code.** `ServiceArea` / `Zone` / bands — Buntharik is a row. | `PROPOSED` — §32 of the Step 4 brief |
 | 7 | **Every state change has an actor and a reason.** Especially manual overrides. | `PROPOSED` |
-| 8 | One deployable service, module boundaries by discipline. | `DOCUMENTED` — DEC-009 |
+| 8 | One deployable service, module boundaries by discipline. | `ACCEPTED` — DEC-009 |
 
 ### Merchant vs Restaurant
 
@@ -46,7 +51,54 @@ implied). Money attaches to `Merchant`; the catalogue attaches to `Restaurant`.
 
 ---
 
-## 2. Aggregates
+## 2. The four state domains
+
+`ACCEPTED` — **DEC-018**. Each domain owns its own states, transitions and
+actors. Cross-domain effects are **explicit mappings, never shared fields**.
+
+```mermaid
+flowchart LR
+    subgraph OD["ORDER domain"]
+        O["CREATED → PENDING_PAYMENT → PAID<br/>→ MERCHANT_ACCEPTED → PREPARING<br/>→ READY_FOR_PICKUP → PICKED_UP<br/>→ DELIVERING → DELIVERED"]
+    end
+    subgraph PD["PAYMENT domain"]
+        P["PENDING → SUCCESS<br/>FAILED · EXPIRED · REFUNDED"]
+    end
+    subgraph DD["DELIVERY domain"]
+        D["RIDER_SEARCHING → RIDER_ASSIGNED<br/>→ PICKED_UP → EN_ROUTE → DELIVERED<br/>RIDER_REASSIGNING"]
+    end
+    subgraph SD["SETTLEMENT domain"]
+        S["ACCRUING → PENDING<br/>→ PROCESSING → PAID"]
+    end
+    PD -.->|verified webhook<br/>advances the order| OD
+    OD -.->|MERCHANT_ACCEPTED<br/>starts the search| DD
+    DD -.->|DELIVERED<br/>closes the order| OD
+    OD -.->|DELIVERED<br/>makes payables| SD
+    PD -.->|refunds reverse| SD
+```
+
+| Domain | Owns | Canonical states | Decision |
+|---|---|---|---|
+| **Order** | What the customer bought and where the order is | 9 core states + exceptions | DEC-019 |
+| **Payment** | Whether money arrived, and refunds | `PENDING`, `SUCCESS`, `FAILED`, `EXPIRED`, `REFUNDED` (+ retained) | DEC-016, DEC-027…DEC-030 |
+| **Delivery** | Rider assignment and physical fulfilment | `RIDER_SEARCHING`, `RIDER_ASSIGNED`, `RIDER_REASSIGNING`, + progression | DEC-020, DEC-021, DEC-022 |
+| **Settlement** | Periodic payouts and platform revenue | `ACCRUING → PENDING → PROCESSING → PAID` | DEC-026 |
+
+Three consequences that fall straight out of the separation:
+
+1. **A rider cancelling never cancels the order** (DEC-021) — it is a delivery
+   transition, and the order does not move.
+2. **A cancelled order can still hold money** until the refund completes
+   (DEC-027) — `Order = CANCELLED` with `Payment = REFUND_PENDING` is normal.
+3. **No-rider is not an order state** (DEC-022) — it is a prolonged
+   `RIDER_SEARCHING` plus an operator alert.
+
+The customer-facing status is derived from the **Order domain alone** (REQ-002).
+Delivery detail is operational, not a second status for the customer to read.
+
+---
+
+## 3. Aggregates
 
 An **aggregate root** is the only entity outside code may address directly;
 everything inside it changes through it. This is what keeps a modular monolith
@@ -77,9 +129,9 @@ the reason DEC-009 chose a monolith.
 
 ---
 
-## 3. Entity relationships
+## 4. Entity relationships
 
-### 3.1 Identity, merchant and catalogue
+### 4.1 Identity, merchant and catalogue
 
 ```mermaid
 erDiagram
@@ -99,7 +151,7 @@ erDiagram
     ZONE ||--o{ RESTAURANT : "located in"
 ```
 
-### 3.2 Ordering and delivery
+### 4.2 Ordering and delivery
 
 ```mermaid
 erDiagram
@@ -121,7 +173,7 @@ erDiagram
     ORDER ||--o{ SUPPORT_TICKET : "disputed via"
 ```
 
-### 3.3 Money
+### 4.3 Money
 
 ```mermaid
 erDiagram
@@ -145,17 +197,17 @@ erDiagram
 
 ---
 
-## 4. Entity catalogue
+## 5. Entity catalogue
 
 Format per entity: **purpose · owner · key fields · relationships · lifecycle ·
 security boundary.** Field lists are conceptual — no types, no DDL, no
 migrations (§2 of the Step 4 brief).
 
-### 4.1 Identity
+### 5.1 Identity
 
 #### `User`
 - **Purpose** — one human, one login. Backed by Supabase `auth.users`.
-- **Owner** — the person. `DOCUMENTED`, live.
+- **Owner** — the person. `ACCEPTED`, live.
 - **Key fields** — id, phone (E.164), created_at.
 - **Relationships** — one `Profile`; optionally one `Merchant` and/or one
   `Rider`; many `Address`, `Order`, `Rating`.
@@ -166,12 +218,12 @@ migrations (§2 of the Step 4 brief).
 
 #### `Profile`
 - **Purpose** — application-side identity: role and display name.
-- **Owner** — the person. `DOCUMENTED`, live and RLS-verified.
+- **Owner** — the person. `ACCEPTED`, live and RLS-verified.
 - **Key fields** — id (= `auth.users.id`), phone (mirror), display_name, role
   (`CUSTOMER` | `MERCHANT` | `RIDER` | `ADMIN`).
 - **Lifecycle** — auto-created by trigger on signup, role defaults to
   `CUSTOMER`.
-- **Security** — `DOCUMENTED` and verified live 14/14: a client may write only
+- **Security** — `ACCEPTED` and verified live 14/14: a client may write only
   `display_name`; `id`, `phone` and `role` are immutable to clients; role
   changes go through the service-role-only `set_user_role()`.
 
@@ -187,7 +239,7 @@ migrations (§2 of the Step 4 brief).
   their delivery is active**, and only the fields needed to deliver.
 - **Status** — `OPEN` on composition and CRUD: BQ-001, BQ-002.
 
-### 4.2 Merchant and catalogue
+### 5.2 Merchant and catalogue
 
 #### `Merchant`
 - **Purpose** — the business entity that gets paid.
@@ -234,7 +286,7 @@ migrations (§2 of the Step 4 brief).
 - **Security** — public read; merchant write.
 - **Status** — multi-select and quantity semantics are `OPEN`, BQ-009.
 
-### 4.3 Cart
+### 5.3 Cart
 
 #### `Cart` · `CartItem`
 - **Purpose** — a draft order. **Not a contract**; prices are indicative.
@@ -243,12 +295,16 @@ migrations (§2 of the Step 4 brief).
   `CartItem`: menu item id, quantity, chosen options, kitchen note, indicative
   unit price.
 - **Lifecycle** — created on first add → mutated → converted to an `Order` →
-  cleared. A cart from another restaurant is cleared on confirmation (BQ-010).
+  cleared. Adding an item from a different restaurant clears or blocks the cart,
+  with an explicit prompt.
 - **Security** — owner only.
-- **Status** — one-merchant rule and revalidation are `OPEN`: BQ-010, BQ-011.
-  Currently client-local in the Customer App.
+- **Status** — **`ACCEPTED` — DEC-017: one cart = one restaurant.** `Cart`
+  therefore carries exactly one `restaurant_id`, and the delivery fee has a
+  single pickup point to measure from. **Resolves BQ-010.** Revalidation of
+  prices and availability at checkout remains `OPEN` (BQ-011). Currently
+  client-local in the Customer App, which already behaves this way.
 
-### 4.4 Order
+### 5.4 Order
 
 #### `Order` — **aggregate root, BANHAO-owned**
 - **Purpose** — the contract. The single source of truth every client reads
@@ -261,11 +317,19 @@ migrations (§2 of the Step 4 brief).
   ETA, cause code for failures, timestamps per state.
 - **Relationships** — one `Payment`, one `Delivery`, many `OrderItem`, many
   `OrderStatusEvent`, zero or more `Rating`, `Refund`, `SupportTicket`.
-- **Lifecycle** — [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md).
+- **Lifecycle** — `ACCEPTED` — **DEC-019**:
+  `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING →
+  READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with `PREPARING` and
+  the delivery domain's `RIDER_SEARCHING` running **in parallel**. Full detail
+  and the supersession mapping: [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md).
+- **`payment_method`** — an **extensible enum**, not a boolean. Phase 1 permits
+  online only; COD must be reintroducible without redesigning this entity
+  (**DEC-016**).
 - **Security** — **no actor writes `state` directly.** All transitions go
   through the order state machine, which records who caused each one. Read: the
   customer (own), the restaurant's merchant (own shop), the assigned rider
-  (limited fields), admin.
+  (limited fields), operator.
+- **Never holds a refund status** — `REFUNDED` is a payment state (**DEC-027**).
 
 #### `OrderItem` · `OrderItemOption`
 - **Purpose** — the immutable snapshot of what was ordered and what it cost.
@@ -282,7 +346,7 @@ migrations (§2 of the Step 4 brief).
 - **Lifecycle** — append-only.
 - **Security** — admin read; the timeline the customer sees is derived from it.
 
-### 4.5 Delivery and rider
+### 5.5 Delivery and rider
 
 #### `Delivery`
 - **Purpose** — the physical fulfilment of an order. Separate from `Order` so
@@ -290,12 +354,18 @@ migrations (§2 of the Step 4 brief).
 - **Owner** — BANHAO; operated by the assigned Rider.
 - **Key fields** — order id, pickup point, dropoff point, distance, delivery
   state, assigned rider id, assigned_at, picked_up_at, delivered_at, rider
-  earning (satang), proof-of-delivery reference, failure cause.
-- **Lifecycle** — [`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md) § Delivery state
-  machine.
-- **Security** — assigned rider writes only its own progress transitions; admin
-  may force-unassign; customer reads status and, during an active delivery, the
-  rider's location and masked contact.
+  earning (satang), reassignment count, proof-of-delivery reference, failure
+  cause.
+- **Lifecycle** — `ACCEPTED` state names — **DEC-020 / DEC-021 / DEC-022**:
+  `RIDER_SEARCHING → RIDER_ASSIGNED`, with `RIDER_REASSIGNING → RIDER_SEARCHING`
+  when a rider cancels. Search starts when the order reaches
+  `MERCHANT_ACCEPTED`; **it has no timeout that cancels anything.** Full detail:
+  [`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md) § 4.
+- **The delivery's state never cancels the order** (**DEC-021**). A lost rider
+  is a delivery event; the order does not move.
+- **Security** — assigned rider writes only its own progress transitions; an
+  operator may force-unassign (**DEC-032**); customer reads status and, during
+  an active delivery, the rider's location and masked contact.
 
 #### `DeliveryOffer`
 - **Purpose** — a job offered to a rider. **This is what makes dispatch
@@ -303,8 +373,11 @@ migrations (§2 of the Step 4 brief).
 - **Key fields** — delivery id, rider id, offered_at, expires_at, outcome
   (`ACCEPTED` | `DECLINED` | `EXPIRED` | `SUPERSEDED`), round number.
 - **Lifecycle** — created by the dispatcher → resolved within the accept window.
-- **Security** — rider sees their own offers; admin sees all.
-- **Status** — `PROPOSED`; shape depends on BQ-019 and BQ-020.
+  Under **DEC-020** a round is a **broadcast**: one round produces one offer per
+  eligible online rider, and the first acceptance wins atomically.
+- **Security** — rider sees their own offers; operator sees all.
+- **Status** — the dispatch model is `ACCEPTED` (DEC-020); the entity shape is
+  `PROPOSED` and the accept-window duration is `OPEN` (BQ-020).
 
 #### `Rider`
 - **Purpose** — a delivery partner.
@@ -319,41 +392,48 @@ migrations (§2 of the Step 4 brief).
 - **Purpose** — can this rider be offered work **right now**.
 - **Key fields** — rider id, online/offline, current location, location updated
   at, active delivery count, blocked_reason (e.g. `CASH_LIMIT_REACHED`).
-- **Lifecycle** — toggled by the rider; **blocked automatically** when the cash
-  limit is exceeded (`DOCUMENTED`).
+- **Lifecycle** — toggled by the rider; the automatic cash-limit block is
+  **dormant in Phase 1** because COD is disabled (**DEC-016**) — no rider holds
+  platform cash, so nothing can exceed a limit.
 - **Security** — 🔴 **the most privacy-sensitive entity in the system.**
   Continuous location. Retention and access require a lawful basis before
   storage (Q-012). Customers see rider location **only during their own active
   delivery**.
 
-#### `RiderCashBalance`
+#### `RiderCashBalance` — **dormant in Phase 1**
 - **Purpose** — how much platform money the rider is currently holding.
+- **Phase 1** — **unused. COD is disabled (DEC-016)**, so no rider ever holds
+  cash. Retained because the model must stay extensible and because **DEC-004
+  and REQ-001 remain ACCEPTED**: the moment COD returns, collected cash is a
+  liability, never income, and must be displayed as a separate number.
 - **Key fields** — rider id, outstanding cash (satang), last remittance at.
-- **Lifecycle** — increases on cash collection, decreases on remittance or
-  netting.
 - **Security** — rider reads own; **written only by the ledger/settlement
-  service.** `DOCUMENTED` DEC-004 / REQ-001: this is a **liability**, and must
-  never be displayed added to earnings.
+  service.**
+- **Deferred question** — BQ-023: the documented cash design has the rider
+  paying the merchant at pickup, fronting their own money. Unanswered, and it
+  returns with COD.
 
-### 4.6 Payment
+### 5.6 Payment
 
 Detailed in [`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md); summarised here for
 completeness.
 
 | Entity | Purpose | Key point |
 |---|---|---|
-| `Payment` | One payment intent per order | Holds the canonical payment state (CON-001 keeps it out of `Order`) |
-| `PaymentAttempt` | One try — one QR, one expiry | A regenerated QR is a **new attempt on the same payment**, not a new payment |
-| `PaymentMethod` | Enum: `PROMPTPAY_QR`, `CASH` | No wallet, no cards in Phase 1 (`DOCUMENTED`) |
-| `PaymentTransaction` | A movement the provider reports | Immutable |
-| `PaymentWebhookEvent` | Raw inbound webhook + verification result | The **idempotency anchor** (REQ-003); stored before processing |
-| `Refund` | A refund request against a payment | Own state machine |
+| `Payment` | One payment intent per order | Holds the canonical payment state (DEC-018 keeps it out of `Order`) |
+| `PaymentAttempt` | One try — one QR, one expiry | A regenerated QR is a **new attempt on the same payment**, not a new payment. Attempts retain identity after expiry so a late payment can be resolved (**DEC-029**) |
+| `PaymentMethod` | **Extensible enum.** Phase 1: online only; `CASH` retained and disabled | **DEC-016** — COD must not be hard-coded as permanently unsupported |
+| `PaymentTransaction` | A movement the provider reports | Immutable. Matched against the order's authoritative value — a surplus is a refund obligation, never extra order value (**DEC-030**) |
+| `PaymentWebhookEvent` | Raw inbound webhook + verification result | The **idempotency anchor** (**DEC-028** / REQ-003); stored before processing |
+| `Refund` | A refund request against a payment | Own state machine. **`REFUNDED` is never an order status** (**DEC-027**) |
 | `RefundTransaction` | A movement executed for a refund | Immutable |
 
 **Owner: BANHAO.** Write access: the payment service only; `SUCCESS` and
 `REFUNDED` reachable **only** from a signature-verified webhook (CON-002).
+Idempotency keys — `order_id`, `payment_reference`, `idempotency_key` — are
+required on every operation (**DEC-028**).
 
-### 4.7 Money and settlement
+### 5.7 Money and settlement
 
 #### `LedgerEntry`
 - **Purpose** — the financial system of record (DEC-014).
@@ -364,20 +444,26 @@ completeness.
   idempotency key, created_at.
 - **Lifecycle** — **append-only.** Never updated, never deleted; a correction is
   a reversing entry.
-- **Invariant** — `DOCUMENTED` CON-003: the entries for one order sum to exactly
+- **Invariant** — `ACCEPTED` CON-003: the entries for one order sum to exactly
   zero.
 - **Security** — written only inside the transaction that causes the money to
   move; read by admin and, in aggregate, by the party concerned.
 
 #### `Settlement` · `SettlementItem`
 - **Purpose** — a transfer round (`รอบโอน`) paying a merchant or rider.
+  **`ACCEPTED` as a separate financial domain — DEC-026.**
 - **Key fields** — payee type and id, period start/end, gross, fees, cash
-  netting, net amount (satang), state, bank account reference, executed_at,
-  failure reason.
-- **Lifecycle** — [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md).
-- **Security** — payee reads own; settlement engine and admin write.
+  netting (dormant in Phase 1), net amount (satang), state, bank account
+  reference, executed_at, failure reason.
+- **Lifecycle** — `ACCRUING → PENDING → PROCESSING → PAID`, with `FAILED →
+  PENDING` on retry. Detail: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md).
+- **Reads the ledger, not the order table.**
+- **Security** — payee reads own; settlement engine and operator write.
+- **Status** — ⛔ **IMPLEMENTATION NOT STARTED and blocked.** DEC-026 accepts
+  the domain, not the build. Every amount in it is still `OPEN` (DEC-023,
+  DEC-024, DEC-025), and Q-002 is `LEGAL_REVIEW_REQUIRED`.
 
-### 4.8 Promotion
+### 5.8 Promotion
 
 #### `Promotion` · `Coupon` · `CouponRedemption`
 - **Purpose** — discounts and subsidies.
@@ -391,7 +477,7 @@ completeness.
 - **Status** — `OPEN`, BQ-030. **The funder field is not optional**: without it
   the ledger cannot balance a discounted order.
 
-### 4.9 Interaction
+### 5.9 Interaction
 
 #### `Rating`
 - Purpose: customer feedback on a restaurant **and, separately, on a rider**.
@@ -410,7 +496,7 @@ completeness.
   (`OPEN → IN_PROGRESS → RESOLVED → CLOSED`), assigned admin, resolution,
   linked refund. Reporter and admin read. `OPEN`, BQ-037.
 
-### 4.10 Geography
+### 5.10 Geography
 
 #### `ServiceArea` · `Zone` · `DeliveryFeeBand`
 - **Purpose** — make expansion configuration rather than a release.
@@ -424,9 +510,9 @@ completeness.
 
 ---
 
-## 5. Phase genericity
+## 6. Phase genericity
 
-`DOCUMENTED` — `docs/05-architecture` § 06 SCALING. The same core entities carry
+`ACCEPTED` — `docs/05-architecture` § 06 SCALING. The same core entities carry
 across all four phases; only the display layer and a pricing formula change.
 
 | Core entity | Phase 1 Food | Phase 2 Parcel | Phase 3 Ride | Phase 4 Shopping |
@@ -451,29 +537,36 @@ Two consequences for this model:
 
 ---
 
-## 6. Where the model already exists in code
+## 7. Where the model already exists in code
 
 | Concept | Where | Reality |
 |---|---|---|
 | `Profile`, roles, RLS | `supabase/migrations/`, live | **Real and verified** — 14/14 live RLS checks |
-| `OrderState`, `PaymentState` unions | `apps/customer/src/mocks/types.ts` | Types only, matching the documented 12+12 states, deliberately kept apart per CON-001 |
+| `OrderState`, `PaymentState` unions | `apps/customer/src/mocks/types.ts` | ⚠️ **Now diverges from DEC-019.** Encodes the superseded 12 order states (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) |
+| Cash payment UI | `apps/customer` checkout (screen 10) | ⚠️ **Now contradicts DEC-016.** A cash option and cash-prepared-amount selector are live in the app |
 | `Shop`, `MenuItem`, `Address`, `CartLine` | same file | Mock shapes for the UI; the file itself notes they belong in `@banhao/types` once a backend contract exists |
 | `Satang`, `Money` | `packages/types` | Integer money, in use |
-| `PaymentProvider` interface | `apps/api/src/modules/payments/` | Abstraction only; `NullPaymentProvider` throws by design |
+| `PaymentProvider` interface | `apps/api/src/modules/payments/` | Abstraction only; already carries `idempotencyKey` per DEC-028. `NullPaymentProvider` throws by design |
 | Everything else | — | **Does not exist** |
 
+**Two known divergences were created by the 2026-08-10 decision lock** (rows
+marked ⚠️). No code was changed in that step, deliberately — reconciling the
+Customer App with DEC-016 and DEC-019 is follow-up work for an implementation
+phase, and it needs the exception state names settled first.
+
 Promoting the mock types into `@banhao/types` is the natural first implementation
-step **after** this model is accepted — not before.
+step **after** the entity shapes are accepted — not before.
 
 ---
 
-## 7. What this model deliberately does not include
+## 8. What this model deliberately does not include
 
 | Not modelled | Why |
 |---|---|
+| **Cash on Delivery** | **Disabled in Phase 1 — DEC-016.** *Modelled but dormant*, never removed: `payment_method` stays extensible, `CASH_PENDING`/`CASH_COLLECTED` and `RiderCashBalance` remain in the model, and DEC-004 / REQ-001 stay ACCEPTED |
 | Wallet / stored value | Explicitly out of the launch scope; would raise an e-money question (Q-002) |
 | Scheduled or pre-orders | Lengthens the core path — CON-004 |
-| Multi-merchant orders | BQ-010; recommended against for Phase 1 |
+| Multi-merchant orders | **Excluded by DEC-017** — one cart, one restaurant |
 | Loyalty points | Not in the design |
 | Chat between customer and rider | The design shows a chat icon, but no chat model is documented; treat as `OPEN` if it is real |
 | Inventory / stock counts | Phase 4 concern; `is_available` is enough for food |

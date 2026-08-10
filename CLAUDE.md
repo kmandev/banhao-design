@@ -37,8 +37,9 @@ Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 ## 3. Current branch
 
 ```
-feature/business-rules   ← YOU ARE HERE — branched from main @ 9a60277e
-                            documentation only, awaiting Product Owner review
+feature/p0-decisions-v1  ← YOU ARE HERE — DEC-016…DEC-032 locked, PUSHED
+                            documentation only, NOT merged to main
+feature/business-rules      EVENT-013 business rules, PUSHED
 main @ 9a60277e             feature/supabase-customer-auth merged, PUSHED
 ```
 
@@ -63,7 +64,8 @@ should branch from `main`, not from either of them.**
 | EVENT-010 | Supabase dev project + live customer auth verification |
 | EVENT-011 | DEF-01…DEF-05 fixed, re-verified; visual QA 31/31 |
 | EVENT-012 | Reviewed and merged to `main` |
-| **EVENT-013** | **Business Rules & Domain Model — 7 documents, 39 open business questions, no code** (this update) |
+| EVENT-013 | Business Rules & Domain Model — 7 documents, 39 open business questions, no code |
+| **EVENT-014** | **P0 Business Decisions v1 approved — DEC-016…DEC-032 locked, no code** (this update) |
 
 ## 5. Current implementation status
 
@@ -82,12 +84,25 @@ should branch from `main`, not from either of them.**
 **No business logic exists.** No order creation, payment integration, dispatch,
 or settlement. That is intentional, not an omission.
 
-**The business rules are now written down but not approved** (EVENT-013).
-`docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`,
-`RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md` and
-`OPEN_BUSINESS_QUESTIONS.md` tag every rule `DOCUMENTED` (accepted product
-truth), `PROPOSED` (unapproved analysis) or `OPEN`. **Build only on
-`DOCUMENTED`.** 39 business questions (BQ-001…BQ-039) are open, 15 of them P0.
+**The business rules are written down, and their P0 decisions are approved**
+(EVENT-014, **DEC-016…DEC-032**). The seven business documents tag every rule
+`ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with
+`ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections.
+**Build only on `ACCEPTED`.** 8 P0 business questions remain, down from 15 —
+and every one of them is a number, a provider, or a legal question.
+
+Decisions that change how anything gets built:
+
+| | |
+|---|---|
+| **DEC-016** | **Phase 1 is online payment only. COD is disabled** — but `payment_method` must stay extensible, and DEC-004 / REQ-001 stay accepted for when COD returns |
+| **DEC-017** | One cart = one restaurant |
+| **DEC-018** | **Order, Payment, Delivery, Settlement are four separate state domains.** No mega-enum |
+| **DEC-019** | New Order lifecycle: `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with `PREPARING` ∥ `RIDER_SEARCHING`. **Supersedes the design canvas's 12 states** |
+| **DEC-020/021/022** | Broadcast → first accept from `MERCHANT_ACCEPTED`; rider cancellation reassigns and never cancels the order; no-rider escalates to an operator and never auto-cancels |
+| **DEC-023/024/025** | Delivery fee, service fee and commission — **models accepted, every number still OPEN** |
+| **DEC-026…030** | Settlement is its own domain; refund lives in payment; idempotency, late payment and duplicate-payment protection required |
+| **DEC-031/032** | Manual operations and operator fallback are intentional Phase 1 capabilities. **No Admin App yet** |
 
 **All 31 Customer states are verified by screenshot** and all five defects
 found in review (DEF-01…DEF-05) are fixed and re-verified on device — see
@@ -197,10 +212,10 @@ terminate/relaunch Expo Go — reloading is not enough.
 
 ## 9. Next steps
 
-0. **Review the 15 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`.** They block
-   Order, Payment and Settlement outright. Two of them are contradictions
-   between accepted documents (BQ-012, BQ-014) and cannot be resolved by an
-   agent.
+0. **Answer the remaining 8 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
+   Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-026, BQ-027, BQ-030. All the
+   structural questions are answered; what is left is numbers, the provider, and
+   legal.
 1. Close DQ-01…DQ-05 — all five are addressed by EVENT-013; see the DQ table in
    `docs/OPEN_BUSINESS_QUESTIONS.md`.
 2. Verify on an Android emulator — per-weight font families are untested there.
@@ -242,10 +257,14 @@ of this merge — check in before starting it.**
 - Every text style needs an explicit `fontFamily` — `fontSize` alone silently
   falls back to the system face.
 - Do not add a text style, dependency, or migration without a stated reason.
-- **Implement only rules tagged `DOCUMENTED`.** `PROPOSED` is analysis awaiting
+- **Implement only rules tagged `ACCEPTED`.** `PROPOSED` is analysis awaiting
   approval; `OPEN` means it is undecided and guessing is forbidden.
 - Sample figures are not rules: 10% commission, ฿15 delivery, ฿5 service and the
-  ฿10 `BANHAO7` coupon are all illustrative.
+  ฿10 `BANHAO7` coupon are all illustrative. **DEC-025 says so explicitly of the
+  10%.**
+- Do not enable cash payment (DEC-016) — and do not delete the cash model either.
+- Do not use the superseded order state names (`NEW`, `ACCEPTED`, `READY`,
+  `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work.
 
 **Open questions blocking real work:** Q-001 payment provider, Q-002 legal
 settlement model, Q-010 platform fee, Q-020 PromptPay refund mechanism (no
