@@ -465,3 +465,113 @@ provenance notes), `ai/KNOWLEDGE/CONSTRAINTS.md` and
 The status taxonomy across the business documents is now `ACCEPTED` /
 `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with the deliberate combination
 `ACCEPTED — MODEL · OPEN — NUMBERS` used throughout the money sections.
+
+---
+
+## EVENT-015
+
+```yaml
+id: EVENT-015
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/technical-architecture-v1
+confidence: HIGH
+```
+
+**Technical Architecture v1.** The architecture that implements the approved
+business decisions (DEC-016…DEC-032) was designed and written down.
+**Architecture only — no backend implementation, no migration, no Supabase
+table, no payment provider integration, no Merchant/Rider/Admin app.** The diff
+is documentation.
+
+Three documents produced: `docs/TECHNICAL_ARCHITECTURE.md` (22 sections),
+`docs/ARCHITECTURE_DECISIONS.md` (**ADR-001…ADR-012**, all `PROPOSED`), and
+`docs/OPEN_TECHNICAL_QUESTIONS.md` (**TQ-001…TQ-016**).
+
+**No business decision was created, changed or reversed**, and no `Q-NNN`,
+`BQ-NNN` or `DEC-NNN` was closed.
+
+### The architectural spine
+
+> **NestJS writes. Clients read. Postgres decides.**
+
+Domain tables grant **no `INSERT`/`UPDATE`/`DELETE` to `authenticated`** at all.
+Every mutation goes through NestJS on the service-role client, inside a
+transaction, guarded by the owning module's state machine. RLS is **defence in
+depth** — it stops a leaked anon key reading another party's rows — not the
+authorization system. This makes the security requirements structurally
+impossible to violate rather than merely forbidden: a customer cannot modify
+payment status because **no grant exists**.
+
+### The concurrency answer
+
+The universal primitive is a **guarded conditional UPDATE** — the state check
+lives in the `WHERE` clause, and the caller branches on rows-affected. Under
+`READ COMMITTED` the second writer blocks, re-evaluates against the committed
+row, and matches nothing. This gives exactly-one-winner with no distributed
+lock, no Redis, and no queue.
+
+- **Rider race** (DEC-020's broadcast makes this routine, not an edge case):
+  guarded update on `delivery`, plus a partial unique index allowing at most one
+  `ACCEPTED` `rider_assignment` per delivery as a database backstop. The loser
+  gets `409`; the same rider re-tapping gets an idempotent `200`.
+- **Webhook race:** `UNIQUE (provider, provider_event_id)` on the event, plus
+  `UNIQUE (entry_group_key)` on the ledger. Two transactions — TX1 records that
+  the event arrived, TX2 applies it — so a crash mid-processing cannot erase the
+  evidence. A sweeper retries anything left unprocessed.
+- **Merchant-accepts-vs-operator-cancels:** guards express the **set** of legal
+  source states, so both orderings resolve correctly and deterministically —
+  first commit wins, the loser receives `409` with the current state.
+
+**The prohibited pattern is named explicitly**: `SELECT` the state, check it in
+TypeScript, then `UPDATE`. That is check-then-act and both riders pass the check.
+
+### Money
+
+`bigint` satang in Postgres, branded `Satang` in TypeScript (it is currently a
+bare `number` alias, so a baht value type-checks as satang), rates as **integer
+basis points**, one rounding function — and the residual allocated to a
+component **computed last by subtraction**. That makes CON-003's zero-sum true
+*by construction* for any rate and any rounding, rather than something to
+reconcile afterwards. **No rate, fee or price was set** — DEC-023/024/025 keep
+every number `OPEN`.
+
+### Things deliberately not adopted
+
+No message broker (transactional outbox instead — a job can be enqueued in the
+same transaction as the state change that causes it). No Redis/BullMQ (Postgres
+`FOR UPDATE SKIP LOCKED` at ~1 job/minute, behind a `JobQueue` interface, with
+stated revisit triggers). No event sourcing, no CQRS, no microservices, no
+rider scoring or route optimisation (DEC-020 forbids), no `PATCH { state }`
+endpoints.
+
+### Existing code was reviewed, not redesigned
+
+`PaymentProvider` already encodes CON-002, DEC-028 and DEC-018 correctly and is
+**kept as written**. The two-client `SupabaseService` split and the module rules
+in `apps/api/src/modules/README.md` are extended, not replaced. The architecture
+adds one mechanism to payments: splitting webhook **ingest** from **processing**.
+
+### Findings worth carrying forward
+
+- **`Satang` is an unbranded `number`.** `bahtToSatang`'s input and output are
+  the same type to the compiler. Cheap to fix now (ADR-007).
+- **`refund()` on `PaymentProvider` is currently unsatisfiable.** Q-020 found no
+  provider supports native PromptPay refunds and DEC-016 removed the cash
+  fallback. If Q-020 resolves out-of-band, refund should move off
+  `PaymentProvider` rather than stay a lie in the interface (TQ-008).
+- **Three T0 questions block backend work** and none is about the provider:
+  TQ-011 (migration workflow — cheaper to agree before the first domain
+  migration than to retrofit across agent-written schema), TQ-012 (how
+  concurrency correctness is *proved* — the EVENT-007 precedent of verifying by
+  execution against real PostgreSQL applies), and TQ-008 (provider adapter,
+  gated on Q-001/Q-020).
+
+### AI maintainability
+
+Treated as a first-class requirement. Every module gets a fixed README header —
+**Owns / State / Governed by / Must NOT / Depends on / Migrations / Tests /
+Open** — with the `Open:` line as the load-bearing part: it tells an agent where
+the map ends, which is what stops it inventing a rate or timing the question
+register lists as undecided. Two rules an agent must not break: **a `DEC` beats
+an `ADR`**, and **`OPEN` means stop and ask**.

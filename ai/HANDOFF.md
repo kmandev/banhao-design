@@ -16,7 +16,13 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-**P0 Business Decisions v1 approved and locked (EVENT-014), on `feature/p0-decisions-v1`** — this update. The Product Owner approved a first tranche of business decisions in a workshop; they are now permanent decision records **DEC-016…DEC-032** in `docs/DECISIONS.md` (which also gained an index). **Documentation only — no code, no migration, no provider.**
+**Technical Architecture v1 (EVENT-015), on `feature/technical-architecture-v1`** — this update. The architecture implementing DEC-016…DEC-032 is designed and written down. **Architecture only — no backend, no migration, no Supabase table, no provider integration, no Merchant/Rider/Admin app.**
+
+Three documents: `docs/TECHNICAL_ARCHITECTURE.md` (22 sections), `docs/ARCHITECTURE_DECISIONS.md` (**ADR-001…ADR-012, all `PROPOSED`**), `docs/OPEN_TECHNICAL_QUESTIONS.md` (**TQ-001…TQ-016**). **No business decision changed; no question closed.**
+
+The spine is **"NestJS writes, clients read, Postgres decides"** — domain tables grant no write access to `authenticated` at all, and RLS is defence in depth rather than the authorization system. Concurrency everywhere is a **guarded conditional UPDATE** with the state check in the `WHERE` clause; the rider race additionally gets a partial unique index as a database backstop. Existing code (`PaymentProvider`, the two-client `SupabaseService`, the module rules) was reviewed and **kept**, not redesigned.
+
+Before that: **P0 Business Decisions v1 approved and locked (EVENT-014), on `feature/p0-decisions-v1`**. The Product Owner approved a first tranche of business decisions in a workshop; they are now permanent decision records **DEC-016…DEC-032** in `docs/DECISIONS.md` (which also gained an index). **Documentation only — no code, no migration, no provider.**
 
 The seven business documents were rewritten against those decisions, and the status taxonomy is now `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections. **Only `ACCEPTED` may be built on.**
 
@@ -30,11 +36,13 @@ Before that: Supabase dev environment + live Customer authentication (EVENT-010)
 
 ## Current Work
 
-`feature/p0-decisions-v1` (from `feature/business-rules`, from `main`) is pushed and **ready for architecture review**. Documentation only. **Not merged to `main`.**
+`feature/technical-architecture-v1` (from `feature/p0-decisions-v1`) is pushed and **ready for architecture review**. Documentation only. **Not merged to `main`.** Three branches are now stacked and unmerged: `feature/business-rules` → `feature/p0-decisions-v1` → `feature/technical-architecture-v1`.
 
 ## Immediate Next Step
 
-**Architecture review of the locked decisions**, then the remaining **8 P0 business questions** in `docs/OPEN_BUSINESS_QUESTIONS.md`: Q-001 (provider), Q-002 (legal), Q-010 / BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). Every one is a number, a provider, or a legal question — **all the structural questions are now answered.**
+**Architecture review of `docs/TECHNICAL_ARCHITECTURE.md` and ADR-001…ADR-012** (all `PROPOSED` — nothing may be built until they are accepted). Three technical questions are **T0 and block backend work**: **TQ-011** (migration workflow — agree it before the first domain migration, not after), **TQ-012** (how concurrency correctness is *proved* — the EVENT-007 precedent of verifying by execution against real PostgreSQL applies), and **TQ-008** (provider adapter, gated on Q-001/Q-020).
+
+Then the remaining **8 P0 business questions** in `docs/OPEN_BUSINESS_QUESTIONS.md`: Q-001 (provider), Q-002 (legal), Q-010 / BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). Every one is a number, a provider, or a legal question — **all the structural questions are now answered.**
 
 In parallel and unchanged: **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017, and now BQ-022 rider classification) still gates all payment work and has external lead time; DQ-01…DQ-05 need closing (all five are now addressed — see `OPEN_BUSINESS_QUESTIONS.md` § DQ table); Android is still unverified. Merchant, Driver, Admin, and any payment/order/dispatch code remain out of scope until the P0 decisions land — that is a new instruction to wait for, not something to infer from "the business rules are written."
 
@@ -124,6 +132,9 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
 - Do not implement anything tagged `PROPOSED` or `OPEN` in the business documents. **Only `ACCEPTED` is product truth**, and `ACCEPTED — MODEL · OPEN — NUMBERS` means you may not pick the number.
 - Do not enable cash payment anywhere — DEC-016 disables COD in Phase 1. Equally, **do not delete the cash model**: `payment_method` must stay extensible, and DEC-004 / REQ-001 remain accepted.
+- Do not implement anything tagged `PROPOSED` in the technical documents either — **every ADR is `PROPOSED`**, and `TQ-NNN` items must not be turned into assumptions.
+- Do not write `SELECT`-then-check-then-`UPDATE` on any guarded table. The state check goes in the `WHERE` clause (ADR-003) — check-then-act lets two riders both win.
+- Do not add a client write grant on a domain table. Mutations go through NestJS (ADR-001/ADR-002).
 - Do not use the old order state names (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work — DEC-019 supersedes them.
 - Do not treat the design's sample figures as business rules — 10% commission, ฿15 delivery, ฿5 service, ฿10 coupon are all illustrative, and the payment canvas says so about itself.
 

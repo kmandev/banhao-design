@@ -37,11 +37,14 @@ Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 ## 3. Current branch
 
 ```
-feature/p0-decisions-v1  ← YOU ARE HERE — DEC-016…DEC-032 locked, PUSHED
-                            documentation only, NOT merged to main
-feature/business-rules      EVENT-013 business rules, PUSHED
-main @ 9a60277e             feature/supabase-customer-auth merged, PUSHED
+feature/technical-architecture-v1  ← YOU ARE HERE — ADR-001…012, TQ-001…016
+                                      documentation only, NOT merged to main
+feature/p0-decisions-v1               DEC-016…DEC-032 locked, PUSHED
+feature/business-rules                EVENT-013 business rules, PUSHED
+main @ 9a60277e                       supabase-customer-auth merged, PUSHED
 ```
+
+Three branches are stacked and unmerged. Each builds on the previous one.
 
 `feature/supabase-customer-auth` (which already contained everything from
 `feature/customer-app`) was reviewed by the Product Owner and merged into `main`
@@ -65,7 +68,8 @@ should branch from `main`, not from either of them.**
 | EVENT-011 | DEF-01…DEF-05 fixed, re-verified; visual QA 31/31 |
 | EVENT-012 | Reviewed and merged to `main` |
 | EVENT-013 | Business Rules & Domain Model — 7 documents, 39 open business questions, no code |
-| **EVENT-014** | **P0 Business Decisions v1 approved — DEC-016…DEC-032 locked, no code** (this update) |
+| EVENT-014 | P0 Business Decisions v1 approved — DEC-016…DEC-032 locked, no code |
+| **EVENT-015** | **Technical Architecture v1 — ADR-001…012, TQ-001…016, no code** (this update) |
 
 ## 5. Current implementation status
 
@@ -104,6 +108,13 @@ Decisions that change how anything gets built:
 | **DEC-026…030** | Settlement is its own domain; refund lives in payment; idempotency, late payment and duplicate-payment protection required |
 | **DEC-031/032** | Manual operations and operator fallback are intentional Phase 1 capabilities. **No Admin App yet** |
 
+**The technical architecture is designed but not approved** (EVENT-015,
+**ADR-001…ADR-012, every one `PROPOSED`**). Spine: **NestJS writes, clients
+read, Postgres decides** — domain tables grant no write access to
+`authenticated`, and RLS is defence in depth, not authorization. Concurrency is
+a guarded conditional `UPDATE` with the state check in the `WHERE` clause.
+Three `T0` technical questions block backend work: TQ-008, TQ-011, TQ-012.
+
 **All 31 Customer states are verified by screenshot** and all five defects
 found in review (DEF-01…DEF-05) are fixed and re-verified on device — see
 §8 and `docs/CUSTOMER_APP_VISUAL_QA.md`.
@@ -141,6 +152,10 @@ docs/RIDER_LIFECYCLE.md           dispatch models, no-rider ladder, cash
 docs/PAYMENT_LIFECYCLE.md         payment/refund states, idempotency, PromptPay
 docs/SETTLEMENT_MODEL.md          ledger accounts, worked examples, payouts
 docs/OPEN_BUSINESS_QUESTIONS.md   BQ-001…BQ-039 — read before any domain work
+
+docs/TECHNICAL_ARCHITECTURE.md    how the decisions get built (PROPOSED)
+docs/ARCHITECTURE_DECISIONS.md    ADR-001…ADR-012, all PROPOSED
+docs/OPEN_TECHNICAL_QUESTIONS.md  TQ-001…TQ-016 — read before backend work
 ```
 
 ## 7. Database / Supabase status
@@ -265,6 +280,10 @@ of this merge — check in before starting it.**
 - Do not enable cash payment (DEC-016) — and do not delete the cash model either.
 - Do not use the superseded order state names (`NEW`, `ACCEPTED`, `READY`,
   `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work.
+- **Every ADR is `PROPOSED`** — the architecture is not approved, so do not
+  start implementing it. A `DEC-` always beats an `ADR-`.
+- Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
+  in the `WHERE` clause (ADR-003).
 
 **Open questions blocking real work:** Q-001 payment provider, Q-002 legal
 settlement model, Q-010 platform fee, Q-020 PromptPay refund mechanism (no

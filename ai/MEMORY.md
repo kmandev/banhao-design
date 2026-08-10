@@ -54,11 +54,21 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-14 events logged, EVENT-001 through EVENT-014 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → **P0 Business Decisions v1 approved**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+15 events logged, EVENT-001 through EVENT-015 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → P0 Business Decisions v1 approved → **Technical Architecture v1**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Business Rules
 
 The business layer is documented, and **its P0 decisions are now approved** (EVENT-014, DEC-016…DEC-032): [`docs/BUSINESS_RULES.md`](../docs/BUSINESS_RULES.md), [`docs/DOMAIN_MODEL.md`](../docs/DOMAIN_MODEL.md), [`docs/ORDER_LIFECYCLE.md`](../docs/ORDER_LIFECYCLE.md), [`docs/RIDER_LIFECYCLE.md`](../docs/RIDER_LIFECYCLE.md), [`docs/PAYMENT_LIFECYCLE.md`](../docs/PAYMENT_LIFECYCLE.md), [`docs/SETTLEMENT_MODEL.md`](../docs/SETTLEMENT_MODEL.md). Every rule is tagged `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections. **Only `ACCEPTED` may be built on.** The two worst contradictions found in EVENT-013 are now resolved by DEC-019 and DEC-022. **Every price, rate and fee remains `OPEN`**, and no payment provider is selected.
+
+## Technical Architecture
+
+**Designed, not built** (EVENT-015, 2026-08-11): [`docs/TECHNICAL_ARCHITECTURE.md`](../docs/TECHNICAL_ARCHITECTURE.md) · [`docs/ARCHITECTURE_DECISIONS.md`](../docs/ARCHITECTURE_DECISIONS.md) (**ADR-001…ADR-012, all `PROPOSED`**) · [`docs/OPEN_TECHNICAL_QUESTIONS.md`](../docs/OPEN_TECHNICAL_QUESTIONS.md) (**TQ-001…TQ-016**).
+
+The spine: **NestJS writes, clients read, Postgres decides.** Domain tables grant no `INSERT`/`UPDATE`/`DELETE` to `authenticated`; every mutation goes through NestJS on the service-role client inside a transaction, guarded by the owning module's state machine. RLS is defence in depth, not the authorization system.
+
+Concurrency is a **guarded conditional UPDATE** — the state check lives in the `WHERE` clause, branch on rows-affected. **Never `SELECT`-then-check-then-`UPDATE`**; that is check-then-act and two riders both pass the check. Money is `bigint` satang with the rounding residual allocated by subtraction, so CON-003 holds by construction.
+
+**A `DEC-` beats an `ADR-`.** ADRs are technical and subordinate; if they appear to conflict, the business decision wins and the ADR is a bug.
 
 ## Important Architecture Rules
 
@@ -68,14 +78,16 @@ The business layer is documented, and **its P0 decisions are now approved** (EVE
 - All client surfaces read order status from one shared backend state — no local computation (REQ-002).
 - Domain model uses generic entities (Merchant, Product, Order, Delivery, Driver) to support future phases (REQ-004).
 
-Full architecture (state tables, diagrams): [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Cross-reference index: [`ai/KNOWLEDGE/ARCHITECTURE.md`](KNOWLEDGE/ARCHITECTURE.md).
+Full architecture (state tables, diagrams): [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) — **note its Order State Machine is superseded by DEC-019**; build from [`docs/ORDER_LIFECYCLE.md`](../docs/ORDER_LIFECYCLE.md) and [`docs/TECHNICAL_ARCHITECTURE.md`](../docs/TECHNICAL_ARCHITECTURE.md). Cross-reference index: [`ai/KNOWLEDGE/ARCHITECTURE.md`](KNOWLEDGE/ARCHITECTURE.md).
 
 ## Memory Sources
 
 | Layer | Location | Purpose |
 |---|---|---|
 | Fast context | `ai/HANDOFF.md`, `ai/MEMORY.md` (this file), `docs/AI_CONTEXT.md` | Read first, every session |
-| Task context | `docs/CURRENT_STATUS.md`, `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/ROADMAP.md` | Read before working on something specific |
+| Task context | `docs/CURRENT_STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/ROADMAP.md` | Read before working on something specific |
+| Business truth | `docs/BUSINESS_RULES.md` + the six companion docs | **Before any domain work.** Only `ACCEPTED` may be built on |
+| Technical truth | `docs/TECHNICAL_ARCHITECTURE.md`, `docs/ARCHITECTURE_DECISIONS.md`, `docs/OPEN_TECHNICAL_QUESTIONS.md` | **Before writing backend code** |
 | Structured knowledge | `ai/KNOWLEDGE/*.md` | Typed, ID'd, cross-referenceable facts/requirements/constraints/etc. |
 | Historical context | `docs/PROJECT_HISTORY.md`, `ai/SESSION_LOG/`, `ai/CONVERSATIONS/` | Read when you need "why" or "when" |
 | Canonical design | `design/`, `specs/` | The actual product design, not a summary of it |

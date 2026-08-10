@@ -2,6 +2,23 @@
 
 > This is a detailed, dated development log for AI-memory purposes. For a shorter, release-facing summary see the root [`CHANGELOG.md`](../CHANGELOG.md) — the two are complementary, not duplicates: this file tracks documentation/process work in date-entry form as agents touch the repo; the root file tracks user-facing repository milestones.
 
+## 2026-08-11 — Technical Architecture v1
+
+### Added
+
+- `docs/TECHNICAL_ARCHITECTURE.md` — 22 sections covering component architecture, domain boundaries, data ownership, API boundaries, payment/delivery architecture, concurrency, idempotency, security, auditability, notifications, background jobs, operator operations, layer responsibilities, AI maintainability, scaling and open decisions.
+- `docs/ARCHITECTURE_DECISIONS.md` — **ADR-001…ADR-012, all `PROPOSED`**. A separate namespace from `DEC-NNN`, with an explicit precedence rule: a `DEC` beats an `ADR`. Product/stack decisions already recorded (DEC-009/010/011/013/014/015/018/020/028/030) are listed as inherited constraints rather than duplicated as ADRs.
+- `docs/OPEN_TECHNICAL_QUESTIONS.md` — **TQ-001…TQ-016**, priorities T0/T1/T2, several gated on a `Q-NNN`.
+- `ai/KNOWLEDGE/EVENTS.md` — EVENT-015.
+
+### Changed
+
+- `ai/MEMORY.md`, `ai/HANDOFF.md`, `CLAUDE.md`, `docs/CURRENT_STATUS.md` — updated for EVENT-015, including new "do not" rules: never `SELECT`-then-check-then-`UPDATE` a guarded table, and never add a client write grant on a domain table.
+
+### Not done, deliberately
+
+No backend implementation, no SQL or Supabase migration, no table/index/RLS policy/trigger/function, no payment provider integration, no Merchant/Rider/Admin app. **No business decision created, changed or reversed; no `Q-NNN`, `BQ-NNN` or `DEC-NNN` closed.** No price, rate, provider or legal structure decided.
+
 ## 2026-08-10 (2) — P0 Decision Lock v1
 
 ### Added

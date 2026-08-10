@@ -183,6 +183,22 @@ Two decisions change Phase 1 materially: **DEC-016** disables Cash on Delivery
 (online payment only, but the cash model stays extensible), and **DEC-019**
 replaces the Order state machine documented in 2026-08-09.
 
+## Technical Architecture Status
+
+**Designed, not approved, not built** (EVENT-015, 2026-08-11, branch
+`feature/technical-architecture-v1`):
+[`TECHNICAL_ARCHITECTURE.md`](TECHNICAL_ARCHITECTURE.md),
+[`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md) (ADR-001…ADR-012),
+[`OPEN_TECHNICAL_QUESTIONS.md`](OPEN_TECHNICAL_QUESTIONS.md) (TQ-001…TQ-016).
+
+**Every ADR is `PROPOSED`.** No backend, migration, Supabase table, or provider
+integration was created. Existing code (`PaymentProvider`, the two-client
+`SupabaseService`, module rules) was reviewed and kept, not redesigned.
+
+Three `T0` technical questions block backend work: **TQ-011** (migration
+workflow), **TQ-012** (proving concurrency correctness), **TQ-008** (provider
+adapter, gated on Q-001/Q-020).
+
 ## Current Blockers
 
 Product-level, not technical. **8 P0 business decisions remain, down from 15** —
