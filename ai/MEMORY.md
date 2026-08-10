@@ -8,7 +8,9 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 ## Current Reality
 
-**Application foundation exists and works** (branch `feature/app-foundation`): pnpm/Turborepo monorepo, NestJS API with auth + RBAC, Supabase migrations with RLS, five shared packages, four minimal app shells, Docker, CI. No product features are implemented yet — deliberately. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md).
+Foundation is merged to `main`. **Customer App UI is implemented** on branch `feature/customer-app`: all 31 design states (18 numbered screens + 7 payment sub-states + 6 state variants), design tokens, shared RN components, 4-tab navigation, Supabase auth + profile. Everything except auth and `profiles` is mock-backed — no order, payment, dispatch, or settlement logic exists. Full detail: [`docs/CURRENT_STATUS.md`](../docs/CURRENT_STATUS.md) and [`docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`](../docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md).
+
+A **live dev Supabase project (`banhao-dev`)** now exists, and on `feature/supabase-customer-auth` **authentication is verified end-to-end against it** — real OTP sign-in and resend, session persistence, profile read/write under RLS, logout — with **31 / 31 states verified by screenshot** and **14 / 14 live RLS checks passing**. The five defects found in QA (DEF-01…DEF-05) are **all fixed and re-verified**. Setup and the Simulator HTTP/3 caveat: [`docs/SUPABASE_DEVELOPMENT.md`](../docs/SUPABASE_DEVELOPMENT.md); QA record: [`docs/CUSTOMER_APP_VISUAL_QA.md`](../docs/CUSTOMER_APP_VISUAL_QA.md). **Android remains UNVERIFIED.**
 
 ## Permanent Facts
 
@@ -34,7 +36,9 @@ BANHAO | บ้านเฮา — a Local Super App launching in อำเภ�
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
-- Review and merge the `feature/app-foundation` branch (P0) — review fixes applied, RLS verified by execution
+- Review `feature/customer-app` and `feature/supabase-customer-auth` (P0) — Customer App UI complete and auth verified live, awaiting review
+- Answer DQ-01…DQ-05 design questions in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` (P1)
+- Verify the app on Android — per-weight font families are untested there (P1)
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design
 - Decide payment provider/settlement model (P0)
@@ -48,7 +52,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-7 events logged, EVENT-001 through EVENT-007 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → **pre-merge review fixes**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+11 events logged, EVENT-001 through EVENT-011 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → **DEF-01…DEF-05 fixed**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Important Architecture Rules
 

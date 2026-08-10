@@ -2,15 +2,31 @@
   "name": "@banhao/ui",
   "version": "0.1.0",
   "private": true,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src --ext .ts",
-    "test": "echo \"@banhao/ui has no tests yet\" && exit 0"
+    "lint": "eslint src --ext .ts,.tsx",
+    "test": "jest --passWithNoTests"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-native": ">=0.76"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^12.9.0",
+    "@types/jest": "^29.5.14",
+    "@types/react": "~18.3.12",
+    "jest": "^29.7.0",
+    "jest-expo": "~52.0.2",
+    "react": "18.3.1",
+    "react-native": "0.76.5",
+    "react-test-renderer": "18.3.1",
     "typescript": "^5.7.2"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme": "./src/theme/tokens.ts"
   }
 }

@@ -2,88 +2,161 @@
 
 ## Last Updated
 
-2026-08-09
+2026-08-10
+
+> **Historical note.** Until 2026-08-09 this file correctly read *"No application
+> exists."* That is no longer true — the foundation is merged and the Customer
+> App is implemented. The earlier state is preserved in
+> [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) and in Git history; nothing has been
+> erased, only superseded.
 
 ## Overall Status
 
-**No application exists.** This repository contains product/UX design (interactive `.dc.html` canvases), architecture and payment documentation, and process scaffolding. Nothing described below as "designed" should be read as "built" — the two are tracked separately on purpose.
+**Application code exists and runs.** The foundation is merged to `main`; the
+Customer App is implemented and its authentication is verified against a live
+Supabase project. **No business logic exists** — no order creation, payment
+integration, dispatch, or settlement. That is deliberate, not an omission.
+
+Two branches are awaiting Product Owner review and are **not merged**:
+`feature/customer-app` and `feature/supabase-customer-auth`.
 
 ## Current Phase
 
-Phase 1 — Food Delivery. Design stage; implementation has not started.
+Phase 1 — Food Delivery. Customer App UI complete; backend is foundation-only.
 
 ## Working Features
 
-None. There is no running application, so nothing can be verified as "working" in the software sense.
+- **Customer App (React Native + Expo)** — all 31 design states; 4-tab
+  navigation; design tokens and shared components in `packages/ui`.
+- **Phone OTP authentication** against the live `banhao-dev` Supabase project —
+  request OTP, verify, resend, session persistence across app restart, logout.
+- **`profiles` read/write under RLS** — a customer can read only its own row and
+  write only `display_name`. Verified by execution, 14/14 checks.
+- **NestJS API foundation** — `GET /health`, `GET /api/v1/me`, global Supabase
+  JWT auth guard and RBAC role guard, OpenAPI.
+- **Monorepo tooling** — pnpm + Turborepo; lint, typecheck, test and build all
+  pass; GitHub Actions CI.
 
 ## Partially Working
 
-None.
+- **Payment screens (12, 12b–12h)** render every payment **state**, but no
+  provider is integrated (Q-001 `OPEN`, DEC-015). The QR is a labelled
+  placeholder and the state transitions on 12b are explicitly marked `จำลอง:`.
+  CON-002 means only a signature-verified provider webhook may ever confirm a
+  payment — a client screen must never decide it.
+- **Order tracking (14)** renders the status timeline, but the map is a labelled
+  placeholder pending a maps provider (Q-018).
 
 ## Mock / Placeholder
 
-- `design/customer/BANHAO Customer App.dc.html` — an interactive, click-through **design mockup** of 18 screens. It demonstrates UI states and copy, but has no real backend, no real orders, and no real payment processing behind it.
-- `design/tracking/tracking-map.html` — a Leaflet map prototype using hard-coded, explicitly-labeled mock coordinates (`ตัวอย่าง: อ.บุณฑริก … ข้อมูลจำลอง` — "example … simulated data" in the file's own comment). Not connected to any real location data.
-- Numeric examples throughout `docs/04-payment/BANHAO Payment Architecture.dc.html` (order totals, ledger splits) are explicitly labeled as design examples ("ข้อมูลตัวเลขทั้งหมดในเอกสารเป็นข้อมูลตัวอย่างเพื่อการออกแบบ").
+- Everything except authentication and `profiles` is **mock-backed** through
+  `apps/customer/src/repositories/` — shops, menu, cart pricing, orders,
+  notifications, addresses. Mock data lives in `apps/customer/src/mocks/` and is
+  labelled `(ตัวอย่าง)` on screen.
+- `design/tracking/tracking-map.html` — Leaflet prototype with hard-coded mock
+  coordinates.
+- Numeric examples in `docs/04-payment/` are design examples, as that document
+  states itself.
 
 ## Not Implemented
 
-- Backend service / API of any kind
-- Database (no schema, no migrations, no ORM config anywhere in the repo)
-- Authentication / authorization
-- Payment provider integration
-- Driver App, Merchant Web, Admin Web (see per-surface status below)
-- Deployment, hosting, CI/CD (none configured)
-- Automated tests (none exist)
+- Order backend, dispatch, settlement, ledger
+- Payment provider integration and webhooks
+- Merchant, Driver and Admin apps (shells only)
+- Storage, Realtime, notifications
+- Production deployment (Docker + CI exist; nothing is hosted)
 
 ## Known Bugs
 
-None tracked. No code exists to have runtime bugs. Open **design-level** questions are tracked in [`TODO.md`](TODO.md), not here.
+Five defects were found during the 2026-08-10 QA pass and **all five are fixed**
+on `feature/supabase-customer-auth` — see
+[`CUSTOMER_APP_VISUAL_QA.md`](CUSTOMER_APP_VISUAL_QA.md) for DEF-01…DEF-05 and
+the evidence for each.
 
 ## Technical Debt
 
-- `support.js` (the design-canvas runtime) is intentionally duplicated 4× across `design/customer/`, `design/design-system/`, `docs/04-payment/`, `docs/05-architecture/` rather than shared from one location, to avoid rewriting `<script src>` paths inside the `.dc.html` files during the 2026-08-09 reorg. All 4 copies are currently identical (verified by checksum); if the runtime ever needs to change, all 4 must be updated together. See `CHANGELOG.md`.
+- `support.js` (the design-canvas runtime) is intentionally duplicated 4× — see
+  `CHANGELOG.md`. All copies must change together.
+- The iOS Simulator cannot hold an HTTP/3 connection to Supabase, so Simulator QA
+  runs through `scripts/sim-supabase-proxy.mjs`. This is an environment
+  limitation, not app code — see [`SUPABASE_DEVELOPMENT.md`](SUPABASE_DEVELOPMENT.md).
 
 ## Security Concerns
 
-UNKNOWN / NOT VERIFIED — no backend or auth exists yet to assess. Forward-looking requirement already documented: `docs/04-payment` specifies that payment webhooks must be signature-verified and processed idempotently once a backend exists (see `docs/ARCHITECTURE.md`).
+- **RLS is verified by execution**, not by reasoning: 14/14 live checks pass
+  (`supabase/tests/live-rls-check.mjs`). Role escalation, phone/id rewriting,
+  fabricated inserts and deletes are all rejected.
+- No secret is in Git. `apps/customer/.env` is gitignored, the mobile app holds
+  only the anon key, and `SUPABASE_SERVICE_ROLE_KEY` appears in no app, no
+  client-read `.env`, and no document.
+- Payment security is **not yet assessable** — no provider, no webhook.
 
 ## Deployment Status
 
-Not deployed. No hosting configuration, Dockerfile, or CI/CD pipeline exists in this repository.
+Not deployed. Dockerfile for the API and GitHub Actions CI exist; no hosting is
+configured (Q-009 open).
 
 ## Database Status
 
-Not started. No schema, no migration files, no database technology chosen.
+**Live.** Supabase project `banhao-dev` in `ap-southeast-1`, PostgreSQL + PostGIS,
+three migrations applied: extensions, `profiles` + roles, RLS hardening. Phone
+auth enabled with Supabase Test OTP (no SMS provider). Setup:
+[`SUPABASE_DEVELOPMENT.md`](SUPABASE_DEVELOPMENT.md).
 
 ## API Status
 
-Not started. `docs/06-api/README.md` is a TODO placeholder with no content.
+Foundation only — `/health` and `/api/v1/me`, with auth and role guards. No
+domain endpoints. The Customer App does not call it yet; it talks to Supabase
+directly for auth and `profiles`, and to mock repositories for everything else.
 
 ## Frontend Status
 
-Not started as an application. Only static, standalone design-canvas HTML files exist (see `design/`) — these are not a frontend app scaffold and share no code with a future real frontend.
+**Customer App implemented** — 31/31 design states in code, 31/31 verified by
+screenshot on iPhone 16 Pro. Merchant, Driver and Admin are Expo/Next.js shells
+with no screens.
 
 ## Admin Status
 
-Not designed beyond 3 wireframe-level screens inside the Product Architecture canvas: `A-02 Dashboard`, `A-03 Live Map`, `A-12 คิวอนุมัติ` (Approval Queue). See `docs/05-architecture/BANHAO Product Architecture.dc.html` section "05 — WIREFRAMES". No dedicated Admin design folder content exists yet (`design/admin/` is an empty placeholder).
+Shell only. Design not advanced beyond 3 wireframe-level screens in the Product
+Architecture canvas.
 
 ## Merchant Status
 
-Not designed beyond 1 wireframe-level screen: `M-05 จัดการออเดอร์ · Kanban` (Order Management Kanban), same source section. The design system additionally defines a reusable "Merchant Card" component. `design/merchant/` is an empty placeholder.
+Shell only. Design not advanced beyond 1 wireframe-level screen.
 
 ## Customer Status
 
-**Design complete for Phase 1** — 18-screen interactive canvas at `design/customer/BANHAO Customer App.dc.html`, covering splash through account settings, including PromptPay QR checkout. Not implemented in code.
+**Implemented and QA'd.** 31/31 states verified by screenshot; authentication
+verified end-to-end against the live project; money arithmetic checked. Five
+defects found and fixed. Android remains **UNVERIFIED**.
 
 ## Rider (Driver) Status
 
-Not designed beyond 4 wireframe-level screens: `D-03 หน้าแรกไรเดอร์` (Home), `D-05 งานใหม่เข้า` (New Job), `D-07 นำทาง` (Navigation/status changes), `D-13 รายได้` (Earnings). Same source section. Platform intention documented as "Mobile · Flutter" — not a confirmed implementation decision. `design/driver/` is an empty placeholder.
+Shell only. Design not advanced beyond 4 wireframe-level screens.
+
+## Explicitly UNVERIFIED
+
+Do not read the above as full verification. These have not been tested:
+
+- **Android** — no SDK or emulator on this machine, and it is the platform most
+  likely to differ on per-weight font families
+- **A physical iOS device**
+- **Real SMS delivery** — no provider configured (Q-019, ~2 week lead time)
+- **Keyboard avoidance**
+- State variants: empty cart, loading, network error, no driver
+- The search **results** list — the simulator cannot type Thai, and the mock
+  catalogue is Thai-only
 
 ## Current Blockers
 
-No technical blockers exist because no development has started. Product-level items block the *start* of development — see `docs/TODO.md` P0 list (payment provider/settlement model, backend stack, database technology all undecided).
+Product-level, not technical. `docs/TODO.md` P0: payment provider (Q-001),
+legal/settlement model (Q-002), platform fee (Q-010), PromptPay refund mechanism
+(Q-020). The Thai legal/compliance review has external lead time and gates all
+payment work.
 
 ## Immediate Next Step
 
-Resolve the P0 decisions in `docs/TODO.md` (payment provider, backend stack, database) — every other piece of Phase 1 design is complete enough to build from once those land.
+Product Owner review of `feature/customer-app` and
+`feature/supabase-customer-auth`. Then answer DQ-01…DQ-05 in
+[`CUSTOMER_APP_IMPLEMENTATION_MAP.md`](CUSTOMER_APP_IMPLEMENTATION_MAP.md) and
+verify the app on Android.

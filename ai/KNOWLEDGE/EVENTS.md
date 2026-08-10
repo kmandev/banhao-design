@@ -125,3 +125,112 @@ Migration `20260809000003_harden_profiles_rls.sql` adds three defence layers —
 13 executable assertions added (`supabase/tests/`), wired into CI. The suite was validated against a negative control with the hardening migration removed, where it correctly fails — an earlier draft passed in that control because its fixture re-applied the grants it claimed to verify.
 
 Customer screen count settled at **18**, verified by counting screen labels in the design canvas; only root `README.md` still said 17.
+
+---
+
+## EVENT-008
+
+```yaml
+id: EVENT-008
+type: EVENT
+date: 2026-08-09
+source: this session; branch feature/customer-app
+confidence: HIGH
+```
+
+**Customer App Implementation Started.** The Customer App UI was implemented in React Native + Expo from the design artifact, which was treated as the source of truth throughout.
+
+**Design audit finding:** the design registry contains **31 addressable states**, not 18 — 18 numbered screens (01–18), plus 7 payment sub-states (12b–12h, mapping onto the Payment State Machine), plus 6 state variants (loading, network error, shop closed, empty cart, no driver, cancelled). All 31 are implemented; the 18 numbered screens are the primary routes and the other 13 are states of them. Documented in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`.
+
+Built: design tokens extracted by frequency analysis of the artifact (`packages/ui/src/theme/tokens.ts`); shared RN components (Button, Card, Input, Badge, Avatar, Stepper, PriceRow, BottomBar, ShopCard, MenuRow, CategoryChip, ListRow, StateView, StatusTimeline); 4-tab navigation matching the design's own tab bar; Supabase auth with session persistence and a profile screen wired to the real `profiles` table under RLS; a repository layer with typed mock data behind swappable interfaces.
+
+**No business logic was implemented** — no order creation, payment integration, dispatch, or settlement. Everything outside authentication and `profiles` is mock-backed.
+
+Five `DESIGN_QUESTION` items (DQ-01…DQ-05) were recorded rather than guessed, covering the cash payment path, the duplicate-payment trigger, the refund entry point, address editing, and search ranking.
+
+Verified: 84 tests pass (33 customer, 14 UI component, 37 pre-existing); lint, typecheck, and build pass. The app was built and driven on an iPhone 16 Pro simulator — screens 01–03 confirmed visually; **04–18 were NOT visually verified** because no Supabase project is configured, recorded honestly in `docs/CUSTOMER_APP_VISUAL_QA.md`.
+
+Also fixed during this work: the monorepo now pins one React version (`pnpm.overrides`) after two `@types/react` majors collided, and `@banhao/ui` exposes framework-agnostic tokens on a `./theme` subpath so the Next.js admin does not bundle React Native.
+
+---
+
+## EVENT-009
+
+```yaml
+id: EVENT-009
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/customer-app
+confidence: HIGH
+```
+
+**Customer App final QA before merge.** The one MUST-FIX from review — IBM Plex Sans Thai not applied — is resolved.
+
+All four design weights (400/500/600/700) are now **bundled with the app** via `@expo-google-fonts/ibm-plex-sans-thai` + `expo-font`; Metro packages the TTF files at build time and nothing is fetched from Google at runtime. `App.tsx` holds the splash until fonts resolve, and falls through to the platform face if loading fails rather than hanging.
+
+Weights are selected by **family name**, not `fontWeight` — React Native registers each weight as a separate family and Android ignores `fontWeight` alongside a custom `fontFamily`. All 19 component and screen files were converted.
+
+**A false alarm was investigated and dismissed rather than reported.** At moderate zoom the heading "สั่งอาหารในบุณฑริก" appeared to be missing its ไม้เอก. Verified three ways — maximum-magnification crop of the running app, the bundled TTFs rendered in a browser at all four weights, and the same character combination at weight 400 in the app — all correct. The marks merge visually when downscaled. No defect exists; recorded so the next agent does not re-raise it.
+
+Visual QA: **4 / 31 states verified by screenshot** (01 Splash, 02 Onboarding, 03 Login, 04 OTP) on iPhone 16 Pro, with 03 also verified on iPhone SE. The remaining 22 screens and 6 state variants are **UNVERIFIED** — `RootNavigator` gates them behind a session and no Supabase project is configured. No fake session was created.
+
+Authentication: **NOT VERIFIED — Supabase environment not configured.**
+Android: **UNVERIFIED** — no Android SDK on this machine.
+
+84 tests pass; lint, typecheck and build pass. No MAJOR or BLOCKER differences among inspected screens.
+
+---
+
+## EVENT-010
+
+```yaml
+id: EVENT-010
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/supabase-customer-auth
+confidence: HIGH
+```
+
+**Supabase dev environment created and Customer authentication verified end-to-end for the first time.**
+
+A Free-tier project `banhao-dev` was created in `ap-southeast-1` (Singapore), migrations pushed, and **Phone auth enabled with Supabase Test OTP** — the official no-SMS development path. No custom OTP backend was built and no OTP is stored in our database. Anon-key-only credentials live in the gitignored `apps/customer/.env`; the service role key appears nowhere in the app, the repository, or any document.
+
+**Authentication is no longer `NOT VERIFIED`.** Against the live project: request OTP, reject a wrong OTP with the server's own error, verify a correct OTP, read the `profiles` row under RLS, update `display_name` (`204 PATCH`), survive a full app restart with the session intact, log out, and stay logged out across another restart — all confirmed by screenshot and request log. **No fake session was created at any point.**
+
+**Live RLS verification: 14 / 14 passed** (`supabase/tests/live-rls-check.mjs`), signing in through real GoTrue with the anon key and then attempting what a hostile client would. This is distinct from the plain-PostgreSQL shim suite, and `supabase/tests/README.md` now states which is which.
+
+**Visual QA moved from 4/31 to 29/31 states verified by screenshot.** Money arithmetic was checked rather than assumed — ฿170 + ฿15 + ฿5 − ฿10 = ฿180, carried through checkout, QR and payment detail without drift.
+
+Five defects were recorded rather than quietly fixed (DEF-01…DEF-05 in `docs/CUSTOMER_APP_VISUAL_QA.md`). One is MAJOR: **`PayExpired` (12e) is unreachable** — the QR screen counts down to zero and navigates nowhere, and nothing else routes to it. No BLOCKER.
+
+**An environment defect was diagnosed by measurement, not guesswork.** Every request to Supabase after the first failed with `Network request failed`. The Simulator's own log showed the requests had switched to QUIC after the first response advertised `alt-svc: h3`, then died with `NSURLErrorNetworkConnectionLost (-1005)`. `curl` inside the same Simulator runtime reached the host fine, and clearing Expo Go's `HTTPStorages` database bought exactly one more successful request. `scripts/sim-supabase-proxy.mjs` works around it by serving the Simulator plain HTTP and forwarding verbatim to the real project over HTTPS — a transport shim, not a mock. Documented in `docs/SUPABASE_DEVELOPMENT.md`.
+
+Still unverified: Android, a physical iOS device, real SMS delivery (Q-019), and the empty-cart / loading / network-error / no-driver state variants.
+
+---
+
+## EVENT-011
+
+```yaml
+id: EVENT-011
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/supabase-customer-auth
+confidence: HIGH
+```
+
+**Customer App defect fixes — DEF-01…DEF-05 closed.** The review of EVENT-010 returned PASS WITH FIXES. All five defects are fixed, tested, and re-verified by screenshot on device.
+
+**DEF-01 (MAJOR) — `PayExpired` (12e) was unreachable.** `PromptPayQrScreen` now `replace()`s to `PayExpired` when its TTL reaches zero; `replace` rather than `navigate` so Back cannot return to a dead QR. **No test hook and no shortened timer were added** — 12e was screenshotted by letting the real 600-second countdown run out. The transition decides nothing about money: CON-002 still means only a signature-verified provider webhook may confirm a payment, and the QR remains a labelled placeholder.
+
+**DEF-02 — `ขอรหัสใหม่` now resends.** It calls `requestOtp` on the existing auth layer rather than only resetting the countdown, and the countdown restarts **only on success**, so the UI never claims a code is coming when none was sent. Verified live: a second `200 POST /auth/v1/otp` reached Supabase. No custom OTP backend, no OTP stored, no OTP or token logged.
+
+**DEF-03** — explicit `headerBackTitle: 'กลับ'`; "Tabs" and "Back" no longer appear. **DEF-04** — the selected-state check is now drawn from two rotated borders instead of U+2713, which IBM Plex Sans Thai does not contain; no font dependency remains. **DEF-05** — `formatThaiPhone` presents `081 234 5678` per the design; the E.164 Auth identity and `profiles.phone` are untouched, and a client cannot write that column in any case.
+
+**Visual QA is now 31 / 31 states verified by screenshot.** 22 new tests (49 in the customer app, 16 in `packages/ui`); lint, typecheck, test and build all pass.
+
+Deliberately unchanged: no payment provider, no webhook, no order backend, no dispatch, no settlement. Q-001 stays `OPEN`.
+
+Still **UNVERIFIED**: Android, a physical iOS device, real SMS, keyboard avoidance, the search results list (the simulator cannot type Thai), and the empty-cart / loading / network-error / no-driver variants.
+
+Also corrected: `docs/CURRENT_STATUS.md` still said *"No application exists"* and *"implementation has not started"*, which had been false since 2026-08-09. It now describes the real state, with a historical note pointing at `PROJECT_HISTORY.md` rather than erasing the record.
