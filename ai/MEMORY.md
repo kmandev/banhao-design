@@ -39,7 +39,7 @@ Plus **39 business questions BQ-001…BQ-039** in [`docs/OPEN_BUSINESS_QUESTIONS
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
 - **Answer the remaining 8 P0 business questions in `docs/OPEN_BUSINESS_QUESTIONS.md` (P0)** — every one is a number, a provider, or a legal question; they still block Order, Payment and Settlement implementation
-- Close DQ-01…DQ-05 (P1) — all five are addressed by EVENT-013; DQ-01 and DQ-02 are answerable from existing documents, DQ-04/DQ-05 are superseded by BQ items
+- Close DQ-01…DQ-05 (P1) — all five are addressed. **DQ-01 is now moot** (DEC-016 disables COD; the cash checkout UI must be *disabled*, not designed); DQ-02 is formalised by DEC-030; DQ-03 is blocked on Q-020 and BQ-031; DQ-04/DQ-05 are superseded by BQ items
 - Verify the app on Android — per-weight font families are untested there (P1)
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design

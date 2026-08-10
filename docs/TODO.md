@@ -108,7 +108,8 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 > Kept for history. These five were given structured IDs (Q-001…Q-005) in
 > `ai/KNOWLEDGE/QUESTIONS.md`, which is canonical for them. Q-003 is now extended
 > by BQ-016 and Q-004 by BQ-034 — see
-> [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md).
+> [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md). **All five remain
+> genuinely open**; DEC-016…DEC-032 answered none of them.
 
 - [ ] Which payment provider(s) will BANHAO integrate with for PromptPay QR in Phase 1?
   - Source: `docs/04-payment`, closing note
@@ -119,7 +120,7 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 - [ ] What is the full refund policy, beyond the three rules already documented (auto-refund before `PREPARING`, shop-confirmed refund during `PREPARING`, support-center-only after `PICKED_UP`)?
   - Source: `docs/05-architecture`, section "03 — ORDER STATE MACHINE"
 
-- [ ] What exact cash-remittance limit triggers "stop assigning new jobs" for a driver?
+- [ ] What exact cash-remittance limit triggers "stop assigning new jobs" for a driver? — **DEFERRED with COD (DEC-016), not answered.** Not a Phase 1 blocker; returns when COD does.
   - Source: `docs/04-payment`, section "05 — DRIVER" (states a limit exists — "ถ้ายังมีเงินสดค้างนำส่งเกินวงเงินที่กำหนด" — but does not give the number)
 
 - [ ] What is the target timeline / launch date for Phase 1?

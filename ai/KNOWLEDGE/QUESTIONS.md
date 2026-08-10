@@ -98,9 +98,11 @@ source: docs/04-payment/BANHAO Payment Architecture.dc.html, section "05 — DRI
 
 **Why it matters:** The document states a limit exists ("ถ้ายังมีเงินสดค้างนำส่งเกินวงเงินที่กำหนด") but never gives the number.
 
-**Blocking:** Driver-app job-assignment logic.
+**Blocking:** Driver-app job-assignment logic. **Not blocking Phase 1 since 2026-08-10** — DEC-016 disables Cash on Delivery, so no rider holds cash and no limit can be crossed.
 
 **Candidates:** None documented in repository.
+
+**Status note (2026-08-10):** **DEFERRED with COD, not answered.** Stays `OPEN` — it returns unchanged the day COD is reintroduced. Related: BQ-023, BQ-033, BQ-034 in `docs/OPEN_BUSINESS_QUESTIONS.md`.
 
 **Decision:** TBD
 
@@ -242,7 +244,9 @@ source: ai/RESEARCH/MARKETPLACE_PAYMENT_MODEL.md; docs/04-payment ledger example
 
 **Blocking:** Ledger implementation, settlement engine, merchant/driver onboarding terms.
 
-**Candidates:** None documented in repository.
+**Candidates:** None documented in repository. Note the design's samples are internally consistent at 10% of the food subtotal, and the merchant screen states `10% ของยอดอาหาร` outright — **evidence of what the design assumed, not a rate.**
+
+**Status note (2026-08-10):** **Partly addressed — the question stays `OPEN`.** DEC-025 accepts the *model* (`Merchant → commission → BANHAO`) and **explicitly refuses** to let the 10% example become the rate by default. The **rate and the model shape** (percentage / fixed / hybrid / subscription) are both still undecided. Extended by BQ-028.
 
 **Decision:** TBD
 

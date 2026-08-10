@@ -73,6 +73,20 @@ Five defects were found during the 2026-08-10 QA pass and **all five are fixed
 and merged to `main`** — see [`CUSTOMER_APP_VISUAL_QA.md`](CUSTOMER_APP_VISUAL_QA.md)
 for DEF-01…DEF-05 and the evidence for each.
 
+## Code Diverging From Approved Decisions
+
+Not bugs — the code was correct when written, and the 2026-08-10 decision lock
+(EVENT-014) moved the target. **No code was changed in that step, deliberately.**
+Both are tracked as P1 in [`TODO.md`](TODO.md):
+
+| Divergence | Conflicts with |
+|---|---|
+| `apps/customer/src/mocks/types.ts` encodes the superseded 12 order states (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) | **DEC-019** |
+| Checkout (screen 10) still offers a cash option and a cash-prepared-amount selector | **DEC-016** — COD is disabled in Phase 1 |
+
+Reconciling the first needs the exception **state names** settled — they are
+still `PROPOSED`.
+
 ## Technical Debt
 
 - `support.js` (the design-canvas runtime) is intentionally duplicated 4× — see
@@ -150,8 +164,9 @@ Do not read the above as full verification. These have not been tested:
 ## Business Rules Status
 
 **Documented, and the P0 decisions are approved** (EVENT-014, 2026-08-10,
-branch `feature/p0-decisions-v1` — **DEC-016…DEC-032**, not merged to `main`). Seven documents describe how BANHAO works as a
-business: [`BUSINESS_RULES.md`](BUSINESS_RULES.md),
+branch `feature/p0-decisions-v1` — **DEC-016…DEC-032**, not merged to `main`).
+Seven documents describe how BANHAO works as a business:
+[`BUSINESS_RULES.md`](BUSINESS_RULES.md),
 [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md), [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md),
 [`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md),
 [`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md),
