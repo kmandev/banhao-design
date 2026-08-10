@@ -575,3 +575,44 @@ Open** — with the `Open:` line as the load-bearing part: it tells an agent whe
 the map ends, which is what stops it inventing a rate or timing the question
 register lists as undecided. Two rules an agent must not break: **a `DEC` beats
 an `ADR`**, and **`OPEN` means stop and ask**.
+
+### Architecture review, same day — 7 findings, all fixed
+
+The architecture was reviewed against the business record before allowing
+database work to begin. **No business decision changed; no code, no migration.**
+Verdict **PASS WITH FINDINGS**; all seven were documentation gaps in an
+unimplemented design, which is what a pre-implementation review is for.
+
+**HIGH — reassignment was impossible as specified.** The accept guard includes
+`AND rider_id IS NULL` and the backstop index is
+`UNIQUE (delivery_id) WHERE outcome = 'ACCEPTED'`. § 8.4 described the
+`RIDER_ASSIGNED → RIDER_REASSIGNING → RIDER_SEARCHING` path but never said that
+releasing a rider must **null `delivery.rider_id`** and **move the old
+`rider_assignment` out of `ACCEPTED`**. Without both, the delivery becomes
+permanently unassignable and **the constraint meant to protect DEC-020 blocks
+DEC-021**. Fixed with explicit release invariants (§ 8.5) and a note on ADR-003.
+
+**MEDIUM ×4:**
+- **No authoritative source of truth for assignment** — `delivery.rider_id` and
+  `rider_assignment` both recorded it. Now declared: `delivery` is
+  authoritative, `rider_assignment` is history and integrity backstop (§ 8.4).
+- **Riders had no read path to broadcast offers.** The RLS table omitted
+  `rider_assignment_attempt`, and a rider who has not accepted is not a party to
+  the order — so DEC-020's broadcast was unreadable. Added, with the narrow
+  offer-payload boundary made explicit.
+- **Surplus payment was unrecorded.** "A second payment creates a refund
+  obligation" said what to owe but not where the money goes. Without a
+  `payment_transaction` and a **distinct `entry_group_key`**, the uniqueness
+  backstop would reject the surplus and cash actually received would vanish from
+  the ledger. The rule is now stated: **a duplicate *event* must be ignored; a
+  duplicate *payment* must be recorded.**
+- **Late payment (DEC-029) had one sentence.** Now a routing path — identify
+  order, attempt, reference and current state, then queue a reconciliation case.
+  The guarded update already prevents resurrection of a cancelled order.
+
+**LOW ×2:** the module contract lacked `Owner`/`Inputs`/`Outputs`; the free-tier
+cost reality was unstated — a **long-running worker cannot run on Supabase
+free**, and PITR is paid. Both apply from the first real order, not at scale.
+
+TQ-012 now lists the seven invariants a concurrency suite must assert, including
+the two the review found unstated.

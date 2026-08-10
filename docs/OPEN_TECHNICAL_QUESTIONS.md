@@ -318,6 +318,22 @@ project already has the right precedent: EVENT-007 verified RLS **by execution
 against real PostgreSQL** rather than by reasoning, and that is exactly the
 standard this needs.
 
+**Invariants the suite must assert** — the 2026-08-11 architecture review found
+two of these unstated in the design, and both would have failed silently:
+
+1. N concurrent accepts on one delivery → **exactly one** winner; every loser
+   gets `409`; exactly one `rider_assignment` is `ACCEPTED`.
+2. The same rider re-accepting → idempotent `200`, not `409`.
+3. **After any release: `delivery.rider_id IS NULL` and zero `rider_assignment`
+   rows are `ACCEPTED`** — otherwise the delivery is permanently unassignable.
+4. Accept → release → accept by a *different* rider **succeeds**, proving the
+   backstop index does not block reassignment (DEC-021).
+5. Duplicate webhook → **one** ledger group. Duplicate *payment* → **two**
+   groups with distinct `entry_group_key`s. The two cases must not be conflated.
+6. Concurrent merchant-accept and operator-cancel → one deterministic outcome;
+   the loser sees the true current state.
+7. Every order's ledger group sums to zero after any sequence of the above.
+
 ---
 
 ## TQ-013 — Clock, timezone and timer reliability

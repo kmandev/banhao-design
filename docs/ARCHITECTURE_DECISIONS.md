@@ -189,6 +189,14 @@ unique indexes are added where the cost of failure is highest — notably at mos
 one `ACCEPTED` `rider_assignment` per delivery. Loser paths must return `409`
 with the current state, never a generic error.
 
+⚠️ **A backstop constrains the release path as much as the claim path.** With
+`UNIQUE (delivery_id) WHERE outcome = 'ACCEPTED'`, releasing a rider **must**
+move the old row out of `ACCEPTED` and null `delivery.rider_id` in the same
+transaction — otherwise reassignment (DEC-021) is blocked by the very constraint
+meant to protect it, and the delivery becomes permanently unassignable.
+Specified in `TECHNICAL_ARCHITECTURE.md` § 8.5; found by the 2026-08-11
+architecture review.
+
 ### Related
 
 DEC-019, DEC-020, DEC-021, DEC-022 · `TECHNICAL_ARCHITECTURE.md` § 11 · TQ-012

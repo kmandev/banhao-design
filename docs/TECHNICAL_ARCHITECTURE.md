@@ -329,6 +329,49 @@ If the process dies between TX1 and TX2, the event sits with `processed_at IS
 NULL` and the sweeper retries it. This is why webhook processing appears in the
 worker's list even though the happy path is inline.
 
+### 7.4 Late payment and surplus payment
+
+Two cases the schema must support. **Neither decides policy** — DEC-029's
+business handling and Q-020's refund mechanism are still `OPEN`. What follows is
+the *recording and routing* path only.
+
+**Late payment** (DEC-029) — money arrives after the attempt expired, possibly
+after the order was cancelled:
+
+| The system must identify | From |
+|---|---|
+| Which order | `payment.order_id` — the payment reference resolves for as long as the order exists |
+| Which attempt | `payment_transaction.payment_attempt_id`; attempts keep their identity after expiry (§ 7.1) |
+| Current order state | The order domain, read in the same transaction |
+| Where to route it | A `reconciliation_case` row with a **cause**, not an automatic state change |
+
+The guarded update does the safety work by itself: `WHERE state =
+'PENDING_PAYMENT'` matches nothing once the order is `CANCELLED`, so **a late
+payment can never resurrect a dead order**. The money is still recorded; the
+disposition is queued.
+
+**Surplus payment** — a second transaction succeeds against an already-`SUCCESS`
+payment (the customer pays an expired QR *and* the new one). DEC-030 fixes the
+outcome: order value must not increase. The recording path:
+
+1. `payment.state` stays `SUCCESS` — the guard finds no `PENDING` row. Correct,
+   and automatic.
+2. **The money is still recorded** as a `payment_transaction` against its
+   attempt. Omitting this is the trap: the ledger would under-report cash
+   actually received and reconciliation (`online received = total sales`) would
+   never balance.
+3. Ledger entries are written with a **distinct `entry_group_key`** — e.g.
+   `payment:<ref>:txn:<providerTxnId>` rather than `payment:<ref>` — otherwise
+   the uniqueness backstop rejects the surplus as a duplicate and the money
+   silently vanishes from the books.
+4. A `REFUND_PAYABLE` obligation is raised and a reconciliation case opened for
+   an operator (DEC-032).
+
+> The distinction that matters: **a duplicate *event* must be ignored; a
+> duplicate *payment* must be recorded.** Conflating them loses real money.
+> `UNIQUE (provider, provider_event_id)` handles the first; a per-transaction
+> ledger group handles the second.
+
 ---
 
 ## 8. Delivery domain
@@ -363,14 +406,65 @@ analysis in § 11.1. Summary: a **guarded conditional UPDATE** (compare-and-set)
 on the `delivery` row, plus a **partial unique index** on `rider_assignment` as
 a database-level backstop. No distributed lock, no queue, no advisory lock.
 
-### 8.4 Reassignment
+⚠️ That backstop index constrains **release** as much as accept — see § 8.5's
+reassignment invariants, without which DEC-021 cannot execute.
+
+### 8.4 Authoritative source of truth for assignment
+
+**`delivery.state` + `delivery.rider_id` is authoritative.** `rider_assignment`
+is the **history** of claims and the integrity backstop; it is never read to
+answer *"who is delivering this order right now?"*
+
+This must be stated because two tables record assignment, and a system with two
+answers to one question eventually gives two different answers. The rule:
+
+| Question | Read |
+|---|---|
+| Who is delivering this now? | `delivery.rider_id` |
+| Who has ever claimed this, and what happened? | `rider_assignment` |
+| Who was offered this, and did they respond? | `rider_assignment_attempt` |
+
+Both are written in the **same transaction**, so they cannot diverge.
+
+### 8.5 Reassignment
 
 `ACCEPTED` — DEC-021: `RIDER_ASSIGNED → RIDER_REASSIGNING → RIDER_SEARCHING →
 broadcast`. **The order does not move.** `RIDER_REASSIGNING` exists as a real
 state so operations can distinguish "never assigned" from "assigned and lost",
 and so `reassignment_count` is a queryable number rather than an inference.
 
-### 8.5 No rider
+#### Reassignment invariants — required for DEC-021 to work at all
+
+Releasing a rider is **not** just a state change. In one transaction it must
+also:
+
+1. **Null `delivery.rider_id`.** The accept guard in § 11.1 includes
+   `AND rider_id IS NULL`. If the departing rider's id is left in place, the
+   guard can never match again and **the delivery becomes permanently
+   unassignable.**
+2. **Move the previous `rider_assignment` out of `ACCEPTED`** — to `CANCELLED`
+   (rider withdrew) or `RELEASED` (operator force-unassigned), with a reason.
+   The backstop index is `UNIQUE (delivery_id) WHERE outcome = 'ACCEPTED'`, so
+   while the old row remains `ACCEPTED` **no other rider can insert a claim** and
+   reassignment is blocked by the very constraint meant to protect it.
+3. **Write a `delivery_status_event`** recording actor, from/to state and reason.
+
+```sql
+-- one transaction, guarded like every other transition
+UPDATE delivery
+   SET state = 'RIDER_SEARCHING', rider_id = NULL, reassignment_count = reassignment_count + 1
+ WHERE id = :deliveryId AND state IN ('RIDER_ASSIGNED', 'RIDER_REASSIGNING');
+
+UPDATE rider_assignment
+   SET outcome = :cancelledOrReleased, closed_at = now(), reason = :reason
+ WHERE delivery_id = :deliveryId AND outcome = 'ACCEPTED';
+```
+
+> **The invariant to test:** after any release, `delivery.rider_id IS NULL` **and**
+> zero `rider_assignment` rows for that delivery are `ACCEPTED`. A rider must not
+> remain logically assigned after reassignment (TQ-012).
+
+### 8.6 No rider
 
 `ACCEPTED` — DEC-022: `retry → manual dispatch → operator decision`. **There is
 no timeout that cancels anything.** Technically this means the dispatch job
@@ -674,7 +768,13 @@ Applied to the domain tables:
 | `profiles` | Own row | `display_name` only | Existing, live |
 | `restaurant`, `menu_*` | Public where active | **None** | Merchant edits go through the API |
 | `order`, `order_item` | Own orders (customer); own restaurant's (merchant); assigned delivery's (rider, limited columns) | **None** | Every transition is a command |
-| `delivery` | Parties to the order | **None** | DEC-020/021 need guarded updates |
+| `delivery` | Parties to the order **plus the currently assigned rider** | **None** | DEC-020/021 need guarded updates |
+| `rider_assignment_attempt` | **Own offers only** (`rider_id = auth.uid()`) | **None** | This is how a rider sees a broadcast offer. Without it DEC-020 has no read path |
+| `rider_assignment` | Own claims only | **None** | Claim history |
+| `cart`, `cart_item` | Own cart | **None** | |
+| `merchant`, `merchant_bank_account` | Own merchant only | **None** | Bank details never leave the API |
+| `notification` | Own notifications | **None** | |
+| `audit_log`, `outbox`, `job`, `idempotency_record` | **None** | **None** | Infrastructure. API/worker only |
 | `payment`, `refund`, `ledger_entry`, `settlement` | **None** | **None** | API-only. These rows contain other parties' amounts |
 | `rider_availability` | 🔴 API-only | **None** | Location. Q-012 |
 
@@ -686,6 +786,15 @@ Applied to the domain tables:
 
 Realtime subscriptions inherit RLS, so a Realtime feed can never expose more
 than the equivalent SELECT.
+
+**A rider's read path is deliberately narrow.** A rider who has not accepted is
+not a party to the order, so `delivery` is unreadable to them. They see a
+broadcast through their **own `rider_assignment_attempt` rows**, which carry only
+what the accept decision needs — pickup and dropoff areas, distances, earning,
+order value. Full customer details become readable only once the rider is
+assigned. This is a privacy boundary, not only an authorization one: at any
+moment most riders in the pool have been *offered* an order they will never
+deliver.
 
 ---
 
@@ -888,16 +997,26 @@ Every module carries a `README.md` with a fixed header:
 
 ```markdown
 # Module: orders
+Owner:       orders module (single owning service: OrderStateService)
 Owns:        order, order_item, order_item_option, order_status_event
 State:       Order (DEC-019)
+Inputs:      customer order commands; merchant transitions; PaymentSucceeded;
+             delivery progress events; operator commands
+Outputs:     OrderCreated / OrderPaid / OrderReady / OrderDelivered / OrderCancelled
+             (outbox); order_status_event (audit)
+Depends on:  catalog (read via service), payments (events), geo (fees)
 Governed by: DEC-017, DEC-018, DEC-019, DEC-022, DEC-027, REQ-002, CON-001
 Must NOT:    write payment/delivery/settlement tables; merge states;
-             use superseded state names; set a price
-Depends on:  catalog (read via service), payments (events), geo (fees)
+             use superseded state names; set a price; SELECT-then-UPDATE
 Migrations:  supabase/migrations/*_orders_*.sql
 Tests:       apps/api/src/modules/orders/**/*.spec.ts
+             (+ mandatory concurrency tests for guarded transitions — TQ-012)
 Open:        BQ-013, BQ-015, BQ-016, BQ-017 — do not guess
 ```
+
+`Inputs`/`Outputs` are what let an agent trace a change across modules without
+reading them all: **outputs are outbox events and audit rows, never direct
+writes into another module's tables.**
 
 The `Open:` line is the important one. It tells an agent where the map ends.
 
@@ -932,6 +1051,25 @@ the question register lists as undecided.
 ## 21. Future scaling
 
 Deliberately deferred, with the trigger that should reopen each:
+
+### 21.1 What the free tier does and does not cover
+
+The launch assumption is Supabase's free tier plus minimal hosting. Stated
+honestly, because "free" is not the whole bill:
+
+| Need | Free tier? | Note |
+|---|---|---|
+| Postgres, Auth, Storage, RLS at this volume | Yes | Comfortably |
+| Realtime | Yes, with connection limits | Fine for one merchant tablet + active customers (TQ-002) |
+| **A long-running worker process** | **No** | ADR-010 needs a process that is never scaled to zero, or timers stop. This is a real, small, unavoidable hosting cost (TQ-005) |
+| **Point-in-time recovery** | **No** | A paid Supabase feature. For the financial system of record this is worth costing deliberately, not defaulting into (TQ-007) |
+| Project pausing after inactivity | Applies to free projects | Unacceptable once real orders exist |
+
+Nothing in this architecture *requires* a paid tier to develop. Two things
+require one to operate safely: the worker host and a backup posture good enough
+for money. Neither is a scaling cost — both apply from the first real order.
+
+### 21.2 Deferred changes
 
 | Change | Trigger |
 |---|---|
