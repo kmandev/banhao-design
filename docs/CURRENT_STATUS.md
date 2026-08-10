@@ -210,10 +210,20 @@ justified indexes and a migration order — plus
 ⛔ **No migration was created, no SQL was executed, and the live `banhao-dev`
 project was not modified.** The three applied migrations are unchanged.
 
-Four questions block the first migration: **DBQ-002** (role model — a single
-`profiles.role` is insufficient once a rider or owner also orders food),
-**DBQ-010** (zero-sum enforcement), **TQ-011** (migration workflow), **TQ-012**
-(concurrency test strategy).
+**Locked 2026-08-11 (EVENT-017) by DEC-033 and DEC-034.**
+
+> ✅ **DATABASE DESIGN IS APPROVED** · ⛔ **DATABASE MIGRATION HAS NOT STARTED**
+
+DEC-033 replaced the proposed generic `user_roles` table with **domain
+membership** — Customer implicit, Merchant via `restaurant_members`, Rider via
+`riders`, Operator/Admin via `platform_staff`. No RLS policy may reference
+`profiles.role`. DEC-034 removed the proposed zero-sum constraint trigger;
+CON-003 stands but is enforced by transaction-level assertion plus a **mandatory
+reconciliation process**.
+
+Four questions still gate the first migration: **DBQ-004** (bank account
+storage), **DBQ-011** (order number format), **TQ-011** (migration workflow),
+**TQ-012** (concurrency test strategy).
 
 ## Current Blockers
 

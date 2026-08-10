@@ -3,11 +3,21 @@
 The PostgreSQL blueprint implementing the approved business decisions
 (DEC-001…DEC-032) under the approved architecture.
 
-Written 2026-08-11 (EVENT-016). **STATUS: PROPOSED — awaiting database review.**
+Written 2026-08-11 (EVENT-016). **Locked 2026-08-11 (EVENT-017) by DEC-033 and
+DEC-034.**
 
-> ⛔ **No migration was created. No SQL was executed. The live Supabase project
-> was not touched.** Every SQL fragment below is illustrative, showing intent
-> and constraint shape — not a migration to copy.
+> ## ✅ DATABASE DESIGN IS APPROVED
+> ## ⛔ DATABASE MIGRATION HAS NOT STARTED
+>
+> **No migration exists. No SQL has been executed. The live Supabase project is
+> untouched** — `supabase/migrations/` still holds exactly the three files
+> applied on 2026-08-09. Every SQL fragment below is **illustrative**, showing
+> intent and constraint shape; none of it is a migration to copy.
+>
+> Approval of the blueprint is not approval to write it. Four questions still
+> gate the first migration: **DBQ-011** (order number format), **DBQ-004**
+> (bank account storage), **TQ-011** (migration workflow) and **TQ-012**
+> (concurrency test strategy) — see § 21.
 
 Companion: [`TECHNICAL_ARCHITECTURE.md`](TECHNICAL_ARCHITECTURE.md) ·
 [`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md) ·
@@ -162,43 +172,75 @@ is the application row, `1:1`, `profiles.id = auth.users.id`, created by the
 `on_auth_user_created` trigger, deleted by cascade. **Do not duplicate identity
 and do not write `auth.users` from application code.**
 
-### 4.2 Role membership — a single `role` column is NOT sufficient
+### 4.2 Role membership — domain relationships, not a role column
 
-**Finding.** `profiles.role` is a single enum. In Buntharik that breaks a
-realistic case immediately: **a rider orders food, and a restaurant owner orders
-food.** With one column, promoting a user to `DRIVER` removes their ability to
-be a customer. Two of the four roles in the live enum are ones the same person
-plausibly holds alongside `CUSTOMER`.
+`ACCEPTED` — **DEC-033** (approved 2026-08-11 under the label
+"DEC-014 — Multi-role Identity Model"; see the numbering note in
+`DECISIONS.md`).
 
-Second finding: **`MERCHANT` as a global role is meaningless on its own.** §6
-requires that a merchant user not gain access to every restaurant, so
-restaurant access must come from `restaurant_members`, not from a role.
+**`profiles` is identity. Authorization is a domain relationship.**
+A single `profiles.role` column is **not** the authoritative role model, and
+**no generic RBAC layer is built** where a domain table already answers the
+question.
 
-Third: **the live enum has no `OPERATOR`**, which DEC-032 requires.
+> The authoritative question is **"what relationship does this user have with
+> this domain?"** — never "what single role does this user have?"
 
-**Recommendation (`PROPOSED`, DBQ-002 for the deprecation timing):**
+| Capability | Established by | Scope |
+|---|---|---|
+| **Customer** | **Implicit** — every authenticated profile | Own data |
+| **Merchant** | `restaurant_members` row | **Per restaurant**, not global |
+| **Rider** | `riders` row | Own rider identity |
+| **Operator / Admin** | `platform_staff` row | Platform-wide, elevated |
 
-| Concept | Where it lives |
-|---|---|
-| **Customer** | **Implicit.** Every authenticated user may order. Not stored |
-| `DRIVER`, `MERCHANT`, `OPERATOR`, `ADMIN` | `user_roles` — sparse, a handful of rows total |
-| *Which* restaurant a merchant may touch | `restaurant_members` — the actual authorization boundary |
-| `profiles.role` | **Retained, demoted to a legacy hint, dropped later** |
+A user may hold several of these at once, which is the point: in Buntharik a
+rider orders food, and a restaurant owner orders food. Under a single role
+column, promoting someone to `DRIVER` would strip their ability to be a
+customer.
 
-`user_roles` becomes authoritative. `profiles.role` cannot simply be dropped in
-this design because live code depends on it — `RolesGuard`, the
-`enforce_profile_immutable_columns()` trigger, and `set_user_role()`. The
-migration path, which requires a **code change and is therefore out of scope for
-this step**:
+Note that `MERCHANT` as a global role authorises nothing useful anyway — the
+real question is *which restaurant*, and only `restaurant_members` answers it.
+A role column would still need the membership table, so it would only add a
+second, weaker answer to the same question.
 
-1. Add `user_roles`; backfill from `profiles.role`.
-2. Change `RolesGuard` to read `user_roles`; add `grant_user_role()` /
-   `revoke_user_role()` as service-role-only functions mirroring
-   `set_user_role()`.
-3. Drop `profiles.role`, its trigger clause, and `set_user_role()`.
+**An earlier draft of this document proposed a generic `user_roles` table. The
+Product Owner rejected it** (DEC-033): where a domain table exists, membership
+*is* the grant. `user_roles` is **not** part of this design, and neither are
+`roles` / `permissions` / `role_permissions`. Adding generic RBAC later requires
+a new decision.
 
-Until step 3, **`user_roles` is authoritative and `profiles.role` must not be
-read for authorization** — one question, one answer.
+#### `profiles.role` is deprecated
+
+It stays in the table for now but **must not be read for authorization**. It
+cannot be dropped by a design change — three live objects reference it:
+`RolesGuard` (`apps/api`), `set_user_role()`, and the `role` clause of
+`enforce_profile_immutable_columns()`. Removing it is implementation work,
+sequenced as:
+
+1. Create `platform_staff`; backfill from `profiles.role` where role is
+   `ADMIN`/`OPERATOR`.
+2. Change `RolesGuard` to resolve capability from `restaurant_members`, `riders`
+   and `platform_staff`. **Code change — out of scope for a design step.**
+3. Drop `profiles.role`, its trigger clause, and `set_user_role()`. The
+   `user_role` enum then becomes unused.
+
+Until step 3, `profiles.role` is legacy scaffolding: writable only by the
+service role, read by nothing that matters.
+
+#### `platform_staff` — NEW
+- **Purpose** — operator and admin membership. The only capability with no other
+  domain table, so it gets a small dedicated one rather than a generic RBAC
+  layer.
+- **PK** `id uuid` · **Unique** `(user_id)`
+- **Columns** `user_id`, `staff_role text` + CHECK (`OPERATOR|ADMIN`),
+  `granted_by`, `granted_at`, `revoked_at timestamptz null`, `reason text`
+- **FK** `user_id → profiles(id) on delete restrict`;
+  `granted_by → profiles(id) on delete set null`
+- **Index** `(user_id) where revoked_at is null`
+- **RLS** self `SELECT` own row; **no client write**. Granted only through a
+  service-role path.
+- **Mutability** append-mostly; revocation sets `revoked_at`, never deletes —
+  an operator's past authority must stay explicable alongside the audit log.
 
 ---
 
@@ -213,18 +255,6 @@ Mutability**. `sat` = `bigint` satang. Every table gets
 
 #### `profiles` — **EXISTS, unchanged**
 Live. See § 1.
-
-#### `user_roles` — NEW
-- **Purpose** — capability grants beyond the implicit customer role.
-- **PK** `id uuid` · **Unique** `(user_id, role)`
-- **Columns** `user_id`, `role user_role`, `granted_by uuid`, `granted_at`,
-  `revoked_at timestamptz null`, `reason text`
-- **FK** `user_id → profiles(id) on delete cascade`;
-  `granted_by → profiles(id) on delete set null`
-- **Index** `(user_id) where revoked_at is null`
-- **RLS** client `SELECT` own rows only; **no client write**. Granted only by
-  service-role functions.
-- **Mutability** append-mostly; revocation sets `revoked_at`, never deletes.
 
 #### `addresses` — NEW
 - **Purpose** — saved delivery addresses (BQ-001/BQ-002 `OPEN` on composition;
@@ -584,8 +614,9 @@ answered from `orders` and `refunds` alone. A ledger is still worth it for three
 reasons that Phase 1 already has:
 
 1. **CON-003 requires a zero-sum check.** Without entries there is nothing to
-   sum. The invariant becomes an assertion the database can enforce rather than
-   a belief.
+   sum. Under DEC-034 the check is asserted in the transaction and verified by
+   reconciliation rather than by a trigger — but it still needs entries to run
+   against.
 2. **Settlement must be derived from financial records** (§20, DEC-026). Deriving
    payouts from order columns means re-deriving them identically in two places
    forever.
@@ -594,6 +625,13 @@ reasons that Phase 1 already has:
 
 It is deliberately *not* double-entry bookkeeping with a chart of accounts —
 that would exceed Phase 1.
+
+**DEC-034 also requires the system to answer "what financial events produced
+these values?"** That is precisely what `ledger_entry_groups` provides: each
+group names its cause (`kind`, `order_id`/`refund_id`/`settlement_id`,
+`correlation_id`), so any amount can be traced back to the event that created
+it. Without the groups, the other five questions would be answerable but the
+sixth would not.
 
 #### `ledger_entry_groups`
 - **PK** `id uuid` · **🔑 Unique `group_key text`** — deterministic per economic
@@ -624,12 +662,43 @@ that would exceed Phase 1.
 - **RLS** 🔴 no client access whatsoever.
 - **Mutability** 🔒 **append-only. No `UPDATE`, no `DELETE` — ever.**
 
-**Zero-sum enforcement:** a `DEFERRABLE INITIALLY DEFERRED` constraint trigger
-asserting `sum(amount_satang) = 0` per `group_id` **at commit**. Deferred is
-essential — entries are inserted one at a time and the group only balances once
-all are present. This is the one place a database trigger is the right enforcer
-(§1 exception 1: it is an integrity constraint, not a business rule), and it
-makes CON-003 physically true rather than tested.
+### Zero-sum enforcement — no database trigger in Phase 1
+
+`ACCEPTED` — **DEC-034** (approved 2026-08-11 under the label
+"DEC-015 — Phase 1 Financial Integrity").
+
+**An earlier draft of this document recommended a `DEFERRABLE INITIALLY
+DEFERRED` constraint trigger asserting `sum(amount_satang) = 0` per group at
+commit. The Product Owner rejected it for Phase 1.**
+
+**CON-003 is not repealed.** Every order's ledger still balances to zero. What
+changes is *where that is enforced*:
+
+| Layer | Role |
+|---|---|
+| **Immutable records** | `ledger_entries` and `ledger_entry_groups` are append-only; no `UPDATE`, no `DELETE`, ever (§ 13) |
+| **Database constraints** | `unique (group_key)`, FKs, `not null`, CHECKs on account values |
+| **NestJS transaction** | Payment + Order + Ledger + Outbox commit together; the ledger service **asserts the group sums to zero before commit** and aborts the transaction if not |
+| **Idempotency** | `group_key` uniqueness stops a duplicate group (DEC-028) — this is idempotency, not zero-sum |
+| **Auditability** | Every group carries `correlation_id` and links to the event that produced it |
+| **Reconciliation** | A scheduled process re-verifies balance across all groups and **alerts on any drift** |
+
+> **The trade this makes.** With the trigger, an unbalanced group was
+> *physically impossible*. Without it, it is *asserted in one place and
+> monitored continuously*. That is a weaker guarantee, and it makes the
+> **reconciliation process mandatory rather than optional** — it is now the only
+> thing that would notice a service-layer bug or a hand-written correction. It
+> needs a schedule and an alert (TQ-006), not just an intention.
+>
+> In exchange, the rule stays in NestJS where ADR-001 keeps every other rule,
+> and a discrepancy surfaces with domain context instead of as a commit-time
+> exception with none.
+>
+> DEC-034 explicitly leaves a stronger ledger invariant available for a later
+> phase. **No future accounting rules are invented here.**
+
+**Corrections are compensating entries, never edits** — unchanged, and required
+by DEC-034's "financial history must not be silently rewritten".
 
 ---
 
@@ -967,10 +1036,23 @@ conditional `UPDATE` issued by the owning module's service (ADR-001, ADR-003).
 `S` select · `I` insert · `U` update · `D` delete · `—` none ·
 **own** = scoped by ownership · **member** = via `restaurant_members`
 
+> **Authorization is a relationship, never a role column** (DEC-033). Every
+> policy below resolves through a domain membership:
+>
+> | Actor column | Resolved by |
+> |---|---|
+> | **Customer** | `auth.uid()` matching the owning column — implicit, no membership row |
+> | **Merchant** | `exists (select 1 from restaurant_members m where m.user_id = auth.uid() and m.restaurant_id = <row>.restaurant_id and m.revoked_at is null)` |
+> | **Rider** | `exists (select 1 from riders r where r.user_id = auth.uid() and r.id = <row>.rider_id)` |
+> | **Operator** | Not an RLS role at all — see below |
+>
+> **No policy may reference `profiles.role`.** It is deprecated and
+> non-authoritative (DEC-033).
+
 | Table | Customer | Merchant | Rider | Operator | Public (anon) |
 |---|---|---|---|---|---|
 | `profiles` | S,U(own, `display_name`) | S(own) | S(own) | via API | — |
-| `user_roles` | S(own) | S(own) | S(own) | via API | — |
+| `platform_staff` | — | — | — | S(own) · via API | — |
 | `addresses` | **S,I,U(own)** | — | S(active delivery, via API) | via API | — |
 | `merchants` | — | S(own) | — | via API | — |
 | `merchant_bank_accounts` | — | 🔴 — | — | via API | — |
@@ -1002,10 +1084,15 @@ conditional `UPDATE` issued by the owning module's service (ADR-001, ADR-003).
 
 ### What "via API" means, and why Operator has no RLS row
 
-**The Operator is not a database role.** Operator capability is a `user_roles`
-grant checked by NestJS guards; the query then runs on the **service-role
-connection, which bypasses RLS entirely**. Giving operators broad RLS `SELECT`
-would create a second authorization system that could drift from the first.
+**The Operator is not a database role.** Operator capability is a
+`platform_staff` membership (DEC-033) checked by NestJS guards; the query then
+runs on the **service-role connection, which bypasses RLS entirely**. Giving
+operators broad RLS `SELECT` would create a second authorization system that
+could drift from the first.
+
+This is also why `platform_staff` needs no elevated RLS of its own — a policy
+granting operators wide read access would be exactly the duplicate authority the
+design avoids.
 
 This is why §25's rule holds structurally:
 
@@ -1036,7 +1123,8 @@ a privacy boundary, not only an authorization one.
 | Parent → Child | On delete | Why |
 |---|---|---|
 | `auth.users` → `profiles` | **CASCADE** | Existing, live |
-| `profiles` → `addresses`, `carts`, `user_roles` | CASCADE | Personal scaffolding |
+| `profiles` → `addresses`, `carts` | CASCADE | Personal scaffolding |
+| `profiles` → `platform_staff` | **RESTRICT** | 🔒 An operator's past authority must stay explicable alongside the audit log |
 | `profiles` → `orders` (customer) | **RESTRICT** | 🔒 An order must outlive an attempt to delete its customer |
 | `profiles` → `riders`, `merchants` | RESTRICT | Same |
 | `merchants` → `restaurants` | RESTRICT | Financial parent |
@@ -1091,7 +1179,7 @@ location geography(Point,4326)
 Suggested migration order (dependency-safe):
 
 ```
-1  identity      alter user_role add OPERATOR; user_roles; addresses
+1  identity      platform_staff; addresses            (no user_roles — DEC-033)
 2  geo           service_areas; zones; delivery_fee_bands            (empty)
 3  merchant      merchants; merchant_bank_accounts; restaurants;
                  restaurant_members; restaurant_hours
@@ -1100,7 +1188,7 @@ Suggested migration order (dependency-safe):
 6  order         orders; order_items; order_item_options; order_status_history
 7  payment       payments; payment_attempts; payment_events;
                  payment_transactions; refunds
-8  ledger        ledger_entry_groups; ledger_entries + zero-sum trigger
+8  ledger        ledger_entry_groups; ledger_entries   (no zero-sum trigger — DEC-034)
 9  rider         riders; rider_documents; rider_availability
 10 delivery      deliveries; delivery_status_history; rider_assignments;
                  rider_assignment_attempts; delivery_attempts
@@ -1128,7 +1216,7 @@ but deliberately unused in Phase 1 (`settlements`, `settlement_items`,
 
 | Domain | Tables |
 |---|---|
-| Identity | 3 — `profiles`*, `user_roles`, `addresses` |
+| Identity | 3 — `profiles`*, `platform_staff`, `addresses` |
 | Merchant | 4 — `merchants`, `merchant_bank_accounts`, `restaurants`, `restaurant_members` |
 | Catalog | 5 — `restaurant_hours`, `menu_categories`, `menu_items`, `menu_option_groups`, `menu_options` |
 | Cart | 3 — `carts`, `cart_items`, `cart_item_options` |
@@ -1149,3 +1237,18 @@ Not created: promotions/coupons (BQ-030 `OPEN`), cash/rider-cash tables
 
 **No migration was written. No SQL was executed. The live database is
 untouched.**
+
+### Approval status
+
+| | |
+|---|---|
+| **Design (this document)** | ✅ **APPROVED** — 2026-08-11, locked by DEC-033 and DEC-034 |
+| **Migration implementation** | ⛔ **NOT STARTED** — no file exists in `supabase/migrations/` beyond the original three |
+| Remaining gates | DBQ-004, DBQ-011, TQ-011, TQ-012 (§ 21) |
+
+Two decisions changed this design after it was first written:
+**DEC-033** replaced the proposed generic `user_roles` table with domain
+membership (§ 4.2), and **DEC-034** removed the proposed zero-sum constraint
+trigger in favour of transaction-level assertion plus reconciliation (§ 10).
+Both rejections are recorded in place rather than deleted, so a later reader can
+see what was considered.

@@ -3,7 +3,9 @@
 Unresolved **technical** questions from the database design pass (EVENT-016,
 2026-08-11), alongside [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md).
 
-**Nothing here is an assumption.** An agent may not close any of these.
+**Nothing here is an assumption.** An agent may not close any of these — only a
+Product Owner decision can. **Two were closed on 2026-08-11**: DBQ-002 by
+DEC-033 and DBQ-010 by DEC-034. **12 of 14 remain open.**
 
 ## Namespaces
 
@@ -34,7 +36,7 @@ not propose a business answer.
 | ID | Question | Priority | Gated on |
 |---|---|---|---|
 | DBQ-001 | Is PostGIS needed in Phase 1? | D2 | — |
-| DBQ-002 | Role model: `user_roles` vs `profiles.role` deprecation | **D0** | — |
+| ~~DBQ-002~~ | ~~Role model~~ — **ANSWERED by DEC-033** | — | closed 2026-08-11 |
 | DBQ-003 | Ledger depth — is one entry group per event enough? | D1 | — |
 | DBQ-004 | Bank account number storage and encryption | D1 | Q-002 |
 | DBQ-005 | Rider location: latest-only vs history | D1 | **Q-012** |
@@ -42,7 +44,7 @@ not propose a business answer.
 | DBQ-007 | Enforce one active delivery per rider in the DB? | D2 | **BQ-021** |
 | DBQ-008 | Retention windows and purge jobs | D1 | **Q-012** |
 | DBQ-009 | Audit `before`/`after` PII redaction | D1 | Q-012 |
-| DBQ-010 | Zero-sum enforcement: constraint trigger vs application check | **D0** | — |
+| ~~DBQ-010~~ | ~~Zero-sum enforcement~~ — **ANSWERED by DEC-034** | — | closed 2026-08-11 |
 | DBQ-011 | Order number generation | D1 | — |
 | DBQ-012 | Connection pooling and the service-role connection | D1 | TQ-005 |
 | DBQ-013 | Naming: `DRIVER` role vs `rider_*` tables | D2 | — |
@@ -78,7 +80,20 @@ would touch two columns and two indexes, not the data. Low stakes either way.
 
 ## DBQ-002 — Role model: `user_roles` vs `profiles.role` deprecation
 
-**Priority:** **D0** · **Status:** OPEN
+**Priority:** ~~D0~~ · **Status: ✅ ANSWERED — DEC-033, 2026-08-11**
+
+> **Answer: neither option offered.** The Product Owner chose **domain
+> membership**: `restaurant_members` for merchants, `riders` for riders,
+> `platform_staff` for operators/admins, and **Customer implicit** for every
+> authenticated profile. **No generic `user_roles` table is built** — where a
+> domain table exists, membership *is* the grant. `profiles.role` is deprecated
+> and non-authoritative.
+>
+> The residual work is not a question but an implementation task: `RolesGuard`,
+> `set_user_role()` and the immutability trigger still read `profiles.role`, so
+> the column cannot be dropped until code changes. Tracked in `docs/TODO.md`.
+>
+> The original question is preserved below for context.
 
 **Question:** Adopt `user_roles` as authoritative and deprecate
 `profiles.role`, or keep the single column?
@@ -259,7 +274,20 @@ deny-listing PII. An allow-list fails safe when someone adds a column.
 
 ## DBQ-010 — Zero-sum enforcement: constraint trigger vs application check
 
-**Priority:** **D0** · **Status:** OPEN
+**Priority:** ~~D0~~ · **Status: ✅ ANSWERED — DEC-034, 2026-08-11**
+
+> **Answer: application check, not a trigger — for Phase 1.** The recommendation
+> below (deferred constraint trigger) was **rejected**. Integrity comes from
+> immutable records, database constraints, NestJS transactions, idempotency,
+> auditability and **reconciliation**.
+>
+> **CON-003 is not repealed** — the invariant stands, its enforcement point
+> moves. The consequence to carry forward: **the reconciliation process is now
+> mandatory and needs an alert (TQ-006)**, because without the trigger it is the
+> only thing that would notice drift. A stronger ledger invariant is explicitly
+> available in a later phase.
+>
+> The original analysis is preserved below for context.
 
 **Question:** Enforce CON-003 with a `DEFERRABLE INITIALLY DEFERRED` constraint
 trigger at commit, or assert it in the ledger service?

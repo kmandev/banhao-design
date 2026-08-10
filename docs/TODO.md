@@ -29,6 +29,11 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## P1 — High
 
+- [ ] Retire `profiles.role` in favour of domain membership (DEC-033)
+  - Priority: P1
+  - Source: DEC-033, EVENT-017
+  - Notes: `profiles.role` is deprecated and non-authoritative, but three live objects still read it — `RolesGuard` (`apps/api/src/common/guards/roles.guard.ts`), `set_user_role()`, and the `role` clause of `enforce_profile_immutable_columns()`. Sequence: create `platform_staff` and backfill → change `RolesGuard` to resolve capability from `restaurant_members` / `riders` / `platform_staff` → drop the column, its trigger clause and `set_user_role()`. **The code change is the blocker, not the schema.**
+
 - [ ] Reconcile the Customer App with DEC-016 and DEC-019
   - Priority: P1
   - Source: EVENT-014

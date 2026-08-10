@@ -18,7 +18,7 @@ The live dev Supabase project (`banhao-dev`) is what the merged app authenticate
 
 ## Critical Decisions
 
-**32 decisions logged, DEC-001 through DEC-032, all `ACCEPTED`** — DEC-016…DEC-032 were approved by the Product Owner on 2026-08-10 (EVENT-014): online-payment-only with COD disabled but extensible (DEC-016), one cart = one restaurant (DEC-017), four separate state domains (DEC-018), the approved Order lifecycle with `PREPARING` ∥ `RIDER_SEARCHING` (DEC-019), broadcast dispatch from `MERCHANT_ACCEPTED` (DEC-020), rider cancellation never cancels the order (DEC-021), no-rider escalates to an operator (DEC-022), the three fee **models** with numbers still open (DEC-023/024/025), settlement as its own domain (DEC-026), refund in the payment domain (DEC-027), idempotency (DEC-028), late payment (DEC-029), duplicate payment (DEC-030), manual operations as an intentional capability (DEC-031), operator fallback (DEC-032). Product rules: Order and Payment State separate (DEC-002), webhook-only confirmation (DEC-003), driver cash is a liability (DEC-004). Stack (2026-08-09): modular monolith (DEC-009), Supabase (DEC-010), NestJS (DEC-011), Expo + Next.js (DEC-012, supersedes DEC-006), monorepo (DEC-013), PostgreSQL as financial system of record (DEC-014), payment abstraction only (DEC-015). Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
+**34 decisions logged, DEC-001 through DEC-034, all `ACCEPTED`** — **DEC-033** (multi-role identity via domain membership) and **DEC-034** (Phase 1 financial integrity without a zero-sum trigger) were approved 2026-08-11. ⚠️ They were *labelled* "DEC-014"/"DEC-015" in the approval, but those IDs were already taken — see the numbering note atop `docs/DECISIONS.md`. — DEC-016…DEC-032 were approved by the Product Owner on 2026-08-10 (EVENT-014): online-payment-only with COD disabled but extensible (DEC-016), one cart = one restaurant (DEC-017), four separate state domains (DEC-018), the approved Order lifecycle with `PREPARING` ∥ `RIDER_SEARCHING` (DEC-019), broadcast dispatch from `MERCHANT_ACCEPTED` (DEC-020), rider cancellation never cancels the order (DEC-021), no-rider escalates to an operator (DEC-022), the three fee **models** with numbers still open (DEC-023/024/025), settlement as its own domain (DEC-026), refund in the payment domain (DEC-027), idempotency (DEC-028), late payment (DEC-029), duplicate payment (DEC-030), manual operations as an intentional capability (DEC-031), operator fallback (DEC-032). Product rules: Order and Payment State separate (DEC-002), webhook-only confirmation (DEC-003), driver cash is a liability (DEC-004). Stack (2026-08-09): modular monolith (DEC-009), Supabase (DEC-010), NestJS (DEC-011), Expo + Next.js (DEC-012, supersedes DEC-006), monorepo (DEC-013), PostgreSQL as financial system of record (DEC-014), payment abstraction only (DEC-015). Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Critical Constraints
 
@@ -54,7 +54,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-16 events logged, EVENT-001 through EVENT-016 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → P0 Business Decisions v1 approved → Technical Architecture v1 → **Supabase Database Design v1**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+17 events logged, EVENT-001 through EVENT-017 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → P0 Business Decisions v1 approved → Technical Architecture v1 → Supabase Database Design v1 → **database decisions locked**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Business Rules
 
@@ -74,9 +74,16 @@ Concurrency is a **guarded conditional UPDATE** — the state check lives in the
 
 **Designed, not built** (EVENT-016, 2026-08-11): [`docs/DATABASE_DESIGN.md`](../docs/DATABASE_DESIGN.md) (46 tables, ERD, RLS matrix, FK/cascade rules, index justifications, migration order) · [`docs/OPEN_DATABASE_QUESTIONS.md`](../docs/OPEN_DATABASE_QUESTIONS.md) (**DBQ-001…DBQ-014**). **No migration exists; no SQL was run; the live project is untouched.**
 
+> ✅ **DATABASE DESIGN IS APPROVED** (locked 2026-08-11 by DEC-033/DEC-034).
+> ⛔ **DATABASE MIGRATION HAS NOT STARTED** — `supabase/` still holds exactly the three migrations from 2026-08-09.
+
 The live `profiles` RLS pattern is the template for every new table: **revoke-first**, narrow column grants, RLS on, policies scoped `to authenticated`, `security definer` trigger backstop. Only three tables accept a direct client write — `addresses`, `carts`, `notifications.read_at`.
 
-DEC-017 is enforced by **composite foreign keys**, so a cross-restaurant cart cannot be stored. State columns are `text` + `CHECK`, not enums, because the order vocabulary already changed once. Blocking the first migration: **DBQ-002** (role model — a single `profiles.role` is not sufficient), **DBQ-010** (zero-sum enforcement), TQ-011, TQ-012.
+**Authorization is a domain relationship, never a role column (DEC-033):** Customer implicit · Merchant = `restaurant_members` · Rider = `riders` · Operator/Admin = `platform_staff`. **No RLS policy may reference `profiles.role`** — it is deprecated. No generic RBAC.
+
+**Zero-sum is asserted, not triggered (DEC-034):** CON-003 stands, but enforcement lives in the NestJS transaction plus a **mandatory reconciliation process**, not a database trigger.
+
+DEC-017 is enforced by **composite foreign keys**, so a cross-restaurant cart cannot be stored. State columns are `text` + `CHECK`, not enums. Blocking the first migration: **DBQ-004**, **DBQ-011**, **TQ-011**, **TQ-012**.
 
 ## Important Architecture Rules
 

@@ -42,10 +42,33 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-030** | **Duplicate payment must never increase an order's value** | **ACCEPTED** | **2026-08-10** | `docs/PAYMENT_LIFECYCLE.md` |
 | **DEC-031** | **Buntharik-first: manual operations are an intentional Phase 1 capability** | **ACCEPTED** | **2026-08-10** | `docs/BUSINESS_RULES.md` |
 | **DEC-032** | **Operator fallback for exceptional situations (capability, not an app)** | **ACCEPTED — REQUIREMENT · NOT IMPLEMENTED** | **2026-08-10** | `docs/BUSINESS_RULES.md` |
+| **DEC-033** | **Multi-role identity: domain membership, not a single `profiles.role`** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
+| **DEC-034** | **Phase 1 financial integrity without a zero-sum database trigger** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
 
 DEC-016 through DEC-032 were approved by the Product Owner in the Business
 Decision Workshop and locked on 2026-08-10 — see `ai/KNOWLEDGE/EVENTS.md`
-EVENT-014.
+EVENT-014. DEC-033 and DEC-034 were approved on 2026-08-11 — EVENT-017.
+
+> ### ⚠️ Numbering note — DEC-033 / DEC-034
+>
+> The 2026-08-11 approval instruction labelled these two decisions **"DEC-014 —
+> Multi-role Identity Model"** and **"DEC-015 — Phase 1 Financial Integrity"**.
+> **Those IDs were already taken** by DEC-014 (PostgreSQL is the system of record)
+> and DEC-015 (payment provider abstraction), both `ACCEPTED` on 2026-08-09 and
+> cited across 17 and 21 files respectively — including a code comment in
+> `apps/api/src/modules/payments/payment-provider.interface.ts`.
+>
+> Reusing those numbers would have silently redefined two decisions the whole
+> repository depends on, so the new decisions were given the **next free IDs**
+> instead. The instruction's own rule — *"Do NOT overwrite an existing ID"* —
+> points the same way.
+>
+> | Approval label | Recorded as | Not to be confused with |
+> |---|---|---|
+> | "DEC-014 — Multi-role Identity Model" | **DEC-033** | DEC-014 — PostgreSQL is the system of record |
+> | "DEC-015 — Phase 1 Financial Integrity" | **DEC-034** | DEC-015 — Payment provider abstraction |
+>
+> Both original decisions remain `ACCEPTED` and unchanged.
 
 ---
 
@@ -1595,3 +1618,180 @@ None directly.
 ### Supersedes / Superseded By
 
 None / None.
+
+---
+
+## DEC-033 — Multi-role identity: domain membership, not a single `profiles.role`
+
+**Status:** ACCEPTED
+**Date:** 2026-08-11
+**Owner:** PRODUCT_OWNER
+
+*(Approved under the label "DEC-014 — Multi-role Identity Model"; recorded here
+because DEC-014 was already taken — see the numbering note at the top of this
+file.)*
+
+### Decision
+
+`profiles` represents the user's **identity**. A single `profiles.role` column
+**must not be the authoritative role model.** A user may participate in several
+domains at once — Customer, Merchant, Rider, Operator, Admin.
+
+Role and capability membership is represented through **domain-specific
+relationships** (`restaurant_members`, `riders`, operator/admin membership), not
+through a generic RBAC layer. **Do not build generic RBAC infrastructure where
+domain membership is sufficient.**
+
+The authoritative question is **"what relationship does this user have with this
+domain?"** — never "what single role does this user have?"
+
+### Why
+
+Product Owner decision, 2026-08-11. Two drivers:
+
+1. **A single role column breaks a routine case.** In Buntharik a rider orders
+   food and a restaurant owner orders food. Setting `role = 'DRIVER'` would
+   strip that person's ability to be a customer.
+2. **A global `MERCHANT` role authorises nothing useful.** The real question is
+   *which restaurant*, which only `restaurant_members` can answer. A role column
+   would still need the membership table, so it adds a second, weaker answer to
+   the same question.
+
+### Alternatives
+
+- **Keep the single `profiles.role`.** Rejected — see above.
+- **A generic `user_roles` table** (the database design's own earlier
+  recommendation). **Rejected by the Product Owner**: it duplicates information
+  the domain tables already hold, and it re-creates the "what role is this
+  person?" framing that DEC-033 explicitly replaces. Where a domain table exists,
+  membership *is* the grant.
+
+### Consequences
+
+- **Customer is implicit.** Every authenticated profile may order. No row, no
+  grant, no membership record.
+- `restaurant_members` becomes the merchant authorization boundary; `riders`
+  becomes the rider one; a small **`platform_staff`** table carries
+  operator/admin membership, since those two have no other domain table.
+- **`profiles.role` is no longer authoritative** and is deprecated. It cannot be
+  dropped by a documentation change: `RolesGuard`, `set_user_role()` and the
+  `role` clause of `enforce_profile_immutable_columns()` all read it. That is
+  implementation work, not a design change.
+- Authorization checks become relationship lookups. RLS policies must express
+  membership (`exists (select 1 from restaurant_members …)`), never
+  `profiles.role = …`.
+- **No generic RBAC tables** — no `roles`, `permissions`, `role_permissions`, or
+  `user_roles`. Adding one later needs a new decision.
+- The live `user_role` enum stays for now, but only as legacy scaffolding behind
+  the deprecated column.
+
+### Evidence
+
+Product Owner approval, 2026-08-11 (Step 6.1 instruction, "DEC-014 — Multi-role
+Identity Model").
+
+### Related Requirements
+
+None directly. Supersedes the `user_roles` recommendation in
+`docs/DATABASE_DESIGN.md` § 4.2 and answers **DBQ-002**.
+
+### Related Architecture
+
+`docs/DATABASE_DESIGN.md` § 4, § 18 · `docs/TECHNICAL_ARCHITECTURE.md` § 13
+
+### Supersedes / Superseded By
+
+Supersedes the authority of `profiles.role` established in migration
+`20260809000002_profiles_and_roles.sql`. The column and migration remain in
+place. / None.
+
+---
+
+## DEC-034 — Phase 1 financial integrity without a zero-sum database trigger
+
+**Status:** ACCEPTED
+**Date:** 2026-08-11
+**Owner:** PRODUCT_OWNER
+
+*(Approved under the label "DEC-015 — Phase 1 Financial Integrity"; recorded here
+because DEC-015 was already taken — see the numbering note at the top of this
+file.)*
+
+### Decision
+
+For Phase 1, BANHAO will **not** enforce a full accounting zero-sum invariant
+through PostgreSQL triggers. Financial integrity is achieved instead by:
+
+- **immutable financial records**
+- **database constraints** (unique, check, foreign key, not-null)
+- **NestJS database transactions**
+- **idempotency**
+- **auditability**
+- **reconciliation queries and processes**
+
+**Financial history must not be silently rewritten.** Corrections use
+compensating records where appropriate.
+
+The architecture must preserve the ability to answer: how much the customer
+paid · how much the merchant is owed · how much the rider is owed · BANHAO's
+revenue · how much was refunded · **and what financial events produced those
+values.**
+
+A stronger zero-sum or ledger invariant **may** be introduced in a future phase.
+**No future accounting rules are invented now.**
+
+### Why
+
+Product Owner decision, 2026-08-11. A deferred constraint trigger is powerful
+but puts a rule in the database that ADR-001 otherwise keeps in NestJS, fails at
+commit time with little domain context, and is unfamiliar to maintain. At Phase 1
+volume, transactional writes plus a reconciliation process give the same
+practical assurance with a much smaller surface — and reconciliation surfaces a
+discrepancy with context rather than aborting a transaction.
+
+### Alternatives
+
+- **`DEFERRABLE INITIALLY DEFERRED` constraint trigger asserting
+  `sum = 0` per entry group** — the database design's own recommendation
+  (DBQ-010). **Rejected for Phase 1**, explicitly available for a later one.
+- **No financial records beyond `orders`/`refunds`.** Rejected — it cannot
+  answer *"what financial events produced these values?"*, which this decision
+  requires.
+
+### Consequences
+
+- **CON-003 is not repealed.** Every order's ledger still balances to zero; what
+  changes is **where that is enforced** — the ledger service asserts it inside
+  the transaction, and a reconciliation job verifies it continuously. The
+  invariant moves from *physically impossible to violate* to *asserted and
+  monitored*.
+- A **reconciliation process becomes mandatory, not optional.** Without the
+  trigger it is the only thing that would notice a drift, so it needs an alert
+  (TQ-006) and must run on a schedule.
+- Financial tables stay **append-only and immutable**; the immutability triggers
+  in `DATABASE_DESIGN.md` § 13 are **unaffected** — those prevent rewriting
+  history, which this decision explicitly requires.
+- `ledger_entry_groups.group_key` keeps its unique constraint: that is
+  idempotency (DEC-028), not zero-sum enforcement.
+- Corrections are reversing/compensating entries, never edits (unchanged,
+  DEC-014).
+- **Answers DBQ-010.** DBQ-003 (running balances) is untouched and stays `OPEN`.
+
+### Evidence
+
+Product Owner approval, 2026-08-11 (Step 6.1 instruction, "DEC-015 — Phase 1
+Financial Integrity").
+
+### Related Requirements
+
+CON-003 (enforcement mechanism changed, invariant intact), REQ-003, DEC-014,
+DEC-028
+
+### Related Architecture
+
+`docs/DATABASE_DESIGN.md` § 10, § 13 · `docs/SETTLEMENT_MODEL.md`
+
+### Supersedes / Superseded By
+
+Supersedes the zero-sum trigger recommendation in `docs/DATABASE_DESIGN.md`
+§ 10. / None. Explicitly revisitable in a later phase.

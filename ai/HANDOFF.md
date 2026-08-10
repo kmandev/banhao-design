@@ -16,7 +16,15 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-**Supabase Database Design v1 (EVENT-016), on `feature/database-design-v1`** — this update. The PostgreSQL blueprint for DEC-016…DEC-032. **Design only — no migration created, no SQL executed, live Supabase untouched.**
+**Database architecture decisions locked (EVENT-017), on `feature/database-design-v1`** — this update. The Product Owner approved **DEC-033** (multi-role identity via domain membership) and **DEC-034** (Phase 1 financial integrity without a zero-sum trigger). **Documentation only.**
+
+⚠️ **Numbering:** the approval labelled them "DEC-014" and "DEC-015". **Both IDs were already taken** (PostgreSQL as system of record; payment provider abstraction) and are cited in 17 and 21 files including live code comments, so the new decisions took the next free IDs. Cite **DEC-033 / DEC-034**.
+
+Both overruled the database design's own recommendations, and both rejections are recorded in place: **`user_roles` is not built** (domain membership instead), and **no zero-sum constraint trigger** (transaction assertion + mandatory reconciliation instead). CON-003 is *not* repealed — its enforcement point moved.
+
+> ✅ **DATABASE DESIGN IS APPROVED** · ⛔ **MIGRATION HAS NOT STARTED**
+
+Before that: **Supabase Database Design v1 (EVENT-016)**. The PostgreSQL blueprint for DEC-016…DEC-032. **Design only — no migration created, no SQL executed, live Supabase untouched.**
 
 Two documents: `docs/DATABASE_DESIGN.md` (46 tables, ERD, table catalog, RLS matrix, state matrix, FK/cascade rules, justified indexes, migration order) and `docs/OPEN_DATABASE_QUESTIONS.md` (**DBQ-001…DBQ-014**).
 
@@ -46,7 +54,9 @@ Before that: Supabase dev environment + live Customer authentication (EVENT-010)
 
 ## Immediate Next Step
 
-**Database review of `docs/DATABASE_DESIGN.md`**, then the first migrations. Four questions block the first migration: **DBQ-002** (role model — `user_roles` vs `profiles.role`, and it needs a `RolesGuard` code change), **DBQ-010** (zero-sum via a deferred constraint trigger), **TQ-011** (migration workflow), **TQ-012** (concurrency test strategy).
+**Supabase migration implementation** — the design is approved. Four questions still gate the first migration: **DBQ-004** (bank account storage), **DBQ-011** (order number format), **TQ-011** (migration workflow), **TQ-012** (concurrency test strategy).
+
+Alongside it, one **code** task now exists: `RolesGuard`, `set_user_role()` and the `enforce_profile_immutable_columns()` trigger all read `profiles.role`, which DEC-033 deprecated. The column cannot be dropped until they resolve capability from `restaurant_members` / `riders` / `platform_staff` instead — tracked in `docs/TODO.md`.
 
 Also still open: **architecture review of `docs/TECHNICAL_ARCHITECTURE.md` and ADR-001…ADR-012** (all `PROPOSED` — nothing may be built until they are accepted). Three technical questions are **T0 and block backend work**: **TQ-011** (migration workflow — agree it before the first domain migration, not after), **TQ-012** (how concurrency correctness is *proved* — the EVENT-007 precedent of verifying by execution against real PostgreSQL applies), and **TQ-008** (provider adapter, gated on Q-001/Q-020).
 
@@ -140,7 +150,9 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
 - Do not implement anything tagged `PROPOSED` or `OPEN` in the business documents. **Only `ACCEPTED` is product truth**, and `ACCEPTED — MODEL · OPEN — NUMBERS` means you may not pick the number.
 - Do not enable cash payment anywhere — DEC-016 disables COD in Phase 1. Equally, **do not delete the cash model**: `payment_method` must stay extensible, and DEC-004 / REQ-001 remain accepted.
-- Do not write a migration before DBQ-002, DBQ-010, TQ-011 and TQ-012 are answered — and never `supabase db push` against the live project without explicit instruction.
+- Do not write a migration before DBQ-004, DBQ-011, TQ-011 and TQ-012 are answered — and never `supabase db push` against the live project without explicit instruction.
+- Do not write an RLS policy that references `profiles.role` — it is deprecated (DEC-033). Resolve capability through `restaurant_members`, `riders` or `platform_staff`.
+- Do not add a zero-sum database trigger (DEC-034). Assert in the ledger service inside the transaction, and rely on reconciliation — which is now **mandatory**, not optional.
 - Do not add a table without the five-step security pattern (`revoke` first — Supabase grants `ALL` by default), and do not put business rules in triggers; integrity constraints only.
 - Do not implement anything tagged `PROPOSED` in the technical documents either — **every ADR is `PROPOSED`**, and `TQ-NNN` items must not be turned into assumptions.
 - Do not write `SELECT`-then-check-then-`UPDATE` on any guarded table. The state check goes in the `WHERE` clause (ADR-003) — check-then-act lets two riders both win.

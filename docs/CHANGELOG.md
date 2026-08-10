@@ -2,6 +2,25 @@
 
 > This is a detailed, dated development log for AI-memory purposes. For a shorter, release-facing summary see the root [`CHANGELOG.md`](../CHANGELOG.md) — the two are complementary, not duplicates: this file tracks documentation/process work in date-entry form as agents touch the repo; the root file tracks user-facing repository milestones.
 
+## 2026-08-11 (3) — Database decision lock
+
+### Added
+
+- `docs/DECISIONS.md` — **DEC-033** (multi-role identity via domain membership) and **DEC-034** (Phase 1 financial integrity without a zero-sum trigger), both `ACCEPTED`, plus a **numbering note**: the approval labelled them "DEC-014"/"DEC-015", but those IDs were already taken by two decisions cited in 17 and 21 files including live code comments, so the next free IDs were used.
+- `ai/KNOWLEDGE/EVENTS.md` — EVENT-017.
+- `docs/TODO.md` — retire `profiles.role` in favour of domain membership (P1; the blocker is the `RolesGuard` code change, not the schema).
+
+### Changed
+
+- `docs/DATABASE_DESIGN.md` — § 4.2 rewritten for DEC-033 (`user_roles` removed, `platform_staff` added, `profiles.role` deprecated); § 10 rewritten for DEC-034 (no trigger; transaction assertion + mandatory reconciliation); RLS matrix now resolves every actor through a membership lookup; migration order and FK table updated. Header carries the approved/not-started guardrail.
+- `docs/TECHNICAL_ARCHITECTURE.md` — new § 13.1a (authorization is a domain relationship); § 10.2 rule 4 cites DEC-034.
+- `docs/OPEN_DATABASE_QUESTIONS.md` — **DBQ-002 and DBQ-010 closed** as `ANSWERED`, original analysis preserved. 12 of 14 remain open.
+- `ai/MEMORY.md`, `ai/HANDOFF.md`, `docs/CURRENT_STATUS.md` — updated, with two new "do not" rules: no RLS policy referencing `profiles.role`, and no zero-sum database trigger.
+
+### Not done, deliberately
+
+No migration, no SQL, no Supabase change, no backend code. **No business decision created, changed or reversed.** Only the two questions genuinely answered by DEC-033/DEC-034 were closed; no `Q`, `BQ` or `TQ` was touched.
+
 ## 2026-08-11 (2) — Supabase Database Design v1
 
 ### Added

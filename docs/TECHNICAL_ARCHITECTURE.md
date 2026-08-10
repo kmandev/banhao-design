@@ -191,7 +191,7 @@ each aggregate; a module's tables are written **only** by that module's service
 
 | Module | Owns (tables) | Owns (state machine) | Governed by |
 |---|---|---|---|
-| `users` | `profiles` | — | Live |
+| `users` | `profiles`, `platform_staff` | — | Live; DEC-033 |
 | `merchants` | `merchant`, `merchant_bank_account` | Merchant lifecycle | BQ-006 `OPEN` |
 | `catalog` | `restaurant`, `restaurant_hours`, `menu_*` | Restaurant open/closed (derived) | BQ-007 `OPEN` |
 | `carts` | `cart`, `cart_item` | — | DEC-017 |
@@ -565,7 +565,11 @@ residual is an architecture choice (platform revenue is the natural one); the
 *amounts* remain `OPEN`.
 
 4. **A ledger group that does not sum to zero must fail the transaction**, not
-   log a warning. Enforced in the ledger service and asserted in tests.
+   log a warning. `ACCEPTED` — **DEC-034**: enforced **in the ledger service
+   inside the transaction**, asserted in tests, and re-verified by a scheduled
+   reconciliation process. **Not** by a database trigger — that was considered
+   and rejected for Phase 1. The reconciliation job is therefore mandatory, not
+   optional: without the trigger it is the only thing that would notice drift.
 
 ### 10.3 The components
 
@@ -748,6 +752,23 @@ body, status, created_at. The request hash matters — the same key with a
 `SupabaseService` already owns both clients and confines the service-role key to
 backend context (CON-005). The service-role key must never appear in a mobile or
 browser bundle — enforced today, must stay enforced.
+
+### 13.1a Authorization is a domain relationship
+
+`ACCEPTED` — **DEC-033**. Capability is resolved by asking **"what relationship
+does this user have with this domain?"**, never by reading a single role column:
+
+| Capability | Established by |
+|---|---|
+| Customer | Implicit — every authenticated profile |
+| Merchant | `restaurant_members` row, **scoped to one restaurant** |
+| Rider | `riders` row |
+| Operator / Admin | `platform_staff` row |
+
+**`profiles.role` is deprecated and must not be read for authorization.** No
+generic RBAC layer is built — where a domain table exists, membership *is* the
+grant. `RolesGuard` currently reads `profiles.role` and must be changed; that is
+implementation work, tracked in `docs/TODO.md`.
 
 ### 13.2 RLS strategy — defence in depth, not the authorization system
 

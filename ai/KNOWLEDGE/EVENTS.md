@@ -707,3 +707,106 @@ into a database decision.
 **DBQ-002** (role model), **DBQ-010** (zero-sum via deferred constraint trigger
 vs application check), plus the already-known **TQ-011** (migration workflow) and
 **TQ-012** (concurrency test strategy).
+
+---
+
+## EVENT-017
+
+```yaml
+id: EVENT-017
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/database-design-v1
+confidence: HIGH
+```
+
+**Database architecture decisions locked.** The Product Owner approved two
+decisions that close the database design. **Documentation only — no migration,
+no SQL, no Supabase change, no backend code.**
+
+### ⚠️ Numbering collision — read this before citing either decision
+
+The approval instruction labelled them **"DEC-014 — Multi-role Identity Model"**
+and **"DEC-015 — Phase 1 Financial Integrity"**. **Both IDs were already taken**
+— DEC-014 (PostgreSQL is the system of record) and DEC-015 (payment provider
+abstraction), accepted 2026-08-09 and cited across **17 and 21 files**
+respectively, including a code comment in
+`apps/api/src/modules/payments/payment-provider.interface.ts`.
+
+Reusing them would have silently redefined two decisions the whole repository
+depends on. The new decisions were therefore recorded at the **next free IDs**:
+
+| Approval label | Recorded as |
+|---|---|
+| "DEC-014 — Multi-role Identity Model" | **DEC-033** |
+| "DEC-015 — Phase 1 Financial Integrity" | **DEC-034** |
+
+The original DEC-014 and DEC-015 are unchanged and still `ACCEPTED`.
+
+### DEC-033 — Multi-role identity via domain membership
+
+`profiles` is identity; **authorization is a domain relationship.** A single
+`profiles.role` column is not authoritative, and **no generic RBAC layer is
+built**: Customer is **implicit** for every authenticated profile, Merchant is a
+`restaurant_members` row (scoped to one restaurant), Rider is a `riders` row,
+and Operator/Admin is a new small **`platform_staff`** row.
+
+The question becomes **"what relationship does this user have with this
+domain?"**, never "what single role does this user have?"
+
+**This overruled the database design's own recommendation.** EVENT-016 proposed
+a generic `user_roles` table; the Product Owner rejected it — where a domain
+table exists, membership *is* the grant. `user_roles` is now **not** part of the
+design, and the rejection is recorded in place rather than deleted.
+
+Consequences: **no RLS policy may reference `profiles.role`** — every policy
+resolves through a membership lookup. `profiles.role` is deprecated but cannot
+be dropped by a design change: `RolesGuard`, `set_user_role()` and the
+`enforce_profile_immutable_columns()` trigger all read it. That is implementation
+work, now tracked in `docs/TODO.md`.
+
+### DEC-034 — Phase 1 financial integrity without a zero-sum trigger
+
+No PostgreSQL trigger enforcing a full accounting zero-sum invariant in Phase 1.
+Integrity comes instead from immutable financial records, database constraints,
+NestJS transactions, idempotency, auditability and **reconciliation**.
+
+**This also overruled the design's own recommendation** — DBQ-010 proposed a
+`DEFERRABLE INITIALLY DEFERRED` constraint trigger.
+
+**CON-003 is not repealed.** Every order's ledger still balances to zero; the
+enforcement point moves from *physically impossible to violate* to *asserted in
+the ledger service and monitored*. The consequence to carry forward: **the
+reconciliation process is now mandatory rather than optional**, because without
+the trigger it is the only thing that would notice drift — it needs a schedule
+and an alert (TQ-006).
+
+`ledger_entry_groups` stays, and DEC-034's requirement to answer *"what
+financial events produced these values?"* is precisely what it provides: without
+the groups, five of the six required questions are answerable and the sixth is
+not. `group_key` uniqueness remains **idempotency** (DEC-028), not zero-sum
+enforcement. Corrections remain compensating entries, never edits.
+
+A stronger ledger invariant is explicitly available in a later phase. **No future
+accounting rules were invented.**
+
+### Questions closed — exactly two
+
+**DBQ-002** by DEC-033 and **DBQ-010** by DEC-034. Both are marked `ANSWERED`
+with the original analysis preserved beneath. **12 of 14 DBQs remain open**, and
+no `Q`, `BQ` or `TQ` was closed.
+
+### Guardrail
+
+> **DATABASE DESIGN IS APPROVED. DATABASE MIGRATION HAS NOT STARTED.**
+
+`supabase/` is unchanged and still holds exactly the three migrations applied on
+2026-08-09. Remaining gates before the first migration: DBQ-004, DBQ-011,
+TQ-011, TQ-012.
+
+### Business decisions
+
+**None changed.** Online-payment-first, COD disabled, one restaurant per cart,
+broadcast → first accept, rider search after merchant accept, the no-rider
+ladder, the three fee directions, settlement separation and refund separation
+are all untouched and re-verified.
