@@ -129,32 +129,53 @@ run against the real project via real Auth sessions, not the pg shim):
 - `display_name` update → allowed
 - Signed-out client reads nothing
 
-## 8. Current task (EVENT-010, incomplete)
+## 8. Last completed task (EVENT-010, done)
 
 Connect the Customer App to the real Supabase dev project and QA it honestly.
+**Complete and pushed** to `feature/supabase-customer-auth` (5 commits, head
+`c6ff6135`). **Not merged.**
 
-**Done:** project created, migrations pushed, Phone auth + Test OTP configured,
-`.env` written and gitignored, live RLS verified.
+Verified live against `banhao-dev`: request OTP → wrong OTP rejected by the
+server → correct OTP → profile read under RLS → `display_name` write
+(`204 PATCH`) → session survives a full app restart → logout → logout persists
+across another restart. **No fake session was created.**
 
-**Not yet done:**
-- Live auth QA on simulator (login → OTP → session → profile → logout)
-- Session persistence across app restart
-- Auth error states (invalid/expired/wrong OTP, resend, network failure)
-- Visual QA of the 22 previously-unreachable authenticated screens
-- `docs/SUPABASE_DEVELOPMENT.md`
-- Memory updates (EVENT-010), commits, push
+Visual QA: **4/31 → 29/31 states verified by screenshot** (artifacts in
+`docs/qa/customer-app/`). Money arithmetic checked, not assumed.
 
-**Nothing has been committed on this branch yet.**
+**Five defects recorded rather than quietly fixed** (`docs/CUSTOMER_APP_VISUAL_QA.md`):
+
+| ID | Severity | Finding |
+|---|---|---|
+| DEF-01 | **MAJOR** | `PayExpired` (12e) unreachable — QR counts to zero and navigates nowhere |
+| DEF-02 | MINOR | `ขอรหัสใหม่` resets the countdown but never resends the OTP |
+| DEF-03 | MINOR | Back labels read "Tabs" / "Back" in English |
+| DEF-04 | MINOR | `✓` (U+2713) substitutes to a glyph reading as `√` |
+| DEF-05 | MINOR | Profile phone shown unformatted, without `+` |
+
+### ⚠️ iOS Simulator cannot hold HTTP/3 to Supabase
+
+First HTTPS request succeeds, then every one after it fails with
+`Network request failed`. The response advertises `alt-svc: h3`, CFNetwork
+switches to QUIC and the connection dies (`-1005`). Survives app restart and
+Simulator reboot. Use `scripts/sim-supabase-proxy.mjs` for Simulator QA — it
+forwards verbatim to the real project and mocks nothing. Full evidence in
+`docs/SUPABASE_DEVELOPMENT.md`. Untested on hardware and on Android.
+
+Also note: `EXPO_PUBLIC_*` is inlined at transform time. After editing
+`apps/customer/.env` you must restart Metro with `--clear` **and**
+terminate/relaunch Expo Go — reloading is not enough.
 
 ## 9. Next steps
 
-1. Run the app against `banhao-dev`; sign in with a Test OTP number.
-2. Screenshot the 22 authenticated screens and classify vs the design artifact.
-3. Test session persistence, logout, and the auth error states.
-4. Write `docs/SUPABASE_DEVELOPMENT.md`; update `CUSTOMER_APP_VISUAL_QA.md`.
-5. Update `ai/MEMORY.md`, `ai/HANDOFF.md`, `ai/KNOWLEDGE/EVENTS.md` (EVENT-010).
-6. `pnpm lint && pnpm typecheck && pnpm test && pnpm build`, then split commits
-   and push. **Do not merge.**
+1. **Review** `feature/customer-app` and `feature/supabase-customer-auth`.
+2. Fix **DEF-01**, then screenshot 12e to close the last reachable state.
+3. Answer DQ-01…DQ-05 in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`.
+4. Verify on an Android emulator — per-weight font families are untested there.
+5. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
+   external lead time, gates all payment work.
+
+**Do not merge without the Product Owner's review.**
 
 ## 10. Decisions and constraints
 
@@ -188,8 +209,10 @@ settlement model, Q-010 platform fee, Q-020 PromptPay refund mechanism (no
 provider supports native PromptPay refunds — see `ai/RESEARCH/PAYMENT_RESEARCH.md`).
 
 **Known gaps:** Android is **UNVERIFIED** (no SDK on this machine, and it is the
-platform most likely to differ on per-weight fonts). 22 Customer screens were
-`UNVERIFIED` as of `f01c8b38` — closing that is the current task.
+platform most likely to differ on per-weight fonts). A physical iOS device and
+real SMS delivery are also unverified. 29/31 Customer states are now verified;
+12e is blocked by DEF-01 and the search results list by the simulator's
+inability to type Thai.
 
 **Scope lock:** do not start Merchant, Driver, or Admin apps, payment
 integration, order backend, dispatch, or settlement.
