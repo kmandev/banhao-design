@@ -16,7 +16,13 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-**Technical Architecture v1 (EVENT-015), on `feature/technical-architecture-v1`** — this update. The architecture implementing DEC-016…DEC-032 is designed and written down. **Architecture only — no backend, no migration, no Supabase table, no provider integration, no Merchant/Rider/Admin app.**
+**Supabase Database Design v1 (EVENT-016), on `feature/database-design-v1`** — this update. The PostgreSQL blueprint for DEC-016…DEC-032. **Design only — no migration created, no SQL executed, live Supabase untouched.**
+
+Two documents: `docs/DATABASE_DESIGN.md` (46 tables, ERD, table catalog, RLS matrix, state matrix, FK/cascade rules, justified indexes, migration order) and `docs/OPEN_DATABASE_QUESTIONS.md` (**DBQ-001…DBQ-014**).
+
+Highlights: the live `profiles` RLS pattern is generalised as the template for every table (**revoke-first** matters — Supabase grants `ALL` by default); **DEC-017 is enforced by composite foreign keys** so a cross-restaurant cart cannot be stored; state columns are `text` + `CHECK` rather than enums because the order vocabulary already changed once; a small ledger is recommended with `ledger_entry_groups.group_key` doing double duty as duplicate protection and zero-sum unit. **A single `profiles.role` column was found insufficient** — a rider and a restaurant owner both also order food (DBQ-002).
+
+Before that: **Technical Architecture v1 (EVENT-015), on `feature/technical-architecture-v1`**. The architecture implementing DEC-016…DEC-032 is designed and written down. **Architecture only — no backend, no migration, no Supabase table, no provider integration, no Merchant/Rider/Admin app.**
 
 Three documents: `docs/TECHNICAL_ARCHITECTURE.md` (22 sections), `docs/ARCHITECTURE_DECISIONS.md` (**ADR-001…ADR-012, all `PROPOSED`**), `docs/OPEN_TECHNICAL_QUESTIONS.md` (**TQ-001…TQ-016**). **No business decision changed; no question closed.**
 
@@ -36,11 +42,13 @@ Before that: Supabase dev environment + live Customer authentication (EVENT-010)
 
 ## Current Work
 
-`feature/technical-architecture-v1` (from `feature/p0-decisions-v1`) is pushed and **ready for architecture review**. Documentation only. **Not merged to `main`.** Three branches are now stacked and unmerged: `feature/business-rules` → `feature/p0-decisions-v1` → `feature/technical-architecture-v1`.
+`feature/database-design-v1` is pushed and **ready for database review**. Documentation only. **Not merged to `main`.** Four branches are stacked and unmerged: `feature/business-rules` → `feature/p0-decisions-v1` → `feature/technical-architecture-v1` → `feature/database-design-v1`.
 
 ## Immediate Next Step
 
-**Architecture review of `docs/TECHNICAL_ARCHITECTURE.md` and ADR-001…ADR-012** (all `PROPOSED` — nothing may be built until they are accepted). Three technical questions are **T0 and block backend work**: **TQ-011** (migration workflow — agree it before the first domain migration, not after), **TQ-012** (how concurrency correctness is *proved* — the EVENT-007 precedent of verifying by execution against real PostgreSQL applies), and **TQ-008** (provider adapter, gated on Q-001/Q-020).
+**Database review of `docs/DATABASE_DESIGN.md`**, then the first migrations. Four questions block the first migration: **DBQ-002** (role model — `user_roles` vs `profiles.role`, and it needs a `RolesGuard` code change), **DBQ-010** (zero-sum via a deferred constraint trigger), **TQ-011** (migration workflow), **TQ-012** (concurrency test strategy).
+
+Also still open: **architecture review of `docs/TECHNICAL_ARCHITECTURE.md` and ADR-001…ADR-012** (all `PROPOSED` — nothing may be built until they are accepted). Three technical questions are **T0 and block backend work**: **TQ-011** (migration workflow — agree it before the first domain migration, not after), **TQ-012** (how concurrency correctness is *proved* — the EVENT-007 precedent of verifying by execution against real PostgreSQL applies), and **TQ-008** (provider adapter, gated on Q-001/Q-020).
 
 Then the remaining **8 P0 business questions** in `docs/OPEN_BUSINESS_QUESTIONS.md`: Q-001 (provider), Q-002 (legal), Q-010 / BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). Every one is a number, a provider, or a legal question — **all the structural questions are now answered.**
 
@@ -132,6 +140,8 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
 - Do not implement anything tagged `PROPOSED` or `OPEN` in the business documents. **Only `ACCEPTED` is product truth**, and `ACCEPTED — MODEL · OPEN — NUMBERS` means you may not pick the number.
 - Do not enable cash payment anywhere — DEC-016 disables COD in Phase 1. Equally, **do not delete the cash model**: `payment_method` must stay extensible, and DEC-004 / REQ-001 remain accepted.
+- Do not write a migration before DBQ-002, DBQ-010, TQ-011 and TQ-012 are answered — and never `supabase db push` against the live project without explicit instruction.
+- Do not add a table without the five-step security pattern (`revoke` first — Supabase grants `ALL` by default), and do not put business rules in triggers; integrity constraints only.
 - Do not implement anything tagged `PROPOSED` in the technical documents either — **every ADR is `PROPOSED`**, and `TQ-NNN` items must not be turned into assumptions.
 - Do not write `SELECT`-then-check-then-`UPDATE` on any guarded table. The state check goes in the `WHERE` clause (ADR-003) — check-then-act lets two riders both win.
 - Do not add a client write grant on a domain table. Mutations go through NestJS (ADR-001/ADR-002).

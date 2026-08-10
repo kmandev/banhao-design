@@ -616,3 +616,94 @@ free**, and PITR is paid. Both apply from the first real order, not at scale.
 
 TQ-012 now lists the seven invariants a concurrency suite must assert, including
 the two the review found unstated.
+
+---
+
+## EVENT-016
+
+```yaml
+id: EVENT-016
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/database-design-v1
+confidence: HIGH
+```
+
+**Supabase Database Design v1.** The PostgreSQL blueprint implementing
+DEC-016…DEC-032 under the approved architecture. **Design only — no migration
+was created, no SQL was executed, the live Supabase project was not touched.**
+
+Two documents: `docs/DATABASE_DESIGN.md` (46 tables, ERD, table catalog, RLS
+matrix, state matrix, FK/cascade table, index justifications, migration order)
+and `docs/OPEN_DATABASE_QUESTIONS.md` (**DBQ-001…DBQ-014**).
+
+**No business decision created, changed or reversed. No `Q`, `BQ`, `TQ` or
+`DEC` closed.**
+
+### The existing security pattern was generalised, not replaced
+
+Migration `20260809000003_harden_profiles_rls.sql` turned out to be the most
+valuable artifact in the repository for this step. Its five-step pattern —
+**revoke-first**, narrow column grants, RLS enabled, policies scoped
+`to authenticated`, `security definer` trigger backstop — is now the template
+every new table follows. The `revoke` step is load-bearing: Supabase grants
+`ALL` on public tables by default, so a migration that only adds policies leaves
+clients able to write every column.
+
+### Findings that changed the design
+
+**A single `profiles.role` column is not sufficient.** In a district this small
+a rider orders food and a restaurant owner orders food, so promoting a user to
+`DRIVER` would remove their ability to be a customer. Recommended `user_roles`
+(sparse) with **`CUSTOMER` implicit for every authenticated user**, plus
+`restaurant_members` as the real merchant authorization boundary — a global
+`MERCHANT` role grants nothing by itself. The live enum also has **no
+`OPERATOR`**, which DEC-032 requires. Deprecating `profiles.role` needs a code
+change (`RolesGuard`, `set_user_role()`, the immutability trigger), so it is
+recorded as **DBQ-002 (D0)** rather than done here.
+
+**DEC-017 is enforced structurally, not by validation.** `cart_items` carries a
+denormalised `restaurant_id` and two composite foreign keys — to
+`carts (id, restaurant_id)` and `menu_items (id, restaurant_id)`. Both share the
+column, so they must agree: **a cross-restaurant cart cannot be stored.** No
+trigger, no application check, no race. Chosen over a `BEFORE INSERT` trigger
+because a trigger is invisible in the table definition and must be re-derived by
+every agent that reads the schema.
+
+**`text` + `CHECK` over PostgreSQL enums for state columns.** The order
+vocabulary has already changed once (DEC-019 superseded the 12-state machine)
+and five exception state names are still `PROPOSED`. Under `text + CHECK` that
+is a one-line constraint swap; under an enum, removing a value means a new type
+and altering every column. The live `user_role` enum stays — small, stable, and
+referenced by a function and a trigger.
+
+**A ledger is recommended, but a small one.** The five questions §21 asks are
+answerable from `orders` and `refunds` alone; the ledger earns its place because
+CON-003's zero-sum needs something to sum, settlement must be *derived from
+financial records* (DEC-026), and corrections must be compensating entries
+(DEC-014). `ledger_entry_groups.group_key` is unique — which is simultaneously
+DEC-028's fail-loudly duplicate protection and the unit the zero-sum assertion
+runs over. It also encodes the earlier review finding: a duplicate **webhook**
+is rejected by `payment_events`' unique key, while a duplicate **payment** gets a
+different `group_key` and is therefore recorded rather than swallowed.
+
+**Only three tables accept a direct client write** — `addresses`, `carts` (and
+children), and `notifications.read_at`. None carries financial or state meaning.
+That is what makes §25's rule structural: a customer cannot write
+`payment.status` because no grant exists.
+
+### Deliberately not designed
+
+Promotions/coupons (**BQ-030 funding is `OPEN`** — the schema would be a guess),
+cash tables (DEC-016), **rider location history** (🔴 Q-012 unanswered — no
+location schema before the legal basis), support tickets (BQ-037). A partial
+unique index enforcing one active delivery per rider was **rejected** because
+BQ-021 is `OPEN`: a configurable service check is reversible, a unique index is
+not (DBQ-007). This is the correct instance of not turning a business question
+into a database decision.
+
+### Blocking the first migration
+
+**DBQ-002** (role model), **DBQ-010** (zero-sum via deferred constraint trigger
+vs application check), plus the already-known **TQ-011** (migration workflow) and
+**TQ-012** (concurrency test strategy).

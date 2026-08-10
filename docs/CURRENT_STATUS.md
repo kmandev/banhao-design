@@ -199,6 +199,22 @@ Three `T0` technical questions block backend work: **TQ-011** (migration
 workflow), **TQ-012** (proving concurrency correctness), **TQ-008** (provider
 adapter, gated on Q-001/Q-020).
 
+## Database Design Status
+
+**Designed, not built** (EVENT-016, 2026-08-11, branch
+`feature/database-design-v1`): [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md) —
+46 tables, ERD, table catalog, RLS matrix, state matrix, FK/cascade rules,
+justified indexes and a migration order — plus
+[`OPEN_DATABASE_QUESTIONS.md`](OPEN_DATABASE_QUESTIONS.md) (DBQ-001…DBQ-014).
+
+⛔ **No migration was created, no SQL was executed, and the live `banhao-dev`
+project was not modified.** The three applied migrations are unchanged.
+
+Four questions block the first migration: **DBQ-002** (role model — a single
+`profiles.role` is insufficient once a rider or owner also orders food),
+**DBQ-010** (zero-sum enforcement), **TQ-011** (migration workflow), **TQ-012**
+(concurrency test strategy).
+
 ## Current Blockers
 
 Product-level, not technical. **8 P0 business decisions remain, down from 15** —

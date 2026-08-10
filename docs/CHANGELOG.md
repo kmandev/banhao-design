@@ -2,6 +2,22 @@
 
 > This is a detailed, dated development log for AI-memory purposes. For a shorter, release-facing summary see the root [`CHANGELOG.md`](../CHANGELOG.md) — the two are complementary, not duplicates: this file tracks documentation/process work in date-entry form as agents touch the repo; the root file tracks user-facing repository milestones.
 
+## 2026-08-11 (2) — Supabase Database Design v1
+
+### Added
+
+- `docs/DATABASE_DESIGN.md` — 46 tables across 13 domains, Mermaid ERD, per-table catalog (purpose / PK / columns / FKs / indexes / RLS / mutability), RLS matrix, state-owner matrix, FK cascade rules, justified indexes, delete and immutability strategy, and a dependency-safe migration order.
+- `docs/OPEN_DATABASE_QUESTIONS.md` — **DBQ-001…DBQ-014**, priorities D0/D1/D2, several gated on a `Q` or `BQ`.
+- `ai/KNOWLEDGE/EVENTS.md` — EVENT-016.
+
+### Changed
+
+- `ai/MEMORY.md`, `ai/HANDOFF.md`, `CLAUDE.md`, `docs/CURRENT_STATUS.md` — updated for EVENT-016, with two new "do not" rules: no migration before DBQ-002/DBQ-010/TQ-011/TQ-012, and every new table needs `revoke ... from anon, authenticated` first.
+
+### Not done, deliberately
+
+**No migration, no SQL executed, no live Supabase change.** No table, index, RLS policy, trigger or function was created. No business decision created, changed or reversed; no `Q`, `BQ`, `TQ` or `DEC` closed. Promotions, cash tables, rider location history and support tickets were deliberately not designed because the business or legal question behind each is still `OPEN`.
+
 ## 2026-08-11 — Technical Architecture v1
 
 ### Added

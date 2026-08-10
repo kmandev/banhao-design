@@ -54,7 +54,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-15 events logged, EVENT-001 through EVENT-015 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → P0 Business Decisions v1 approved → **Technical Architecture v1**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+16 events logged, EVENT-001 through EVENT-016 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → P0 Business Decisions v1 approved → Technical Architecture v1 → **Supabase Database Design v1**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Business Rules
 
@@ -69,6 +69,14 @@ The spine: **NestJS writes, clients read, Postgres decides.** Domain tables gran
 Concurrency is a **guarded conditional UPDATE** — the state check lives in the `WHERE` clause, branch on rows-affected. **Never `SELECT`-then-check-then-`UPDATE`**; that is check-then-act and two riders both pass the check. Money is `bigint` satang with the rounding residual allocated by subtraction, so CON-003 holds by construction.
 
 **A `DEC-` beats an `ADR-`.** ADRs are technical and subordinate; if they appear to conflict, the business decision wins and the ADR is a bug.
+
+## Database Design
+
+**Designed, not built** (EVENT-016, 2026-08-11): [`docs/DATABASE_DESIGN.md`](../docs/DATABASE_DESIGN.md) (46 tables, ERD, RLS matrix, FK/cascade rules, index justifications, migration order) · [`docs/OPEN_DATABASE_QUESTIONS.md`](../docs/OPEN_DATABASE_QUESTIONS.md) (**DBQ-001…DBQ-014**). **No migration exists; no SQL was run; the live project is untouched.**
+
+The live `profiles` RLS pattern is the template for every new table: **revoke-first**, narrow column grants, RLS on, policies scoped `to authenticated`, `security definer` trigger backstop. Only three tables accept a direct client write — `addresses`, `carts`, `notifications.read_at`.
+
+DEC-017 is enforced by **composite foreign keys**, so a cross-restaurant cart cannot be stored. State columns are `text` + `CHECK`, not enums, because the order vocabulary already changed once. Blocking the first migration: **DBQ-002** (role model — a single `profiles.role` is not sufficient), **DBQ-010** (zero-sum enforcement), TQ-011, TQ-012.
 
 ## Important Architecture Rules
 
@@ -88,6 +96,7 @@ Full architecture (state tables, diagrams): [`docs/ARCHITECTURE.md`](../docs/ARC
 | Task context | `docs/CURRENT_STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/ROADMAP.md` | Read before working on something specific |
 | Business truth | `docs/BUSINESS_RULES.md` + the six companion docs | **Before any domain work.** Only `ACCEPTED` may be built on |
 | Technical truth | `docs/TECHNICAL_ARCHITECTURE.md`, `docs/ARCHITECTURE_DECISIONS.md`, `docs/OPEN_TECHNICAL_QUESTIONS.md` | **Before writing backend code** |
+| Database truth | `docs/DATABASE_DESIGN.md`, `docs/OPEN_DATABASE_QUESTIONS.md` | **Before writing any migration** |
 | Structured knowledge | `ai/KNOWLEDGE/*.md` | Typed, ID'd, cross-referenceable facts/requirements/constraints/etc. |
 | Historical context | `docs/PROJECT_HISTORY.md`, `ai/SESSION_LOG/`, `ai/CONVERSATIONS/` | Read when you need "why" or "when" |
 | Canonical design | `design/`, `specs/` | The actual product design, not a summary of it |
