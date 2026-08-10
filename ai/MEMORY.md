@@ -32,11 +32,14 @@ The live dev Supabase project (`banhao-dev`) is what the merged app authenticate
 
 18 open of 20 logged. **Q-006 and Q-007 are RESOLVED** (DEC-011 NestJS, DEC-010 Supabase). Still blocking payment work: **Q-002** (legal/settlement model), **Q-020** (🚨 PromptPay refund mechanism — no provider supports native refunds), **Q-001** (payment provider — `OPEN` by design, see DEC-015), **Q-010** (platform fee). Full list: [`ai/KNOWLEDGE/QUESTIONS.md`](KNOWLEDGE/QUESTIONS.md).
 
+Plus **39 business questions BQ-001…BQ-039** from EVENT-013, 15 of them P0, in [`docs/OPEN_BUSINESS_QUESTIONS.md`](../docs/OPEN_BUSINESS_QUESTIONS.md) — a separate namespace that cross-references the `Q-NNN` list rather than duplicating it. Nothing in the Order, Payment or Settlement domain can be implemented until the P0 set is answered.
+
 ## Active Tasks
 
 P0/P1 items only (full list in [`docs/TODO.md`](../docs/TODO.md)):
 
-- Answer DQ-01…DQ-05 design questions in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` (P1)
+- **Review the 15 P0 business questions in `docs/OPEN_BUSINESS_QUESTIONS.md` (P0)** — they block Order, Payment and Settlement implementation
+- Close DQ-01…DQ-05 (P1) — all five are addressed by EVENT-013; DQ-01 and DQ-02 are answerable from existing documents, DQ-04/DQ-05 are superseded by BQ items
 - Verify the app on Android — per-weight font families are untested there (P1)
 - **Commission Thai legal/compliance review (P0)** — has external lead time; gates all payment work
 - Decide PromptPay refund mechanism (P0) — contradicts documented design
@@ -51,7 +54,11 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-11 events logged, EVENT-001 through EVENT-011 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → **DEF-01…DEF-05 fixed**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+13 events logged, EVENT-001 through EVENT-013 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → **Business Rules & Domain Modelling**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+
+## Business Rules
+
+The business layer is documented but **not approved**: [`docs/BUSINESS_RULES.md`](../docs/BUSINESS_RULES.md), [`docs/DOMAIN_MODEL.md`](../docs/DOMAIN_MODEL.md), [`docs/ORDER_LIFECYCLE.md`](../docs/ORDER_LIFECYCLE.md), [`docs/RIDER_LIFECYCLE.md`](../docs/RIDER_LIFECYCLE.md), [`docs/PAYMENT_LIFECYCLE.md`](../docs/PAYMENT_LIFECYCLE.md), [`docs/SETTLEMENT_MODEL.md`](../docs/SETTLEMENT_MODEL.md). Every rule is tagged `DOCUMENTED` (accepted product truth), `PROPOSED` (unapproved analysis) or `OPEN`. **Only `DOCUMENTED` may be built on.** Six contradictions inside accepted documents were found — see EVENT-013 — including a referenced-but-nonexistent `PENDING_PAYMENT` order state and a `NO_DRIVER` rule that the Customer App's own copy contradicts.
 
 ## Important Architecture Rules
 

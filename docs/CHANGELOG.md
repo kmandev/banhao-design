@@ -2,6 +2,19 @@
 
 > This is a detailed, dated development log for AI-memory purposes. For a shorter, release-facing summary see the root [`CHANGELOG.md`](../CHANGELOG.md) — the two are complementary, not duplicates: this file tracks documentation/process work in date-entry form as agents touch the repo; the root file tracks user-facing repository milestones.
 
+## 2026-08-10
+
+### Added
+
+- `docs/BUSINESS_RULES.md`, `docs/DOMAIN_MODEL.md`, `docs/ORDER_LIFECYCLE.md`, `docs/RIDER_LIFECYCLE.md`, `docs/PAYMENT_LIFECYCLE.md`, `docs/SETTLEMENT_MODEL.md`, `docs/OPEN_BUSINESS_QUESTIONS.md` — the Step 4 business-rules and domain-modelling pass (EVENT-013). Every rule tagged `DOCUMENTED` / `PROPOSED` / `OPEN`; 39 new business questions (BQ-001…BQ-039), 15 of them P0. **No production code, no migration, no payment provider.**
+- `ai/KNOWLEDGE/EVENTS.md` — EVENT-013, including the six contradictions found inside accepted documents.
+
+### Changed
+
+- `docs/TODO.md` — the P0 entries "decide backend technology stack" and "decide database technology" were stale since 2026-08-09 (resolved by DEC-011 and DEC-010); marked resolved with their decision references rather than deleted. Added a pointer separating business questions (`Q-NNN` / `BQ-NNN`) from engineering tasks.
+- `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — DQ-01…DQ-05 now cross-reference `OPEN_BUSINESS_QUESTIONS.md`. None was closed; that is a Product Owner action.
+- `ai/KNOWLEDGE/QUESTIONS.md`, `ai/MEMORY.md`, `ai/HANDOFF.md`, `CLAUDE.md`, `docs/CURRENT_STATUS.md` — updated for EVENT-013.
+
 ## 2026-08-09
 
 ### Added

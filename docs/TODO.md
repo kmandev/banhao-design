@@ -2,22 +2,30 @@
 
 Every item cites where it comes from in the repository. Items with no in-repo source are marked as such rather than invented.
 
+> **Business decisions live elsewhere.** Since EVENT-013 (2026-08-10) the product
+> decisions that block Order, Payment and Settlement are tracked in
+> [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md) (`BQ-001…BQ-039`)
+> and [`../ai/KNOWLEDGE/QUESTIONS.md`](../ai/KNOWLEDGE/QUESTIONS.md)
+> (`Q-001…Q-020`). This file keeps engineering and documentation tasks. Do not
+> duplicate a question into both places.
+
 ## P0 — Critical
+
+- [ ] Answer the 15 P0 business questions in [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
+  - Priority: P0
+  - Source: EVENT-013
+  - Notes: Q-001, Q-002, Q-010, Q-020, BQ-010, BQ-012, BQ-014, BQ-015, BQ-019, BQ-023, BQ-025, BQ-026, BQ-027, BQ-028, BQ-030. Until these are answered, the Order, Payment and Settlement modules can only be guessed at. Two of them (BQ-012, BQ-014) are contradictions between accepted documents.
 
 - [ ] Decide payment provider(s) and the marketplace/settlement model for Phase 1 PromptPay QR payments
   - Priority: P0
   - Source: `docs/04-payment/BANHAO Payment Architecture.dc.html`, closing note of section "06 — EDGE CASES"
-  - Notes: The document explicitly states it is not yet bound to any provider and flags this as required before production. Blocks all payment implementation.
+  - Notes: The document explicitly states it is not yet bound to any provider and flags this as required before production. Blocks all payment implementation. Tracked as Q-001 / Q-002.
 
-- [ ] Decide backend technology stack (language, framework, hosting)
-  - Priority: P0
-  - Source: UNKNOWN / NOT VERIFIED — no decision found anywhere in the repository
-  - Notes: Nothing can be implemented until this exists.
+- [x] ~~Decide backend technology stack (language, framework, hosting)~~
+  - **RESOLVED 2026-08-09 by DEC-011** — NestJS + TypeScript, REST with OpenAPI (Q-006). Hosting remains open as Q-009 (P1). *Entry was stale until EVENT-013 reconciled it.*
 
-- [ ] Decide database technology and design the schema
-  - Priority: P0
-  - Source: UNKNOWN / NOT VERIFIED
-  - Notes: The Order and Payment state machines are already fully specified at the product level (`docs/05-architecture`, `docs/04-payment`) and ready to translate into a schema once a database is chosen.
+- [x] ~~Decide database technology and design the schema~~
+  - **RESOLVED 2026-08-09 by DEC-010** — Supabase (PostgreSQL + PostGIS), Q-007. Three migrations are applied live. The **domain schema** is still unwritten and is deliberately blocked on the P0 business questions above; the proposed model is `docs/DOMAIN_MODEL.md`, status `PROPOSED`. *Entry was stale until EVENT-013 reconciled it.*
 
 ## P1 — High
 
@@ -91,6 +99,11 @@ Every item cites where it comes from in the repository. Items with no in-repo so
   - Notes: —
 
 ## Questions Requiring Product Decision
+
+> Kept for history. These five were given structured IDs (Q-001…Q-005) in
+> `ai/KNOWLEDGE/QUESTIONS.md`, which is canonical for them. Q-003 is now extended
+> by BQ-016 and Q-004 by BQ-034 — see
+> [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md).
 
 - [ ] Which payment provider(s) will BANHAO integrate with for PromptPay QR in Phase 1?
   - Source: `docs/04-payment`, closing note

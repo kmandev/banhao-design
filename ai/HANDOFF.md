@@ -16,17 +16,21 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-**Merge to `main`** (this update). The full quality gate (lint, typecheck, test, build) was re-run on `main` after the merge and passed. Before that: Customer App defect fixes (EVENT-011) — **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
+**Business Rules & Domain Modelling (EVENT-013), on `feature/business-rules`** — this update. Seven documents written, **zero production code**: `docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md`, `OPEN_BUSINESS_QUESTIONS.md`. Every rule is tagged `DOCUMENTED` / `PROPOSED` / `OPEN`; nothing was promoted to `ACCEPTED` and no `Q-NNN` was resolved. 39 business questions added (BQ-001…BQ-039), 15 of them P0. Six contradictions **inside accepted documents** were found — see EVENT-013 for all six; the two that matter most are a `PENDING_PAYMENT` order state that the payment machine references but the order machine does not contain (BQ-012), and a `NO_DRIVER` rule that the Customer App's own copy contradicts (BQ-014).
+
+Before that: **merge to `main`**. The full quality gate (lint, typecheck, test, build) was re-run on `main` after the merge and passed. Before that: Customer App defect fixes (EVENT-011) — **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
 
 Before that: Supabase dev environment + live Customer authentication (EVENT-010). Project `banhao-dev` created in `ap-southeast-1` with Phone auth on **Supabase Test OTP**. Verified live: request OTP, wrong OTP rejected by the server, correct OTP, profile read under RLS, `display_name` write (`204 PATCH`), session persistence across a full app restart, logout, and logout persisting across another restart. **Live RLS: 14/14 passed.** No fake session was ever created.
 
 ## Current Work
 
-None active. The merge is done; new work should branch from `main`.
+`feature/business-rules` is written and **awaiting Product Owner review**. It is documentation only — no code, no migration, no provider.
 
 ## Immediate Next Step
 
-Answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed — and verify the app on Android. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time. Merchant, Driver, Admin, and any payment/order/dispatch work remain out of scope until the P0 product decisions land — that is a new instruction to wait for, not something to infer from "the merge is done."
+**Product Owner review of `docs/OPEN_BUSINESS_QUESTIONS.md`, starting with the 15 P0 items.** Until those are answered, Order, Payment and Settlement cannot be implemented — only guessed at. The P0 set is Q-001, Q-002, Q-010, Q-020, plus BQ-010, BQ-012, BQ-014, BQ-015, BQ-019, BQ-023, BQ-025, BQ-026, BQ-027, BQ-028, BQ-030.
+
+In parallel and unchanged: **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017, and now BQ-022 rider classification) still gates all payment work and has external lead time; DQ-01…DQ-05 need closing (all five are now addressed — see `OPEN_BUSINESS_QUESTIONS.md` § DQ table); Android is still unverified. Merchant, Driver, Admin, and any payment/order/dispatch code remain out of scope until the P0 decisions land — that is a new instruction to wait for, not something to infer from "the business rules are written."
 
 ## Important Decisions
 
@@ -51,14 +55,19 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Pending Decisions
 
-**Blocking payment work:** Q-002 (legal/settlement model), Q-020 (PromptPay refund mechanism), Q-001 (payment provider), Q-010 (platform fee).
-**Needed soon:** Q-015 (ETDA notification), Q-009 (hosting budget), Q-018 (map field test), Q-019 (SMS sender ID — ~2 week lead time), Q-012 (PDPA review).
+**Blocking payment work:** Q-002 (legal/settlement model), Q-020 (PromptPay refund mechanism), Q-001 (payment provider), Q-010 (platform fee — anchored but not decided; see BQ-028).
+**Blocking order/dispatch work (new, EVENT-013):** BQ-010 (one merchant per cart), BQ-012 (`PENDING_PAYMENT`), BQ-014 (`NO_DRIVER` semantics), BQ-015 (who pays for wasted food), BQ-019 (dispatch model), BQ-023 (rider cash float), BQ-025 (no-rider ladder), BQ-026/BQ-027 (delivery and service fees), BQ-030 (promotion funding).
+**Needed soon:** Q-015 (ETDA notification), Q-009 (hosting budget), Q-018 (map field test), Q-019 (SMS sender ID — ~2 week lead time), Q-012 (PDPA review), BQ-022 (rider contractor status).
 
 ## Blocking Issues
 
 🚨 **No payment provider supports native PromptPay refunds** — contradicts the refund design in `docs/04-payment`. An off-rail mechanism (likely wallet credit) must be designed. Q-020.
 
 🚨 **Payment-facilitation licensing boundary unresolved** — BANHAO's split/transfer-round/cash-liability design may itself be regulated activity. Q-002.
+
+🚨 **Two accepted documents contradict each other** (EVENT-013). The Payment State Machine pairs five states with an Order state `PENDING_PAYMENT` that the Order State Machine does not contain (BQ-012). The Order State Machine puts `NO_DRIVER` after `READY` — food cooked — while the Customer App tells the customer their food has *not* been cooked (BQ-014). Neither can be resolved by an agent; both change who pays for wasted food.
+
+🚨 **The cash design makes riders front their own money** — the rider pays the merchant ฿108 at pickup to earn ฿12, before collecting anything. Documented twice, never called out. With 8–12 riders total this is a recruitment barrier. BQ-023.
 
 ## Important Files
 
@@ -104,6 +113,8 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not build Merchant, Driver, or Admin apps without an explicit instruction.
 - Do not commit `.env` or any credential — CI fails the build on this.
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
+- Do not implement anything tagged `PROPOSED` in `docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md` or `SETTLEMENT_MODEL.md`. Only `DOCUMENTED` rules are product truth.
+- Do not treat the design's sample figures as business rules — 10% commission, ฿15 delivery, ฿5 service, ฿10 coupon are all illustrative, and the payment canvas says so about itself.
 
 ## Recommended First Action
 

@@ -171,6 +171,15 @@ RootNavigator
 
 Recorded rather than guessed, per the brief.
 
+> **All five were addressed by EVENT-013** (Business Rules & Domain Modelling,
+> 2026-08-10). See the DQ table in
+> [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md) § Design questions
+> for the reasoning. Summary: **DQ-01** and **DQ-02** turned out to be answerable
+> from `docs/04-payment` and are recommended for closure as *documented*, not
+> decided; **DQ-03** is blocked on Q-020 and BQ-031; **DQ-04** is superseded by
+> BQ-001 and BQ-002; **DQ-05** is superseded by BQ-039. None has been closed
+> here — that is the Product Owner's action.
+
 **DQ-01 — Cash payment path after checkout.** The design has `isCash` and a CTA
 `ยืนยันสั่ง ฿N (เงินสด)`, but no cash-specific confirmation screen; PromptPay
 goes to `12 QR`. Implemented as: cash → `13 สั่งสำเร็จ` directly. Needs

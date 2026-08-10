@@ -258,3 +258,99 @@ confidence: HIGH
 `feature/customer-app` and `feature/supabase-customer-auth` remain on the remote (not deleted) but are now fully contained in `main`; any future work should branch from `main`.
 
 **Scope did not change.** No payment provider, no order backend, no dispatch, no settlement, and no Merchant/Driver/Admin app work was started as part of this merge — those all remain gated on the P0 product decisions in `docs/TODO.md`.
+
+---
+
+## EVENT-013
+
+```yaml
+id: EVENT-013
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/business-rules
+confidence: HIGH
+```
+
+**Business Rules & Domain Modelling.** The business layer of BANHAO was
+analysed, structured and written down before any Order, Payment, Merchant,
+Rider or Settlement code exists. **No production code, no migration, no API and
+no payment provider integration was created** — the diff is documentation and AI
+knowledge only.
+
+Seven documents produced: `docs/BUSINESS_RULES.md`, `docs/DOMAIN_MODEL.md`,
+`docs/ORDER_LIFECYCLE.md`, `docs/RIDER_LIFECYCLE.md`,
+`docs/PAYMENT_LIFECYCLE.md`, `docs/SETTLEMENT_MODEL.md`, and
+`docs/OPEN_BUSINESS_QUESTIONS.md`. Every rule in them carries a status —
+`DOCUMENTED` (traceable to an accepted source), `PROPOSED` (this pass's
+suggestion, unapproved) or `OPEN` — so a later agent can tell product truth from
+analysis. **No `PROPOSED` item was promoted to `ACCEPTED`, and no `Q-NNN` was
+resolved.**
+
+**39 new business questions (BQ-001…BQ-039)** were recorded, cross-referencing
+the twenty pre-existing `Q-NNN` items rather than duplicating them. Fifteen are
+P0 — they block Order, Payment or Settlement implementation outright.
+
+Six findings changed the project's understanding of its own design. Each is a
+contradiction or omission **inside accepted documents**, not an opinion:
+
+1. **`PENDING_PAYMENT` is referenced but does not exist.** The Payment State
+   Machine pairs five payment states with an Order state named
+   `PENDING_PAYMENT`; the Order State Machine's twelve states do not include it.
+   An order awaiting a PromptPay transfer is therefore in no nameable state,
+   which REQ-002 does not allow (BQ-012).
+2. **`NO_DRIVER` contradicts the Customer App.** The state machine documents
+   `READY → NO_DRIVER` — the food is cooked — while the app's no-rider screen
+   tells the customer *"อาหารของคุณยังไม่ถูกปรุง"*, their food has not been
+   cooked. Both cannot be true, and the answer decides who absorbs the cost of
+   wasted food (BQ-014, BQ-015).
+3. **The cash design requires riders to front their own money.** Two independent
+   statements — the cash ledger line `ร้านได้รับเงินสดหน้าร้านแล้ว −฿108` and the
+   merchant-finance note that cash orders skip transfer rounds "because the shop
+   already received the money from the rider at the counter" — mean the rider
+   pays the merchant at pickup, before collecting from the customer. On a ฿130
+   order the rider fronts ฿108 to earn ฿12. With a pool of 8–12 riders this is a
+   recruitment barrier, and it was never called out (BQ-023).
+4. **The commission rate the design implies is 10% of the food subtotal.**
+   Q-010 records that no rate is documented; in fact the samples are internally
+   consistent at 10% (120→12, 180→18, 260→26) and the merchant screen states
+   `10% ของยอดอาหาร` outright. Still a sample, not a decision — but a coherent
+   anchor Q-010 did not have.
+5. **The platform funds discounts, and delivery runs at a loss.** Working the
+   design's own ledger: the merchant is paid commission on the full undiscounted
+   menu price, so the platform absorbs the ฿10 coupon; and ฿10 of net delivery
+   revenue pays a ฿12 rider earning, with commission covering the gap. Neither
+   is stated anywhere (BQ-030, BQ-026, BQ-029).
+6. **The rider accept window is contradictory.** Wireframe `D-05` is titled
+   `นับถอยหลัง 20 วิ` while its button reads `รับงาน · 12 วิ`.
+   `ai/RESEARCH/THAILAND_COMPLIANCE.md` §5 cites "the documented 12-second accept
+   window" — it read the button state. 12 s should not be treated as established
+   (BQ-020).
+
+Also recorded: **riders pay a platform fee** (`ค่าธรรมเนียมแพลตฟอร์ม −฿38` in
+`D-13`), which appears nowhere else in the repository; and the Customer App's
+refund copy promises money back *"เข้าบัญชีเดิม … ภายใน 1–3 วันทำการ"*, which
+Q-020 found is not natively possible on the PromptPay rail — a promise without a
+mechanism.
+
+**Three dispatch models were compared** (first-available, zone-based, broadcast)
+plus manual dispatch, against complexity, cost, fairness, speed, Buntharik fit
+and scalability. The recommendation is **broadcast / first-accept with admin
+manual dispatch as an always-available override**, on the grounds that 8–12
+riders is one pool and speed is the only lever that moves the documented ≤5%
+no-rider cancellation ceiling. **The Product Owner decides — BQ-019 is `OPEN`.**
+The no-rider scenario was analysed across seven options and answered with a
+time-based ladder rather than a single choice (BQ-025).
+
+**DQ-01…DQ-05 were all addressed.** DQ-01 (cash path) and DQ-02 (duplicate-payment
+trigger) turned out to be **answerable from documents that already exist** — the
+payment canvas specifies both — and are recommended for closure rather than
+decision. DQ-03 is blocked on Q-020 and BQ-031; DQ-04 is superseded by BQ-001
+and BQ-002; DQ-05 by BQ-039.
+
+`docs/TODO.md` was reconciled: its P0 entries for "decide backend stack" and
+"decide database technology" had been stale since 2026-08-09, when DEC-011 and
+DEC-010 resolved them.
+
+**Nothing was implemented and nothing was decided.** The next step is Product
+Owner review of `docs/OPEN_BUSINESS_QUESTIONS.md`, starting with the fifteen P0
+items.

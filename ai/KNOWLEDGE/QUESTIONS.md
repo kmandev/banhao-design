@@ -2,6 +2,14 @@
 
 Migrated from `docs/TODO.md` § "Questions Requiring Product Decision", plus the P0 stack questions from the same file's P0 list, given structured IDs. When a question is resolved, update its `Status` to `RESOLVED` and its `Decision` field to the `DEC-NNN` that answers it — do not delete the entry.
 
+**See also — the `BQ-NNN` series.** EVENT-013 (2026-08-10) added 39 business
+questions from the domain-modelling pass, held in
+[`docs/OPEN_BUSINESS_QUESTIONS.md`](../../docs/OPEN_BUSINESS_QUESTIONS.md). They
+use a separate `BQ-NNN` namespace and **cross-reference the `Q-NNN` entries
+below rather than restating them**, so nothing has two homes. Several `BQ`
+entries extend a `Q` — Q-003 by BQ-016, Q-004 by BQ-034, Q-010 by BQ-028, Q-014
+by BQ-038. This file remains canonical for `Q-NNN`.
+
 ---
 
 ## Q-001

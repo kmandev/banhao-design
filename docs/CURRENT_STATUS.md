@@ -147,16 +147,38 @@ Do not read the above as full verification. These have not been tested:
 - The search **results** list — the simulator cannot type Thai, and the mock
   catalogue is Thai-only
 
+## Business Rules Status
+
+**Documented, not approved** (EVENT-013, 2026-08-10, branch
+`feature/business-rules`). Seven documents describe how BANHAO works as a
+business: [`BUSINESS_RULES.md`](BUSINESS_RULES.md),
+[`DOMAIN_MODEL.md`](DOMAIN_MODEL.md), [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md),
+[`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md),
+[`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md),
+[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md),
+[`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md).
+
+Every rule is tagged `DOCUMENTED` (accepted product truth) / `PROPOSED`
+(unapproved analysis) / `OPEN`. **Only `DOCUMENTED` may be implemented.** No
+decision was made, no question resolved, no code written.
+
 ## Current Blockers
 
-Product-level, not technical. `docs/TODO.md` P0: payment provider (Q-001),
-legal/settlement model (Q-002), platform fee (Q-010), PromptPay refund mechanism
-(Q-020). The Thai legal/compliance review has external lead time and gates all
-payment work.
+Product-level, not technical. **15 P0 business decisions** —
+`docs/TODO.md` P0 and [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md):
+payment provider (Q-001), legal/settlement model (Q-002), platform fee
+(Q-010/BQ-028), PromptPay refund mechanism (Q-020), plus BQ-010, BQ-012, BQ-014,
+BQ-015, BQ-019, BQ-023, BQ-025, BQ-026, BQ-027, BQ-030. The Thai
+legal/compliance review has external lead time and gates all payment work.
+
+Two blockers are **contradictions between accepted documents**, found by
+EVENT-013 and not resolvable by an agent: the `PENDING_PAYMENT` order state that
+the payment machine references but the order machine lacks (BQ-012), and the
+`NO_DRIVER` rule the Customer App's own copy contradicts (BQ-014).
 
 ## Immediate Next Step
 
-Answer DQ-01…DQ-05 in
-[`CUSTOMER_APP_IMPLEMENTATION_MAP.md`](CUSTOMER_APP_IMPLEMENTATION_MAP.md), verify
-the app on Android, and move the P0 product decisions below forward — they gate
-all payment work, not the code.
+**Product Owner review of the 15 P0 business questions.** Then close DQ-01…DQ-05
+(all five are addressed — see the DQ table in
+[`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)) and verify the app on
+Android.

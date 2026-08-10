@@ -37,8 +37,9 @@ Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 ## 3. Current branch
 
 ```
-main @ c4927b25   ← YOU ARE HERE — feature/supabase-customer-auth merged, PUSHED
-  (merge commit: Merge feature/supabase-customer-auth into main)
+feature/business-rules   ← YOU ARE HERE — branched from main @ 9a60277e
+                            documentation only, awaiting Product Owner review
+main @ 9a60277e             feature/supabase-customer-auth merged, PUSHED
 ```
 
 `feature/supabase-customer-auth` (which already contained everything from
@@ -61,7 +62,8 @@ should branch from `main`, not from either of them.**
 | EVENT-009 | Typography fix (IBM Plex Sans Thai bundled) + visual QA |
 | EVENT-010 | Supabase dev project + live customer auth verification |
 | EVENT-011 | DEF-01…DEF-05 fixed, re-verified; visual QA 31/31 |
-| **—** | **Reviewed and merged to `main`** (this update) |
+| EVENT-012 | Reviewed and merged to `main` |
+| **EVENT-013** | **Business Rules & Domain Model — 7 documents, 39 open business questions, no code** (this update) |
 
 ## 5. Current implementation status
 
@@ -79,6 +81,13 @@ should branch from `main`, not from either of them.**
 
 **No business logic exists.** No order creation, payment integration, dispatch,
 or settlement. That is intentional, not an omission.
+
+**The business rules are now written down but not approved** (EVENT-013).
+`docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`,
+`RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md` and
+`OPEN_BUSINESS_QUESTIONS.md` tag every rule `DOCUMENTED` (accepted product
+truth), `PROPOSED` (unapproved analysis) or `OPEN`. **Build only on
+`DOCUMENTED`.** 39 business questions (BQ-001…BQ-039) are open, 15 of them P0.
 
 **All 31 Customer states are verified by screenshot** and all five defects
 found in review (DEF-01…DEF-05) are fixed and re-verified on device — see
@@ -109,6 +118,14 @@ supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.m
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
 docs/CUSTOMER_APP_VISUAL_QA.md            what is and is not verified
 docs/CUSTOMER_APP_ASSETS.md               fonts, placeholders
+
+docs/BUSINESS_RULES.md            master business rules, status-tagged
+docs/DOMAIN_MODEL.md              PROPOSED entities, aggregates, ER diagrams
+docs/ORDER_LIFECYCLE.md           order states, timeouts, cancellation matrix
+docs/RIDER_LIFECYCLE.md           dispatch models, no-rider ladder, cash
+docs/PAYMENT_LIFECYCLE.md         payment/refund states, idempotency, PromptPay
+docs/SETTLEMENT_MODEL.md          ledger accounts, worked examples, payouts
+docs/OPEN_BUSINESS_QUESTIONS.md   BQ-001…BQ-039 — read before any domain work
 ```
 
 ## 7. Database / Supabase status
@@ -180,7 +197,12 @@ terminate/relaunch Expo Go — reloading is not enough.
 
 ## 9. Next steps
 
-1. Answer DQ-01…DQ-05 in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`.
+0. **Review the 15 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`.** They block
+   Order, Payment and Settlement outright. Two of them are contradictions
+   between accepted documents (BQ-012, BQ-014) and cannot be resolved by an
+   agent.
+1. Close DQ-01…DQ-05 — all five are addressed by EVENT-013; see the DQ table in
+   `docs/OPEN_BUSINESS_QUESTIONS.md`.
 2. Verify on an Android emulator — per-weight font families are untested there.
 3. Verify the search **results** list and keyboard avoidance on a device that
    can type Thai (the Simulator cannot).
@@ -220,6 +242,10 @@ of this merge — check in before starting it.**
 - Every text style needs an explicit `fontFamily` — `fontSize` alone silently
   falls back to the system face.
 - Do not add a text style, dependency, or migration without a stated reason.
+- **Implement only rules tagged `DOCUMENTED`.** `PROPOSED` is analysis awaiting
+  approval; `OPEN` means it is undecided and guessing is forbidden.
+- Sample figures are not rules: 10% commission, ฿15 delivery, ฿5 service and the
+  ฿10 `BANHAO7` coupon are all illustrative.
 
 **Open questions blocking real work:** Q-001 payment provider, Q-002 legal
 settlement model, Q-010 platform fee, Q-020 PromptPay refund mechanism (no
