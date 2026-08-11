@@ -421,3 +421,152 @@ against a running PostgreSQL instance, not by reading the SQL, and the
 exercise reproduced the architecture review's own HIGH finding precisely
 enough to reveal it is a sharper failure mode (a hard constraint-violation
 error, not a silent no-op) than the original finding described.
+
+---
+
+## 12. Architect Review findings, Step 7.2 — HIGH-1: fixed
+
+**Status: fixed**, migration `20260811000012_rider_order_views.sql`.
+
+**Finding.** § 7 of this report already flagged the underlying issue as a
+known simplification (DBQ-015): the rider's RLS policies on
+`orders`/`order_items`/`order_item_options` were correctly scoped at the
+**row** level (`is_assigned_order_rider()`, proven in § 4.3 F5) but granted
+**full-row** access once assigned — every money column, `payment_method`,
+`customer_id`, and `address_id` on `orders`, plus the two price columns on
+`order_items` and `order_item_options`. The Architect Review confirmed this
+as a HIGH finding: a rider client could `SELECT *` and receive the complete
+financial breakdown of an order it merely delivers.
+
+**1. What a rider CAN select** (via three new views, granted to
+`authenticated`):
+
+| View | Columns |
+|---|---|
+| `rider_order_view` | `id`, `order_number`, `state`, `restaurant_id`, `restaurant_name_snapshot`, `delivery_address_snapshot`, `delivery_lat`, `delivery_lng`, `delivery_landmark`, `recipient_name_snapshot`, `recipient_phone_snapshot`, `distance_m`, `quoted_eta_minutes`, `placed_at`, `accepted_at`, `ready_at`, `picked_up_at`, `delivered_at`, `cancelled_at`, `created_at`, `updated_at` |
+| `rider_order_item_view` | `id`, `order_id`, `item_name_snapshot`, `quantity`, `note`, `created_at` |
+| `rider_order_item_option_view` | `id`, `order_item_id`, `group_name_snapshot`, `option_name_snapshot`, `created_at` |
+
+**2. What a rider CANNOT select.** Not merely nulled — **not a column on the
+view at all**, proven by `undefined_column` (42703) in § domain test G3/G7/G9:
+`subtotal_satang`, `delivery_fee_satang`, `service_fee_satang`,
+`discount_satang`, `grand_total_satang`, `currency`, `payment_method`,
+`customer_id`, `address_id`, `cause_code` (orders); `unit_price_satang`,
+`line_total_satang`, `menu_item_id` (order_items); `price_delta_satang`,
+`menu_option_id` (order_item_options). Phase 1 is online-payment-only
+(DEC-016) — a rider never collects money and has no operational need for any
+of these.
+
+**3. How the database enforces this.** Two changes, together:
+
+- The rider's SELECT policies on the three base tables are **dropped**
+  (`orders_select_rider`, `order_items_select_rider`,
+  `order_item_options_select_rider`). A rider querying `orders` directly now
+  matches zero policies and gets zero rows — proven in § domain test G4.
+- The three views are created **without `security_invoker`** (the pre-PG15
+  default: a view runs with its owner's privileges). Since the migration
+  role owns every table in this schema and Postgres exempts a table's owner
+  from its own RLS unless `FORCE ROW LEVEL SECURITY` is set (nothing in this
+  schema sets it), the views can still read the underlying rows even though
+  the rider's own policy no longer exists. The views' own `where` clause
+  reuses the identical `is_assigned_order_rider()` function the dropped
+  policies called, so row-level scoping is unchanged — it moved from a
+  policy evaluated per-row to a view predicate calling the same function.
+
+**4. Why this is safe against direct client SQL access.** A client cannot
+widen the view's result by crafting different SQL: `select * from
+rider_order_view` still cannot return `grand_total_satang`, because that
+column was never projected into the view — it does not exist as far as any
+query against the view is concerned, independent of anything the client
+sends. And a client cannot go around the view to the base table either,
+because the rider has no working policy left there (`SELECT` returns zero
+rows, not an error, since `authenticated` still has table-level `GRANT
+SELECT` for the customer/merchant policies that remain — but RLS filters
+every row out for a rider). Customer and merchant access to the base tables,
+money columns included, is untouched — verified in § domain test G10/G11.
+
+**Corrects one detail of DBQ-015's own recommendation:** DBQ-015 suggested
+`security_invoker = true`. That would not work once the rider's base-table
+policy is removed — an invoker-security view still evaluates RLS as the
+querying role, so a rider would see zero rows through it too, same as
+querying the base table directly. The two changes (drop the policy, use an
+owner-privilege view) have to be made together, which is what this migration
+does. **DBQ-015 is now resolved**, not merely narrowed — see
+`docs/OPEN_DATABASE_QUESTIONS.md`.
+
+`deliveries`, `restaurants`, and `addresses` were reviewed per the finding's
+instructions and left unchanged: `deliveries`' rider-visible columns are the
+delivery's own operational data (including the rider's *own*
+`rider_earning_satang`, not the order's price breakdown); `restaurants` is
+already public for `ACTIVE` restaurants; `addresses` already has no rider
+policy at all (the dropoff address a rider needs comes from the order
+snapshot, now served by `rider_order_view`).
+
+---
+
+## 13. Architect Review findings, Step 7.2 — HIGH-2: fixed
+
+**Status: fixed**, migration `20260811000013_rider_reassignment_atomicity.sql`.
+
+**Finding.** § 4.4 of this report already proved, by execution, that an
+*incomplete* release (statement 1 of § 11.1's release invariant without
+statement 2) leaves a delivery permanently unassignable and makes the next
+claim attempt crash with an unhandled `23505 unique_violation`. The
+underlying race protection (`rider_assignments_one_active`, the guarded
+conditional `UPDATE`) is correct and was not changed. What was missing was a
+single database-owned entry point that makes "both statements, one
+transaction" a property of the API surface rather than a rule every caller
+has to remember.
+
+**The fix.** `public.release_rider_assignment(delivery_id uuid, status text,
+reason text)` — `SECURITY DEFINER`, service-role-only (same trusted-server
+pattern as `set_user_role` in `20260809000003_harden_profiles_rls.sql`).
+Inside one function invocation it:
+
+1. Locks the delivery row and reads the currently-assigned rider
+   (`SELECT ... FOR UPDATE`, guarded on `state IN ('RIDER_ASSIGNED',
+   'RIDER_REASSIGNING') AND rider_id IS NOT NULL`) — raises immediately if
+   the delivery is not actually releasable.
+2. Clears `deliveries.rider_id`, advances `state` to `RIDER_SEARCHING`, and
+   increments `reassignment_count`, guarded on the same condition.
+3. Closes the matching `rider_assignments` row (`delivery_id` **and**
+   `rider_id` both matched, so it cannot cross-close a different rider's
+   row), setting `status` to the caller-supplied `CANCELLED` or `RELEASED`.
+4. Verifies step 3 affected **exactly one row**. If not, it raises — and
+   because steps 2 and 3 both ran inside this single statement, Postgres
+   rolls back step 2 as well. The function can never return having cleared
+   `rider_id` while leaving a stale `ACCEPTED` assignment behind — the exact
+   half-done state the original finding described.
+
+**Why this is safe if the application crashes mid-operation.** A crash
+between steps 2 and 3 is not possible from outside this function, because
+both are inside one function call = one statement = one unit of work from
+the calling transaction's point of view. If the calling NestJS process dies
+before the call returns, the surrounding transaction is simply never
+committed — ordinary Postgres behaviour, not something this migration adds.
+If a future caller manages to invoke only *half* of the release by going
+around this function (a raw two-statement bypass), the untouched
+`rider_assignments_one_active` unique index is still the backstop — proven
+directly in the new regression tests (Case E) by deliberately reproducing
+that exact bypass and confirming it still cannot produce two `ACCEPTED`
+rows.
+
+**What stays an application-layer decision, by design (ADR-001):** *when* to
+release a rider (a tap-to-cancel, a no-response timeout, an operator's
+forced reassignment) and whether that release is recorded as `CANCELLED` or
+`RELEASED`. This function makes the resulting write atomic; it does not
+decide when to call it.
+
+**Regression tests — Cases A–E**, `supabase/tests/rider_reassignment_atomicity_test.sql`:
+
+| Case | What it proves | Result |
+|---|---|---|
+| A | Normal claim → atomic release → a new rider claims immediately | PASS |
+| B | Two riders claim simultaneously → exactly one winner (re-asserted from the genuinely concurrent execution in § 4.4; that mechanism is untouched) | PASS |
+| C | The released rider's own assignment row is `RELEASED` with `closed_at` set — never left stale `ACCEPTED` | PASS |
+| D | A new rider can claim the same delivery immediately after a valid atomic release | PASS |
+| E | `release_rider_assignment` refuses a non-service caller, an invalid status, and an un-releasable delivery — each rejection leaves the delivery/assignments completely unchanged; and a hand-rolled bypass of the function (reproducing the original incomplete release directly against the base tables) is still blocked from producing two `ACCEPTED` rows by the pre-existing unique index | PASS |
+
+15/15 new assertions pass. Full run: **91/91** across all four suites (RLS,
+domain invariants incl. the new HIGH-1 §G, the pre-existing rider race, and
+the new HIGH-2 Cases A–E) — see EVENT-019 in `ai/KNOWLEDGE/EVENTS.md`.

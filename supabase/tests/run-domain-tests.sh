@@ -19,6 +19,9 @@
 #      deliberate reproduction of the architecture review's HIGH finding
 #      (incomplete release makes a delivery permanently unassignable) and
 #      its fix, both proven by execution.
+#   5. rider_reassignment_atomicity_test.sql — HIGH-2 fix (Architect Review,
+#      Step 7.2): proves public.release_rider_assignment() makes the release
+#      invariant atomic, cases A-E.
 #
 # This does NOT touch the live/remote Supabase project. It never runs
 # `supabase db push` or `supabase link`.
@@ -129,4 +132,18 @@ if grep -q "FAIL" /tmp/banhao-race-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + RIDER RACE VERIFICATION PASSED"
+echo "==> Running rider reassignment atomicity assertions (HIGH-2 fix, Architect Review Step 7.2)"
+docker cp "$REPO_ROOT/supabase/tests/rider_reassignment_atomicity_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/rider_reassignment_atomicity_test.sql 2>&1 | tee /tmp/banhao-reassign-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> Rider reassignment atomicity verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-reassign-out.log; then
+  echo "==> Rider reassignment atomicity verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + RIDER RACE + REASSIGNMENT ATOMICITY VERIFICATION PASSED"

@@ -5,7 +5,12 @@ Unresolved **technical** questions from the database design pass (EVENT-016,
 
 **Nothing here is an assumption.** An agent may not close any of these — only a
 Product Owner decision can. **Two were closed on 2026-08-11**: DBQ-002 by
-DEC-033 and DBQ-010 by DEC-034. **12 of 14 remain open.**
+DEC-033 and DBQ-010 by DEC-034. **DBQ-015 was implemented on 2026-08-11**,
+directed by the Architect Review's HIGH-1 finding (EVENT-019) rather than a
+Product Owner decision — it was a security implementation gap, not a
+business question, so no `DEC` was needed to act on it. Marked **IMPLEMENTED**
+below rather than removed, so the original question and its answer both stay
+visible. **11 of 14 business/legal-gated questions remain open.**
 
 ## Namespaces
 
@@ -49,7 +54,7 @@ not propose a business answer.
 | DBQ-012 | Connection pooling and the service-role connection | D1 | TQ-005 |
 | DBQ-013 | Naming: `DRIVER` role vs `rider_*` tables | D2 | — |
 | DBQ-014 | Where do notification preferences live? | D2 | BQ-035 |
-| DBQ-015 | Column-scoped rider view for orders/order_items | D2 | — |
+| ~~DBQ-015~~ | ~~Column-scoped rider view for orders/order_items~~ — **IMPLEMENTED** | — | closed 2026-08-11 |
 
 ---
 
@@ -408,7 +413,25 @@ table) once a push provider is chosen — TQ-003.
 
 ## DBQ-015 — Column-scoped rider view for orders/order_items
 
-**Priority:** D2 · **Status:** OPEN
+**Priority:** ~~D2~~ · **Status: ✅ IMPLEMENTED — 2026-08-11, Architect Review HIGH-1 (EVENT-019)**
+
+> **Answer: implemented largely as this entry's own recommendation
+> proposed**, with one correction. `20260811000012_rider_order_views.sql`
+> adds `rider_order_view`, `rider_order_item_view`, and
+> `rider_order_item_option_view`; the rider's full-row policies on
+> `orders`/`order_items`/`order_item_options` are dropped. The correction:
+> this entry recommended `security_invoker = true`. That does not actually
+> work once the rider's base-table policy is dropped — an invoker-security
+> view still evaluates the querying role's own RLS, so a rider would see
+> zero rows through it too. The views are created **without**
+> `security_invoker` (the pre-PG15 default: owner-privilege), which is what
+> lets them read rows the rider's own RLS no longer permits directly, while
+> the view's `where` clause (the same `is_assigned_order_rider()` the
+> dropped policy used) keeps the row-level scope identical to before.
+>
+> Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md` § 12.
+>
+> The original question is preserved below for context.
 
 **Question:** Should a rider's read access to `orders`/`order_items` be
 narrowed to specific columns via a view, as `docs/DATABASE_DESIGN.md` § 18

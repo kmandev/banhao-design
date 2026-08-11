@@ -629,6 +629,140 @@ select test_assert(
 
 \echo '--- F. RLS representative access: PASS ---'
 
+-- ===========================================================================
+-- G. HIGH-1 fix — rider column exposure via views (Architect Review Step 7.2)
+--
+-- 20260811000012_rider_order_views.sql dropped the full-row rider policies
+-- on orders/order_items/order_item_options and replaced the rider's read
+-- path with three column-scoped views. RIDER_A is assigned here; RIDER_B is
+-- deliberately left unassigned, to prove both the column boundary and the
+-- (unchanged) row boundary in the same section.
+-- ===========================================================================
+
+insert into public.deliveries (id, order_id, state, rider_id, assigned_at)
+values ('f2000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001',
+        'RIDER_ASSIGNED', 'c1000000-0000-0000-0000-000000000001', now());
+
+insert into public.rider_assignments (delivery_id, rider_id, status)
+values ('f2000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', 'ACCEPTED');
+
+insert into public.order_item_options (id, order_item_id, group_name_snapshot, option_name_snapshot, price_delta_satang)
+values ('a2100000-0000-0000-0000-000000000001', 'a2000000-0000-0000-0000-000000000001',
+        'ระดับความเผ็ด', 'เผ็ดมาก', 500);
+
+-- G1. The assigned rider reads the order through the view.
+select test_assert(
+  test_select_count_as_user(:'RIDER_A',
+    $stmt$select count(*) from public.rider_order_view where id = 'a1000000-0000-0000-0000-000000000001'$stmt$
+  ) = 1,
+  'G1. The assigned rider reads the order through rider_order_view'
+);
+
+-- G2. The view carries what a rider actually needs to deliver.
+select test_assert(
+  test_select_count_as_user(:'RIDER_A',
+    $stmt$select count(*) from public.rider_order_view
+       where id = 'a1000000-0000-0000-0000-000000000001'
+         and recipient_phone_snapshot = '+66811111111'
+         and delivery_address_snapshot = '88 หมู่ 4 บ้านบุณฑริก'$stmt$
+  ) = 1,
+  'G2. rider_order_view carries delivery-relevant columns (recipient phone, delivery address)'
+);
+
+-- G3. Money and identity columns are not merely null — they DO NOT EXIST on
+-- the view, so selecting them fails to parse (42703), regardless of rows.
+select test_assert(
+  test_as_user(:'RIDER_A',
+    $stmt$select grand_total_satang from public.rider_order_view where id = 'a1000000-0000-0000-0000-000000000001'$stmt$
+  ) = 'BLOCKED: 42703',
+  'G3a. rider_order_view has no grand_total_satang column (undefined_column)'
+);
+select test_assert(
+  test_as_user(:'RIDER_A',
+    $stmt$select subtotal_satang from public.rider_order_view where id = 'a1000000-0000-0000-0000-000000000001'$stmt$
+  ) = 'BLOCKED: 42703',
+  'G3b. rider_order_view has no subtotal_satang column (undefined_column)'
+);
+select test_assert(
+  test_as_user(:'RIDER_A',
+    $stmt$select payment_method from public.rider_order_view where id = 'a1000000-0000-0000-0000-000000000001'$stmt$
+  ) = 'BLOCKED: 42703',
+  'G3c. rider_order_view has no payment_method column (undefined_column)'
+);
+select test_assert(
+  test_as_user(:'RIDER_A',
+    $stmt$select customer_id from public.rider_order_view where id = 'a1000000-0000-0000-0000-000000000001'$stmt$
+  ) = 'BLOCKED: 42703',
+  'G3d. rider_order_view has no customer_id column (undefined_column)'
+);
+
+-- G4. The assigned rider can no longer read the base orders table directly
+-- at all — the rider policy is gone, full-row access is not merely narrowed.
+select test_assert(
+  test_select_count_as_user(:'RIDER_A',
+    $stmt$select count(*) from public.orders where id = 'a1000000-0000-0000-0000-000000000001'$stmt$
+  ) = 0,
+  'G4. The assigned rider cannot read the base orders table directly — only the column-scoped view'
+);
+
+-- G5. A rider who is NOT assigned to this delivery sees nothing through the
+-- view either — the row-level boundary is unchanged by this fix.
+select test_assert(
+  test_select_count_as_user(:'RIDER_B',
+    $stmt$select count(*) from public.rider_order_view where id = 'a1000000-0000-0000-0000-000000000001'$stmt$
+  ) = 0,
+  'G5. An unassigned rider cannot read another rider''s order through rider_order_view'
+);
+
+-- G6/G7. order_items: name/quantity visible, price is not a column at all.
+select test_assert(
+  test_select_count_as_user(:'RIDER_A',
+    $stmt$select count(*) from public.rider_order_item_view
+       where order_id = 'a1000000-0000-0000-0000-000000000001' and item_name_snapshot = 'ส้มตำไทย' and quantity = 1$stmt$
+  ) = 1,
+  'G6. rider_order_item_view carries item name and quantity'
+);
+select test_assert(
+  test_as_user(:'RIDER_A',
+    $stmt$select unit_price_satang from public.rider_order_item_view limit 1$stmt$
+  ) = 'BLOCKED: 42703',
+  'G7. rider_order_item_view has no unit_price_satang column (undefined_column)'
+);
+
+-- G8/G9. order_item_options: option name visible, price_delta is not.
+select test_assert(
+  test_select_count_as_user(:'RIDER_A',
+    $stmt$select count(*) from public.rider_order_item_option_view
+       where order_item_id = 'a2000000-0000-0000-0000-000000000001' and option_name_snapshot = 'เผ็ดมาก'$stmt$
+  ) = 1,
+  'G8. rider_order_item_option_view carries the selected option name'
+);
+select test_assert(
+  test_as_user(:'RIDER_A',
+    $stmt$select price_delta_satang from public.rider_order_item_option_view limit 1$stmt$
+  ) = 'BLOCKED: 42703',
+  'G9. rider_order_item_option_view has no price_delta_satang column (undefined_column)'
+);
+
+-- G10/G11. Customer and merchant access to the FULL order, money included,
+-- is completely unaffected by this fix.
+select test_assert(
+  test_select_count_as_user(:'CUST_A',
+    $stmt$select count(*) from public.orders
+       where id = 'a1000000-0000-0000-0000-000000000001' and grand_total_satang = 13000$stmt$
+  ) = 1,
+  'G10. Customer access to orders, INCLUDING money columns, is unchanged'
+);
+select test_assert(
+  test_select_count_as_user(:'OWNER_1',
+    $stmt$select count(*) from public.orders
+       where id = 'a1000000-0000-0000-0000-000000000001' and grand_total_satang = 13000$stmt$
+  ) = 1,
+  'G11. Merchant access to orders, INCLUDING money columns, is unchanged'
+);
+
+\echo '--- G. rider column exposure (HIGH-1 fix): PASS ---'
+
 \echo ''
 \echo 'All domain invariant assertions passed.'
 \echo ''

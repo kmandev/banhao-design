@@ -909,3 +909,107 @@ narrowing is deferred as **DBQ-015 (D2)** rather than silently shipped as
 
 **None changed.** No `Q`, `BQ`, `TQ`, or `DEC` was closed by this work — this
 event only *implements* what DEC-033 and DEC-034 already decided.
+
+---
+
+## EVENT-019
+
+```yaml
+id: EVENT-019
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/supabase-migration-v1; commit 81ab8e61 -> (this fix)
+confidence: HIGH
+```
+
+**Supabase Migration v1 — Architect Review findings fixed (Step 7.2).** The
+Architect Review of `feature/supabase-migration-v1` (commit `81ab8e61`)
+returned **PASS WITH FINDINGS**: two HIGH findings, no merge, no
+`supabase db push`. Both are now fixed on the same branch, with regression
+tests, and **the live/remote Supabase project was never touched** — same
+Docker-only discipline as EVENT-018.
+
+### HIGH-1 — rider column exposure — FIXED
+
+**Finding:** RLS correctly restricted a rider to their own assigned order
+(row-level, proven by execution in EVENT-018), but
+`20260811000011_rls_policies.sql` granted the rider the **full row** once
+assigned — every money column (`subtotal_satang`, `delivery_fee_satang`,
+`service_fee_satang`, `discount_satang`, `grand_total_satang`, `currency`),
+`payment_method`, `customer_id`, `address_id`, and `cause_code` on `orders`,
+plus `unit_price_satang`/`line_total_satang` on `order_items` and
+`price_delta_satang` on `order_item_options`. This is exactly the
+simplification EVENT-018 flagged as **DBQ-015**, now resolved rather than
+deferred.
+
+**Fix** (`20260811000012_rider_order_views.sql`): the rider's SELECT
+policies on `orders`/`order_items`/`order_item_options` are dropped —
+querying those tables directly as a rider now returns zero rows, full-row or
+otherwise. Three replacement views (`rider_order_view`,
+`rider_order_item_view`, `rider_order_item_option_view`) project only the
+columns a delivery actually needs (order identity/state, pickup
+`restaurant_id`, the delivery-address snapshot, recipient name/phone,
+distance/ETA, lifecycle timestamps; item name/quantity/note; option
+group/name) — no money column, no `payment_method`, no `customer_id` is ever
+projected. Row scope is unchanged: the views call the same
+`is_assigned_order_rider()` the dropped policies used. The views are created
+without `security_invoker` (the pre-PG15 default), so they run with the
+migration role's own privileges and are exempt from `orders`' RLS the same
+way a table owner always is — this is what lets a hidden column be hidden
+structurally rather than merely unrequested by the app. Customer and
+merchant access to `orders`/`order_items`/`order_item_options`, money columns
+included, is completely unchanged. `deliveries`, `restaurants`, and
+`addresses` were reviewed and left as-is — none of them exposes another
+party's financial detail to a rider (see the migration's own § 5 for the
+per-table reasoning). **DBQ-015 is resolved by this fix**, not merely
+narrowed — see `docs/OPEN_DATABASE_QUESTIONS.md`.
+
+### HIGH-2 — rider reassignment atomicity — FIXED
+
+**Finding:** the database-level race protection itself
+(`rider_assignments_one_active`, the guarded conditional `UPDATE`) is
+correct and untouched. But EVENT-018's own testing had already proven that
+an *incomplete* release (nulling `deliveries.rider_id` without closing the
+old `ACCEPTED` row) leaves a delivery stuck, and the next claim attempt
+crashes with an unhandled `23505`. The two release statements
+(`docs/DATABASE_DESIGN.md` § 11.1) had no single database-owned entry point
+— correctness depended entirely on the caller remembering to issue both in
+one transaction.
+
+**Fix** (`20260811000013_rider_reassignment_atomicity.sql`): added
+`public.release_rider_assignment(delivery_id, status, reason)`, a
+`SECURITY DEFINER` function, service-role-only (same trusted-server-path
+pattern as `set_user_role`), that performs both release statements —
+clearing `deliveries.rider_id`/advancing state, then closing the matching
+`rider_assignments` row — inside one function call. If the second statement
+does not affect exactly one row, the function raises and Postgres rolls back
+the entire call, including the first statement; there is no state in which
+only one of the two has taken effect. `rider_assignments_one_active` is
+untouched and remains the backstop for any caller that bypasses this
+function entirely. Application-layer responsibility (deciding *when* to
+release, and `CANCELLED` vs `RELEASED`) is explicitly out of scope for a
+migration (ADR-001) and stays with NestJS — documented in the migration's own
+header rather than assumed.
+
+### Regression tests added, all suites re-run
+
+| Suite | Result |
+|---|---|
+| `run-rls-tests.sh` (existing, `profiles`) | **13/13 PASS**, unchanged |
+| `domain_invariants_test.sql` §A–F (existing) | unchanged, still pass |
+| `domain_invariants_test.sql` §G (**new**, HIGH-1) | **14/14 PASS** — rider sees only permitted columns/rows through the three views; base-table direct access is zero rows; customer/merchant money-column access proven unchanged |
+| `rider_race_assertions.sql` (existing, incl. 2 genuinely concurrent processes) | unchanged, still pass |
+| `rider_reassignment_atomicity_test.sql` (**new**, HIGH-2, Cases A–E) | **15/15 PASS** — normal claim/release/re-claim, the old assignment closed not stale, the pre-existing concurrent-race outcome re-asserted, the function rejecting a non-service caller/bad status/un-releasable delivery, and a hand-rolled bypass of the new function still blocked by the untouched unique-index backstop |
+| **Total this run** | **91/91 PASS**, zero skipped, `git diff --check` clean |
+
+Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md` § 12 (HIGH-1) and § 13
+(HIGH-2).
+
+### What did not change
+
+No original migration was rewritten — `20260809000001`–`20260809000003` and
+`20260811000001`–`20260811000011` are byte-identical (two purely additive
+migrations, `...012` and `...013`, were appended instead). No business
+decision changed; no payment provider, settlement, ledger, order-lifecycle,
+or merchant-model rule was touched. The live/remote `banhao-dev` project was
+not reached by any command in this session.
