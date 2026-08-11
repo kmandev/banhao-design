@@ -13,6 +13,26 @@ migration files. Written 2026-08-11 (EVENT-018), branch
 
 ---
 
+## How to read this report
+
+This document accumulated across **three passes**, and the sections are
+*not* all describing the same point in time. Read § 12 and § 13 as
+authoritative wherever they overlap with an earlier section:
+
+| Sections | Pass | Status |
+|---|---|---|
+| **§§ 1–11** | EVENT-018 — the original migration pass (Step 7.1) | **Historical.** Accurate as of that pass. Two claims in §§ 7, 9, 11 about *rider access* were superseded by § 12 and are marked inline where they appear. |
+| **§ 12** | EVENT-019 + EVENT-020 — HIGH-1 / H-1 rider column **and** row isolation | **Current and authoritative** for everything about rider access to orders. |
+| **§ 13** | EVENT-019 + EVENT-020 — HIGH-2 / M-1 rider reassignment atomicity | **Current and authoritative** for `release_rider_assignment()`. |
+
+⚠️ **If you are looking for how rider access to `orders`/`order_items`/
+`order_item_options` actually works, read § 12 — not §§ 7, 9, or 11.** The
+earlier sections describe a full-row implementation that no longer exists,
+and § 9's suggested remedy (`security_invoker = true`) was subsequently
+**proven not to work**; § 12 explains why and what replaced it.
+
+---
+
 ## 1. What was built
 
 **11 new migration files**, `20260811000001` through `20260811000011`,
@@ -297,9 +317,42 @@ evaluated.
 | `carts` / `cart_items` / `cart_item_options` | Full CRUD, owner-scoped | B1 (insert path) |
 | `notifications` | `read_at` only | (grant present; not separately re-tested beyond F-series patterns) |
 
-**One known simplification, flagged rather than hidden:** § 18 of
-`docs/DATABASE_DESIGN.md` calls for "limited columns via a view" for a
-rider's read of `orders`/`order_items` once assigned. This migration grants
+> ⚠️ **SUPERSEDED — see § 12.** The paragraph below described the original
+> Step 7.1 migration pass, where a rider held full-row `SELECT`. **That is no
+> longer how this schema works.** The rider's policies on
+> `orders`/`order_items`/`order_item_options` have since been dropped
+> entirely and replaced with three column-scoped, `security_barrier` views.
+> Kept here unedited as the record of what the first pass shipped and what
+> the Architect Review then found.
+
+**Current state, in brief** (full detail and verification: § 12): a rider's
+read of `orders`/`order_items`/`order_item_options` no longer goes through
+`GRANT`+RLS on the base tables at all — those policies are dropped. The
+reason is structural, not a preference: `GRANT` is per database *role*, and
+`authenticated` is the single role shared by customer, merchant, and rider
+(DEC-033), so there is no way to give a rider a narrower column set than a
+customer on the same table through ordinary column `GRANT`s. The rider's
+only read path is now three dedicated views —
+`rider_order_view`/`rider_order_item_view`/`rider_order_item_option_view` —
+each with an explicit, minimal column projection (no money column, no
+`payment_method`, no `customer_id`/`address_id`) and a row predicate calling
+`is_assigned_order_rider()`. The views are **owner-privilege**
+(`security_invoker = false`, so they can still read rows the rider's own RLS
+no longer permits) **and `security_barrier = true`** — the second property
+is required, not optional: without it, a rider-supplied query predicate can
+be evaluated by the planner *before* the row predicate, which was proven
+exploitable as an error-based oracle disclosing hidden rows' column values
+without ever returning them. The exact oracle probe was reproduced locally
+against both the vulnerable and fixed states, alongside a positive control
+proving the probe genuinely fires when nothing blocks it (so the fixed
+state's clean result is meaningful, not vacuous) — see § 12 for the full
+proof and `supabase/tests/rider_view_row_isolation_security_test.sql` for
+the permanent regression test.
+
+**One known simplification, flagged rather than hidden** *(state as of Step
+7.1 — since fixed, § 12)*: § 18 of `docs/DATABASE_DESIGN.md` calls for
+"limited columns via a view" for a rider's read of `orders`/`order_items`
+once assigned. This migration grants
 the rider **full-row** `SELECT`, correctly scoped to their own assigned
 delivery via `is_assigned_order_rider()`. The row-level boundary the
 mandatory tests target — a rider seeing only their own assigned orders, not
@@ -329,14 +382,36 @@ see) is not yet implemented and is recorded as **DBQ-015** below.
 
 New, added to `docs/OPEN_DATABASE_QUESTIONS.md`:
 
-**DBQ-015 — column-scoped rider view for orders/order_items.** § 18 of the
-database design calls for "limited columns via a view" for a rider's order
-read once assigned; this migration implements full-row access at the
-correct row-level scope instead (§ 7 above). Recommend a follow-up migration
-adding `rider_order_view` / `rider_order_item_view` with
-`security_invoker = true` (PostgreSQL 15+) once the exact column set a rider
-needs is specified. Priority D2 — the security boundary that matters
-(row-level) is already enforced; this is a refinement.
+**DBQ-015 — column-scoped rider view for orders/order_items.**
+**✅ RESOLVED — implemented in § 12. Do not follow the recommendation in the
+struck-through paragraph below.**
+
+DBQ-015 was raised by this pass and closed by the two Architect Review
+passes that followed. `rider_order_view`, `rider_order_item_view` and
+`rider_order_item_option_view` now exist
+(`20260811000012_rider_order_views.sql`), the rider's full-row policies are
+dropped, and the views are `security_invoker = false` **plus
+`security_barrier = true`**. Current status in
+`docs/OPEN_DATABASE_QUESTIONS.md`: **IMPLEMENTED WITH CAVEAT**.
+
+> ⚠️ **The original recommendation below was WRONG on both counts and is
+> retained only as a record.** `security_invoker = true` does **not** work
+> here: an invoker-security view still evaluates RLS as the querying role,
+> so once the rider's base-table policy is dropped the rider sees zero rows
+> through it. And owner-privilege access alone is **also** insufficient
+> without `security_barrier = true` — without the barrier, a rider-supplied
+> predicate can be evaluated ahead of the view's row check, which was proven
+> exploitable as an error-based oracle. § 12 documents both corrections and
+> the regression test that locks them in.
+
+> ~~**DBQ-015 — column-scoped rider view for orders/order_items.** § 18 of the
+> database design calls for "limited columns via a view" for a rider's order
+> read once assigned; this migration implements full-row access at the
+> correct row-level scope instead (§ 7 above). Recommend a follow-up migration
+> adding `rider_order_view` / `rider_order_item_view` with
+> `security_invoker = true` (PostgreSQL 15+) once the exact column set a rider
+> needs is specified. Priority D2 — the security boundary that matters
+> (row-level) is already enforced; this is a refinement.~~
 
 No other new database questions were raised. The four documentation gaps in
 § 3 were resolved during implementation with the more specific, deliberate
@@ -401,19 +476,28 @@ product or legal decision to resolve.
 
 ---
 
-## 11. Summary
+## 11. Summary *(of the Step 7.1 pass — see § 12/§ 13 for the current state)*
 
 **40 tables, 62 foreign keys, 61 check constraints, 110 indexes, 55 RLS
 policies, 52 triggers, 9 new functions — 11 migrations, 60/60 executable
 assertions passing against real PostgreSQL, zero changes to the live
 Supabase project.**
 
+> **Counts and totals here are as of Step 7.1.** After the two Architect
+> Review passes the branch carries **13 migrations** (two added: the rider
+> views and the atomic release function), three `security_barrier` rider
+> views (§ 12), one new function `release_rider_assignment()` — `SECURITY
+> INVOKER`, callable only by `service_role` (§ 13) — and **104/104**
+> assertions across five suites. § 12 and § 13 carry the current figures.
+
 Six tables were deliberately deferred, each with a stated reason and
 dependency, none removed from the conceptual design. Four small internal
 inconsistencies in the design document were found and resolved in favour of
 the more specific source. One deliberate simplification (a column-scoped
-rider view, deferred as DBQ-015) is flagged rather than silently
-under-delivered.
+rider view, flagged as DBQ-015) was flagged rather than silently
+under-delivered — and has **since been implemented**, together with the
+row-isolation hardening the Architect Review then required on top of it
+(§ 12). It is no longer a deferral.
 
 The rider race condition — the single most safety-critical property in this
 schema — was proven by launching genuinely concurrent client processes
