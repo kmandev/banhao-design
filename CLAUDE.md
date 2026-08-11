@@ -37,15 +37,16 @@ Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 ## 3. Current branch
 
 ```
-feature/database-design-v1        ← YOU ARE HERE — 46 tables, DBQ-001…014
-                                     documentation only, NOT merged to main
+feature/supabase-migration-v1     ← YOU ARE HERE — 11 migrations, 40 tables
+                                     tested (60/60), NOT merged to main
+feature/database-design-v1           46 tables designed, DEC-033/034 locked, PUSHED
 feature/technical-architecture-v1    ADR-001…012, TQ-001…016, PUSHED
 feature/p0-decisions-v1              DEC-016…DEC-032 locked, PUSHED
 feature/business-rules               EVENT-013 business rules, PUSHED
 main @ 9a60277e                      supabase-customer-auth merged, PUSHED
 ```
 
-Four branches are stacked and unmerged. Each builds on the previous one.
+Five branches are stacked and unmerged. Each builds on the previous one.
 
 `feature/supabase-customer-auth` (which already contained everything from
 `feature/customer-app`) was reviewed by the Product Owner and merged into `main`
@@ -71,7 +72,9 @@ should branch from `main`, not from either of them.**
 | EVENT-013 | Business Rules & Domain Model — 7 documents, 39 open business questions, no code |
 | EVENT-014 | P0 Business Decisions v1 approved — DEC-016…DEC-032 locked, no code |
 | EVENT-015 | Technical Architecture v1 — ADR-001…012, TQ-001…016, no code |
-| **EVENT-016** | **Supabase Database Design v1 — 46 tables, DBQ-001…014, no migration** (this update) |
+| EVENT-016 | Supabase Database Design v1 — 46 tables, DBQ-001…014, no migration |
+| EVENT-017 | Database architecture decisions locked — DEC-033 (multi-role identity), DEC-034 (no zero-sum trigger) |
+| **EVENT-018** | **Supabase Migration v1 — 11 migrations, 40 tables, 60/60 assertions pass, live project untouched** (this update) |
 
 ## 5. Current implementation status
 
@@ -117,12 +120,21 @@ read, Postgres decides** — domain tables grant no write access to
 a guarded conditional `UPDATE` with the state check in the `WHERE` clause.
 Three `T0` technical questions block backend work: TQ-008, TQ-011, TQ-012.
 
-**The database is designed but not built** (EVENT-016) — 46 tables, no
-migration, no SQL executed, live project untouched. The live `profiles` RLS
-pattern (**revoke-first**, column grants, policies `to authenticated`, trigger
-backstop) is the template for every table. DEC-017 is enforced by composite
-foreign keys; state columns are `text` + `CHECK`, not enums. Four questions
-block the first migration: DBQ-002, DBQ-010, TQ-011, TQ-012.
+**The database is designed AND implemented as migrations** (EVENT-016 design →
+EVENT-017 DEC-033/034 lock → EVENT-018 migration). 11 migration files, 40
+tables, on `feature/supabase-migration-v1` — **not merged, and the live
+`banhao-dev` project was never touched.** Verified by two Docker-based test
+suites: **60/60 assertions pass**, including the rider race condition proven
+with two genuinely concurrent `psql` processes (see
+`docs/DATABASE_MIGRATION_V1_REPORT.md`). The live `profiles` RLS pattern
+(**revoke-first**, column grants, policies `to authenticated`, trigger
+backstop) is the template every table follows. DEC-017 is enforced by
+composite foreign keys (proven: a cross-restaurant cart_item is rejected).
+DEC-033 is implemented with zero `profiles.role` references in any policy.
+DEC-034 is implemented with no zero-sum trigger — immutability yes, zero-sum
+no. Six tables deferred (settlements, settlement_items, delivery_fee_bands,
+zones, service_areas, delivery_attempts), each justified, none removed from
+the design.
 
 **All 31 Customer states are verified by screenshot** and all five defects
 found in review (DEF-01…DEF-05) are fixed and re-verified on device — see
@@ -166,8 +178,11 @@ docs/TECHNICAL_ARCHITECTURE.md    how the decisions get built (PROPOSED)
 docs/ARCHITECTURE_DECISIONS.md    ADR-001…ADR-012, all PROPOSED
 docs/OPEN_TECHNICAL_QUESTIONS.md  TQ-001…TQ-016 — read before backend work
 
-docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix (PROPOSED)
-docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-014 — read before any migration
+docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-033/034)
+docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
+docs/DATABASE_MIGRATION_V1_REPORT.md  11 migrations, 40 tables, 60/60 tests pass
+
+supabase/migrations/20260811*.sql  the 11 new migrations — read before editing
 ```
 
 ## 7. Database / Supabase status
@@ -239,6 +254,12 @@ terminate/relaunch Expo Go — reloading is not enough.
 
 ## 9. Next steps
 
+**Architect review of `feature/supabase-migration-v1`**, then applying it to
+the live `banhao-dev` project (needs an explicit instruction — nothing here
+does that automatically). Alongside it: retire `profiles.role` in
+`RolesGuard`/`set_user_role()`/the immutability trigger now that DEC-033
+deprecated it (`docs/TODO.md`).
+
 0. **Answer the remaining 8 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
    Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-026, BQ-027, BQ-030. All the
    structural questions are answered; what is left is numbers, the provider, and
@@ -296,8 +317,10 @@ of this merge — check in before starting it.**
   start implementing it. A `DEC-` always beats an `ADR-`.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- Do not write a migration yet, and never run `supabase db push` against the
-  live project without an explicit instruction.
+- 11 migrations exist on `feature/supabase-migration-v1` (EVENT-018) — read
+  `docs/DATABASE_MIGRATION_V1_REPORT.md` before adding to them. Never run
+  `supabase db push` or `supabase link` against the live project without an
+  explicit instruction — this branch never did either.
 - Every new table needs `revoke ... from anon, authenticated` **first** —
   Supabase grants `ALL` on public tables by default.
 

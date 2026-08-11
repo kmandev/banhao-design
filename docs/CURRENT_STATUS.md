@@ -199,31 +199,45 @@ Three `T0` technical questions block backend work: **TQ-011** (migration
 workflow), **TQ-012** (proving concurrency correctness), **TQ-008** (provider
 adapter, gated on Q-001/Q-020).
 
-## Database Design Status
+## Database Design and Migration Status
 
-**Designed, not built** (EVENT-016, 2026-08-11, branch
-`feature/database-design-v1`): [`DATABASE_DESIGN.md`](DATABASE_DESIGN.md) —
-46 tables, ERD, table catalog, RLS matrix, state matrix, FK/cascade rules,
-justified indexes and a migration order — plus
-[`OPEN_DATABASE_QUESTIONS.md`](OPEN_DATABASE_QUESTIONS.md) (DBQ-001…DBQ-014).
+**Designed (EVENT-016) → decisions locked (EVENT-017) → implemented as
+migrations (EVENT-018)**, all 2026-08-11. Design:
+[`DATABASE_DESIGN.md`](DATABASE_DESIGN.md) — 46 tables conceptually, ERD,
+table catalog, RLS matrix, state matrix, FK/cascade rules, justified indexes.
+Questions: [`OPEN_DATABASE_QUESTIONS.md`](OPEN_DATABASE_QUESTIONS.md)
+(DBQ-001…DBQ-015 — 2 answered by DEC-033/034, 1 raised by implementation).
+Migration verification: [`DATABASE_MIGRATION_V1_REPORT.md`](DATABASE_MIGRATION_V1_REPORT.md).
 
-⛔ **No migration was created, no SQL was executed, and the live `banhao-dev`
-project was not modified.** The three applied migrations are unchanged.
-
-**Locked 2026-08-11 (EVENT-017) by DEC-033 and DEC-034.**
-
-> ✅ **DATABASE DESIGN IS APPROVED** · ⛔ **DATABASE MIGRATION HAS NOT STARTED**
+**11 new migration files exist**, on `feature/supabase-migration-v1`,
+**tested and passing (60/60 assertions), not merged, and the live
+`banhao-dev` project was never modified** — no `supabase db push`, no
+`supabase link`. The three original migrations remain byte-identical.
 
 DEC-033 replaced the proposed generic `user_roles` table with **domain
 membership** — Customer implicit, Merchant via `restaurant_members`, Rider via
-`riders`, Operator/Admin via `platform_staff`. No RLS policy may reference
-`profiles.role`. DEC-034 removed the proposed zero-sum constraint trigger;
-CON-003 stands but is enforced by transaction-level assertion plus a **mandatory
-reconciliation process**.
+`riders`, Operator/Admin via `platform_staff`. **Implemented with zero
+`profiles.role` references in any of the 55 RLS policies.** DEC-034 removed
+the proposed zero-sum constraint trigger; CON-003 stands but is enforced by
+transaction-level assertion plus a **mandatory reconciliation process** —
+**implemented: no zero-sum trigger exists anywhere in the schema**, verified
+by grep and by reading the ledger tables' trigger definitions.
 
-Four questions still gate the first migration: **DBQ-004** (bank account
-storage), **DBQ-011** (order number format), **TQ-011** (migration workflow),
-**TQ-012** (concurrency test strategy).
+**40 application tables, 62 foreign keys, 61 check constraints, 110 indexes,
+52 triggers.** The rider race condition was proven with two genuinely
+concurrent `psql` client processes racing the same delivery row — not a
+single-session simulation — and the architecture review's HIGH finding about
+incomplete rider release was reproduced exactly (and found sharper: a hard
+`unique_violation`, not a silent failure) and then fixed, both by execution.
+
+Six tables deferred, each justified, none removed from the design:
+`settlements`, `settlement_items`, `delivery_fee_bands`, `zones`,
+`service_areas`, `delivery_attempts`.
+
+**Immediate next step: architect review of the migration set**, then applying
+it to `banhao-dev` (requires an explicit instruction). Alongside it: retire
+`profiles.role` in `RolesGuard`/`set_user_role()`/the immutability trigger,
+tracked in `docs/TODO.md`.
 
 ## Current Blockers
 

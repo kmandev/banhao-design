@@ -49,6 +49,7 @@ not propose a business answer.
 | DBQ-012 | Connection pooling and the service-role connection | D1 | TQ-005 |
 | DBQ-013 | Naming: `DRIVER` role vs `rider_*` tables | D2 | — |
 | DBQ-014 | Where do notification preferences live? | D2 | BQ-035 |
+| DBQ-015 | Column-scoped rider view for orders/order_items | D2 | — |
 
 ---
 
@@ -402,3 +403,37 @@ prefer is dead weight.
 **Recommendation:** none in Phase 1. Add only when BQ-035 lands and there is a
 choice worth storing. Device push tokens **will** be needed (a separate small
 table) once a push provider is chosen — TQ-003.
+
+---
+
+## DBQ-015 — Column-scoped rider view for orders/order_items
+
+**Priority:** D2 · **Status:** OPEN
+
+**Question:** Should a rider's read access to `orders`/`order_items` be
+narrowed to specific columns via a view, as `docs/DATABASE_DESIGN.md` § 18
+originally called for ("limited columns via a view"), rather than the
+full-row access `20260811000011_rls_policies.sql` actually grants?
+
+**Context:** Raised during Supabase Migration v1
+(`docs/DATABASE_MIGRATION_V1_REPORT.md` § 7). Postgres RLS is row-level, not
+column-level, and column-level `GRANT` is per database role — `authenticated`
+is shared by every client actor — so giving a rider a genuinely different
+column set than a customer/merchant on the *same table* cannot be done with
+grants alone. The migration implements the row-level boundary correctly
+(`is_assigned_order_rider()` — a rider sees only their own assigned order,
+proven by execution) but grants the **full row** once assigned, rather than a
+narrower column set.
+
+**Considerations:** the row-level boundary is what the mandatory security
+tests target and is fully enforced. The column-level refinement is about
+*which* fields of an order a rider can see once legitimately assigned to
+it — e.g. whether they need the customer's full phone number or only a
+masked form. No field has been identified as actually sensitive enough to
+justify the added complexity; this is a hardening item, not a known leak.
+
+**Recommendation:** add `rider_order_view` / `rider_order_item_view` with
+`security_invoker = true` (PostgreSQL 15+, so the view still evaluates the
+querying user's own RLS/`auth.uid()`) once the exact column set a rider needs
+for delivery is specified. Low priority — the security boundary that matters
+today is already enforced.

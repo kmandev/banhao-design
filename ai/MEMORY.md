@@ -54,7 +54,7 @@ Complete as of 2026-08-09 — 27 documents in [`ai/RESEARCH/`](RESEARCH/). Start
 
 ## Recent Events
 
-17 events logged, EVENT-001 through EVENT-017 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → P0 Business Decisions v1 approved → Technical Architecture v1 → Supabase Database Design v1 → **database decisions locked**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
+18 events logged, EVENT-001 through EVENT-018 (design drop → repo reorg → Memory v1 → Memory v2 → architecture research → application foundation → pre-merge review fixes → Customer App implementation → final QA / typography → Supabase dev environment and live auth verification → DEF-01…DEF-05 fixed → merge to `main` → Business Rules & Domain Modelling → P0 Business Decisions v1 approved → Technical Architecture v1 → Supabase Database Design v1 → database decisions locked → **Supabase Migration v1 implemented**). Full list: [`ai/KNOWLEDGE/EVENTS.md`](KNOWLEDGE/EVENTS.md).
 
 ## Business Rules
 
@@ -70,20 +70,19 @@ Concurrency is a **guarded conditional UPDATE** — the state check lives in the
 
 **A `DEC-` beats an `ADR-`.** ADRs are technical and subordinate; if they appear to conflict, the business decision wins and the ADR is a bug.
 
-## Database Design
+## Database Design and Migration
 
-**Designed, not built** (EVENT-016, 2026-08-11): [`docs/DATABASE_DESIGN.md`](../docs/DATABASE_DESIGN.md) (46 tables, ERD, RLS matrix, FK/cascade rules, index justifications, migration order) · [`docs/OPEN_DATABASE_QUESTIONS.md`](../docs/OPEN_DATABASE_QUESTIONS.md) (**DBQ-001…DBQ-014**). **No migration exists; no SQL was run; the live project is untouched.**
+**Designed AND implemented** (EVENT-016 design, EVENT-017 DEC-033/034 lock, EVENT-018 migration, all 2026-08-11): [`docs/DATABASE_DESIGN.md`](../docs/DATABASE_DESIGN.md) (46 tables conceptually) · [`docs/OPEN_DATABASE_QUESTIONS.md`](../docs/OPEN_DATABASE_QUESTIONS.md) (**DBQ-001…DBQ-015** — 2 answered by DEC-033/034, 1 raised by implementation) · [`docs/DATABASE_MIGRATION_V1_REPORT.md`](../docs/DATABASE_MIGRATION_V1_REPORT.md).
 
-> ✅ **DATABASE DESIGN IS APPROVED** (locked 2026-08-11 by DEC-033/DEC-034).
-> ⛔ **DATABASE MIGRATION HAS NOT STARTED** — `supabase/` still holds exactly the three migrations from 2026-08-09.
+**11 migrations on `feature/supabase-migration-v1`** (not merged), applied strictly after the three existing ones, which remain byte-identical and untouched. **The live/remote Supabase project (`banhao-dev`) was never touched** — no `supabase db push`, no `supabase link` — verified by two Docker-based test suites: **60/60 assertions pass**, including the rider race condition proven with two genuinely concurrent `psql` client processes racing the same delivery row (not a single-session simulation). The winner differed run to run, confirming real database-level serialisation.
 
-The live `profiles` RLS pattern is the template for every new table: **revoke-first**, narrow column grants, RLS on, policies scoped `to authenticated`, `security definer` trigger backstop. Only three tables accept a direct client write — `addresses`, `carts`, `notifications.read_at`.
+The live `profiles` RLS pattern is the template every new table follows: **revoke-first**, narrow column grants, RLS on, policies scoped `to authenticated`, `security definer` trigger backstop. Only three tables accept a direct client write — `addresses`, `carts`, `notifications.read_at`.
 
-**Authorization is a domain relationship, never a role column (DEC-033):** Customer implicit · Merchant = `restaurant_members` · Rider = `riders` · Operator/Admin = `platform_staff`. **No RLS policy may reference `profiles.role`** — it is deprecated. No generic RBAC.
+**Authorization is a domain relationship, never a role column (DEC-033) — implemented with zero `profiles.role` references in any policy:** Customer implicit · Merchant = `restaurant_members` · Rider = `riders` · Operator/Admin = `platform_staff`.
 
-**Zero-sum is asserted, not triggered (DEC-034):** CON-003 stands, but enforcement lives in the NestJS transaction plus a **mandatory reconciliation process**, not a database trigger.
+**Zero-sum is asserted, not triggered (DEC-034) — implemented with no zero-sum trigger anywhere:** CON-003 stands, enforcement lives in the NestJS transaction plus a **mandatory reconciliation process**. Immutability (append-only, no `UPDATE`/`DELETE` even for `service_role`) **is** enforced via triggers, proven by running mutations as a superuser (RLS does not apply — only a trigger could have blocked it).
 
-DEC-017 is enforced by **composite foreign keys**, so a cross-restaurant cart cannot be stored. State columns are `text` + `CHECK`, not enums. Blocking the first migration: **DBQ-004**, **DBQ-011**, **TQ-011**, **TQ-012**.
+DEC-017 is enforced by **composite foreign keys** — proven: a cross-restaurant cart_item is rejected with `23503` before it can ever be stored. **Six tables deferred**, each individually justified, none removed from the design: `settlements`, `settlement_items`, `delivery_fee_bands`, `zones`, `service_areas`, `delivery_attempts`. State columns are `text` + `CHECK`, not enums.
 
 ## Important Architecture Rules
 
@@ -103,7 +102,7 @@ Full architecture (state tables, diagrams): [`docs/ARCHITECTURE.md`](../docs/ARC
 | Task context | `docs/CURRENT_STATUS.md`, `docs/DECISIONS.md`, `docs/TODO.md`, `docs/ROADMAP.md` | Read before working on something specific |
 | Business truth | `docs/BUSINESS_RULES.md` + the six companion docs | **Before any domain work.** Only `ACCEPTED` may be built on |
 | Technical truth | `docs/TECHNICAL_ARCHITECTURE.md`, `docs/ARCHITECTURE_DECISIONS.md`, `docs/OPEN_TECHNICAL_QUESTIONS.md` | **Before writing backend code** |
-| Database truth | `docs/DATABASE_DESIGN.md`, `docs/OPEN_DATABASE_QUESTIONS.md` | **Before writing any migration** |
+| Database truth | `docs/DATABASE_DESIGN.md`, `docs/OPEN_DATABASE_QUESTIONS.md`, `docs/DATABASE_MIGRATION_V1_REPORT.md`, `supabase/migrations/` | **Before touching the schema** |
 | Structured knowledge | `ai/KNOWLEDGE/*.md` | Typed, ID'd, cross-referenceable facts/requirements/constraints/etc. |
 | Historical context | `docs/PROJECT_HISTORY.md`, `ai/SESSION_LOG/`, `ai/CONVERSATIONS/` | Read when you need "why" or "when" |
 | Canonical design | `design/`, `specs/` | The actual product design, not a summary of it |

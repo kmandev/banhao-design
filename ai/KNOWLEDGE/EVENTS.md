@@ -810,3 +810,102 @@ TQ-011, TQ-012.
 broadcast → first accept, rider search after merchant accept, the no-rider
 ladder, the three fee directions, settlement separation and refund separation
 are all untouched and re-verified.
+
+---
+
+## EVENT-018
+
+```yaml
+id: EVENT-018
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/supabase-migration-v1
+confidence: HIGH
+```
+
+**Supabase Migration v1.** The approved database design
+(`docs/DATABASE_DESIGN.md`, locked by DEC-033/DEC-034) was implemented as
+real migration files for the first time. **The live/remote Supabase project
+was never touched** — no `supabase db push`, no `supabase link`, no SQL
+executed against anything but a throwaway local Docker container.
+
+**11 new migration files**, `20260811000001`–`20260811000011`, applied after
+the three existing ones — which remain **byte-identical, untouched**
+(verified by `git diff`). **39 new tables + the existing `profiles` = 40
+application tables**, 62 foreign keys, 61 check constraints, 110 indexes, 55
+RLS policies, 52 triggers, 9 new functions. Full detail and every number
+re-verified: `docs/DATABASE_MIGRATION_V1_REPORT.md`.
+
+### Verified by execution, not by reading the SQL — 60/60 assertions pass
+
+Two independent Docker-based test suites, extending the existing
+`supabase/tests/run-rls-tests.sh` pattern (plain PostgreSQL 16 + PostGIS, not
+`supabase start` — same rationale the existing suite already documented: RLS,
+triggers and concurrency are core PostgreSQL behaviour, not
+Supabase-specific):
+
+- `run-rls-tests.sh` (existing) — still **13/13 pass**, now against the full
+  14-migration set, proving the original `profiles` hardening is undisturbed.
+- `run-domain-tests.sh` (new) — **34/34** identity/cart/order/payment/
+  ledger/RLS assertions, plus **13/13** rider-race-condition assertions.
+
+**The rider race condition was proven with two genuinely concurrent `psql`
+client processes**, backgrounded and raced against the same delivery row —
+not a single-session simulation. Across runs the winner was **not the same
+rider both times** (confirmed non-deterministic, i.e. genuinely
+database-serialised, not test-order-determined). Also directly proven: the
+`rider_assignments_one_active` partial-unique-index backstop (a raw `INSERT`
+bypassing the guarded `UPDATE` is rejected), and correct reassignment
+(DEC-021) succeeding when both release statements are performed together.
+
+**The 2026-08-11 architecture review's HIGH finding was reproduced exactly,
+and turned out sharper than described.** Performing only half the release
+(nulling `deliveries.rider_id` without closing the stale `rider_assignments`
+row) does not fail quietly — the guarded `UPDATE` half of the next claim
+actually *succeeds* (rowcount 1, since `rider_id` is null), and it is the
+**follow-up `INSERT`** that then raises `unique_violation` against the stale
+row. This is a hard, unhandled database error a caller must explicitly catch,
+not a silent no-op — a more precise version of the documented finding,
+discovered only by actually running it. Closing the stale row (the
+documented fix) was then proven to restore correct behaviour, also by
+execution.
+
+### Six tables deferred, individually justified, none removed from the design
+
+`settlements`, `settlement_items` (DEC-026 not implemented, Q-002
+`LEGAL_REVIEW_REQUIRED`) · `delivery_fee_bands` (DEC-023 pricing `OPEN`, no
+consumer) · `zones`, `service_areas` (geo domain deferred as a unit;
+`zone_id`/`service_area_id` kept as bare `uuid` columns with no FK, so adding
+the tables later is additive) · `delivery_attempts` (**evaluated carefully as
+instructed** — it does *not* protect rider reassignment, that is
+`rider_assignments`; it is the post-pickup handover workflow, and BQ-017 is
+`OPEN`, the same reasoning that deferred `promotions` in the original
+design).
+
+### Four small documentation gaps found and resolved while implementing
+
+None involved a business decision. `refunds` was missing the `provider`
+column its own unique constraint required (added). `menu_items.category_id`'s
+delete behaviour conflicted between § 5.3 (`RESTRICT`, followed) and § 19's
+summary table (`CASCADE`) — the more specific section won.
+`rider_availability`'s RLS was stated two different ways in the design; § 18
+(authoritative) was followed — a rider may read and toggle their own row.
+`restaurants (id, merchant_id)`'s composite-FK anchor has no actual consumer
+anywhere in the design; implemented anyway per the design's literal text,
+harmless.
+
+### One flagged simplification — DBQ-015
+
+§ 18 called for "limited columns via a view" for a rider's read of orders
+once assigned. Postgres RLS is row-level, and column grants are per database
+role — `authenticated` is shared across every actor — so a genuinely
+different column set per actor on one table needs a view, not a grant. The
+migration implements full-row access at the **correct row-level scope**
+(proven: a rider sees only their own assigned order), and the column
+narrowing is deferred as **DBQ-015 (D2)** rather than silently shipped as
+"done".
+
+### Business decisions
+
+**None changed.** No `Q`, `BQ`, `TQ`, or `DEC` was closed by this work — this
+event only *implements* what DEC-033 and DEC-034 already decided.

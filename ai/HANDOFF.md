@@ -16,7 +16,19 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-**Database architecture decisions locked (EVENT-017), on `feature/database-design-v1`** — this update. The Product Owner approved **DEC-033** (multi-role identity via domain membership) and **DEC-034** (Phase 1 financial integrity without a zero-sum trigger). **Documentation only.**
+**Supabase Migration v1 implemented (EVENT-018), on `feature/supabase-migration-v1`** — this update. `docs/DATABASE_DESIGN.md` (locked by DEC-033/DEC-034) was implemented as **11 new migration files**, applied strictly after the three existing ones, which remain byte-identical and untouched. **The live/remote Supabase project was never touched** — no `supabase db push`, no `supabase link`.
+
+**40 application tables, 62 foreign keys, 61 check constraints, 110 indexes, 55 RLS policies, 52 triggers.** Verified against two independent Docker-based test suites: **60/60 assertions pass**. Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md`.
+
+**The rider race condition was proven by execution** — two genuinely concurrent `psql` client processes, backgrounded and raced against the same delivery row, not a single-session simulation. The winner differed between runs (confirmed non-deterministic, i.e. really database-serialised). The 2026-08-11 architecture review's HIGH finding was reproduced exactly and turned out sharper than documented: an incomplete rider-release doesn't fail quietly, it produces a hard `unique_violation` on the *next* claim's `rider_assignments` insert — a real error a caller must catch, not a silent no-op. The fix (closing the stale row) was then proven to restore correct behaviour, also by execution.
+
+**Six tables deferred**, each individually justified in the report, none removed from the design: `settlements`, `settlement_items` (Q-002 `LEGAL_REVIEW_REQUIRED`), `delivery_fee_bands` (DEC-023 `OPEN`), `zones`/`service_areas` (geo domain deferred as a unit, FK-less columns kept for forward compatibility), `delivery_attempts` (BQ-017 `OPEN` — evaluated carefully, does **not** protect rider reassignment, that's `rider_assignments`).
+
+One flagged simplification: § 18's "limited columns via a view" for a rider's order read was implemented as full-row access at the correct row-level scope instead (proven safe) — the column-level refinement is **DBQ-015**, new.
+
+**No business decision changed. No `Q`/`BQ`/`TQ`/`DEC` closed.**
+
+Before that: **Database architecture decisions locked (EVENT-017), on `feature/database-design-v1`**. The Product Owner approved **DEC-033** (multi-role identity via domain membership) and **DEC-034** (Phase 1 financial integrity without a zero-sum trigger). **Documentation only.**
 
 ⚠️ **Numbering:** the approval labelled them "DEC-014" and "DEC-015". **Both IDs were already taken** (PostgreSQL as system of record; payment provider abstraction) and are cited in 17 and 21 files including live code comments, so the new decisions took the next free IDs. Cite **DEC-033 / DEC-034**.
 
@@ -50,13 +62,13 @@ Before that: Supabase dev environment + live Customer authentication (EVENT-010)
 
 ## Current Work
 
-`feature/database-design-v1` is pushed and **ready for database review**. Documentation only. **Not merged to `main`.** Four branches are stacked and unmerged: `feature/business-rules` → `feature/p0-decisions-v1` → `feature/technical-architecture-v1` → `feature/database-design-v1`.
+`feature/supabase-migration-v1` (from `feature/database-design-v1`) is pushed and **ready for architect review**. 11 new migrations, tested, not merged. **Not merged to `main`.** Five branches are stacked and unmerged: `feature/business-rules` → `feature/p0-decisions-v1` → `feature/technical-architecture-v1` → `feature/database-design-v1` → `feature/supabase-migration-v1`.
 
 ## Immediate Next Step
 
-**Supabase migration implementation** — the design is approved. Four questions still gate the first migration: **DBQ-004** (bank account storage), **DBQ-011** (order number format), **TQ-011** (migration workflow), **TQ-012** (concurrency test strategy).
+**Architect review of the migration set**, then — once approved — apply it to the live `banhao-dev` project (still requires an explicit instruction; nothing in this repository does that automatically). `DBQ-004` (bank account storage) and `DBQ-011` (order number format) didn't block writing the schema — the design's own column shapes were sufficient — but the actual encryption approach and number-generation algorithm are still `OPEN` and live in application code, not this schema.
 
-Alongside it, one **code** task now exists: `RolesGuard`, `set_user_role()` and the `enforce_profile_immutable_columns()` trigger all read `profiles.role`, which DEC-033 deprecated. The column cannot be dropped until they resolve capability from `restaurant_members` / `riders` / `platform_staff` instead — tracked in `docs/TODO.md`.
+One **code** task remains: `RolesGuard`, `set_user_role()` and the `enforce_profile_immutable_columns()` trigger all read `profiles.role`, which DEC-033 deprecated. The column cannot be dropped until they resolve capability from `restaurant_members` / `riders` / `platform_staff` instead — tracked in `docs/TODO.md`.
 
 Also still open: **architecture review of `docs/TECHNICAL_ARCHITECTURE.md` and ADR-001…ADR-012** (all `PROPOSED` — nothing may be built until they are accepted). Three technical questions are **T0 and block backend work**: **TQ-011** (migration workflow — agree it before the first domain migration, not after), **TQ-012** (how concurrency correctness is *proved* — the EVENT-007 precedent of verifying by execution against real PostgreSQL applies), and **TQ-008** (provider adapter, gated on Q-001/Q-020).
 
@@ -150,7 +162,7 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
 - Do not implement anything tagged `PROPOSED` or `OPEN` in the business documents. **Only `ACCEPTED` is product truth**, and `ACCEPTED — MODEL · OPEN — NUMBERS` means you may not pick the number.
 - Do not enable cash payment anywhere — DEC-016 disables COD in Phase 1. Equally, **do not delete the cash model**: `payment_method` must stay extensible, and DEC-004 / REQ-001 remain accepted.
-- Do not write a migration before DBQ-004, DBQ-011, TQ-011 and TQ-012 are answered — and never `supabase db push` against the live project without explicit instruction.
+- 11 migrations now exist on `feature/supabase-migration-v1` (EVENT-018) — read `docs/DATABASE_MIGRATION_V1_REPORT.md` before writing another one. Never `supabase db push` or `supabase link` to the live project without explicit instruction — this branch never did either.
 - Do not write an RLS policy that references `profiles.role` — it is deprecated (DEC-033). Resolve capability through `restaurant_members`, `riders` or `platform_staff`.
 - Do not add a zero-sum database trigger (DEC-034). Assert in the ledger service inside the transaction, and rely on reconciliation — which is now **mandatory**, not optional.
 - Do not add a table without the five-step security pattern (`revoke` first — Supabase grants `ALL` by default), and do not put business rules in triggers; integrity constraints only.

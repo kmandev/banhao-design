@@ -2,6 +2,25 @@
 
 > This is a detailed, dated development log for AI-memory purposes. For a shorter, release-facing summary see the root [`CHANGELOG.md`](../CHANGELOG.md) — the two are complementary, not duplicates: this file tracks documentation/process work in date-entry form as agents touch the repo; the root file tracks user-facing repository milestones.
 
+## 2026-08-11 (4) — Supabase Migration v1
+
+### Added
+
+- `supabase/migrations/20260811000001`–`20260811000011` — 11 new migrations implementing `docs/DATABASE_DESIGN.md` under DEC-033/DEC-034. 40 application tables, 62 foreign keys, 61 check constraints, 110 indexes, 55 RLS policies, 52 triggers. The three original migrations (`20260809*`) are untouched, byte-identical.
+- `supabase/tests/domain_invariants_test.sql`, `rider_race_setup.sql`, `rider_race_assertions.sql`, `run-domain-tests.sh` — a second Docker-based test suite (plain PostgreSQL 16 + PostGIS, extending the existing `run-rls-tests.sh` pattern) covering identity, cart enforcement, order snapshots, payment/webhook idempotency, ledger append-only behaviour, representative RLS access, and — critically — the rider race condition, proven with two genuinely concurrent `psql` client processes.
+- `docs/DATABASE_MIGRATION_V1_REPORT.md` — full verification report: schema counts, deferred-table justifications, documentation gaps found and resolved, and the 60/60 test results.
+- `docs/OPEN_DATABASE_QUESTIONS.md` — **DBQ-015** added (column-scoped rider view for orders, deferred as a refinement — the row-level security boundary is already enforced and proven).
+- `ai/KNOWLEDGE/EVENTS.md` — EVENT-018.
+
+### Changed
+
+- `docs/OPEN_DATABASE_QUESTIONS.md` — DBQ-015 cross-referenced from the migration report.
+- `ai/MEMORY.md`, `ai/HANDOFF.md`, `docs/CURRENT_STATUS.md`, `CLAUDE.md` — updated for EVENT-018. `CLAUDE.md` was also brought up to date for EVENT-017 (DEC-033/034), which an earlier pass had missed.
+
+### Not done, deliberately
+
+**The live/remote Supabase project (`banhao-dev`) was never touched** — no `supabase db push`, no `supabase link` to a project, no SQL executed against anything but a throwaway local Docker container. Six tables deferred (`settlements`, `settlement_items`, `delivery_fee_bands`, `zones`, `service_areas`, `delivery_attempts`), each individually justified, none removed from `docs/DATABASE_DESIGN.md`. No backend code, no payment provider integration. No business decision created, changed or reversed; no `Q`, `BQ`, `TQ` or `DEC` closed by this work.
+
 ## 2026-08-11 (3) — Database decision lock
 
 ### Added
