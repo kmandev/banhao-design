@@ -36,27 +36,58 @@
 --      set, which nothing in this schema does). The view's own `where`
 --      clause — the same `is_assigned_order_rider()` used by the row-level
 --      policy that was proven by execution — is what does the row scoping
---      instead of RLS. Row scoping is still enforced; it just moved from a
---      policy to a view predicate, and the predicate calls the identical
---      SECURITY DEFINER function.
+--      instead of RLS.
 --   3. The COLUMN list a client can retrieve is fixed by the view
 --      definition, not by anything the client sends. `select * from
 --      rider_order_view` cannot return `grand_total_satang` — that column
 --      was never projected into the view, so it does not exist as far as
 --      any query against the view is concerned. There is no client-supplied
 --      input that can widen it.
+--   4. `security_barrier = true` on all three views (added by the Architect
+--      Review's Step 7.3 HIGH-1 finding — see the note below). WITHOUT this
+--      option, moving the row check from an RLS policy to a plain view
+--      predicate is NOT equivalent, because Postgres is free to reorder a
+--      plain view's WHERE clauses by estimated cost — a cheap client
+--      predicate (e.g. `delivery_address_snapshot like '...'`) can be
+--      evaluated BEFORE `is_assigned_order_rider(o.id)`, on rows the rider
+--      is not authorised to see at all. `is_assigned_order_rider` is a SQL
+--      function and is not marked LEAKPROOF, so it does not get the
+--      automatic protection Postgres gives leakproof functions either.
+--      Concretely (proven locally, Step 7.3): a rider issuing
+--      `select * from rider_order_view where 1 / (case when
+--      recipient_phone_snapshot like '+6689%' then 0 else 1 end) = 1`
+--      raised `division_by_zero` for a PHONE NUMBER BELONGING TO AN ORDER
+--      THAT WAS NEVER THEIRS — an error-based oracle a client can use to
+--      binary-search any projected column (address, phone, name,
+--      order_number) across every order in the system, entirely without
+--      that order ever being returned as a row. `security_barrier` forces
+--      the planner to fully materialise the view (evaluate
+--      `is_assigned_order_rider` first, as an opaque barrier) before any
+--      predicate from the outer query is applied, closing this off — see
+--      supabase/tests/rider_view_row_isolation_security_test.sql for the
+--      regression test that reproduces the exact probe and asserts a clean
+--      (non-erroring) result. RLS policies get this protection
+--      automatically (a policy's USING clause is always treated as a
+--      security qual); a plain view does not, which is exactly the gap
+--      `security_barrier` closes.
 --
 -- This is a refinement of DBQ-015's own recommendation
--- (docs/OPEN_DATABASE_QUESTIONS.md), corrected on one point: DBQ-015
--- suggested `security_invoker = true`. That would NOT work once the
+-- (docs/OPEN_DATABASE_QUESTIONS.md), corrected on two points now. DBQ-015
+-- suggested `security_invoker = true`, which would NOT work once the
 -- underlying rider policy is removed (an invoker-security view still runs
--- RLS as the querying role, so a rider would see zero rows through it,
--- same as querying the base table) — the two changes have to be made
--- together, which is what this migration does.
+-- RLS as the querying role, so a rider would see zero rows through it, same
+-- as querying the base table) — the two changes have to be made together.
+-- The Architect Review's Step 7.3 pass then found that owner-privilege
+-- alone (point 2 above) is not sufficient either, without `security_barrier`
+-- (point 4) — both corrections are folded into this same migration file
+-- rather than layered as a follow-up migration, since this file has never
+-- been applied anywhere but a throwaway local container (see
+-- docs/DATABASE_MIGRATION_V1_REPORT.md § 12 for why editing it in place,
+-- rather than adding a new migration, was the chosen strategy here).
 --
--- Reviewed per the Architect Review, Step 7.2, HIGH-1. Does not touch
--- customer or merchant access, does not add a business rule, does not
--- change orders/order_items/order_item_options themselves.
+-- Reviewed per the Architect Review, Step 7.2 and Step 7.3, HIGH-1. Does
+-- not touch customer or merchant access, does not add a business rule, does
+-- not change orders/order_items/order_item_options themselves.
 
 -- ---------------------------------------------------------------------------
 -- 1. Remove the full-row rider policies. Customer and merchant policies on
@@ -86,7 +117,7 @@ drop policy if exists order_item_options_select_rider on public.order_item_optio
 -- ---------------------------------------------------------------------------
 
 create view public.rider_order_view
-with (security_invoker = false)
+with (security_invoker = false, security_barrier = true)
 as
 select
   o.id,
@@ -114,7 +145,7 @@ from public.orders o
 where public.is_assigned_order_rider(o.id);
 
 comment on view public.rider_order_view is
-  'HIGH-1 fix (Architect Review, Step 7.2). The rider''s ONLY read path to an order once assigned — orders_select_rider no longer exists. Column list is deliberately minimal: no money column, no payment_method, no customer_id/address_id. Row scope is public.is_assigned_order_rider(), the same function the dropped policy used, evaluated by the view (owned by the migration role, so it bypasses orders'' RLS) rather than by a policy. See the file header for why this is safe against direct client SQL.';
+  'HIGH-1 fix (Architect Review, Step 7.2/7.3). The rider''s ONLY read path to an order once assigned — orders_select_rider no longer exists. Column list is deliberately minimal: no money column, no payment_method, no customer_id/address_id. Row scope is public.is_assigned_order_rider(), the same function the dropped policy used, evaluated by the view (owned by the migration role, so it bypasses orders'' RLS) rather than by a policy. security_barrier=true is REQUIRED, not cosmetic — without it a rider-supplied predicate can be evaluated before the row check, turning query errors into an oracle for hidden rows (proven, Step 7.3; see rider_view_row_isolation_security_test.sql). See the file header for the full argument.';
 
 revoke all on public.rider_order_view from public, anon, authenticated;
 grant select on public.rider_order_view to authenticated;
@@ -131,7 +162,7 @@ grant select on public.rider_order_view to authenticated;
 -- ---------------------------------------------------------------------------
 
 create view public.rider_order_item_view
-with (security_invoker = false)
+with (security_invoker = false, security_barrier = true)
 as
 select
   oi.id,
@@ -144,7 +175,7 @@ from public.order_items oi
 where public.is_assigned_order_rider(oi.order_id);
 
 comment on view public.rider_order_item_view is
-  'HIGH-1 fix (Architect Review, Step 7.2). Rider read path for order lines — order_items_select_rider no longer exists. No price column is projected: a rider never needs a line''s unit_price_satang/line_total_satang to perform delivery.';
+  'HIGH-1 fix (Architect Review, Step 7.2/7.3). Rider read path for order lines — order_items_select_rider no longer exists. No price column is projected: a rider never needs a line''s unit_price_satang/line_total_satang to perform delivery. security_barrier=true — see rider_order_view''s comment for why this is required, not optional.';
 
 revoke all on public.rider_order_item_view from public, anon, authenticated;
 grant select on public.rider_order_item_view to authenticated;
@@ -159,7 +190,7 @@ grant select on public.rider_order_item_view to authenticated;
 -- ---------------------------------------------------------------------------
 
 create view public.rider_order_item_option_view
-with (security_invoker = false)
+with (security_invoker = false, security_barrier = true)
 as
 select
   oo.id,
@@ -175,7 +206,7 @@ where exists (
 );
 
 comment on view public.rider_order_item_option_view is
-  'HIGH-1 fix (Architect Review, Step 7.2). Rider read path for selected options — order_item_options_select_rider no longer exists. No price_delta_satang projected, same reasoning as rider_order_item_view.';
+  'HIGH-1 fix (Architect Review, Step 7.2/7.3). Rider read path for selected options — order_item_options_select_rider no longer exists. No price_delta_satang projected, same reasoning as rider_order_item_view. security_barrier=true — see rider_order_view''s comment for why this is required, not optional.';
 
 revoke all on public.rider_order_item_option_view from public, anon, authenticated;
 grant select on public.rider_order_item_option_view to authenticated;

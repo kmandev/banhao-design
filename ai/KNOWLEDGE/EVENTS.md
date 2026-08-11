@@ -1013,3 +1013,120 @@ migrations, `...012` and `...013`, were appended instead). No business
 decision changed; no payment provider, settlement, ledger, order-lifecycle,
 or merchant-model rule was touched. The live/remote `banhao-dev` project was
 not reached by any command in this session.
+
+---
+
+## EVENT-020
+
+```yaml
+id: EVENT-020
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/supabase-migration-v1; commit 4980dcbd -> (this fix)
+confidence: HIGH
+```
+
+**Supabase Migration v1 — Architect Review #2 findings fixed (Step 7.3).** A
+second Architect Review pass (commit `4980dcbd`, the EVENT-019 fix) returned
+**FIX REQUIRED**: one blocking finding (H-1) in the HIGH-1 fix itself, one
+security-correctness finding (M-1) in the HIGH-2 fix, both now resolved on
+the same branch. **The live/remote Supabase project was still never
+touched.**
+
+### H-1 — rider view row-isolation was incomplete — FIXED
+
+**Finding.** The Architect Review proved, by execution against a local
+container, that the three rider views EVENT-019 added
+(`rider_order_view` and its two siblings) were missing
+`security_barrier = true`. Without it, Postgres was free to evaluate a
+rider-supplied `WHERE` predicate **before** the view's own row-security
+predicate (`is_assigned_order_rider()`, not marked `LEAKPROOF`) — an
+error-based oracle: a rider issuing a predicate like `1 / (case when
+recipient_phone_snapshot like '+6689%' then 0 else 1 end) = 1` against
+`rider_order_view` raised `division_by_zero` **for an order that was never
+theirs**, disclosing whether the guess matched without the row ever being
+returned. The old RLS-policy-based mechanism EVENT-019 replaced was immune
+to exactly this (Postgres always treats an RLS policy's `USING` clause as a
+security qual); the view-based replacement was not, until this fix.
+
+**Fix:** `security_barrier = true` added to all three views
+(`20260811000012_rider_order_views.sql`, edited in place — see below).
+Column restriction (the actual HIGH-1 column-exposure problem) was already
+correct and is unchanged; this fix is specifically about row isolation under
+an adversarial predicate, not about which columns are projected.
+
+**New regression test:**
+`supabase/tests/rider_view_row_isolation_security_test.sql` —
+`rider_view_row_isolation_security_test` — reproduces the exact oracle probe
+against a seeded "victim" order belonging to a different rider, asserts a
+clean (non-erroring) result, includes a control proving the probe genuinely
+fires when unblocked (against the rider's own row), and re-confirms the
+column/row properties EVENT-019 already proved are unaffected. **13/13
+PASS.**
+
+### M-1 — `release_rider_assignment`'s internal guard was not real — FIXED
+
+**Finding.** The Architect Review proved the `pg_has_role(current_user,
+'service_role', 'member')` guard inside `release_rider_assignment`
+(described by EVENT-019 as "defence-in-depth") was not actually checking the
+caller: under `SECURITY DEFINER`, `current_user` resolves to the function's
+**owner**, not the invoking role. After granting `EXECUTE` to `authenticated`
+(simulating a future accidental over-grant), a rider successfully released
+*another* rider's delivery — the guard passed because the owner (a
+superuser in the test container) trivially satisfies any `pg_has_role`
+check, never because the actual caller was authorised.
+
+**Fix:** the function is now `SECURITY INVOKER` (`security definer` removed)
+— `20260811000013_rider_reassignment_atomicity.sql`, edited in place, same
+file EVENT-019 added. `service_role` already has `bypassrls` and direct
+table grants, so no owner substitution was ever needed for it to do this
+work. Re-running the identical over-grant probe after the fix: the call now
+correctly raises `42501` — the guard is real defence-in-depth, confirmed by
+execution, not merely described as such. **HIGH-2's atomicity logic itself
+— locking, the two guarded statements, the exactly-one-row invariant check,
+rollback behaviour — is completely unchanged** and all 15 of its existing
+regression assertions (Cases A–E) still pass unmodified.
+
+### DBQ-015 — status corrected
+
+Was marked **IMPLEMENTED** by EVENT-019. Now marked **IMPLEMENTED WITH
+CAVEAT** — not a plain resolved/closed — reflecting that the fix was
+verified with direct SQL against the `authenticated` database role, and
+whether PostgREST's HTTP filter grammar can express the same class of probe
+was not separately verified (a client-reachability question, not a schema
+one). See `docs/OPEN_DATABASE_QUESTIONS.md`.
+
+### Migration strategy
+
+Both fixes edited the migration files EVENT-019 added
+(`20260811000012`, `20260811000013`) **in place**, rather than adding new
+`...014`/`...015` migrations. Neither file has ever been applied to
+anything but a throwaway local container across either review pass — adding
+a migration that immediately corrects the previous one three commits later
+would only add a confusing, purely cosmetic step to permanent history. The
+three original migrations (`20260809000001`–`003`) and the eight
+domain migrations (`20260811000001`–`011`) remain untouched, as they have
+throughout this branch.
+
+### Regression tests, all suites re-run
+
+| Suite | Result |
+|---|---|
+| `run-rls-tests.sh` (existing, `profiles`) | **13/13 PASS**, unchanged |
+| `domain_invariants_test.sql` §A–G (existing, incl. HIGH-1 columns/rows) | unchanged, still pass |
+| `rider_view_row_isolation_security_test.sql` (**new**, H-1) | **13/13 PASS** |
+| `rider_race_assertions.sql` (existing, incl. 2 genuinely concurrent processes) | unchanged, still pass |
+| `rider_reassignment_atomicity_test.sql` (existing, HIGH-2 Cases A–E) | unchanged, still pass — re-verified after the M-1 `SECURITY INVOKER` change |
+| **Total this run** | **104/104 PASS**, zero skipped, `git diff --check` clean |
+
+Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md` § 12 (H-1) and § 13
+(M-1).
+
+### What did not change
+
+No original migration was rewritten. No business decision changed — DEC-016
+through DEC-034, `rider_assignments_one_active`, and the guarded-`UPDATE`
+claim path (Layer 1) are all untouched; the atomicity guarantee HIGH-2 added
+is unmodified, only its security *mode* (`SECURITY INVOKER` vs `DEFINER`)
+changed. The live/remote `banhao-dev` project was not reached by any command
+in this session.

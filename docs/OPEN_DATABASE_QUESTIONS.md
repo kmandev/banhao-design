@@ -8,9 +8,13 @@ Product Owner decision can. **Two were closed on 2026-08-11**: DBQ-002 by
 DEC-033 and DBQ-010 by DEC-034. **DBQ-015 was implemented on 2026-08-11**,
 directed by the Architect Review's HIGH-1 finding (EVENT-019) rather than a
 Product Owner decision — it was a security implementation gap, not a
-business question, so no `DEC` was needed to act on it. Marked **IMPLEMENTED**
-below rather than removed, so the original question and its answer both stay
-visible. **11 of 14 business/legal-gated questions remain open.**
+business question, so no `DEC` was needed to act on it. **Marked IMPLEMENTED
+WITH CAVEAT, not fully resolved**, after a second Architect Review pass
+(Step 7.3, EVENT-020) found the first implementation's row-isolation
+mechanism was incomplete and required a further fix
+(`security_barrier = true`); the caveat that remains after the fix is a
+verification-scope note, not a known gap — see the DBQ-015 entry below.
+**11 of 14 business/legal-gated questions remain open.**
 
 ## Namespaces
 
@@ -54,7 +58,7 @@ not propose a business answer.
 | DBQ-012 | Connection pooling and the service-role connection | D1 | TQ-005 |
 | DBQ-013 | Naming: `DRIVER` role vs `rider_*` tables | D2 | — |
 | DBQ-014 | Where do notification preferences live? | D2 | BQ-035 |
-| ~~DBQ-015~~ | ~~Column-scoped rider view for orders/order_items~~ — **IMPLEMENTED** | — | closed 2026-08-11 |
+| ~~DBQ-015~~ | ~~Column-scoped rider view for orders/order_items~~ — **IMPLEMENTED WITH CAVEAT** | — | 2026-08-11, 2 passes |
 
 ---
 
@@ -413,21 +417,42 @@ table) once a push provider is chosen — TQ-003.
 
 ## DBQ-015 — Column-scoped rider view for orders/order_items
 
-**Priority:** ~~D2~~ · **Status: ✅ IMPLEMENTED — 2026-08-11, Architect Review HIGH-1 (EVENT-019)**
+**Priority:** ~~D2~~ · **Status: ⚠️ IMPLEMENTED WITH CAVEAT — 2026-08-11, Architect Review HIGH-1, two passes (EVENT-019, EVENT-020)**
 
-> **Answer: implemented largely as this entry's own recommendation
-> proposed**, with one correction. `20260811000012_rider_order_views.sql`
-> adds `rider_order_view`, `rider_order_item_view`, and
-> `rider_order_item_option_view`; the rider's full-row policies on
-> `orders`/`order_items`/`order_item_options` are dropped. The correction:
-> this entry recommended `security_invoker = true`. That does not actually
-> work once the rider's base-table policy is dropped — an invoker-security
-> view still evaluates the querying role's own RLS, so a rider would see
-> zero rows through it too. The views are created **without**
-> `security_invoker` (the pre-PG15 default: owner-privilege), which is what
-> lets them read rows the rider's own RLS no longer permits directly, while
-> the view's `where` clause (the same `is_assigned_order_rider()` the
-> dropped policy used) keeps the row-level scope identical to before.
+> **Answer: implemented, in the end, differently from either this entry's own
+> recommendation or the first fix attempt** — both were corrected in turn.
+> `20260811000012_rider_order_views.sql` adds `rider_order_view`,
+> `rider_order_item_view`, and `rider_order_item_option_view`; the rider's
+> full-row policies on `orders`/`order_items`/`order_item_options` are
+> dropped.
+>
+> **First correction (Step 7.2, EVENT-019):** this entry recommended
+> `security_invoker = true`. That does not work once the rider's base-table
+> policy is dropped — an invoker-security view still evaluates the querying
+> role's own RLS, so a rider would see zero rows through it too. Fixed by
+> using `security_invoker = false` (owner-privilege) instead, so the view can
+> still read rows the rider's own RLS no longer permits directly.
+>
+> **Second correction (Step 7.3, EVENT-020):** owner-privilege access plus
+> the `is_assigned_order_rider()` predicate was **still not sufficient on its
+> own**. A second Architect Review pass proved, by execution, that a
+> rider-supplied predicate could be evaluated by the planner BEFORE the
+> view's own security predicate — an error-based oracle that could
+> disclose any projected column of any order in the system without that
+> order ever being returned as a row. Fixed by adding
+> `security_barrier = true` to all three views, which forces the security
+> predicate to evaluate first. Re-verified by execution: the exact oracle
+> probe that found the gap now returns cleanly. See
+> `supabase/tests/rider_view_row_isolation_security_test.sql`.
+>
+> **The caveat this status reflects:** the fix was verified with direct SQL
+> against the `authenticated` database role, which is how a rider's session
+> genuinely behaves. Whether PostgREST's HTTP filter grammar (the layer a
+> mobile client actually talks to) can express an error-raising expression of
+> the shape used in the proof was not separately verified — that is a
+> PostgREST-layer reachability question, not a schema one, and does not
+> change what was fixed at the database level. This is why the status here
+> is IMPLEMENTED WITH CAVEAT rather than a plain closed/resolved.
 >
 > Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md` § 12.
 >

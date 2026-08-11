@@ -10,16 +10,22 @@
 # then runs:
 #
 #   1. domain_invariants_test.sql — identity, cart, order snapshot,
-#      payment idempotency, ledger, and representative RLS checks.
-#   2. rider_race_setup.sql — fixtures and helper functions.
-#   3. TWO REAL, CONCURRENT psql client processes, both attempting to claim
+#      payment idempotency, ledger, and representative RLS checks
+#      (including §G, the HIGH-1 rider column/row checks).
+#   2. rider_view_row_isolation_security_test.sql — HIGH-1 fix (Architect
+#      Review, Step 7.3, finding H-1): reproduces the error-oracle probe
+#      that showed a rider-supplied predicate could be evaluated ahead of
+#      the view's row-security predicate, and asserts it no longer can be,
+#      now that the rider views are security_barrier.
+#   3. rider_race_setup.sql — fixtures and helper functions.
+#   4. TWO REAL, CONCURRENT psql client processes, both attempting to claim
 #      the SAME delivery at the same time — this is what proves the rider
 #      race protection by execution (TQ-012), not by reading the SQL.
-#   4. rider_race_assertions.sql — checks the outcome, including a
+#   5. rider_race_assertions.sql — checks the outcome, including a
 #      deliberate reproduction of the architecture review's HIGH finding
 #      (incomplete release makes a delivery permanently unassignable) and
 #      its fix, both proven by execution.
-#   5. rider_reassignment_atomicity_test.sql — HIGH-2 fix (Architect Review,
+#   6. rider_reassignment_atomicity_test.sql — HIGH-2 fix (Architect Review,
 #      Step 7.2): proves public.release_rider_assignment() makes the release
 #      invariant atomic, cases A-E.
 #
@@ -87,6 +93,20 @@ if grep -q "FAIL" /tmp/banhao-domain-out.log; then
 fi
 
 echo ""
+echo "==> Running rider view row-isolation security test (H-1 fix, Architect Review Step 7.3)"
+docker cp "$REPO_ROOT/supabase/tests/rider_view_row_isolation_security_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/rider_view_row_isolation_security_test.sql 2>&1 | tee /tmp/banhao-oracle-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> Rider view row-isolation security verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-oracle-out.log; then
+  echo "==> Rider view row-isolation security verification FAILED"
+  exit 1
+fi
+
+echo ""
 echo "==> Seeding rider race condition fixtures"
 run_sql "$REPO_ROOT/supabase/tests/rider_race_setup.sql"
 
@@ -146,4 +166,4 @@ if grep -q "FAIL" /tmp/banhao-reassign-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + RIDER RACE + REASSIGNMENT ATOMICITY VERIFICATION PASSED"
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY VERIFICATION PASSED"

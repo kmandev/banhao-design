@@ -424,9 +424,17 @@ error, not a silent no-op) than the original finding described.
 
 ---
 
-## 12. Architect Review findings, Step 7.2 — HIGH-1: fixed
+## 12. Architect Review findings, Step 7.2 + 7.3 — HIGH-1: fixed
 
-**Status: fixed**, migration `20260811000012_rider_order_views.sql`.
+**Status: fixed**, migration `20260811000012_rider_order_views.sql` (edited
+in place across two review passes — see "Migration strategy" at the end of
+this section for why).
+
+**This section was rewritten during Step 7.3.** The Step 7.2 version of this
+report made a safety claim that Step 7.3's Architect Review disproved by
+execution: it stated that moving the row check "from a policy to a view
+predicate" was sufficient on its own. It is not — see finding H-1 below.
+Nothing about the earlier claim is repeated here uncorrected.
 
 **Finding.** § 7 of this report already flagged the underlying issue as a
 known simplification (DBQ-015): the rider's RLS policies on
@@ -457,42 +465,103 @@ view at all**, proven by `undefined_column` (42703) in § domain test G3/G7/G9:
 (DEC-016) — a rider never collects money and has no operational need for any
 of these.
 
-**3. How the database enforces this.** Two changes, together:
+**3. Why the rider's base-table SELECT was removed, and why the views exist.**
+Column-level `GRANT` is per database *role*, and `authenticated` is the one
+role shared by customer, merchant, and rider (DEC-033) — there is no way to
+give a rider a narrower column set than a customer on the same table via
+`GRANT` alone. So the rider's SELECT policies on the three base tables are
+**dropped** (`orders_select_rider`, `order_items_select_rider`,
+`order_item_options_select_rider`; customer/merchant policies untouched). A
+rider querying `orders`/`order_items`/`order_item_options` directly now
+matches zero policies and gets zero rows — proven in § domain test G4. The
+three views are the rider's *only* remaining read path, and their column
+list is the only column-level restriction mechanism available here at all.
 
-- The rider's SELECT policies on the three base tables are **dropped**
-  (`orders_select_rider`, `order_items_select_rider`,
-  `order_item_options_select_rider`). A rider querying `orders` directly now
-  matches zero policies and gets zero rows — proven in § domain test G4.
-- The three views are created **without `security_invoker`** (the pre-PG15
-  default: a view runs with its owner's privileges). Since the migration
-  role owns every table in this schema and Postgres exempts a table's owner
-  from its own RLS unless `FORCE ROW LEVEL SECURITY` is set (nothing in this
-  schema sets it), the views can still read the underlying rows even though
-  the rider's own policy no longer exists. The views' own `where` clause
-  reuses the identical `is_assigned_order_rider()` function the dropped
-  policies called, so row-level scoping is unchanged — it moved from a
-  policy evaluated per-row to a view predicate calling the same function.
+**4. How the views restrict columns.** By construction, not by permission: a
+column the view does not project (every money column, `payment_method`,
+`customer_id`, `address_id`, `cause_code`, and every catalogue price column)
+does not exist as far as any query against the view is concerned. `select *
+from rider_order_view` cannot return `grand_total_satang` regardless of what
+SQL a client sends — there is no client-supplied input that can widen a
+view's own column list.
 
-**4. Why this is safe against direct client SQL access.** A client cannot
-widen the view's result by crafting different SQL: `select * from
-rider_order_view` still cannot return `grand_total_satang`, because that
-column was never projected into the view — it does not exist as far as any
-query against the view is concerned, independent of anything the client
-sends. And a client cannot go around the view to the base table either,
-because the rider has no working policy left there (`SELECT` returns zero
-rows, not an error, since `authenticated` still has table-level `GRANT
-SELECT` for the customer/merchant policies that remain — but RLS filters
-every row out for a rider). Customer and merchant access to the base tables,
-money columns included, is untouched — verified in § domain test G10/G11.
+**5. How the views restrict rows, and why `security_barrier` is required —
+not optional.** The three views are created **without `security_invoker`**
+(the pre-PG15 default: a view runs with its owner's privileges). Since the
+migration role owns every table in this schema and Postgres exempts a
+table's owner from its own RLS unless `FORCE ROW LEVEL SECURITY` is set
+(nothing in this schema sets it), the views can still read rows the rider's
+own policy no longer permits. The views' `where` clause reuses the identical
+`is_assigned_order_rider()` function the dropped policies called — but
+**owner-privilege access plus that predicate is not, on its own, equivalent
+to what the RLS policy provided**, because Postgres is free to reorder a
+plain view's `WHERE` clauses by estimated cost. `is_assigned_order_rider` is
+a SQL function, not marked `LEAKPROOF`, and does not get the automatic
+protection a policy's `USING` clause gets (Postgres always treats a row
+policy as a security qual, forcing it to evaluate before any query-supplied
+predicate — a plain view has no such guarantee).
 
-**Corrects one detail of DBQ-015's own recommendation:** DBQ-015 suggested
-`security_invoker = true`. That would not work once the rider's base-table
-policy is removed — an invoker-security view still evaluates RLS as the
-querying role, so a rider would see zero rows through it too, same as
-querying the base table directly. The two changes (drop the policy, use an
-owner-privilege view) have to be made together, which is what this migration
-does. **DBQ-015 is now resolved**, not merely narrowed — see
-`docs/OPEN_DATABASE_QUESTIONS.md`.
+**Finding H-1 (Architect Review, Step 7.3):** this gap is exploitable. A
+rider issuing `select * from rider_order_view where 1 / (case when
+recipient_phone_snapshot like '+6689%' then 0 else 1 end) = 1` raised
+`division_by_zero` for a phone number belonging to an order that was never
+theirs — an error-based oracle able to binary-search any *projected* column
+(address, phone, name, order number) across every order in the system,
+without that order ever being returned as a row. Proven by direct execution
+against a local container, both with and without the fix.
+
+**The fix:** all three views now set `security_barrier = true`, in addition
+to `security_invoker = false`. This forces the planner to fully evaluate the
+view (including `is_assigned_order_rider`) as an opaque barrier before any
+predicate from the outer query is applied to its output — closing the qual-
+reordering gap. Re-running the identical oracle probe after the fix returns
+a clean result (see § 6 below and
+`supabase/tests/rider_view_row_isolation_security_test.sql`).
+
+**6. What was verified locally, by execution, not by reading the SQL:**
+
+- `security_barrier=true` is present in `pg_class.reloptions` for all three
+  views (structural check, independent of the planner's cost-based choices).
+- The exact oracle probe from the Architect Review — an error-raising
+  predicate on `delivery_address_snapshot` and `recipient_phone_snapshot`
+  that matches only a "victim" order belonging to a different rider — was
+  re-run against the fixed views and returns cleanly (no error), for
+  `rider_order_view`, and the same probe shape against
+  `rider_order_item_view` (`item_name_snapshot`) and
+  `rider_order_item_option_view` (`option_name_snapshot`).
+- A **control** probe using the identical predicate shape against the
+  rider's own, legitimately visible row *does* raise the error — this is
+  what proves the probe is a real oracle when nothing is blocking it, not
+  that the test predicate silently never fires.
+- Permitted columns/rows and the "forbidden column is structurally absent"
+  property (§ domain test G-series) were re-verified unaffected by adding
+  `security_barrier`.
+- Customer and merchant access to `orders`, money columns included, is
+  unaffected — verified directly, not assumed.
+
+**7. What remains a limitation, stated plainly:** this was verified with
+direct SQL against a local PostgreSQL container connected as the
+`authenticated` role, which is how the rider's own database session behaves.
+Whether PostgREST's HTTP filter grammar (the layer a mobile client actually
+talks to in front of Supabase) can express an error-raising expression of
+this exact shape was **not** verified in this pass — casts are the most
+likely such vector, and checking that is a PostgREST-layer concern, not a
+schema one. This does not change the fix or the verdict: the mitigation
+(`security_barrier`) removes the underlying database-level gap regardless of
+which client surface might have reached it, so this limitation is about
+*how confident we are the vector was reachable*, not about whether it is now
+closed at the database.
+
+**Corrects DBQ-015's own recommendation on two points**, not one: DBQ-015
+suggested `security_invoker = true`, which does not work once the rider's
+base-table policy is removed (an invoker-security view still evaluates RLS
+as the querying role, so a rider would see zero rows through it too). The
+Step 7.2 pass corrected that to owner-privilege access
+(`security_invoker = false`) plus the `is_assigned_order_rider()` predicate
+— which Step 7.3 then found was **still insufficient** without
+`security_barrier = true`. **DBQ-015 is resolved with this fix in place**;
+see `docs/OPEN_DATABASE_QUESTIONS.md` for the caveat noted there (§ 7 above,
+"what remains a limitation").
 
 `deliveries`, `restaurants`, and `addresses` were reviewed per the finding's
 instructions and left unchanged: `deliveries`' rider-visible columns are the
@@ -501,6 +570,21 @@ delivery's own operational data (including the rider's *own*
 already public for `ACTIVE` restaurants; `addresses` already has no rider
 policy at all (the dropoff address a rider needs comes from the order
 snapshot, now served by `rider_order_view`).
+
+**Migration strategy — why `20260811000012` was edited in place, not
+patched by a new migration:** this migration has never been applied to any
+environment but a throwaway local Docker container torn down after each
+test run (never the live `banhao-dev` project, never anything shared). Its
+own two review passes (Step 7.2, Step 7.3) both happened before merge.
+Adding a third migration that immediately `ALTER VIEW`s what the second one
+just created would leave a confusing, purely-cosmetic step in permanent
+migration history — "migration N creates an insecure view, migration N+1
+fixes it three minutes later" — for no benefit, since nothing outside this
+branch has ever depended on the intermediate, vulnerable definition.
+Editing the file in place keeps the history deterministic and reviewable:
+one migration, one final correct definition. `20260811000013` (HIGH-2) was
+left untouched — it was already reviewed and approved as merge-ready, and
+none of Step 7.3's findings concern its atomicity logic.
 
 ---
 
@@ -519,9 +603,10 @@ transaction" a property of the API surface rather than a rule every caller
 has to remember.
 
 **The fix.** `public.release_rider_assignment(delivery_id uuid, status text,
-reason text)` — `SECURITY DEFINER`, service-role-only (same trusted-server
-pattern as `set_user_role` in `20260809000003_harden_profiles_rls.sql`).
-Inside one function invocation it:
+reason text)` — service-role-only, `SECURITY INVOKER` (see the "security
+model, corrected" note below — this is a Step 7.3 correction; Step 7.2
+originally shipped it `SECURITY DEFINER`). Inside one function invocation
+it:
 
 1. Locks the delivery row and reads the currently-assigned rider
    (`SELECT ... FOR UPDATE`, guarded on `state IN ('RIDER_ASSIGNED',
@@ -557,6 +642,46 @@ forced reassignment) and whether that release is recorded as `CANCELLED` or
 `RELEASED`. This function makes the resulting write atomic; it does not
 decide when to call it.
 
+**Security model, corrected (Architect Review, Step 7.3, finding M-1).** The
+Step 7.2 version of this function was `SECURITY DEFINER`, matching
+`set_user_role`'s pattern, with an internal guard —
+`pg_has_role(current_user, 'service_role', 'member')` — described as
+"defence-in-depth" alongside the `EXECUTE` grant. **That description was
+wrong, proven by execution:** inside a `SECURITY DEFINER` function,
+`current_user` resolves to the function's **owner**, not the caller. After
+granting `EXECUTE` to `authenticated` (simulating a future accidental
+over-grant) a rider successfully called the function and released
+*another* rider's delivery — the guard was silently checking whether the
+*owner* (a superuser in the test container, which auto-passes any
+`pg_has_role` check) was a `service_role` member, never the actual caller.
+The guard was not providing the second layer it claimed to.
+
+**The fix:** the function is now `SECURITY INVOKER` (the `security definer`
+clause is removed). Two consequences, both verified:
+
+- `current_user` inside the function is now genuinely the caller's active
+  role, so the guard means what it says. Re-running the identical
+  over-grant probe after the fix: the same call now raises `release_rider_
+  assignment may only be called by the service role` (42501) — the guard is
+  real defence-in-depth now, not vestigial.
+- `SECURITY DEFINER` was not actually needed for `service_role` to do this
+  work: `service_role` already has `bypassrls` and direct table grants on
+  `deliveries`/`rider_assignments` (the `revoke all ... from anon,
+  authenticated` statements in earlier migrations never touch
+  `service_role`), so an invoker-mode call under `service_role` succeeds on
+  its own privileges with no owner substitution required. This also closes
+  a second-order risk `SECURITY DEFINER` carried: had `EXECUTE` ever been
+  mistakenly over-granted, the *entire function body* — not just the guard
+  — would previously have run with the owner's elevated privileges,
+  letting a misconfigured grant actually mutate data as any caller. Under
+  `SECURITY INVOKER`, the same misconfiguration would additionally require
+  the caller to hold the underlying table privileges, which `authenticated`
+  does not.
+
+The primary protection remains the `EXECUTE` grant (`service_role` only,
+unchanged); the in-body check is confirmed, not merely claimed, to be a
+real second layer.
+
 **Regression tests — Cases A–E**, `supabase/tests/rider_reassignment_atomicity_test.sql`:
 
 | Case | What it proves | Result |
@@ -567,6 +692,11 @@ decide when to call it.
 | D | A new rider can claim the same delivery immediately after a valid atomic release | PASS |
 | E | `release_rider_assignment` refuses a non-service caller, an invalid status, and an un-releasable delivery — each rejection leaves the delivery/assignments completely unchanged; and a hand-rolled bypass of the function (reproducing the original incomplete release directly against the base tables) is still blocked from producing two `ACCEPTED` rows by the pre-existing unique index | PASS |
 
-15/15 new assertions pass. Full run: **91/91** across all four suites (RLS,
-domain invariants incl. the new HIGH-1 §G, the pre-existing rider race, and
-the new HIGH-2 Cases A–E) — see EVENT-019 in `ai/KNOWLEDGE/EVENTS.md`.
+15/15 new assertions pass, unaffected by the Step 7.3 `SECURITY INVOKER`
+change above — re-run and confirmed. Full run, Step 7.3:
+**104/104** across five suites (RLS 13/13; domain invariants incl. HIGH-1
+§G 49/49; the new
+`rider_view_row_isolation_security_test.sql` 13/13 — see § 12 above; the
+pre-existing rider race 14/14; HIGH-2 Cases A–E 15/15) — see EVENT-020 in
+`ai/KNOWLEDGE/EVENTS.md`. (EVENT-019 recorded the Step 7.2 pass at 91/91,
+before the security test existed.)

@@ -21,9 +21,40 @@
 -- What was missing is a single, atomic, database-owned entry point for the
 -- release — so "both statements, same transaction" is a property of the
 -- API surface, not a rule the caller has to remember to follow correctly
--- every time. This migration adds exactly that, following the same
--- trusted-server-path pattern already used for
--- 20260809000003_harden_profiles_rls.sql's `set_user_role`.
+-- every time. This migration adds exactly that.
+--
+-- SECURITY MODEL (corrected by the Architect Review's Step 7.3 pass — M-1):
+-- this function is `SECURITY INVOKER` (the plain default — the `security
+-- definer` clause an earlier version of this file had is REMOVED), not
+-- `SECURITY DEFINER` like `set_user_role`. Two independent reasons:
+--
+--   1. It does not need elevated privilege. `service_role` already has
+--      `bypassrls` and direct table grants on `deliveries`/
+--      `rider_assignments` (the `revoke all ... from anon, authenticated`
+--      statements in earlier migrations never touch `service_role`) — so a
+--      `service_role` caller can perform every statement in this function
+--      under its own privileges, with no owner substitution required.
+--   2. `SECURITY DEFINER` made the in-function guard below
+--      (`pg_has_role(current_user, 'service_role', 'member')`) FALSE
+--      SECURITY: inside a `SECURITY DEFINER` function, `current_user`
+--      resolves to the function's OWNER, not the caller — proven locally
+--      (Step 7.3) by granting `EXECUTE` to `authenticated` and watching a
+--      rider successfully release ANOTHER rider's delivery, because the
+--      guard was silently checking whether the OWNER (a superuser in the
+--      test container, which auto-passes any pg_has_role check) was a
+--      service_role member, never the actual caller. Under `SECURITY
+--      INVOKER`, `current_user` is genuinely the caller's role, so the same
+--      guard now means what it says — and, as a second consequence, even a
+--      future accidental `GRANT EXECUTE ... TO authenticated` could not
+--      make the internal UPDATEs succeed as a rider either, since an
+--      invoker-mode call runs with the CALLER's table privileges, and
+--      `authenticated` has none on `deliveries`/`rider_assignments`.
+--
+-- The primary, load-bearing protection remains the EXECUTE grant at the
+-- bottom of this file (`service_role` only) — that is what actually stops
+-- an unauthorised caller from reaching this function at all. The
+-- `pg_has_role` check is real defence-in-depth now, not vestigial, but it
+-- is still the SECOND layer, not the first.
 --
 -- ATOMICITY GUARANTEE: both UPDATEs happen inside ONE PL/pgSQL function
 -- invocation, which is a single statement from the calling transaction's
@@ -46,9 +77,12 @@
 -- not decide when to call it. That decision logic is out of scope for a
 -- migration (ADR-001).
 --
--- Reviewed per the Architect Review, Step 7.2, HIGH-2. Does not touch
--- rider_assignments_one_active, does not change the guarded-UPDATE claim
--- path, does not introduce a new delivery or assignment state.
+-- Reviewed per the Architect Review, Step 7.2, HIGH-2 (unchanged — the
+-- atomicity guarantee, locking, and invariant checks below are exactly as
+-- reviewed and approved) and Step 7.3, M-1 (the security-mode correction
+-- above). Does not touch rider_assignments_one_active, does not change the
+-- guarded-UPDATE claim path, does not introduce a new delivery or
+-- assignment state.
 
 create or replace function public.release_rider_assignment(
   p_delivery_id uuid,
@@ -57,7 +91,6 @@ create or replace function public.release_rider_assignment(
 )
 returns uuid
 language plpgsql
-security definer
 set search_path = public
 as $$
 declare
@@ -65,7 +98,11 @@ declare
   v_delivery_rows int;
   v_assignment_rows int;
 begin
-  -- Trusted server path only — same convention as set_user_role. Riders and
+  -- SECOND layer only — the EXECUTE grant below is what actually stops an
+  -- unauthorised caller from reaching this function. This check is
+  -- meaningful (not vestigial) specifically BECAUSE this function is
+  -- SECURITY INVOKER: current_user here is the real caller's active role,
+  -- not a function owner substituted in by SECURITY DEFINER. Riders and
   -- every other client actor reach this exclusively through the NestJS API
   -- (ADR-001: no client writes a delivery/assignment transition directly).
   if not pg_has_role(current_user, 'service_role', 'member') then
@@ -146,7 +183,7 @@ end;
 $$;
 
 comment on function public.release_rider_assignment(uuid, text, text) is
-  'HIGH-2 fix (Architect Review, Step 7.2). The sole sanctioned way to release a rider from a delivery for reassignment (DEC-021) — both statements of docs/DATABASE_DESIGN.md § 11.1''s release invariant run inside this one function call, so they succeed or roll back together. Service role only. See supabase/tests/rider_reassignment_atomicity_test.sql Cases A-E.';
+  'HIGH-2 fix (Architect Review, Step 7.2/7.3). The sole sanctioned way to release a rider from a delivery for reassignment (DEC-021) — both statements of docs/DATABASE_DESIGN.md § 11.1''s release invariant run inside this one function call, so they succeed or roll back together. SECURITY INVOKER (not DEFINER, see file header M-1 note) — service_role reaches every statement on its own bypassrls/table-grant privileges, no owner substitution needed. Primary protection: the EXECUTE grant below (service_role only). Secondary: the in-body pg_has_role check, meaningful under INVOKER mode. See supabase/tests/rider_reassignment_atomicity_test.sql Cases A-E.';
 
 revoke execute on function public.release_rider_assignment(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.release_rider_assignment(uuid, text, text) to service_role;
