@@ -84,6 +84,8 @@ owner: PROJECT
 
 The documented Order State Machine has 12 states: `NEW, ACCEPTED, PREPARING, READY, DRIVER_ASSIGNED, PICKED_UP, DELIVERING, COMPLETED, NO_DRIVER, PAYMENT_FAILED, REJECTED, CANCELLED`. Full table: `docs/ARCHITECTURE.md`.
 
+**⚠️ Provenance note (2026-08-10, EVENT-014).** This fact remains VERIFIED **as a statement about the 2026-08-09 design artifact**, but that machine is **no longer canonical**. **DEC-019** supersedes it with `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, moves `DRIVER_ASSIGNED` into the delivery domain, and removes `NO_DRIVER` as an order state. See `docs/ORDER_LIFECYCLE.md` § 1 for the full mapping.
+
 ---
 
 ### FACT-006
@@ -99,6 +101,8 @@ owner: PROJECT
 ```
 
 The documented Payment State Machine has 12 states: `CREATED, PENDING, PROCESSING, SUCCESS, FAILED, EXPIRED, CANCELLED, REFUND_PENDING, REFUND_PROCESSING, REFUNDED, CASH_PENDING, CASH_COLLECTED` — modeled separately from Order State (see CON-001). Full table: `docs/ARCHITECTURE.md`.
+
+**⚠️ Provenance note (2026-08-10, EVENT-014).** Still accurate. **DEC-016** disables Cash on Delivery in Phase 1, so `CASH_PENDING` and `CASH_COLLECTED` are **unreachable but retained** — COD must not be hard-coded as permanently unsupported. **DEC-018** extends the separation from two domains to four (Order, Payment, Delivery, Settlement).
 
 ---
 

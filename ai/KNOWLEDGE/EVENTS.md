@@ -258,3 +258,875 @@ confidence: HIGH
 `feature/customer-app` and `feature/supabase-customer-auth` remain on the remote (not deleted) but are now fully contained in `main`; any future work should branch from `main`.
 
 **Scope did not change.** No payment provider, no order backend, no dispatch, no settlement, and no Merchant/Driver/Admin app work was started as part of this merge — those all remain gated on the P0 product decisions in `docs/TODO.md`.
+
+---
+
+## EVENT-013
+
+```yaml
+id: EVENT-013
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/business-rules
+confidence: HIGH
+```
+
+**Business Rules & Domain Modelling.** The business layer of BANHAO was
+analysed, structured and written down before any Order, Payment, Merchant,
+Rider or Settlement code exists. **No production code, no migration, no API and
+no payment provider integration was created** — the diff is documentation and AI
+knowledge only.
+
+Seven documents produced: `docs/BUSINESS_RULES.md`, `docs/DOMAIN_MODEL.md`,
+`docs/ORDER_LIFECYCLE.md`, `docs/RIDER_LIFECYCLE.md`,
+`docs/PAYMENT_LIFECYCLE.md`, `docs/SETTLEMENT_MODEL.md`, and
+`docs/OPEN_BUSINESS_QUESTIONS.md`. Every rule in them carries a status —
+`DOCUMENTED` (traceable to an accepted source), `PROPOSED` (this pass's
+suggestion, unapproved) or `OPEN` — so a later agent can tell product truth from
+analysis. **No `PROPOSED` item was promoted to `ACCEPTED`, and no `Q-NNN` was
+resolved.**
+
+**39 new business questions (BQ-001…BQ-039)** were recorded, cross-referencing
+the twenty pre-existing `Q-NNN` items rather than duplicating them. Fifteen are
+P0 — they block Order, Payment or Settlement implementation outright.
+
+Six findings changed the project's understanding of its own design. Each is a
+contradiction or omission **inside accepted documents**, not an opinion:
+
+1. **`PENDING_PAYMENT` is referenced but does not exist.** The Payment State
+   Machine pairs five payment states with an Order state named
+   `PENDING_PAYMENT`; the Order State Machine's twelve states do not include it.
+   An order awaiting a PromptPay transfer is therefore in no nameable state,
+   which REQ-002 does not allow (BQ-012).
+2. **`NO_DRIVER` contradicts the Customer App.** The state machine documents
+   `READY → NO_DRIVER` — the food is cooked — while the app's no-rider screen
+   tells the customer *"อาหารของคุณยังไม่ถูกปรุง"*, their food has not been
+   cooked. Both cannot be true, and the answer decides who absorbs the cost of
+   wasted food (BQ-014, BQ-015).
+3. **The cash design requires riders to front their own money.** Two independent
+   statements — the cash ledger line `ร้านได้รับเงินสดหน้าร้านแล้ว −฿108` and the
+   merchant-finance note that cash orders skip transfer rounds "because the shop
+   already received the money from the rider at the counter" — mean the rider
+   pays the merchant at pickup, before collecting from the customer. On a ฿130
+   order the rider fronts ฿108 to earn ฿12. With a pool of 8–12 riders this is a
+   recruitment barrier, and it was never called out (BQ-023).
+4. **The commission rate the design implies is 10% of the food subtotal.**
+   Q-010 records that no rate is documented; in fact the samples are internally
+   consistent at 10% (120→12, 180→18, 260→26) and the merchant screen states
+   `10% ของยอดอาหาร` outright. Still a sample, not a decision — but a coherent
+   anchor Q-010 did not have.
+5. **The platform funds discounts, and delivery runs at a loss.** Working the
+   design's own ledger: the merchant is paid commission on the full undiscounted
+   menu price, so the platform absorbs the ฿10 coupon; and ฿10 of net delivery
+   revenue pays a ฿12 rider earning, with commission covering the gap. Neither
+   is stated anywhere (BQ-030, BQ-026, BQ-029).
+6. **The rider accept window is contradictory.** Wireframe `D-05` is titled
+   `นับถอยหลัง 20 วิ` while its button reads `รับงาน · 12 วิ`.
+   `ai/RESEARCH/THAILAND_COMPLIANCE.md` §5 cites "the documented 12-second accept
+   window" — it read the button state. 12 s should not be treated as established
+   (BQ-020).
+
+Also recorded: **riders pay a platform fee** (`ค่าธรรมเนียมแพลตฟอร์ม −฿38` in
+`D-13`), which appears nowhere else in the repository; and the Customer App's
+refund copy promises money back *"เข้าบัญชีเดิม … ภายใน 1–3 วันทำการ"*, which
+Q-020 found is not natively possible on the PromptPay rail — a promise without a
+mechanism.
+
+**Three dispatch models were compared** (first-available, zone-based, broadcast)
+plus manual dispatch, against complexity, cost, fairness, speed, Buntharik fit
+and scalability. The recommendation is **broadcast / first-accept with admin
+manual dispatch as an always-available override**, on the grounds that 8–12
+riders is one pool and speed is the only lever that moves the documented ≤5%
+no-rider cancellation ceiling. **The Product Owner decides — BQ-019 is `OPEN`.**
+The no-rider scenario was analysed across seven options and answered with a
+time-based ladder rather than a single choice (BQ-025).
+
+**DQ-01…DQ-05 were all addressed.** DQ-01 (cash path) and DQ-02 (duplicate-payment
+trigger) turned out to be **answerable from documents that already exist** — the
+payment canvas specifies both — and are recommended for closure rather than
+decision. DQ-03 is blocked on Q-020 and BQ-031; DQ-04 is superseded by BQ-001
+and BQ-002; DQ-05 by BQ-039.
+
+`docs/TODO.md` was reconciled: its P0 entries for "decide backend stack" and
+"decide database technology" had been stale since 2026-08-09, when DEC-011 and
+DEC-010 resolved them.
+
+**Nothing was implemented and nothing was decided.** The next step is Product
+Owner review of `docs/OPEN_BUSINESS_QUESTIONS.md`, starting with the fifteen P0
+items.
+
+---
+
+## EVENT-014
+
+```yaml
+id: EVENT-014
+type: EVENT
+date: 2026-08-10
+source: this session; branch feature/p0-decisions-v1
+confidence: HIGH
+```
+
+**BANHAO P0 Business Decisions v1 Approved.** The Product Owner reviewed the
+EVENT-013 business rules in a Business Decision Workshop and approved a first
+tranche of decisions. This event converts them into the project's permanent
+source of truth. **Documentation and decision records only — no production
+code, no migration, no API, no payment provider, no Merchant/Rider/Admin app.**
+
+### Approved — DEC-016 through DEC-032 (17 decisions)
+
+| ID | Decision |
+|---|---|
+| DEC-016 | Phase 1 is **online payment only**; **COD disabled** but `payment_method` stays extensible |
+| DEC-017 | **One cart = one restaurant** |
+| DEC-018 | **Order, Payment, Delivery and Settlement are four separate state domains** — no mega-enum |
+| DEC-019 | Order core lifecycle `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with **`PREPARING` and `RIDER_SEARCHING` in parallel** |
+| DEC-020 | Rider search starts at `MERCHANT_ACCEPTED`; dispatch is **broadcast → first accept** |
+| DEC-021 | Rider cancellation → `RIDER_REASSIGNING → RIDER_SEARCHING`. **The order is never cancelled** |
+| DEC-022 | No rider → retry → manual dispatch → **operator decision**. **Never auto-cancel** |
+| DEC-023 | Delivery fee funds rider compensation — **model only** |
+| DEC-024 | Service fee is BANHAO revenue — **model only** |
+| DEC-025 | Merchant commission is BANHAO revenue — **model only; the 10% example must not become the rate** |
+| DEC-026 | Settlement is a separate financial domain — **implementation not started** |
+| DEC-027 | Refund belongs to the payment domain: `Order = CANCELLED` + `Payment = REFUNDED` |
+| DEC-028 | Payment operations must be **idempotent** (`order_id`, `payment_reference`, `idempotency_key`) |
+| DEC-029 | **Late payment** must resolve to an order and attempt — technical requirement accepted, business handling open |
+| DEC-030 | A **duplicate payment never increases an order's value** |
+| DEC-031 | Buntharik-first: **manual operations are an intentional Phase 1 capability** |
+| DEC-032 | **Operator fallback** for exceptional situations — capability documented, no Admin App |
+
+### What this supersedes
+
+Two pieces of previously-accepted product truth were changed **by the Product
+Owner**, not by an agent, and both are recorded as supersessions rather than
+edits:
+
+1. **DEC-019 supersedes the Order State Machine** documented in
+   `docs/05-architecture` § 03 and restated in `docs/ARCHITECTURE.md` and
+   FACT-005. State names change (`NEW`→`PAID`/`MERCHANT_ACCEPTED`,
+   `READY`→`READY_FOR_PICKUP`, `COMPLETED`→`DELIVERED`), `DRIVER_ASSIGNED` moves
+   to the delivery domain, and `NO_DRIVER` stops being an Order state.
+   **FACT-005 stays VERIFIED as a statement about the 2026-08-09 design
+   artifact**, which is no longer the canonical machine.
+2. **DEC-016 supersedes the Phase 1 payment scope** (`เงินสด + พร้อมเพย์ QR`).
+   **DEC-004 and REQ-001 remain ACCEPTED but dormant** — rider-held cash is
+   still a liability, still displayed separately, the moment COD returns. They
+   were deliberately not deleted.
+
+### Questions closed, and questions deliberately left open
+
+**Answered:** BQ-010 (DEC-017), BQ-012 (DEC-019), BQ-014 (DEC-019/DEC-022),
+BQ-019 (DEC-020), BQ-025 shape (DEC-022), and the **model halves** of BQ-026
+(DEC-023), BQ-027 (DEC-024), BQ-028 (DEC-025).
+
+**Deferred by DEC-016, not answered:** BQ-023 (rider cash float), BQ-033 (cash
+fee netting), Q-004 (cash limit), the cash half of BQ-034. Each returns
+unchanged when COD does.
+
+**Still `OPEN`, and explicitly excluded from the lock:** every number — commission
+rate, service fee, delivery zone price, rider base and distance earnings,
+promotion budget — plus merchant of record, payment provider, settlement legal
+structure, tax structure, regulatory classification, and the final refund
+policy. **No `Q-NNN` was resolved by this event.**
+
+### Blockers after the lock
+
+**P0, down from fifteen to eight:** Q-001 (provider), Q-002 (legal), Q-010 /
+BQ-028 (commission rate), Q-020 (PromptPay refund mechanism), BQ-015 (who bears
+the cost of wasted food), BQ-026 and BQ-027 (fee numbers), BQ-030 (promotion
+funding).
+
+⚠️ **DEC-016 made Q-001 and Q-020 more blocking, not less.** With cash removed,
+100% of Phase 1 revenue and 100% of refunds run through a rail whose provider is
+unchosen and whose native refund capability research says does not exist —
+and disabling COD deleted one of the four candidate refund mechanisms (cash
+refund via rider). A secondary demand-side risk was recorded, not resolved: a
+customer without a banking app cannot order at all in Phase 1.
+
+### Two divergences the lock created in existing code
+
+No code was touched, deliberately. Both are recorded as follow-up work:
+
+- `apps/customer/src/mocks/types.ts` encodes the superseded twelve order states
+  (DEC-019).
+- The Customer App checkout still offers cash and a cash-prepared-amount
+  selector (DEC-016).
+
+### Documents updated
+
+`docs/DECISIONS.md` (index added, DEC-016…DEC-032 appended), `BUSINESS_RULES.md`,
+`DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`,
+`PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md`, `OPEN_BUSINESS_QUESTIONS.md`,
+plus `ai/MEMORY.md`, `ai/HANDOFF.md`, `ai/KNOWLEDGE/FACTS.md` (FACT-005/006
+provenance notes), `ai/KNOWLEDGE/CONSTRAINTS.md` and
+`ai/KNOWLEDGE/REQUIREMENTS.md` (cross-references), `CLAUDE.md`,
+`docs/CURRENT_STATUS.md`, `docs/TODO.md`, `docs/CHANGELOG.md`.
+
+The status taxonomy across the business documents is now `ACCEPTED` /
+`PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with the deliberate combination
+`ACCEPTED — MODEL · OPEN — NUMBERS` used throughout the money sections.
+
+---
+
+## EVENT-015
+
+```yaml
+id: EVENT-015
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/technical-architecture-v1
+confidence: HIGH
+```
+
+**Technical Architecture v1.** The architecture that implements the approved
+business decisions (DEC-016…DEC-032) was designed and written down.
+**Architecture only — no backend implementation, no migration, no Supabase
+table, no payment provider integration, no Merchant/Rider/Admin app.** The diff
+is documentation.
+
+Three documents produced: `docs/TECHNICAL_ARCHITECTURE.md` (22 sections),
+`docs/ARCHITECTURE_DECISIONS.md` (**ADR-001…ADR-012**, all `PROPOSED`), and
+`docs/OPEN_TECHNICAL_QUESTIONS.md` (**TQ-001…TQ-016**).
+
+**No business decision was created, changed or reversed**, and no `Q-NNN`,
+`BQ-NNN` or `DEC-NNN` was closed.
+
+### The architectural spine
+
+> **NestJS writes. Clients read. Postgres decides.**
+
+Domain tables grant **no `INSERT`/`UPDATE`/`DELETE` to `authenticated`** at all.
+Every mutation goes through NestJS on the service-role client, inside a
+transaction, guarded by the owning module's state machine. RLS is **defence in
+depth** — it stops a leaked anon key reading another party's rows — not the
+authorization system. This makes the security requirements structurally
+impossible to violate rather than merely forbidden: a customer cannot modify
+payment status because **no grant exists**.
+
+### The concurrency answer
+
+The universal primitive is a **guarded conditional UPDATE** — the state check
+lives in the `WHERE` clause, and the caller branches on rows-affected. Under
+`READ COMMITTED` the second writer blocks, re-evaluates against the committed
+row, and matches nothing. This gives exactly-one-winner with no distributed
+lock, no Redis, and no queue.
+
+- **Rider race** (DEC-020's broadcast makes this routine, not an edge case):
+  guarded update on `delivery`, plus a partial unique index allowing at most one
+  `ACCEPTED` `rider_assignment` per delivery as a database backstop. The loser
+  gets `409`; the same rider re-tapping gets an idempotent `200`.
+- **Webhook race:** `UNIQUE (provider, provider_event_id)` on the event, plus
+  `UNIQUE (entry_group_key)` on the ledger. Two transactions — TX1 records that
+  the event arrived, TX2 applies it — so a crash mid-processing cannot erase the
+  evidence. A sweeper retries anything left unprocessed.
+- **Merchant-accepts-vs-operator-cancels:** guards express the **set** of legal
+  source states, so both orderings resolve correctly and deterministically —
+  first commit wins, the loser receives `409` with the current state.
+
+**The prohibited pattern is named explicitly**: `SELECT` the state, check it in
+TypeScript, then `UPDATE`. That is check-then-act and both riders pass the check.
+
+### Money
+
+`bigint` satang in Postgres, branded `Satang` in TypeScript (it is currently a
+bare `number` alias, so a baht value type-checks as satang), rates as **integer
+basis points**, one rounding function — and the residual allocated to a
+component **computed last by subtraction**. That makes CON-003's zero-sum true
+*by construction* for any rate and any rounding, rather than something to
+reconcile afterwards. **No rate, fee or price was set** — DEC-023/024/025 keep
+every number `OPEN`.
+
+### Things deliberately not adopted
+
+No message broker (transactional outbox instead — a job can be enqueued in the
+same transaction as the state change that causes it). No Redis/BullMQ (Postgres
+`FOR UPDATE SKIP LOCKED` at ~1 job/minute, behind a `JobQueue` interface, with
+stated revisit triggers). No event sourcing, no CQRS, no microservices, no
+rider scoring or route optimisation (DEC-020 forbids), no `PATCH { state }`
+endpoints.
+
+### Existing code was reviewed, not redesigned
+
+`PaymentProvider` already encodes CON-002, DEC-028 and DEC-018 correctly and is
+**kept as written**. The two-client `SupabaseService` split and the module rules
+in `apps/api/src/modules/README.md` are extended, not replaced. The architecture
+adds one mechanism to payments: splitting webhook **ingest** from **processing**.
+
+### Findings worth carrying forward
+
+- **`Satang` is an unbranded `number`.** `bahtToSatang`'s input and output are
+  the same type to the compiler. Cheap to fix now (ADR-007).
+- **`refund()` on `PaymentProvider` is currently unsatisfiable.** Q-020 found no
+  provider supports native PromptPay refunds and DEC-016 removed the cash
+  fallback. If Q-020 resolves out-of-band, refund should move off
+  `PaymentProvider` rather than stay a lie in the interface (TQ-008).
+- **Three T0 questions block backend work** and none is about the provider:
+  TQ-011 (migration workflow — cheaper to agree before the first domain
+  migration than to retrofit across agent-written schema), TQ-012 (how
+  concurrency correctness is *proved* — the EVENT-007 precedent of verifying by
+  execution against real PostgreSQL applies), and TQ-008 (provider adapter,
+  gated on Q-001/Q-020).
+
+### AI maintainability
+
+Treated as a first-class requirement. Every module gets a fixed README header —
+**Owns / State / Governed by / Must NOT / Depends on / Migrations / Tests /
+Open** — with the `Open:` line as the load-bearing part: it tells an agent where
+the map ends, which is what stops it inventing a rate or timing the question
+register lists as undecided. Two rules an agent must not break: **a `DEC` beats
+an `ADR`**, and **`OPEN` means stop and ask**.
+
+### Architecture review, same day — 7 findings, all fixed
+
+The architecture was reviewed against the business record before allowing
+database work to begin. **No business decision changed; no code, no migration.**
+Verdict **PASS WITH FINDINGS**; all seven were documentation gaps in an
+unimplemented design, which is what a pre-implementation review is for.
+
+**HIGH — reassignment was impossible as specified.** The accept guard includes
+`AND rider_id IS NULL` and the backstop index is
+`UNIQUE (delivery_id) WHERE outcome = 'ACCEPTED'`. § 8.4 described the
+`RIDER_ASSIGNED → RIDER_REASSIGNING → RIDER_SEARCHING` path but never said that
+releasing a rider must **null `delivery.rider_id`** and **move the old
+`rider_assignment` out of `ACCEPTED`**. Without both, the delivery becomes
+permanently unassignable and **the constraint meant to protect DEC-020 blocks
+DEC-021**. Fixed with explicit release invariants (§ 8.5) and a note on ADR-003.
+
+**MEDIUM ×4:**
+- **No authoritative source of truth for assignment** — `delivery.rider_id` and
+  `rider_assignment` both recorded it. Now declared: `delivery` is
+  authoritative, `rider_assignment` is history and integrity backstop (§ 8.4).
+- **Riders had no read path to broadcast offers.** The RLS table omitted
+  `rider_assignment_attempt`, and a rider who has not accepted is not a party to
+  the order — so DEC-020's broadcast was unreadable. Added, with the narrow
+  offer-payload boundary made explicit.
+- **Surplus payment was unrecorded.** "A second payment creates a refund
+  obligation" said what to owe but not where the money goes. Without a
+  `payment_transaction` and a **distinct `entry_group_key`**, the uniqueness
+  backstop would reject the surplus and cash actually received would vanish from
+  the ledger. The rule is now stated: **a duplicate *event* must be ignored; a
+  duplicate *payment* must be recorded.**
+- **Late payment (DEC-029) had one sentence.** Now a routing path — identify
+  order, attempt, reference and current state, then queue a reconciliation case.
+  The guarded update already prevents resurrection of a cancelled order.
+
+**LOW ×2:** the module contract lacked `Owner`/`Inputs`/`Outputs`; the free-tier
+cost reality was unstated — a **long-running worker cannot run on Supabase
+free**, and PITR is paid. Both apply from the first real order, not at scale.
+
+TQ-012 now lists the seven invariants a concurrency suite must assert, including
+the two the review found unstated.
+
+---
+
+## EVENT-016
+
+```yaml
+id: EVENT-016
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/database-design-v1
+confidence: HIGH
+```
+
+**Supabase Database Design v1.** The PostgreSQL blueprint implementing
+DEC-016…DEC-032 under the approved architecture. **Design only — no migration
+was created, no SQL was executed, the live Supabase project was not touched.**
+
+Two documents: `docs/DATABASE_DESIGN.md` (46 tables, ERD, table catalog, RLS
+matrix, state matrix, FK/cascade table, index justifications, migration order)
+and `docs/OPEN_DATABASE_QUESTIONS.md` (**DBQ-001…DBQ-014**).
+
+**No business decision created, changed or reversed. No `Q`, `BQ`, `TQ` or
+`DEC` closed.**
+
+### The existing security pattern was generalised, not replaced
+
+Migration `20260809000003_harden_profiles_rls.sql` turned out to be the most
+valuable artifact in the repository for this step. Its five-step pattern —
+**revoke-first**, narrow column grants, RLS enabled, policies scoped
+`to authenticated`, `security definer` trigger backstop — is now the template
+every new table follows. The `revoke` step is load-bearing: Supabase grants
+`ALL` on public tables by default, so a migration that only adds policies leaves
+clients able to write every column.
+
+### Findings that changed the design
+
+**A single `profiles.role` column is not sufficient.** In a district this small
+a rider orders food and a restaurant owner orders food, so promoting a user to
+`DRIVER` would remove their ability to be a customer. Recommended `user_roles`
+(sparse) with **`CUSTOMER` implicit for every authenticated user**, plus
+`restaurant_members` as the real merchant authorization boundary — a global
+`MERCHANT` role grants nothing by itself. The live enum also has **no
+`OPERATOR`**, which DEC-032 requires. Deprecating `profiles.role` needs a code
+change (`RolesGuard`, `set_user_role()`, the immutability trigger), so it is
+recorded as **DBQ-002 (D0)** rather than done here.
+
+**DEC-017 is enforced structurally, not by validation.** `cart_items` carries a
+denormalised `restaurant_id` and two composite foreign keys — to
+`carts (id, restaurant_id)` and `menu_items (id, restaurant_id)`. Both share the
+column, so they must agree: **a cross-restaurant cart cannot be stored.** No
+trigger, no application check, no race. Chosen over a `BEFORE INSERT` trigger
+because a trigger is invisible in the table definition and must be re-derived by
+every agent that reads the schema.
+
+**`text` + `CHECK` over PostgreSQL enums for state columns.** The order
+vocabulary has already changed once (DEC-019 superseded the 12-state machine)
+and five exception state names are still `PROPOSED`. Under `text + CHECK` that
+is a one-line constraint swap; under an enum, removing a value means a new type
+and altering every column. The live `user_role` enum stays — small, stable, and
+referenced by a function and a trigger.
+
+**A ledger is recommended, but a small one.** The five questions §21 asks are
+answerable from `orders` and `refunds` alone; the ledger earns its place because
+CON-003's zero-sum needs something to sum, settlement must be *derived from
+financial records* (DEC-026), and corrections must be compensating entries
+(DEC-014). `ledger_entry_groups.group_key` is unique — which is simultaneously
+DEC-028's fail-loudly duplicate protection and the unit the zero-sum assertion
+runs over. It also encodes the earlier review finding: a duplicate **webhook**
+is rejected by `payment_events`' unique key, while a duplicate **payment** gets a
+different `group_key` and is therefore recorded rather than swallowed.
+
+**Only three tables accept a direct client write** — `addresses`, `carts` (and
+children), and `notifications.read_at`. None carries financial or state meaning.
+That is what makes §25's rule structural: a customer cannot write
+`payment.status` because no grant exists.
+
+### Deliberately not designed
+
+Promotions/coupons (**BQ-030 funding is `OPEN`** — the schema would be a guess),
+cash tables (DEC-016), **rider location history** (🔴 Q-012 unanswered — no
+location schema before the legal basis), support tickets (BQ-037). A partial
+unique index enforcing one active delivery per rider was **rejected** because
+BQ-021 is `OPEN`: a configurable service check is reversible, a unique index is
+not (DBQ-007). This is the correct instance of not turning a business question
+into a database decision.
+
+### Blocking the first migration
+
+**DBQ-002** (role model), **DBQ-010** (zero-sum via deferred constraint trigger
+vs application check), plus the already-known **TQ-011** (migration workflow) and
+**TQ-012** (concurrency test strategy).
+
+---
+
+## EVENT-017
+
+```yaml
+id: EVENT-017
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/database-design-v1
+confidence: HIGH
+```
+
+**Database architecture decisions locked.** The Product Owner approved two
+decisions that close the database design. **Documentation only — no migration,
+no SQL, no Supabase change, no backend code.**
+
+### ⚠️ Numbering collision — read this before citing either decision
+
+The approval instruction labelled them **"DEC-014 — Multi-role Identity Model"**
+and **"DEC-015 — Phase 1 Financial Integrity"**. **Both IDs were already taken**
+— DEC-014 (PostgreSQL is the system of record) and DEC-015 (payment provider
+abstraction), accepted 2026-08-09 and cited across **17 and 21 files**
+respectively, including a code comment in
+`apps/api/src/modules/payments/payment-provider.interface.ts`.
+
+Reusing them would have silently redefined two decisions the whole repository
+depends on. The new decisions were therefore recorded at the **next free IDs**:
+
+| Approval label | Recorded as |
+|---|---|
+| "DEC-014 — Multi-role Identity Model" | **DEC-033** |
+| "DEC-015 — Phase 1 Financial Integrity" | **DEC-034** |
+
+The original DEC-014 and DEC-015 are unchanged and still `ACCEPTED`.
+
+### DEC-033 — Multi-role identity via domain membership
+
+`profiles` is identity; **authorization is a domain relationship.** A single
+`profiles.role` column is not authoritative, and **no generic RBAC layer is
+built**: Customer is **implicit** for every authenticated profile, Merchant is a
+`restaurant_members` row (scoped to one restaurant), Rider is a `riders` row,
+and Operator/Admin is a new small **`platform_staff`** row.
+
+The question becomes **"what relationship does this user have with this
+domain?"**, never "what single role does this user have?"
+
+**This overruled the database design's own recommendation.** EVENT-016 proposed
+a generic `user_roles` table; the Product Owner rejected it — where a domain
+table exists, membership *is* the grant. `user_roles` is now **not** part of the
+design, and the rejection is recorded in place rather than deleted.
+
+Consequences: **no RLS policy may reference `profiles.role`** — every policy
+resolves through a membership lookup. `profiles.role` is deprecated but cannot
+be dropped by a design change: `RolesGuard`, `set_user_role()` and the
+`enforce_profile_immutable_columns()` trigger all read it. That is implementation
+work, now tracked in `docs/TODO.md`.
+
+### DEC-034 — Phase 1 financial integrity without a zero-sum trigger
+
+No PostgreSQL trigger enforcing a full accounting zero-sum invariant in Phase 1.
+Integrity comes instead from immutable financial records, database constraints,
+NestJS transactions, idempotency, auditability and **reconciliation**.
+
+**This also overruled the design's own recommendation** — DBQ-010 proposed a
+`DEFERRABLE INITIALLY DEFERRED` constraint trigger.
+
+**CON-003 is not repealed.** Every order's ledger still balances to zero; the
+enforcement point moves from *physically impossible to violate* to *asserted in
+the ledger service and monitored*. The consequence to carry forward: **the
+reconciliation process is now mandatory rather than optional**, because without
+the trigger it is the only thing that would notice drift — it needs a schedule
+and an alert (TQ-006).
+
+`ledger_entry_groups` stays, and DEC-034's requirement to answer *"what
+financial events produced these values?"* is precisely what it provides: without
+the groups, five of the six required questions are answerable and the sixth is
+not. `group_key` uniqueness remains **idempotency** (DEC-028), not zero-sum
+enforcement. Corrections remain compensating entries, never edits.
+
+A stronger ledger invariant is explicitly available in a later phase. **No future
+accounting rules were invented.**
+
+### Questions closed — exactly two
+
+**DBQ-002** by DEC-033 and **DBQ-010** by DEC-034. Both are marked `ANSWERED`
+with the original analysis preserved beneath. **12 of 14 DBQs remain open**, and
+no `Q`, `BQ` or `TQ` was closed.
+
+### Guardrail
+
+> **DATABASE DESIGN IS APPROVED. DATABASE MIGRATION HAS NOT STARTED.**
+
+`supabase/` is unchanged and still holds exactly the three migrations applied on
+2026-08-09. Remaining gates before the first migration: DBQ-004, DBQ-011,
+TQ-011, TQ-012.
+
+### Business decisions
+
+**None changed.** Online-payment-first, COD disabled, one restaurant per cart,
+broadcast → first accept, rider search after merchant accept, the no-rider
+ladder, the three fee directions, settlement separation and refund separation
+are all untouched and re-verified.
+
+---
+
+## EVENT-018
+
+```yaml
+id: EVENT-018
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/supabase-migration-v1
+confidence: HIGH
+```
+
+**Supabase Migration v1.** The approved database design
+(`docs/DATABASE_DESIGN.md`, locked by DEC-033/DEC-034) was implemented as
+real migration files for the first time. **The live/remote Supabase project
+was never touched** — no `supabase db push`, no `supabase link`, no SQL
+executed against anything but a throwaway local Docker container.
+
+**11 new migration files**, `20260811000001`–`20260811000011`, applied after
+the three existing ones — which remain **byte-identical, untouched**
+(verified by `git diff`). **39 new tables + the existing `profiles` = 40
+application tables**, 62 foreign keys, 61 check constraints, 110 indexes, 55
+RLS policies, 52 triggers, 9 new functions. Full detail and every number
+re-verified: `docs/DATABASE_MIGRATION_V1_REPORT.md`.
+
+### Verified by execution, not by reading the SQL — 60/60 assertions pass
+
+Two independent Docker-based test suites, extending the existing
+`supabase/tests/run-rls-tests.sh` pattern (plain PostgreSQL 16 + PostGIS, not
+`supabase start` — same rationale the existing suite already documented: RLS,
+triggers and concurrency are core PostgreSQL behaviour, not
+Supabase-specific):
+
+- `run-rls-tests.sh` (existing) — still **13/13 pass**, now against the full
+  14-migration set, proving the original `profiles` hardening is undisturbed.
+- `run-domain-tests.sh` (new) — **34/34** identity/cart/order/payment/
+  ledger/RLS assertions, plus **13/13** rider-race-condition assertions.
+
+**The rider race condition was proven with two genuinely concurrent `psql`
+client processes**, backgrounded and raced against the same delivery row —
+not a single-session simulation. Across runs the winner was **not the same
+rider both times** (confirmed non-deterministic, i.e. genuinely
+database-serialised, not test-order-determined). Also directly proven: the
+`rider_assignments_one_active` partial-unique-index backstop (a raw `INSERT`
+bypassing the guarded `UPDATE` is rejected), and correct reassignment
+(DEC-021) succeeding when both release statements are performed together.
+
+**The 2026-08-11 architecture review's HIGH finding was reproduced exactly,
+and turned out sharper than described.** Performing only half the release
+(nulling `deliveries.rider_id` without closing the stale `rider_assignments`
+row) does not fail quietly — the guarded `UPDATE` half of the next claim
+actually *succeeds* (rowcount 1, since `rider_id` is null), and it is the
+**follow-up `INSERT`** that then raises `unique_violation` against the stale
+row. This is a hard, unhandled database error a caller must explicitly catch,
+not a silent no-op — a more precise version of the documented finding,
+discovered only by actually running it. Closing the stale row (the
+documented fix) was then proven to restore correct behaviour, also by
+execution.
+
+### Six tables deferred, individually justified, none removed from the design
+
+`settlements`, `settlement_items` (DEC-026 not implemented, Q-002
+`LEGAL_REVIEW_REQUIRED`) · `delivery_fee_bands` (DEC-023 pricing `OPEN`, no
+consumer) · `zones`, `service_areas` (geo domain deferred as a unit;
+`zone_id`/`service_area_id` kept as bare `uuid` columns with no FK, so adding
+the tables later is additive) · `delivery_attempts` (**evaluated carefully as
+instructed** — it does *not* protect rider reassignment, that is
+`rider_assignments`; it is the post-pickup handover workflow, and BQ-017 is
+`OPEN`, the same reasoning that deferred `promotions` in the original
+design).
+
+### Four small documentation gaps found and resolved while implementing
+
+None involved a business decision. `refunds` was missing the `provider`
+column its own unique constraint required (added). `menu_items.category_id`'s
+delete behaviour conflicted between § 5.3 (`RESTRICT`, followed) and § 19's
+summary table (`CASCADE`) — the more specific section won.
+`rider_availability`'s RLS was stated two different ways in the design; § 18
+(authoritative) was followed — a rider may read and toggle their own row.
+`restaurants (id, merchant_id)`'s composite-FK anchor has no actual consumer
+anywhere in the design; implemented anyway per the design's literal text,
+harmless.
+
+### One flagged simplification — DBQ-015
+
+§ 18 called for "limited columns via a view" for a rider's read of orders
+once assigned. Postgres RLS is row-level, and column grants are per database
+role — `authenticated` is shared across every actor — so a genuinely
+different column set per actor on one table needs a view, not a grant. The
+migration implements full-row access at the **correct row-level scope**
+(proven: a rider sees only their own assigned order), and the column
+narrowing is deferred as **DBQ-015 (D2)** rather than silently shipped as
+"done".
+
+### Business decisions
+
+**None changed.** No `Q`, `BQ`, `TQ`, or `DEC` was closed by this work — this
+event only *implements* what DEC-033 and DEC-034 already decided.
+
+---
+
+## EVENT-019
+
+```yaml
+id: EVENT-019
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/supabase-migration-v1; commit 81ab8e61 -> (this fix)
+confidence: HIGH
+```
+
+**Supabase Migration v1 — Architect Review findings fixed (Step 7.2).** The
+Architect Review of `feature/supabase-migration-v1` (commit `81ab8e61`)
+returned **PASS WITH FINDINGS**: two HIGH findings, no merge, no
+`supabase db push`. Both are now fixed on the same branch, with regression
+tests, and **the live/remote Supabase project was never touched** — same
+Docker-only discipline as EVENT-018.
+
+### HIGH-1 — rider column exposure — FIXED
+
+**Finding:** RLS correctly restricted a rider to their own assigned order
+(row-level, proven by execution in EVENT-018), but
+`20260811000011_rls_policies.sql` granted the rider the **full row** once
+assigned — every money column (`subtotal_satang`, `delivery_fee_satang`,
+`service_fee_satang`, `discount_satang`, `grand_total_satang`, `currency`),
+`payment_method`, `customer_id`, `address_id`, and `cause_code` on `orders`,
+plus `unit_price_satang`/`line_total_satang` on `order_items` and
+`price_delta_satang` on `order_item_options`. This is exactly the
+simplification EVENT-018 flagged as **DBQ-015**, now resolved rather than
+deferred.
+
+**Fix** (`20260811000012_rider_order_views.sql`): the rider's SELECT
+policies on `orders`/`order_items`/`order_item_options` are dropped —
+querying those tables directly as a rider now returns zero rows, full-row or
+otherwise. Three replacement views (`rider_order_view`,
+`rider_order_item_view`, `rider_order_item_option_view`) project only the
+columns a delivery actually needs (order identity/state, pickup
+`restaurant_id`, the delivery-address snapshot, recipient name/phone,
+distance/ETA, lifecycle timestamps; item name/quantity/note; option
+group/name) — no money column, no `payment_method`, no `customer_id` is ever
+projected. Row scope is unchanged: the views call the same
+`is_assigned_order_rider()` the dropped policies used. The views are created
+without `security_invoker` (the pre-PG15 default), so they run with the
+migration role's own privileges and are exempt from `orders`' RLS the same
+way a table owner always is — this is what lets a hidden column be hidden
+structurally rather than merely unrequested by the app. Customer and
+merchant access to `orders`/`order_items`/`order_item_options`, money columns
+included, is completely unchanged. `deliveries`, `restaurants`, and
+`addresses` were reviewed and left as-is — none of them exposes another
+party's financial detail to a rider (see the migration's own § 5 for the
+per-table reasoning). **DBQ-015 is resolved by this fix**, not merely
+narrowed — see `docs/OPEN_DATABASE_QUESTIONS.md`.
+
+### HIGH-2 — rider reassignment atomicity — FIXED
+
+**Finding:** the database-level race protection itself
+(`rider_assignments_one_active`, the guarded conditional `UPDATE`) is
+correct and untouched. But EVENT-018's own testing had already proven that
+an *incomplete* release (nulling `deliveries.rider_id` without closing the
+old `ACCEPTED` row) leaves a delivery stuck, and the next claim attempt
+crashes with an unhandled `23505`. The two release statements
+(`docs/DATABASE_DESIGN.md` § 11.1) had no single database-owned entry point
+— correctness depended entirely on the caller remembering to issue both in
+one transaction.
+
+**Fix** (`20260811000013_rider_reassignment_atomicity.sql`): added
+`public.release_rider_assignment(delivery_id, status, reason)`, a
+`SECURITY DEFINER` function, service-role-only (same trusted-server-path
+pattern as `set_user_role`), that performs both release statements —
+clearing `deliveries.rider_id`/advancing state, then closing the matching
+`rider_assignments` row — inside one function call. If the second statement
+does not affect exactly one row, the function raises and Postgres rolls back
+the entire call, including the first statement; there is no state in which
+only one of the two has taken effect. `rider_assignments_one_active` is
+untouched and remains the backstop for any caller that bypasses this
+function entirely. Application-layer responsibility (deciding *when* to
+release, and `CANCELLED` vs `RELEASED`) is explicitly out of scope for a
+migration (ADR-001) and stays with NestJS — documented in the migration's own
+header rather than assumed.
+
+### Regression tests added, all suites re-run
+
+| Suite | Result |
+|---|---|
+| `run-rls-tests.sh` (existing, `profiles`) | **13/13 PASS**, unchanged |
+| `domain_invariants_test.sql` §A–F (existing) | unchanged, still pass |
+| `domain_invariants_test.sql` §G (**new**, HIGH-1) | **14/14 PASS** — rider sees only permitted columns/rows through the three views; base-table direct access is zero rows; customer/merchant money-column access proven unchanged |
+| `rider_race_assertions.sql` (existing, incl. 2 genuinely concurrent processes) | unchanged, still pass |
+| `rider_reassignment_atomicity_test.sql` (**new**, HIGH-2, Cases A–E) | **15/15 PASS** — normal claim/release/re-claim, the old assignment closed not stale, the pre-existing concurrent-race outcome re-asserted, the function rejecting a non-service caller/bad status/un-releasable delivery, and a hand-rolled bypass of the new function still blocked by the untouched unique-index backstop |
+| **Total this run** | **91/91 PASS**, zero skipped, `git diff --check` clean |
+
+Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md` § 12 (HIGH-1) and § 13
+(HIGH-2).
+
+### What did not change
+
+No original migration was rewritten — `20260809000001`–`20260809000003` and
+`20260811000001`–`20260811000011` are byte-identical (two purely additive
+migrations, `...012` and `...013`, were appended instead). No business
+decision changed; no payment provider, settlement, ledger, order-lifecycle,
+or merchant-model rule was touched. The live/remote `banhao-dev` project was
+not reached by any command in this session.
+
+---
+
+## EVENT-020
+
+```yaml
+id: EVENT-020
+type: EVENT
+date: 2026-08-11
+source: this session; branch feature/supabase-migration-v1; commit 4980dcbd -> (this fix)
+confidence: HIGH
+```
+
+**Supabase Migration v1 — Architect Review #2 findings fixed (Step 7.3).** A
+second Architect Review pass (commit `4980dcbd`, the EVENT-019 fix) returned
+**FIX REQUIRED**: one blocking finding (H-1) in the HIGH-1 fix itself, one
+security-correctness finding (M-1) in the HIGH-2 fix, both now resolved on
+the same branch. **The live/remote Supabase project was still never
+touched.**
+
+### H-1 — rider view row-isolation was incomplete — FIXED
+
+**Finding.** The Architect Review proved, by execution against a local
+container, that the three rider views EVENT-019 added
+(`rider_order_view` and its two siblings) were missing
+`security_barrier = true`. Without it, Postgres was free to evaluate a
+rider-supplied `WHERE` predicate **before** the view's own row-security
+predicate (`is_assigned_order_rider()`, not marked `LEAKPROOF`) — an
+error-based oracle: a rider issuing a predicate like `1 / (case when
+recipient_phone_snapshot like '+6689%' then 0 else 1 end) = 1` against
+`rider_order_view` raised `division_by_zero` **for an order that was never
+theirs**, disclosing whether the guess matched without the row ever being
+returned. The old RLS-policy-based mechanism EVENT-019 replaced was immune
+to exactly this (Postgres always treats an RLS policy's `USING` clause as a
+security qual); the view-based replacement was not, until this fix.
+
+**Fix:** `security_barrier = true` added to all three views
+(`20260811000012_rider_order_views.sql`, edited in place — see below).
+Column restriction (the actual HIGH-1 column-exposure problem) was already
+correct and is unchanged; this fix is specifically about row isolation under
+an adversarial predicate, not about which columns are projected.
+
+**New regression test:**
+`supabase/tests/rider_view_row_isolation_security_test.sql` —
+`rider_view_row_isolation_security_test` — reproduces the exact oracle probe
+against a seeded "victim" order belonging to a different rider, asserts a
+clean (non-erroring) result, includes a control proving the probe genuinely
+fires when unblocked (against the rider's own row), and re-confirms the
+column/row properties EVENT-019 already proved are unaffected. **13/13
+PASS.**
+
+### M-1 — `release_rider_assignment`'s internal guard was not real — FIXED
+
+**Finding.** The Architect Review proved the `pg_has_role(current_user,
+'service_role', 'member')` guard inside `release_rider_assignment`
+(described by EVENT-019 as "defence-in-depth") was not actually checking the
+caller: under `SECURITY DEFINER`, `current_user` resolves to the function's
+**owner**, not the invoking role. After granting `EXECUTE` to `authenticated`
+(simulating a future accidental over-grant), a rider successfully released
+*another* rider's delivery — the guard passed because the owner (a
+superuser in the test container) trivially satisfies any `pg_has_role`
+check, never because the actual caller was authorised.
+
+**Fix:** the function is now `SECURITY INVOKER` (`security definer` removed)
+— `20260811000013_rider_reassignment_atomicity.sql`, edited in place, same
+file EVENT-019 added. `service_role` already has `bypassrls` and direct
+table grants, so no owner substitution was ever needed for it to do this
+work. Re-running the identical over-grant probe after the fix: the call now
+correctly raises `42501` — the guard is real defence-in-depth, confirmed by
+execution, not merely described as such. **HIGH-2's atomicity logic itself
+— locking, the two guarded statements, the exactly-one-row invariant check,
+rollback behaviour — is completely unchanged** and all 15 of its existing
+regression assertions (Cases A–E) still pass unmodified.
+
+### DBQ-015 — status corrected
+
+Was marked **IMPLEMENTED** by EVENT-019. Now marked **IMPLEMENTED WITH
+CAVEAT** — not a plain resolved/closed — reflecting that the fix was
+verified with direct SQL against the `authenticated` database role, and
+whether PostgREST's HTTP filter grammar can express the same class of probe
+was not separately verified (a client-reachability question, not a schema
+one). See `docs/OPEN_DATABASE_QUESTIONS.md`.
+
+### Migration strategy
+
+Both fixes edited the migration files EVENT-019 added
+(`20260811000012`, `20260811000013`) **in place**, rather than adding new
+`...014`/`...015` migrations. Neither file has ever been applied to
+anything but a throwaway local container across either review pass — adding
+a migration that immediately corrects the previous one three commits later
+would only add a confusing, purely cosmetic step to permanent history. The
+three original migrations (`20260809000001`–`003`) and the eight
+domain migrations (`20260811000001`–`011`) remain untouched, as they have
+throughout this branch.
+
+### Regression tests, all suites re-run
+
+| Suite | Result |
+|---|---|
+| `run-rls-tests.sh` (existing, `profiles`) | **13/13 PASS**, unchanged |
+| `domain_invariants_test.sql` §A–G (existing, incl. HIGH-1 columns/rows) | unchanged, still pass |
+| `rider_view_row_isolation_security_test.sql` (**new**, H-1) | **13/13 PASS** |
+| `rider_race_assertions.sql` (existing, incl. 2 genuinely concurrent processes) | unchanged, still pass |
+| `rider_reassignment_atomicity_test.sql` (existing, HIGH-2 Cases A–E) | unchanged, still pass — re-verified after the M-1 `SECURITY INVOKER` change |
+| **Total this run** | **104/104 PASS**, zero skipped, `git diff --check` clean |
+
+Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md` § 12 (H-1) and § 13
+(M-1).
+
+### What did not change
+
+No original migration was rewritten. No business decision changed — DEC-016
+through DEC-034, `rider_assignments_one_active`, and the guarded-`UPDATE`
+claim path (Layer 1) are all untouched; the atomicity guarantee HIGH-2 added
+is unmodified, only its security *mode* (`SECURITY INVOKER` vs `DEFINER`)
+changed. The live/remote `banhao-dev` project was not reached by any command
+in this session.

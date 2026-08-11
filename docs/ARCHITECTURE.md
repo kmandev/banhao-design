@@ -60,6 +60,23 @@ The explicit design goal (same section): expanding to a new phase should require
 
 ## Order State Machine
 
+> ### ⚠️ SUPERSEDED as the canonical machine — 2026-08-10
+>
+> The twelve states below are **the 2026-08-09 design artifact**, preserved as
+> the historical record. **They are no longer what BANHAO builds.**
+>
+> **DEC-019** (Product Owner, 2026-08-10) replaces them with:
+> `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING →
+> READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with `PREPARING` and
+> the delivery domain's `RIDER_SEARCHING` running **in parallel**.
+> **DEC-018** splits state into **four** domains — Order, Payment, Delivery,
+> Settlement — so `DRIVER_ASSIGNED` moves to the delivery domain as
+> `RIDER_ASSIGNED`, and **`NO_DRIVER` stops being an Order state** (DEC-022).
+>
+> **Build from [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md), not from this table.**
+> That document carries the full old→new mapping. See also `docs/DECISIONS.md`
+> DEC-018/DEC-019/DEC-022 and FACT-005's provenance note.
+
 **Documented as the single source of truth for the whole system** — "ทุก client อ่านจาก state เดียวกัน แต่แสดงคนละถ้อยคำ" ("every client reads from the same state, each just displays different wording"), with an explicit rule that no screen may compute its own status.
 
 Source: `docs/05-architecture/BANHAO Product Architecture.dc.html`, section "03 — ORDER STATE MACHINE" (data array at line ~396).
@@ -85,6 +102,13 @@ Documented refund rules: cancel before `PREPARING` → full automatic refund. Ca
 
 ## Payment State Machine
 
+> **Phase 1 note (DEC-016, 2026-08-10):** Cash on Delivery is **disabled**, so
+> `CASH_PENDING` and `CASH_COLLECTED` are unreachable. They are **retained, not
+> removed** — `payment_method` must stay extensible. The paired Order states
+> below use the superseded names; see [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md)
+> § 2 for the current pairing.
+
+
 **Documented as a separate, parallel state machine from Order State — the two must never be collapsed into one.** Source: `docs/04-payment/BANHAO Payment Architecture.dc.html`, section "02 — STATE MACHINE" (data array at line ~361).
 
 | Payment state | Customer sees | Paired order state | Changed by |
@@ -99,8 +123,8 @@ Documented refund rules: cancel before `PREPARING` → full automatic refund. Ca
 | `REFUND_PENDING` | กำลังดำเนินการคืนเงิน | `CANCELLED` | System / Admin |
 | `REFUND_PROCESSING` | ธนาคารกำลังดำเนินการ | `CANCELLED` | Provider |
 | `REFUNDED` | คืนเงินสำเร็จ | `CANCELLED` | **Webhook only** |
-| `CASH_PENDING` | จ่ายเงินสดปลายทาง | `NEW → DELIVERING` | System |
-| `CASH_COLLECTED` | จ่ายเงินแล้ว ขอบคุณครับ | `COMPLETED` | Driver |
+| `CASH_PENDING` | จ่ายเงินสดปลายทาง | `NEW → DELIVERING` | System · **unreachable in Phase 1 — DEC-016** |
+| `CASH_COLLECTED` | จ่ายเงินแล้ว ขอบคุณครับ | `COMPLETED` | Driver · **unreachable in Phase 1 — DEC-016** |
 
 ## Payment Confirmation Flow (documented design intent)
 

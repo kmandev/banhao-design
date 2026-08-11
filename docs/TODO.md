@@ -2,24 +2,42 @@
 
 Every item cites where it comes from in the repository. Items with no in-repo source are marked as such rather than invented.
 
+> **Business decisions live elsewhere.** Since EVENT-013 (2026-08-10) the product
+> decisions that block Order, Payment and Settlement are tracked in
+> [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md) (`BQ-001…BQ-039`)
+> and [`../ai/KNOWLEDGE/QUESTIONS.md`](../ai/KNOWLEDGE/QUESTIONS.md)
+> (`Q-001…Q-020`). This file keeps engineering and documentation tasks. Do not
+> duplicate a question into both places.
+
 ## P0 — Critical
+
+- [ ] Answer the remaining **8** P0 business questions in [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
+  - Priority: P0
+  - Source: EVENT-013, narrowed by EVENT-014
+  - Notes: Q-001 (provider), Q-002 (legal), Q-010/BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). **Every structural question is now answered** by DEC-016…DEC-032; what remains is numbers, the provider, and legal. BQ-023, BQ-033 and Q-004 are **deferred with COD** (DEC-016), not answered.
 
 - [ ] Decide payment provider(s) and the marketplace/settlement model for Phase 1 PromptPay QR payments
   - Priority: P0
   - Source: `docs/04-payment/BANHAO Payment Architecture.dc.html`, closing note of section "06 — EDGE CASES"
-  - Notes: The document explicitly states it is not yet bound to any provider and flags this as required before production. Blocks all payment implementation.
+  - Notes: The document explicitly states it is not yet bound to any provider and flags this as required before production. Blocks all payment implementation. Tracked as Q-001 / Q-002.
 
-- [ ] Decide backend technology stack (language, framework, hosting)
-  - Priority: P0
-  - Source: UNKNOWN / NOT VERIFIED — no decision found anywhere in the repository
-  - Notes: Nothing can be implemented until this exists.
+- [x] ~~Decide backend technology stack (language, framework, hosting)~~
+  - **RESOLVED 2026-08-09 by DEC-011** — NestJS + TypeScript, REST with OpenAPI (Q-006). Hosting remains open as Q-009 (P1). *Entry was stale until EVENT-013 reconciled it.*
 
-- [ ] Decide database technology and design the schema
-  - Priority: P0
-  - Source: UNKNOWN / NOT VERIFIED
-  - Notes: The Order and Payment state machines are already fully specified at the product level (`docs/05-architecture`, `docs/04-payment`) and ready to translate into a schema once a database is chosen.
+- [x] ~~Decide database technology and design the schema~~
+  - **RESOLVED 2026-08-09 by DEC-010** — Supabase (PostgreSQL + PostGIS), Q-007. Three migrations are applied live. The **domain schema** is still unwritten and is deliberately blocked on the P0 business questions above; the proposed model is `docs/DOMAIN_MODEL.md`, status `PROPOSED`. *Entry was stale until EVENT-013 reconciled it.*
 
 ## P1 — High
+
+- [ ] Retire `profiles.role` in favour of domain membership (DEC-033)
+  - Priority: P1
+  - Source: DEC-033, EVENT-017
+  - Notes: `profiles.role` is deprecated and non-authoritative, but three live objects still read it — `RolesGuard` (`apps/api/src/common/guards/roles.guard.ts`), `set_user_role()`, and the `role` clause of `enforce_profile_immutable_columns()`. **`platform_staff`, `restaurant_members` and `riders` now exist** (EVENT-018, `feature/supabase-migration-v1`, not yet applied to `banhao-dev`) — the schema half of this task is done. Remaining sequence: apply the migration → backfill `platform_staff` from `profiles.role` where `ADMIN` → change `RolesGuard` to resolve capability from `restaurant_members` / `riders` / `platform_staff` → drop the column, its trigger clause and `set_user_role()`. **The code change is the only blocker now.**
+
+- [ ] Reconcile the Customer App with DEC-016 and DEC-019
+  - Priority: P1
+  - Source: EVENT-014
+  - Notes: two divergences the decision lock created, deliberately left in code. (a) `apps/customer/src/mocks/types.ts` encodes the superseded 12 order states — DEC-019 replaces them. (b) Checkout still offers a cash option and a cash-prepared-amount selector — DEC-016 disables COD. Needs the exception **state names** settled first (still `PROPOSED`).
 
 - [ ] Design the full Driver App UI (currently 4 wireframe-level screens only: D-03, D-05, D-07, D-13)
   - Priority: P1
@@ -92,6 +110,12 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## Questions Requiring Product Decision
 
+> Kept for history. These five were given structured IDs (Q-001…Q-005) in
+> `ai/KNOWLEDGE/QUESTIONS.md`, which is canonical for them. Q-003 is now extended
+> by BQ-016 and Q-004 by BQ-034 — see
+> [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md). **All five remain
+> genuinely open**; DEC-016…DEC-032 answered none of them.
+
 - [ ] Which payment provider(s) will BANHAO integrate with for PromptPay QR in Phase 1?
   - Source: `docs/04-payment`, closing note
 
@@ -101,7 +125,7 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 - [ ] What is the full refund policy, beyond the three rules already documented (auto-refund before `PREPARING`, shop-confirmed refund during `PREPARING`, support-center-only after `PICKED_UP`)?
   - Source: `docs/05-architecture`, section "03 — ORDER STATE MACHINE"
 
-- [ ] What exact cash-remittance limit triggers "stop assigning new jobs" for a driver?
+- [ ] What exact cash-remittance limit triggers "stop assigning new jobs" for a driver? — **DEFERRED with COD (DEC-016), not answered.** Not a Phase 1 blocker; returns when COD does.
   - Source: `docs/04-payment`, section "05 — DRIVER" (states a limit exists — "ถ้ายังมีเงินสดค้างนำส่งเกินวงเงินที่กำหนด" — but does not give the number)
 
 - [ ] What is the target timeline / launch date for Phase 1?

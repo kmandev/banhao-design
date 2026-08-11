@@ -16,17 +16,65 @@ Still no business logic: no order creation, payment integration, dispatch, or se
 
 ## Last Completed Work
 
-**Merge to `main`** (this update). The full quality gate (lint, typecheck, test, build) was re-run on `main` after the merge and passed. Before that: Customer App defect fixes (EVENT-011) — **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
+**Supabase Migration v1 implemented (EVENT-018), on `feature/supabase-migration-v1`** — this update. `docs/DATABASE_DESIGN.md` (locked by DEC-033/DEC-034) was implemented as **11 new migration files**, applied strictly after the three existing ones, which remain byte-identical and untouched. **The live/remote Supabase project was never touched** — no `supabase db push`, no `supabase link`.
+
+**40 application tables, 62 foreign keys, 61 check constraints, 110 indexes, 55 RLS policies, 52 triggers.** Verified against two independent Docker-based test suites: **60/60 assertions pass**. Full detail: `docs/DATABASE_MIGRATION_V1_REPORT.md`.
+
+**The rider race condition was proven by execution** — two genuinely concurrent `psql` client processes, backgrounded and raced against the same delivery row, not a single-session simulation. The winner differed between runs (confirmed non-deterministic, i.e. really database-serialised). The 2026-08-11 architecture review's HIGH finding was reproduced exactly and turned out sharper than documented: an incomplete rider-release doesn't fail quietly, it produces a hard `unique_violation` on the *next* claim's `rider_assignments` insert — a real error a caller must catch, not a silent no-op. The fix (closing the stale row) was then proven to restore correct behaviour, also by execution.
+
+**Six tables deferred**, each individually justified in the report, none removed from the design: `settlements`, `settlement_items` (Q-002 `LEGAL_REVIEW_REQUIRED`), `delivery_fee_bands` (DEC-023 `OPEN`), `zones`/`service_areas` (geo domain deferred as a unit, FK-less columns kept for forward compatibility), `delivery_attempts` (BQ-017 `OPEN` — evaluated carefully, does **not** protect rider reassignment, that's `rider_assignments`).
+
+One flagged simplification: § 18's "limited columns via a view" for a rider's order read was implemented as full-row access at the correct row-level scope instead (proven safe) — the column-level refinement is **DBQ-015**, new.
+
+**No business decision changed. No `Q`/`BQ`/`TQ`/`DEC` closed.**
+
+Before that: **Database architecture decisions locked (EVENT-017), on `feature/database-design-v1`**. The Product Owner approved **DEC-033** (multi-role identity via domain membership) and **DEC-034** (Phase 1 financial integrity without a zero-sum trigger). **Documentation only.**
+
+⚠️ **Numbering:** the approval labelled them "DEC-014" and "DEC-015". **Both IDs were already taken** (PostgreSQL as system of record; payment provider abstraction) and are cited in 17 and 21 files including live code comments, so the new decisions took the next free IDs. Cite **DEC-033 / DEC-034**.
+
+Both overruled the database design's own recommendations, and both rejections are recorded in place: **`user_roles` is not built** (domain membership instead), and **no zero-sum constraint trigger** (transaction assertion + mandatory reconciliation instead). CON-003 is *not* repealed — its enforcement point moved.
+
+> ✅ **DATABASE DESIGN IS APPROVED** · ⛔ **MIGRATION HAS NOT STARTED**
+
+Before that: **Supabase Database Design v1 (EVENT-016)**. The PostgreSQL blueprint for DEC-016…DEC-032. **Design only — no migration created, no SQL executed, live Supabase untouched.**
+
+Two documents: `docs/DATABASE_DESIGN.md` (46 tables, ERD, table catalog, RLS matrix, state matrix, FK/cascade rules, justified indexes, migration order) and `docs/OPEN_DATABASE_QUESTIONS.md` (**DBQ-001…DBQ-014**).
+
+Highlights: the live `profiles` RLS pattern is generalised as the template for every table (**revoke-first** matters — Supabase grants `ALL` by default); **DEC-017 is enforced by composite foreign keys** so a cross-restaurant cart cannot be stored; state columns are `text` + `CHECK` rather than enums because the order vocabulary already changed once; a small ledger is recommended with `ledger_entry_groups.group_key` doing double duty as duplicate protection and zero-sum unit. **A single `profiles.role` column was found insufficient** — a rider and a restaurant owner both also order food (DBQ-002).
+
+Before that: **Technical Architecture v1 (EVENT-015), on `feature/technical-architecture-v1`**. The architecture implementing DEC-016…DEC-032 is designed and written down. **Architecture only — no backend, no migration, no Supabase table, no provider integration, no Merchant/Rider/Admin app.**
+
+Three documents: `docs/TECHNICAL_ARCHITECTURE.md` (22 sections), `docs/ARCHITECTURE_DECISIONS.md` (**ADR-001…ADR-012, all `PROPOSED`**), `docs/OPEN_TECHNICAL_QUESTIONS.md` (**TQ-001…TQ-016**). **No business decision changed; no question closed.**
+
+The spine is **"NestJS writes, clients read, Postgres decides"** — domain tables grant no write access to `authenticated` at all, and RLS is defence in depth rather than the authorization system. Concurrency everywhere is a **guarded conditional UPDATE** with the state check in the `WHERE` clause; the rider race additionally gets a partial unique index as a database backstop. Existing code (`PaymentProvider`, the two-client `SupabaseService`, the module rules) was reviewed and **kept**, not redesigned.
+
+Before that: **P0 Business Decisions v1 approved and locked (EVENT-014), on `feature/p0-decisions-v1`**. The Product Owner approved a first tranche of business decisions in a workshop; they are now permanent decision records **DEC-016…DEC-032** in `docs/DECISIONS.md` (which also gained an index). **Documentation only — no code, no migration, no provider.**
+
+The seven business documents were rewritten against those decisions, and the status taxonomy is now `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections. **Only `ACCEPTED` may be built on.**
+
+Headline decisions: **online payment only, COD disabled but extensible** (DEC-016) · **one cart = one restaurant** (DEC-017) · **four separate state domains** (DEC-018) · a new Order lifecycle with **`PREPARING` and `RIDER_SEARCHING` in parallel** (DEC-019) · **broadcast → first accept** dispatch starting at `MERCHANT_ACCEPTED` (DEC-020) · **rider cancellation never cancels the order** (DEC-021) · **no-rider escalates to an operator, never auto-cancels** (DEC-022) · fee/commission **models only, every number still open** (DEC-023/024/025) · settlement as its own domain (DEC-026) · refund in the payment domain (DEC-027) · idempotency, late payment and duplicate payment (DEC-028/029/030) · manual operations and operator fallback as intentional Phase 1 capabilities (DEC-031/032).
+
+Before that: **Business Rules & Domain Modelling (EVENT-013), on `feature/business-rules`**. Seven documents written, **zero production code**: `docs/BUSINESS_RULES.md`, `DOMAIN_MODEL.md`, `ORDER_LIFECYCLE.md`, `RIDER_LIFECYCLE.md`, `PAYMENT_LIFECYCLE.md`, `SETTLEMENT_MODEL.md`, `OPEN_BUSINESS_QUESTIONS.md`. At the time, every rule was tagged `DOCUMENTED` / `PROPOSED` / `OPEN`, nothing was promoted to `ACCEPTED`, and no `Q-NNN` was resolved. *(The `DOCUMENTED` token was renamed to `ACCEPTED` by EVENT-014 — see the taxonomy above.)* 39 business questions added (BQ-001…BQ-039), 15 of them P0. Six contradictions **inside accepted documents** were found — see EVENT-013 for all six; the two that matter most are a `PENDING_PAYMENT` order state that the payment machine references but the order machine does not contain (BQ-012), and a `NO_DRIVER` rule that the Customer App's own copy contradicts (BQ-014).
+
+Before that: **merge to `main`**. The full quality gate (lint, typecheck, test, build) was re-run on `main` after the merge and passed. Before that: Customer App defect fixes (EVENT-011) — **DEF-01…DEF-05 are all fixed, tested and re-verified by screenshot.** Visual QA is **31 / 31 states**. 12e was reached by letting the **real** 600-second QR TTL elapse — no test hook and no shortened timer were added. OTP resend now genuinely calls the auth layer, verified by a second `200 POST /auth/v1/otp` against the live project.
 
 Before that: Supabase dev environment + live Customer authentication (EVENT-010). Project `banhao-dev` created in `ap-southeast-1` with Phone auth on **Supabase Test OTP**. Verified live: request OTP, wrong OTP rejected by the server, correct OTP, profile read under RLS, `display_name` write (`204 PATCH`), session persistence across a full app restart, logout, and logout persisting across another restart. **Live RLS: 14/14 passed.** No fake session was ever created.
 
 ## Current Work
 
-None active. The merge is done; new work should branch from `main`.
+`feature/supabase-migration-v1` (from `feature/database-design-v1`) is pushed and **ready for architect review**. 11 new migrations, tested, not merged. **Not merged to `main`.** Five branches are stacked and unmerged: `feature/business-rules` → `feature/p0-decisions-v1` → `feature/technical-architecture-v1` → `feature/database-design-v1` → `feature/supabase-migration-v1`.
 
 ## Immediate Next Step
 
-Answer the five `DESIGN_QUESTION` items (DQ-01…DQ-05) in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md` — they were recorded rather than guessed — and verify the app on Android. In parallel, **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017) still gates all payment work and has external lead time. Merchant, Driver, Admin, and any payment/order/dispatch work remain out of scope until the P0 product decisions land — that is a new instruction to wait for, not something to infer from "the merge is done."
+**Architect review of the migration set**, then — once approved — apply it to the live `banhao-dev` project (still requires an explicit instruction; nothing in this repository does that automatically). `DBQ-004` (bank account storage) and `DBQ-011` (order number format) didn't block writing the schema — the design's own column shapes were sufficient — but the actual encryption approach and number-generation algorithm are still `OPEN` and live in application code, not this schema.
+
+One **code** task remains: `RolesGuard`, `set_user_role()` and the `enforce_profile_immutable_columns()` trigger all read `profiles.role`, which DEC-033 deprecated. The column cannot be dropped until they resolve capability from `restaurant_members` / `riders` / `platform_staff` instead — tracked in `docs/TODO.md`.
+
+Also still open: **architecture review of `docs/TECHNICAL_ARCHITECTURE.md` and ADR-001…ADR-012** (all `PROPOSED` — nothing may be built until they are accepted). Three technical questions are **T0 and block backend work**: **TQ-011** (migration workflow — agree it before the first domain migration, not after), **TQ-012** (how concurrency correctness is *proved* — the EVENT-007 precedent of verifying by execution against real PostgreSQL applies), and **TQ-008** (provider adapter, gated on Q-001/Q-020).
+
+Then the remaining **8 P0 business questions** in `docs/OPEN_BUSINESS_QUESTIONS.md`: Q-001 (provider), Q-002 (legal), Q-010 / BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). Every one is a number, a provider, or a legal question — **all the structural questions are now answered.**
+
+In parallel and unchanged: **commissioning the Thai legal/compliance review** (Q-002, Q-015, Q-012, Q-017, and now BQ-022 rider classification) still gates all payment work and has external lead time; DQ-01…DQ-05 need closing (all five are now addressed — see `OPEN_BUSINESS_QUESTIONS.md` § DQ table); Android is still unverified. Merchant, Driver, Admin, and any payment/order/dispatch code remain out of scope until the P0 decisions land — that is a new instruction to wait for, not something to infer from "the business rules are written."
 
 ## Important Decisions
 
@@ -51,14 +99,22 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 
 ## Pending Decisions
 
-**Blocking payment work:** Q-002 (legal/settlement model), Q-020 (PromptPay refund mechanism), Q-001 (payment provider), Q-010 (platform fee).
-**Needed soon:** Q-015 (ETDA notification), Q-009 (hosting budget), Q-018 (map field test), Q-019 (SMS sender ID — ~2 week lead time), Q-012 (PDPA review).
+**Blocking payment work:** Q-002 (legal/settlement model), Q-020 (PromptPay refund mechanism), Q-001 (payment provider) — **all three got more urgent with DEC-016**, since online is now the only way to be paid or to refund.
+**Blocking money work:** every number. Q-010 / BQ-028 (commission rate), BQ-026 (delivery fee), BQ-027 (service fee), BQ-029 (rider earnings), BQ-030 (promotion funding), BQ-015 (who pays for wasted food).
+**Answered 2026-08-10 (EVENT-014):** BQ-010, BQ-012, BQ-014, BQ-019, BQ-025 and the model halves of BQ-026/027/028. **Deferred with COD:** BQ-023, BQ-033, Q-004.
+**Needed soon:** Q-015 (ETDA notification), Q-009 (hosting budget), Q-018 (map field test), Q-019 (SMS sender ID — ~2 week lead time), Q-012 (PDPA review), BQ-022 (rider contractor status).
 
 ## Blocking Issues
 
 🚨 **No payment provider supports native PromptPay refunds** — contradicts the refund design in `docs/04-payment`. An off-rail mechanism (likely wallet credit) must be designed. Q-020.
 
 🚨 **Payment-facilitation licensing boundary unresolved** — BANHAO's split/transfer-round/cash-liability design may itself be regulated activity. Q-002.
+
+✅ **Resolved 2026-08-10.** The two contradictions found in EVENT-013 are settled: `PENDING_PAYMENT` is now a real Order state (DEC-019), and rider search starts at `MERCHANT_ACCEPTED` so the `NO_DRIVER` conflict disappears (DEC-019, DEC-022). **The cost question they exposed — who pays for cooked-but-undelivered food — is still `OPEN` (BQ-015) and still P0.**
+
+🚨 **Two code divergences created by the lock, deliberately not fixed** (no code was touched). `apps/customer/src/mocks/types.ts` still encodes the superseded 12 order states (DEC-019), and the Customer App checkout still offers cash (DEC-016). Both are follow-up work for an implementation phase.
+
+⏸️ **The rider cash-float problem is deferred, not solved** — DEC-016 disables COD, so no rider fronts money in Phase 1. The underlying question (the rider pays the merchant ฿108 at pickup to earn ฿12) returns unchanged the day COD is switched back on. BQ-023.
 
 ## Important Files
 
@@ -104,6 +160,17 @@ Full list: [`docs/DECISIONS.md`](../docs/DECISIONS.md).
 - Do not build Merchant, Driver, or Admin apps without an explicit instruction.
 - Do not commit `.env` or any credential — CI fails the build on this.
 - Do not mark an open question `RESOLVED` or a decision `ACCEPTED` without human approval.
+- Do not implement anything tagged `PROPOSED` or `OPEN` in the business documents. **Only `ACCEPTED` is product truth**, and `ACCEPTED — MODEL · OPEN — NUMBERS` means you may not pick the number.
+- Do not enable cash payment anywhere — DEC-016 disables COD in Phase 1. Equally, **do not delete the cash model**: `payment_method` must stay extensible, and DEC-004 / REQ-001 remain accepted.
+- 11 migrations now exist on `feature/supabase-migration-v1` (EVENT-018) — read `docs/DATABASE_MIGRATION_V1_REPORT.md` before writing another one. Never `supabase db push` or `supabase link` to the live project without explicit instruction — this branch never did either.
+- Do not write an RLS policy that references `profiles.role` — it is deprecated (DEC-033). Resolve capability through `restaurant_members`, `riders` or `platform_staff`.
+- Do not add a zero-sum database trigger (DEC-034). Assert in the ledger service inside the transaction, and rely on reconciliation — which is now **mandatory**, not optional.
+- Do not add a table without the five-step security pattern (`revoke` first — Supabase grants `ALL` by default), and do not put business rules in triggers; integrity constraints only.
+- Do not implement anything tagged `PROPOSED` in the technical documents either — **every ADR is `PROPOSED`**, and `TQ-NNN` items must not be turned into assumptions.
+- Do not write `SELECT`-then-check-then-`UPDATE` on any guarded table. The state check goes in the `WHERE` clause (ADR-003) — check-then-act lets two riders both win.
+- Do not add a client write grant on a domain table. Mutations go through NestJS (ADR-001/ADR-002).
+- Do not use the old order state names (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work — DEC-019 supersedes them.
+- Do not treat the design's sample figures as business rules — 10% commission, ฿15 delivery, ฿5 service, ฿10 coupon are all illustrative, and the payment canvas says so about itself.
 
 ## Recommended First Action
 

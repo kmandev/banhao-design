@@ -135,10 +135,10 @@ See [AGENTS.md](../AGENTS.md) at the repository root for the full, binding rule 
 
 Extracted from the design canvases (see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for full state tables):
 
-- Order states (12): `NEW → ACCEPTED → PREPARING → READY → DRIVER_ASSIGNED → PICKED_UP → DELIVERING → COMPLETED`, plus terminal/error states `NO_DRIVER`, `PAYMENT_FAILED`, `REJECTED`, `CANCELLED`.
-- Payment states (12): `CREATED → PENDING → PROCESSING → SUCCESS`, plus `FAILED`, `EXPIRED`, `CANCELLED`, `REFUND_PENDING`, `REFUND_PROCESSING`, `REFUNDED`, and the cash-specific pair `CASH_PENDING` / `CASH_COLLECTED`.
+- ⚠️ **Order states — SUPERSEDED by DEC-019 (2026-08-10).** The canonical lifecycle is now `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with `PREPARING` ∥ `RIDER_SEARCHING`. Read [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md). *Historical (2026-08-09 design artifact): `NEW → ACCEPTED → PREPARING → READY → DRIVER_ASSIGNED → PICKED_UP → DELIVERING → COMPLETED`, plus `NO_DRIVER`, `PAYMENT_FAILED`, `REJECTED`, `CANCELLED`.*
+- Payment states (12): `CREATED → PENDING → PROCESSING → SUCCESS`, plus `FAILED`, `EXPIRED`, `CANCELLED`, `REFUND_PENDING`, `REFUND_PROCESSING`, `REFUNDED`, and the cash-specific pair `CASH_PENDING` / `CASH_COLLECTED` — **the cash pair is unreachable in Phase 1 (DEC-016) but deliberately retained.**
 - Refunds: cancel before `PREPARING` → full automatic refund. Cancel during `PREPARING` → requires shop confirmation. After `PICKED_UP` → cannot cancel; must go through the support center.
-- Cash collected by a driver is a **liability owed to the platform** ("Cash Collection"), never counted as driver income, and must be shown separately in any driver-facing UI.
+- Cash collected by a driver is a **liability owed to the platform** ("Cash Collection"), never counted as driver income, and must be shown separately in any driver-facing UI. **Dormant in Phase 1 — DEC-016 disables COD — but still accepted (DEC-004 / REQ-001) and must not be deleted.**
 - Every order's ledger must balance to exactly zero — money in (customer payment) must equal money out (merchant + driver + platform fee + refunds) with no unaccounted remainder.
 
 ## Technical Rules

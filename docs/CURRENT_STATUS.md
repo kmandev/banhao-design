@@ -73,6 +73,20 @@ Five defects were found during the 2026-08-10 QA pass and **all five are fixed
 and merged to `main`** — see [`CUSTOMER_APP_VISUAL_QA.md`](CUSTOMER_APP_VISUAL_QA.md)
 for DEF-01…DEF-05 and the evidence for each.
 
+## Code Diverging From Approved Decisions
+
+Not bugs — the code was correct when written, and the 2026-08-10 decision lock
+(EVENT-014) moved the target. **No code was changed in that step, deliberately.**
+Both are tracked as P1 in [`TODO.md`](TODO.md):
+
+| Divergence | Conflicts with |
+|---|---|
+| `apps/customer/src/mocks/types.ts` encodes the superseded 12 order states (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) | **DEC-019** |
+| Checkout (screen 10) still offers a cash option and a cash-prepared-amount selector | **DEC-016** — COD is disabled in Phase 1 |
+
+Reconciling the first needs the exception **state names** settled — they are
+still `PROPOSED`.
+
 ## Technical Debt
 
 - `support.js` (the design-canvas runtime) is intentionally duplicated 4× — see
@@ -147,16 +161,106 @@ Do not read the above as full verification. These have not been tested:
 - The search **results** list — the simulator cannot type Thai, and the mock
   catalogue is Thai-only
 
+## Business Rules Status
+
+**Documented, and the P0 decisions are approved** (EVENT-014, 2026-08-10,
+branch `feature/p0-decisions-v1` — **DEC-016…DEC-032**, not merged to `main`).
+Seven documents describe how BANHAO works as a business:
+[`BUSINESS_RULES.md`](BUSINESS_RULES.md),
+[`DOMAIN_MODEL.md`](DOMAIN_MODEL.md), [`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md),
+[`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md),
+[`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md),
+[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md),
+[`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md).
+
+Every rule is tagged `ACCEPTED` / `PROPOSED` / `OPEN` /
+`LEGAL_REVIEW_REQUIRED`, with `ACCEPTED — MODEL · OPEN — NUMBERS` in the money
+sections. **Only `ACCEPTED` may be implemented.** Seventeen decisions were
+recorded; **no `Q-NNN` was resolved, no pricing was set, no provider was
+selected, and no code was written.**
+
+Two decisions change Phase 1 materially: **DEC-016** disables Cash on Delivery
+(online payment only, but the cash model stays extensible), and **DEC-019**
+replaces the Order state machine documented in 2026-08-09.
+
+## Technical Architecture Status
+
+**Designed, not approved, not built** (EVENT-015, 2026-08-11, branch
+`feature/technical-architecture-v1`):
+[`TECHNICAL_ARCHITECTURE.md`](TECHNICAL_ARCHITECTURE.md),
+[`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md) (ADR-001…ADR-012),
+[`OPEN_TECHNICAL_QUESTIONS.md`](OPEN_TECHNICAL_QUESTIONS.md) (TQ-001…TQ-016).
+
+**Every ADR is `PROPOSED`.** No backend, migration, Supabase table, or provider
+integration was created. Existing code (`PaymentProvider`, the two-client
+`SupabaseService`, module rules) was reviewed and kept, not redesigned.
+
+Three `T0` technical questions block backend work: **TQ-011** (migration
+workflow), **TQ-012** (proving concurrency correctness), **TQ-008** (provider
+adapter, gated on Q-001/Q-020).
+
+## Database Design and Migration Status
+
+**Designed (EVENT-016) → decisions locked (EVENT-017) → implemented as
+migrations (EVENT-018)**, all 2026-08-11. Design:
+[`DATABASE_DESIGN.md`](DATABASE_DESIGN.md) — 46 tables conceptually, ERD,
+table catalog, RLS matrix, state matrix, FK/cascade rules, justified indexes.
+Questions: [`OPEN_DATABASE_QUESTIONS.md`](OPEN_DATABASE_QUESTIONS.md)
+(DBQ-001…DBQ-015 — 2 answered by DEC-033/034, 1 raised by implementation).
+Migration verification: [`DATABASE_MIGRATION_V1_REPORT.md`](DATABASE_MIGRATION_V1_REPORT.md).
+
+**11 new migration files exist**, on `feature/supabase-migration-v1`,
+**tested and passing (60/60 assertions), not merged, and the live
+`banhao-dev` project was never modified** — no `supabase db push`, no
+`supabase link`. The three original migrations remain byte-identical.
+
+DEC-033 replaced the proposed generic `user_roles` table with **domain
+membership** — Customer implicit, Merchant via `restaurant_members`, Rider via
+`riders`, Operator/Admin via `platform_staff`. **Implemented with zero
+`profiles.role` references in any of the 55 RLS policies.** DEC-034 removed
+the proposed zero-sum constraint trigger; CON-003 stands but is enforced by
+transaction-level assertion plus a **mandatory reconciliation process** —
+**implemented: no zero-sum trigger exists anywhere in the schema**, verified
+by grep and by reading the ledger tables' trigger definitions.
+
+**40 application tables, 62 foreign keys, 61 check constraints, 110 indexes,
+52 triggers.** The rider race condition was proven with two genuinely
+concurrent `psql` client processes racing the same delivery row — not a
+single-session simulation — and the architecture review's HIGH finding about
+incomplete rider release was reproduced exactly (and found sharper: a hard
+`unique_violation`, not a silent failure) and then fixed, both by execution.
+
+Six tables deferred, each justified, none removed from the design:
+`settlements`, `settlement_items`, `delivery_fee_bands`, `zones`,
+`service_areas`, `delivery_attempts`.
+
+**Immediate next step: architect review of the migration set**, then applying
+it to `banhao-dev` (requires an explicit instruction). Alongside it: retire
+`profiles.role` in `RolesGuard`/`set_user_role()`/the immutability trigger,
+tracked in `docs/TODO.md`.
+
 ## Current Blockers
 
-Product-level, not technical. `docs/TODO.md` P0: payment provider (Q-001),
-legal/settlement model (Q-002), platform fee (Q-010), PromptPay refund mechanism
-(Q-020). The Thai legal/compliance review has external lead time and gates all
-payment work.
+Product-level, not technical. **8 P0 business decisions remain, down from 15** —
+`docs/TODO.md` P0 and [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md):
+payment provider (Q-001), legal/settlement model (Q-002), commission **rate**
+(Q-010/BQ-028), PromptPay refund mechanism (Q-020), cost of wasted food
+(BQ-015), delivery and service fee **numbers** (BQ-026, BQ-027), and promotion
+funding (BQ-030). The Thai legal/compliance review has external lead time and
+gates all payment work.
+
+⚠️ **DEC-016 made Q-001 and Q-020 more blocking, not less.** With cash removed,
+100% of Phase 1 revenue and 100% of refunds depend on an unselected provider and
+a PromptPay refund mechanism research says does not exist natively — and
+disabling COD removed one of the four candidate refund mechanisms.
+
+The two document contradictions found in EVENT-013 are **resolved** by DEC-019
+and DEC-022.
 
 ## Immediate Next Step
 
-Answer DQ-01…DQ-05 in
-[`CUSTOMER_APP_IMPLEMENTATION_MAP.md`](CUSTOMER_APP_IMPLEMENTATION_MAP.md), verify
-the app on Android, and move the P0 product decisions below forward — they gate
-all payment work, not the code.
+**Architecture review of DEC-016…DEC-032, then the remaining 8 P0 business
+questions.** Then close DQ-01…DQ-05
+(all five are addressed — see the DQ table in
+[`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)) and verify the app on
+Android.

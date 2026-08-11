@@ -6,6 +6,72 @@ Every entry below is evidenced by content already in this repository — either 
 
 ---
 
+## Index
+
+| ID | Decision | Status | Date | Related documents |
+|---|---|---|---|---|
+| DEC-001 | Reorganise repository into docs/design/assets/specs/archive | ACCEPTED | 2026-08-09 | `docs/AI_CONTEXT.md` |
+| DEC-002 | Order State and Payment State are separate state machines | ACCEPTED | design drop | `docs/ARCHITECTURE.md`, CON-001 |
+| DEC-003 | Payment confirmation is webhook-only | ACCEPTED | design drop | `docs/PAYMENT_LIFECYCLE.md`, CON-002 |
+| DEC-004 | Driver-collected cash is a platform liability | ACCEPTED · dormant in Phase 1 (DEC-016) | design drop | `docs/SETTLEMENT_MODEL.md`, REQ-001 |
+| DEC-005 | Generic domain entities, not food-specific naming | ACCEPTED | design drop | `docs/DOMAIN_MODEL.md`, REQ-004 |
+| DEC-006 | Driver App as Flutter; Merchant/Admin desktop-first web | ACCEPTED · superseded by DEC-012 | design drop | — |
+| DEC-007 | Phase 1 scope discipline: never lengthen the core path | ACCEPTED | design drop | CON-004 |
+| DEC-008 | AI Memory System is filesystem-based only | ACCEPTED | 2026-08-09 | `ai/README.md` |
+| DEC-009 | Modular monolith backend architecture | ACCEPTED | 2026-08-09 | `apps/api/src/modules/README.md` |
+| DEC-010 | Supabase (PostgreSQL + PostGIS) as database and platform | ACCEPTED | 2026-08-09 | `supabase/README.md` |
+| DEC-011 | NestJS + TypeScript for the backend | ACCEPTED | 2026-08-09 | `apps/api/` |
+| DEC-012 | React Native + Expo for mobile; Next.js for admin | ACCEPTED | 2026-08-09 | `apps/` |
+| DEC-013 | Monorepo with pnpm and Turborepo | ACCEPTED | 2026-08-09 | `pnpm-workspace.yaml` |
+| DEC-014 | PostgreSQL is the system of record for financial data | ACCEPTED | 2026-08-09 | `docs/SETTLEMENT_MODEL.md` |
+| DEC-015 | Payment provider access via abstraction layer only | ACCEPTED | 2026-08-09 | `docs/PAYMENT_LIFECYCLE.md` |
+| **DEC-016** | **Phase 1 is online payment only; COD disabled but extensible** | **ACCEPTED** | **2026-08-10** | `docs/BUSINESS_RULES.md`, `docs/PAYMENT_LIFECYCLE.md` |
+| **DEC-017** | **One cart = one restaurant** | **ACCEPTED** | **2026-08-10** | `docs/BUSINESS_RULES.md`, `docs/DOMAIN_MODEL.md` |
+| **DEC-018** | **Order, Payment, Delivery and Settlement are four separate state domains** | **ACCEPTED** | **2026-08-10** | `docs/DOMAIN_MODEL.md`, CON-001 |
+| **DEC-019** | **Approved Order core lifecycle, with PREPARING and RIDER_SEARCHING in parallel** | **ACCEPTED** | **2026-08-10** | `docs/ORDER_LIFECYCLE.md` |
+| **DEC-020** | **Rider search starts at MERCHANT_ACCEPTED; dispatch is broadcast → first accept** | **ACCEPTED** | **2026-08-10** | `docs/RIDER_LIFECYCLE.md` |
+| **DEC-021** | **Rider cancellation reassigns; it never cancels the order** | **ACCEPTED** | **2026-08-10** | `docs/RIDER_LIFECYCLE.md` |
+| **DEC-022** | **No-rider escalates to operator decision; never auto-cancels** | **ACCEPTED** | **2026-08-10** | `docs/RIDER_LIFECYCLE.md` |
+| **DEC-023** | **Delivery fee funds rider compensation (model only)** | **ACCEPTED — MODEL · OPEN — PRICING** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
+| **DEC-024** | **Service fee is BANHAO revenue (model only)** | **ACCEPTED — MODEL · OPEN — PRICING** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
+| **DEC-025** | **Merchant commission is BANHAO revenue (model only)** | **ACCEPTED — MODEL · OPEN — RATE** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
+| **DEC-026** | **Settlement is a separate financial domain** | **ACCEPTED — DOMAIN · NOT IMPLEMENTED** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
+| **DEC-027** | **Refund belongs to the payment domain, not order cancellation** | **ACCEPTED** | **2026-08-10** | `docs/PAYMENT_LIFECYCLE.md` |
+| **DEC-028** | **Payment operations must be idempotent** | **ACCEPTED** | **2026-08-10** | `docs/PAYMENT_LIFECYCLE.md`, REQ-003 |
+| **DEC-029** | **Late payment must be resolvable to an order and attempt** | **ACCEPTED — TECHNICAL · OPEN — POLICY** | **2026-08-10** | `docs/PAYMENT_LIFECYCLE.md` |
+| **DEC-030** | **Duplicate payment must never increase an order's value** | **ACCEPTED** | **2026-08-10** | `docs/PAYMENT_LIFECYCLE.md` |
+| **DEC-031** | **Buntharik-first: manual operations are an intentional Phase 1 capability** | **ACCEPTED** | **2026-08-10** | `docs/BUSINESS_RULES.md` |
+| **DEC-032** | **Operator fallback for exceptional situations (capability, not an app)** | **ACCEPTED — REQUIREMENT · NOT IMPLEMENTED** | **2026-08-10** | `docs/BUSINESS_RULES.md` |
+| **DEC-033** | **Multi-role identity: domain membership, not a single `profiles.role`** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
+| **DEC-034** | **Phase 1 financial integrity without a zero-sum database trigger** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
+
+DEC-016 through DEC-032 were approved by the Product Owner in the Business
+Decision Workshop and locked on 2026-08-10 — see `ai/KNOWLEDGE/EVENTS.md`
+EVENT-014. DEC-033 and DEC-034 were approved on 2026-08-11 — EVENT-017.
+
+> ### ⚠️ Numbering note — DEC-033 / DEC-034
+>
+> The 2026-08-11 approval instruction labelled these two decisions **"DEC-014 —
+> Multi-role Identity Model"** and **"DEC-015 — Phase 1 Financial Integrity"**.
+> **Those IDs were already taken** by DEC-014 (PostgreSQL is the system of record)
+> and DEC-015 (payment provider abstraction), both `ACCEPTED` on 2026-08-09 and
+> cited across 17 and 21 files respectively — including a code comment in
+> `apps/api/src/modules/payments/payment-provider.interface.ts`.
+>
+> Reusing those numbers would have silently redefined two decisions the whole
+> repository depends on, so the new decisions were given the **next free IDs**
+> instead. The instruction's own rule — *"Do NOT overwrite an existing ID"* —
+> points the same way.
+>
+> | Approval label | Recorded as | Not to be confused with |
+> |---|---|---|
+> | "DEC-014 — Multi-role Identity Model" | **DEC-033** | DEC-014 — PostgreSQL is the system of record |
+> | "DEC-015 — Phase 1 Financial Integrity" | **DEC-034** | DEC-015 — Payment provider abstraction |
+>
+> Both original decisions remain `ACCEPTED` and unchanged.
+
+---
+
 ## DEC-001 — Reorganize repository into docs/design/assets/specs/archive structure
 
 **Status:** ACCEPTED
@@ -633,3 +699,1099 @@ REQ-003
 ### Supersedes / Superseded By
 
 None / None.
+
+---
+
+## DEC-016 — Phase 1 is online payment only; Cash on Delivery is disabled but the model stays extensible
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+Phase 1 launches with **online payment only**. **Cash on Delivery is disabled.**
+COD must **not** be hard-coded as permanently unsupported: `payment_method`
+remains an extensible concept so COD can be reintroduced later without
+redesigning Order, Payment, Delivery or Settlement.
+
+### Why
+
+Product Owner decision in the Business Decision Workshop, 2026-08-10. Online-only
+removes the entire cash-handling surface from a Phase 1 operated by one person:
+no rider float, no cash remittance, no cash reconciliation, no cash-limit
+dispatch blocking, and no OCPB cash-on-delivery exposure at launch.
+
+### Alternatives
+
+Cash + PromptPay, as the original design canvas specified for Phase 1
+("Phase 1 เงินสด + พร้อมเพย์ QR"). Rejected for this phase.
+
+### Consequences
+
+**This supersedes the design canvas's Phase 1 payment scope.** Specifically:
+
+- `docs/04-payment` documents an entire cash subsystem — rider collection,
+  change calculation, cash-as-liability, remittance, cash-limit auto-blocking,
+  and cash-order fee netting. **All of it is deferred, none of it is deleted.**
+- **DEC-004 and REQ-001 remain ACCEPTED but dormant.** Cash collected by a rider
+  is still a platform liability and must still be displayed separately from
+  earnings — there is simply no cash in Phase 1. Do not remove either record.
+- Payment states `CASH_PENDING` and `CASH_COLLECTED` stay in the payment model,
+  unreachable in Phase 1.
+- **Q-004** (cash remittance limit) and the cash portion of **Q-017** (OCPB
+  "Dee-Delivery") stop being Phase 1 blockers. They remain `OPEN` for the phase
+  that reintroduces COD.
+- **BQ-023** (rider cash float at pickup) is **deferred, not resolved** — the
+  underlying question returns unchanged with COD.
+- ⚠️ **This makes Q-001 and Q-020 strictly more blocking, not less.** With cash
+  removed, 100% of Phase 1 revenue depends on a payment provider that has not
+  been selected, and 100% of refunds depend on a PromptPay refund mechanism that
+  research found no provider supports natively. There is no longer a cash
+  fallback for either.
+- ⚠️ Demand-side risk to monitor, not resolved here: a customer without a
+  banking app cannot order at all in Phase 1.
+- The Customer App currently implements a cash option at checkout (screen 10)
+  and a cash-prepared-amount selector. **That UI must be disabled** — tracked as
+  follow-up work, not done in this documentation step.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 Business Decision Workshop (Step 4.2
+instruction, sections 3 and 18).
+
+### Related Requirements
+
+REQ-001 (dormant in Phase 1)
+
+### Related Architecture
+
+`docs/BUSINESS_RULES.md` § 10, `docs/PAYMENT_LIFECYCLE.md`,
+`docs/SETTLEMENT_MODEL.md`
+
+### Supersedes
+
+The Phase 1 payment scope stated in `docs/04-payment/BANHAO Payment
+Architecture.dc.html` (cash + PromptPay) — for Phase 1 only.
+
+### Superseded By
+
+None.
+
+---
+
+## DEC-017 — One cart equals one restaurant
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+A customer cannot build a multi-restaurant cart in Phase 1. One `Cart` belongs
+to exactly one `Restaurant`.
+
+### Why
+
+Product Owner decision, 2026-08-10. Multi-merchant carts multiply dispatch
+complexity — multi-pickup routing against a pool of 8–12 riders — and would
+lengthen the core path, which CON-004 forbids.
+
+### Alternatives
+
+Multiple merchants in one delivery (rejected: routing complexity); multiple
+merchants split into separate orders (rejected: extra checkout steps for the
+same result).
+
+### Consequences
+
+Adding an item from a different restaurant clears or blocks the cart, with an
+explicit prompt. `Cart` carries a `restaurant_id`. The delivery fee has exactly
+one pickup point to measure from. The Customer App is already built as if this
+were true, so no rework is implied. **Resolves BQ-010.**
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 4).
+
+### Related Requirements
+
+None directly.
+
+### Related Architecture
+
+`docs/DOMAIN_MODEL.md` § 4.3, `docs/BUSINESS_RULES.md` § 4
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-018 — Order, Payment, Delivery and Settlement are four separate state domains
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The system keeps **four** independent state domains: **Order State**, **Payment
+State**, **Delivery State**, **Settlement State**. No giant Order status enum
+containing every financial and delivery outcome may be created.
+
+### Why
+
+Product Owner decision, 2026-08-10. This extends DEC-002 and CON-001 from two
+domains to four for the same reason the original split existed: a cancelled
+order still holds money until the refund completes, and an order whose rider
+cancelled is not itself cancelled (DEC-021). Collapsing them hides exactly the
+states operations needs to see.
+
+### Alternatives
+
+A single order status enum. Rejected — it is the failure mode DEC-002 was
+written to prevent, and it makes DEC-021 and DEC-022 unrepresentable.
+
+### Consequences
+
+Each domain owns its own states, transitions and actors. Cross-domain effects
+are explicit mappings, never shared fields. The customer-facing status remains
+derived from **Order State** alone (REQ-002); delivery detail is operational.
+`OrderState` and `PaymentState` already exist as separate union types in
+`apps/customer/src/mocks/types.ts`; `DeliveryState` and `SettlementState` join
+them.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 5).
+
+### Related Requirements
+
+REQ-002
+
+### Related Architecture
+
+`docs/DOMAIN_MODEL.md` § 2, `ai/KNOWLEDGE/CONSTRAINTS.md` CON-001
+
+### Supersedes
+
+Extends DEC-002 (two domains → four). DEC-002 remains ACCEPTED and is not
+replaced.
+
+### Superseded By
+
+None.
+
+---
+
+## DEC-019 — Approved Order core lifecycle, with PREPARING and RIDER_SEARCHING running in parallel
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The Order core lifecycle is:
+
+```
+CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING
+        → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED
+```
+
+After `MERCHANT_ACCEPTED`, **`PREPARING` (order domain) and `RIDER_SEARCHING`
+(delivery domain) are parallel operational processes.** The restaurant must not
+wait for rider assignment before starting preparation.
+
+### Why
+
+Product Owner decision, 2026-08-10. Serialising rider search after the food is
+ready wastes the only window in which searching is free, and it is the direct
+cause of the design's documented `READY → NO_DRIVER` path landing on cooked
+food.
+
+### Alternatives
+
+The 2026-08-09 design canvas machine (`NEW → ACCEPTED → PREPARING → READY →
+DRIVER_ASSIGNED → …`) with `READY → NO_DRIVER`. Superseded.
+
+### Consequences
+
+**This supersedes the canonical Order state machine documented on 2026-08-09.**
+
+- **Resolves BQ-012.** `PENDING_PAYMENT` is now a real Order state, so the
+  Payment State Machine's pairing column is no longer dangling.
+- **Resolves BQ-014.** The `READY → NO_DRIVER` contradiction disappears: rider
+  search starts at `MERCHANT_ACCEPTED`, so the Customer App's copy
+  ("อาหารของคุณยังไม่ถูกปรุง") is consistent with the flow. `NO_DRIVER` ceases to
+  be an Order state — the equivalent condition is `RIDER_SEARCHING` in the
+  delivery domain (DEC-022).
+- State names change: `NEW → PAID`/`MERCHANT_ACCEPTED`, `READY →
+  READY_FOR_PICKUP`, `COMPLETED → DELIVERED`, and `DRIVER_ASSIGNED` moves to the
+  delivery domain as `RIDER_ASSIGNED`.
+- **FACT-005 now describes the historical design artifact, not the canonical
+  machine.** It stays VERIFIED as a statement about that document.
+- The Customer App's `OrderState` union and its tracking timeline encode the old
+  twelve values and **will need updating**. Not done in this step — no code was
+  touched.
+- Exception states (payment failure, expiry, merchant rejection, customer
+  cancellation, delivery failure) are **not** part of this approval. Their names
+  remain `PROPOSED` in `docs/ORDER_LIFECYCLE.md`.
+- REQ-002 is unaffected in principle: one canonical state, per-role wording.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 6).
+
+### Related Requirements
+
+REQ-002
+
+### Related Architecture
+
+`docs/ORDER_LIFECYCLE.md`, `docs/DOMAIN_MODEL.md`
+
+### Supersedes
+
+The Order State Machine documented in `docs/05-architecture/BANHAO Product
+Architecture.dc.html` § 03 and restated in `docs/ARCHITECTURE.md` and FACT-005.
+
+### Superseded By
+
+None.
+
+---
+
+## DEC-020 — Rider search starts at MERCHANT_ACCEPTED; dispatch is broadcast → first accept
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+Rider search begins when the order reaches `MERCHANT_ACCEPTED`. The dispatch
+model is **broadcast to eligible online riders, first to accept wins**. No
+scoring, ranking or route optimisation in Phase 1.
+
+### Why
+
+Product Owner decision, 2026-08-10. With 8–12 riders the whole district is one
+pool, and assignment speed is the only lever that moves the documented ≤5%
+no-rider cancellation ceiling. Broadcast is also the least code to build and
+maintain for a solo founder.
+
+### Alternatives
+
+Nearest-first sequential offer and zone-based dispatch — both compared in
+`docs/RIDER_LIFECYCLE.md` § 5 and rejected for Phase 1: sequential spends
+seconds the system does not have, zones fragment a pool too small to fragment.
+
+### Consequences
+
+Every offer is recorded so "why did nobody take this?" is answerable. A
+tie-break (fewer jobs today, or nearer the merchant) may be added later without
+changing the model. Reassess at Stage 2, roughly past 30 riders. The dispatcher
+should sit behind an interface so the model is swappable — the same discipline
+DEC-015 applies to payment providers. **Resolves BQ-019.** The accept-window
+duration remains `OPEN` (BQ-020) — the design contradicts itself, 20 s in the
+wireframe title versus 12 s on its button.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 7).
+
+### Related Requirements
+
+None directly.
+
+### Related Architecture
+
+`docs/RIDER_LIFECYCLE.md` § 5
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-021 — A rider cancelling reassigns the delivery; it never cancels the order
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+When a rider accepts and then cancels:
+
+```
+RIDER_ASSIGNED → RIDER_REASSIGNING → RIDER_SEARCHING → broadcast
+```
+
+The Order is **not** automatically cancelled.
+
+### Why
+
+Product Owner decision, 2026-08-10. A rider changing their mind is a delivery
+event, not an order outcome. Cancelling a paid order with cooked food because
+one rider dropped it would convert a recoverable delay into a refund, a wasted
+meal and a lost customer.
+
+### Alternatives
+
+Auto-cancel and refund. Rejected.
+
+### Consequences
+
+`RIDER_REASSIGNING` exists as a distinct delivery state so operations can see
+the difference between "never assigned" and "assigned and lost". Requires
+DEC-018's domain separation to be representable at all. Rider compensation for
+a job cancelled through no fault of theirs, and any consequence for a rider who
+cancels repeatedly, remain `OPEN` (BQ-024).
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 8).
+
+### Related Requirements
+
+None directly.
+
+### Related Architecture
+
+`docs/RIDER_LIFECYCLE.md` § 4
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-022 — No rider available escalates to an operator decision; it never auto-cancels
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+When no rider is available:
+
+```
+RIDER_SEARCHING → retry → manual dispatch → operator decision
+```
+
+An order is **never** cancelled merely because the first rider search failed.
+Operator options may include continuing the search, merchant delivery,
+cancel + refund, or another approved operational resolution.
+
+### Why
+
+Product Owner decision, 2026-08-10. At launch volume a human can resolve almost
+every no-rider case, and an automatic cancellation destroys a recoverable order.
+
+### Alternatives
+
+Auto-cancel after a fixed timeout — the behaviour the 2026-08-09 design implied
+via `READY → NO_DRIVER`. Rejected.
+
+### Consequences
+
+`NO_DRIVER` is not an Order state (DEC-019); the condition lives in the delivery
+domain as a prolonged `RIDER_SEARCHING` plus an operator alert. The customer
+must still be informed rather than left in silence — the existing 5-minute
+notification and 3-minute extension UI already does this and remains valid.
+**Resolves the policy half of BQ-025.** Still `OPEN`: the retry and escalation
+timings, whether merchant delivery is a per-merchant opt-in, and — importantly —
+**who bears the cost of food already cooked when the operator chooses cancel +
+refund (BQ-015)**.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, sections 9 and 20).
+
+### Related Requirements
+
+None directly.
+
+### Related Architecture
+
+`docs/RIDER_LIFECYCLE.md` § 7, `docs/ORDER_LIFECYCLE.md`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-023 — Delivery fee funds rider compensation (model only)
+
+**Status:** ACCEPTED — MODEL · OPEN — NUMERIC PRICING
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The approved conceptual money flow is `Customer → delivery fee → rider earning`.
+The delivery fee is conceptually associated with delivery compensation.
+**No numeric pricing is approved.**
+
+### Why
+
+Product Owner decision, 2026-08-10. The relationship is settled so the ledger
+and settlement model can be designed; the numbers require unit-economics work
+that has not happened.
+
+### Alternatives
+
+Not applicable — this fixes a relationship, not a price.
+
+### Consequences
+
+The ledger models a delivery-fee inflow and a rider-earning outflow as related
+lines. **No agent may invent a delivery price, a distance band or a rider rate.**
+The design's `฿10`/`฿15` samples are illustrative and inconsistent with each
+other. Note for unit economics: in the design's own worked example the net
+delivery-side contribution is ฿10 against a ฿12 rider payment, so the model as
+sampled does not cover itself — see `docs/SETTLEMENT_MODEL.md` § 3. BQ-026 and
+BQ-029 remain `OPEN` for the numbers.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, sections 10 and 22).
+
+### Related Requirements
+
+CON-003
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-024 — Service fee is BANHAO revenue (model only)
+
+**Status:** ACCEPTED — MODEL · OPEN — NUMERIC PRICING
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The approved conceptual money flow is `Customer → service fee → BANHAO`.
+**No amount is approved.**
+
+### Why
+
+Product Owner decision, 2026-08-10.
+
+### Alternatives
+
+Not applicable.
+
+### Consequences
+
+The service fee is a platform revenue line in the ledger, distinct from
+commission and from the delivery fee. The `฿5` in the design and in
+`apps/customer/src/mocks/pricing.ts` is a sample and must not be copied into
+backend code. Whether the service fee is refunded when an order fails remains
+`OPEN` (BQ-027).
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, sections 11 and 22).
+
+### Related Requirements
+
+CON-003
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-025 — Merchant commission is BANHAO revenue (model only)
+
+**Status:** ACCEPTED — MODEL · OPEN — NUMERIC RATE
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The approved conceptual money flow is `Merchant → commission → BANHAO`.
+**No commission percentage is approved.** Existing design examples — notably the
+10% that appears consistently in the payment canvas — **must not** become a
+business rule by default.
+
+### Why
+
+Product Owner decision, 2026-08-10. Commission is both a revenue lever and a
+merchant-acquisition lever in a 20–30-shop district; it needs a deliberate
+decision, not inheritance from a mock-up.
+
+### Alternatives
+
+Percentage, fixed fee, hybrid and subscription models are compared in
+`docs/SETTLEMENT_MODEL.md` § 5. The **model shape** is not fixed by this
+decision either — only the direction of the money.
+
+### Consequences
+
+Q-010 and BQ-028 remain `OPEN`. Until answered, the ledger cannot be closed to
+zero for a real order (CON-003), so **no settlement code may be written**. The
+`10% ของยอดอาหาร` note and the 120→12 / 180→18 / 260→26 samples remain evidence
+of what the design assumed, nothing more.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, sections 12 and 22).
+
+### Related Requirements
+
+CON-003
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 5
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-026 — Settlement is a separate financial domain
+
+**Status:** ACCEPTED — DOMAIN MODEL · IMPLEMENTATION NOT STARTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+Settlement is its own domain, conceptually:
+
+```
+Customer payment → BANHAO financial records → merchant settlement
+                                             → rider settlement
+                                             → BANHAO revenue
+```
+
+**No settlement is to be implemented yet.**
+
+### Why
+
+Product Owner decision, 2026-08-10, consistent with DEC-018's four-domain split
+and DEC-014's system-of-record rule.
+
+### Alternatives
+
+Settling inline with order completion. Rejected — it merges a periodic financial
+process into a transactional one.
+
+### Consequences
+
+Settlement has its own states, its own cycle and its own reconciliation, and it
+reads the ledger rather than the order table. Implementation is blocked on
+Q-002 (legal settlement model), Q-001 (provider) and the pricing questions —
+none of which is an engineering choice.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, sections 13 and 28).
+
+### Related Requirements
+
+CON-003, DEC-014
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-027 — Refund belongs to the payment domain and is not a substitute for order cancellation
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+`REFUNDED` is a **payment** state and must not be used as an order outcome. The
+correct representation of a refunded, cancelled order is:
+
+```
+Order   = CANCELLED
+Payment = REFUNDED
+```
+
+### Why
+
+Product Owner decision, 2026-08-10. Directly follows CON-001 and DEC-018: an
+order and its money have separate fates, and the window in which an order is
+cancelled but not yet refunded is real and must be visible.
+
+### Alternatives
+
+A `REFUNDED` order status. Rejected.
+
+### Consequences
+
+Operations can see cancelled-but-unrefunded orders as a queue. The refund
+**policy** — what is refunded, when, and in what proportion — remains `OPEN`
+(Q-003, BQ-016, BQ-031), as does the **mechanism** (Q-020).
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 14).
+
+### Related Requirements
+
+CON-001, CON-002
+
+### Related Architecture
+
+`docs/PAYMENT_LIFECYCLE.md` § 8
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-028 — Payment operations must be idempotent
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+Payment operations must support idempotency so that a duplicate operation cannot
+create duplicate financial value for one order. The required concepts are
+`order_id`, `payment_reference` and `idempotency_key`. **Not to be implemented
+yet.**
+
+### Why
+
+Product Owner decision, 2026-08-10, confirming REQ-003 and DEC-003 at the
+architecture level.
+
+### Alternatives
+
+None considered — this is a correctness requirement, not a preference.
+
+### Consequences
+
+Every payment operation carries an explicit idempotency key; the raw webhook
+event is persisted before processing and keyed so a repeat delivery reads back
+the stored result; ledger writes carry a unique entry-group key so a second
+insert fails loudly rather than silently duplicating. The already-shipped
+`PaymentProvider` interface enforces the key at the type level, so this is
+satisfied by construction when a provider is eventually chosen.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 15).
+
+### Related Requirements
+
+REQ-003
+
+### Related Architecture
+
+`docs/PAYMENT_LIFECYCLE.md` § 5,
+`apps/api/src/modules/payments/payment-provider.interface.ts`
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-029 — Late payment must be resolvable to an order and a payment attempt
+
+**Status:** ACCEPTED — TECHNICAL REQUIREMENT · OPEN — FINAL BUSINESS HANDLING
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The architecture must handle a payment that succeeds **after** the order or
+payment attempt has timed out. Given a late payment the system must be able to
+determine: which order, which payment attempt, the order's current state, and
+whether the payment should be accepted, refunded, or manually reviewed. **The
+final business handling is not decided.**
+
+### Why
+
+Product Owner decision, 2026-08-10. A 10-minute QR window and a real-world bank
+rail guarantee this case occurs; the system must never be unable to identify
+whose money arrived.
+
+### Alternatives
+
+Ignoring late payments. Rejected — the money exists regardless.
+
+### Consequences
+
+Payment attempts are first-class and retain their identity after expiry; a
+payment reference resolves to an order for as long as the order exists. The
+resolution policy — auto-accept if the order is still viable, refund, or queue
+for review — is `OPEN` and interacts with Q-020, because "refund" may not be
+mechanically available. Reconciliation must surface late payments as a distinct
+category, not as a generic mismatch.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 16).
+
+### Related Requirements
+
+REQ-003
+
+### Related Architecture
+
+`docs/PAYMENT_LIFECYCLE.md` § 7
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-030 — A duplicate payment must never increase an order's value
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+If an order expects ฿185 and two separate ฿185 payments succeed, the order's
+value must **not** become ฿370. The second transaction is detected as a
+duplicate and handled through the financial/refund workflow.
+
+### Why
+
+Product Owner decision, 2026-08-10. A customer who transfers twice must not be
+recorded as having bought twice; the order's value is a property of the order,
+not a sum of received transfers.
+
+### Alternatives
+
+Treating the second payment as an overpayment credit. Not approved.
+
+### Consequences
+
+Order value is authoritative and immutable at creation; received transactions
+are matched against it. A surplus transaction becomes a refund obligation, not
+order value — which means **this decision depends on Q-020 being answerable**;
+until then a duplicate PromptPay payment can be detected but not automatically
+returned. The Customer App already promises automatic refund of a double
+transfer on screen 12f, so the promise exists ahead of the mechanism.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 17).
+
+### Related Requirements
+
+REQ-003, CON-003
+
+### Related Architecture
+
+`docs/PAYMENT_LIFECYCLE.md` § 5
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-031 — Buntharik-first: manual operations are an intentional Phase 1 capability
+
+**Status:** ACCEPTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+The system assumes roughly 50 restaurants, a small rider pool, local geography,
+a solo operator and low initial transaction volume. **Manual operations are an
+intentional Phase 1 capability**, and automation must not be treated as a
+requirement for every edge case.
+
+### Why
+
+Product Owner decision, 2026-08-10. At launch volume a phone call outperforms an
+algorithm, and every automated edge case is code a solo founder maintains
+forever.
+
+### Alternatives
+
+Automating every exception path before launch. Rejected as disproportionate.
+
+### Consequences
+
+An edge case may legitimately be answered with "an operator handles it" —
+that is a design outcome, not a gap. Nothing about the launch district may be
+hard-coded: `ServiceArea`, `Zone` and delivery-fee bands stay configuration so
+expansion is a row, not a release. Where a manual process replaces automation,
+it must still be **recorded** — see DEC-032.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 19).
+
+### Related Requirements
+
+None directly.
+
+### Related Architecture
+
+`docs/BUSINESS_RULES.md` § 16, § 19
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-032 — Operator fallback for exceptional situations is a required capability
+
+**Status:** ACCEPTED — OPERATIONAL REQUIREMENT · IMPLEMENTATION NOT STARTED
+**Date:** 2026-08-10
+**Owner:** PRODUCT_OWNER
+
+### Decision
+
+An operator must be able to resolve exceptional situations manually — no rider,
+rider cancellation, customer unreachable, restaurant issue, refund review. **No
+Admin App is to be built now**; the capability is documented only.
+
+### Why
+
+Product Owner decision, 2026-08-10. Follows directly from DEC-031 and is the
+mechanism DEC-022 escalates into.
+
+### Alternatives
+
+Fully automated exception handling. Rejected for Phase 1.
+
+### Consequences
+
+The domain model must make manual intervention **expressible and attributable**:
+manual dispatch, force-unassign, cancel, refund, approve/suspend, and
+reconciliation matching all exist as documented operator capabilities.
+`PROPOSED` and not yet approved: that every manual override writes an audit
+record with actor, timestamp, before/after state and reason (BQ-038, Q-014).
+Building the Admin App itself remains out of scope.
+
+### Evidence
+
+Product Owner approval, 2026-08-10 (Step 4.2 instruction, section 20).
+
+### Related Requirements
+
+None directly.
+
+### Related Architecture
+
+`docs/BUSINESS_RULES.md` § 14
+
+### Supersedes / Superseded By
+
+None / None.
+
+---
+
+## DEC-033 — Multi-role identity: domain membership, not a single `profiles.role`
+
+**Status:** ACCEPTED
+**Date:** 2026-08-11
+**Owner:** PRODUCT_OWNER
+
+*(Approved under the label "DEC-014 — Multi-role Identity Model"; recorded here
+because DEC-014 was already taken — see the numbering note at the top of this
+file.)*
+
+### Decision
+
+`profiles` represents the user's **identity**. A single `profiles.role` column
+**must not be the authoritative role model.** A user may participate in several
+domains at once — Customer, Merchant, Rider, Operator, Admin.
+
+Role and capability membership is represented through **domain-specific
+relationships** (`restaurant_members`, `riders`, operator/admin membership), not
+through a generic RBAC layer. **Do not build generic RBAC infrastructure where
+domain membership is sufficient.**
+
+The authoritative question is **"what relationship does this user have with this
+domain?"** — never "what single role does this user have?"
+
+### Why
+
+Product Owner decision, 2026-08-11. Two drivers:
+
+1. **A single role column breaks a routine case.** In Buntharik a rider orders
+   food and a restaurant owner orders food. Setting `role = 'DRIVER'` would
+   strip that person's ability to be a customer.
+2. **A global `MERCHANT` role authorises nothing useful.** The real question is
+   *which restaurant*, which only `restaurant_members` can answer. A role column
+   would still need the membership table, so it adds a second, weaker answer to
+   the same question.
+
+### Alternatives
+
+- **Keep the single `profiles.role`.** Rejected — see above.
+- **A generic `user_roles` table** (the database design's own earlier
+  recommendation). **Rejected by the Product Owner**: it duplicates information
+  the domain tables already hold, and it re-creates the "what role is this
+  person?" framing that DEC-033 explicitly replaces. Where a domain table exists,
+  membership *is* the grant.
+
+### Consequences
+
+- **Customer is implicit.** Every authenticated profile may order. No row, no
+  grant, no membership record.
+- `restaurant_members` becomes the merchant authorization boundary; `riders`
+  becomes the rider one; a small **`platform_staff`** table carries
+  operator/admin membership, since those two have no other domain table.
+- **`profiles.role` is no longer authoritative** and is deprecated. It cannot be
+  dropped by a documentation change: `RolesGuard`, `set_user_role()` and the
+  `role` clause of `enforce_profile_immutable_columns()` all read it. That is
+  implementation work, not a design change.
+- Authorization checks become relationship lookups. RLS policies must express
+  membership (`exists (select 1 from restaurant_members …)`), never
+  `profiles.role = …`.
+- **No generic RBAC tables** — no `roles`, `permissions`, `role_permissions`, or
+  `user_roles`. Adding one later needs a new decision.
+- The live `user_role` enum stays for now, but only as legacy scaffolding behind
+  the deprecated column.
+
+### Evidence
+
+Product Owner approval, 2026-08-11 (Step 6.1 instruction, "DEC-014 — Multi-role
+Identity Model").
+
+### Related Requirements
+
+None directly. Supersedes the `user_roles` recommendation in
+`docs/DATABASE_DESIGN.md` § 4.2 and answers **DBQ-002**.
+
+### Related Architecture
+
+`docs/DATABASE_DESIGN.md` § 4, § 18 · `docs/TECHNICAL_ARCHITECTURE.md` § 13
+
+### Supersedes / Superseded By
+
+Supersedes the authority of `profiles.role` established in migration
+`20260809000002_profiles_and_roles.sql`. The column and migration remain in
+place. / None.
+
+---
+
+## DEC-034 — Phase 1 financial integrity without a zero-sum database trigger
+
+**Status:** ACCEPTED
+**Date:** 2026-08-11
+**Owner:** PRODUCT_OWNER
+
+*(Approved under the label "DEC-015 — Phase 1 Financial Integrity"; recorded here
+because DEC-015 was already taken — see the numbering note at the top of this
+file.)*
+
+### Decision
+
+For Phase 1, BANHAO will **not** enforce a full accounting zero-sum invariant
+through PostgreSQL triggers. Financial integrity is achieved instead by:
+
+- **immutable financial records**
+- **database constraints** (unique, check, foreign key, not-null)
+- **NestJS database transactions**
+- **idempotency**
+- **auditability**
+- **reconciliation queries and processes**
+
+**Financial history must not be silently rewritten.** Corrections use
+compensating records where appropriate.
+
+The architecture must preserve the ability to answer: how much the customer
+paid · how much the merchant is owed · how much the rider is owed · BANHAO's
+revenue · how much was refunded · **and what financial events produced those
+values.**
+
+A stronger zero-sum or ledger invariant **may** be introduced in a future phase.
+**No future accounting rules are invented now.**
+
+### Why
+
+Product Owner decision, 2026-08-11. A deferred constraint trigger is powerful
+but puts a rule in the database that ADR-001 otherwise keeps in NestJS, fails at
+commit time with little domain context, and is unfamiliar to maintain. At Phase 1
+volume, transactional writes plus a reconciliation process give the same
+practical assurance with a much smaller surface — and reconciliation surfaces a
+discrepancy with context rather than aborting a transaction.
+
+### Alternatives
+
+- **`DEFERRABLE INITIALLY DEFERRED` constraint trigger asserting
+  `sum = 0` per entry group** — the database design's own recommendation
+  (DBQ-010). **Rejected for Phase 1**, explicitly available for a later one.
+- **No financial records beyond `orders`/`refunds`.** Rejected — it cannot
+  answer *"what financial events produced these values?"*, which this decision
+  requires.
+
+### Consequences
+
+- **CON-003 is not repealed.** Every order's ledger still balances to zero; what
+  changes is **where that is enforced** — the ledger service asserts it inside
+  the transaction, and a reconciliation job verifies it continuously. The
+  invariant moves from *physically impossible to violate* to *asserted and
+  monitored*.
+- A **reconciliation process becomes mandatory, not optional.** Without the
+  trigger it is the only thing that would notice a drift, so it needs an alert
+  (TQ-006) and must run on a schedule.
+- Financial tables stay **append-only and immutable**; the immutability triggers
+  in `DATABASE_DESIGN.md` § 13 are **unaffected** — those prevent rewriting
+  history, which this decision explicitly requires.
+- `ledger_entry_groups.group_key` keeps its unique constraint: that is
+  idempotency (DEC-028), not zero-sum enforcement.
+- Corrections are reversing/compensating entries, never edits (unchanged,
+  DEC-014).
+- **Answers DBQ-010.** DBQ-003 (running balances) is untouched and stays `OPEN`.
+
+### Evidence
+
+Product Owner approval, 2026-08-11 (Step 6.1 instruction, "DEC-015 — Phase 1
+Financial Integrity").
+
+### Related Requirements
+
+CON-003 (enforcement mechanism changed, invariant intact), REQ-003, DEC-014,
+DEC-028
+
+### Related Architecture
+
+`docs/DATABASE_DESIGN.md` § 10, § 13 · `docs/SETTLEMENT_MODEL.md`
+
+### Supersedes / Superseded By
+
+Supersedes the zero-sum trigger recommendation in `docs/DATABASE_DESIGN.md`
+§ 10. / None. Explicitly revisitable in a later phase.
