@@ -1,7 +1,9 @@
-# BANHAO — APPLICATION ARCHITECTURE V1
+# BANHAO — APPLICATION ARCHITECTURE V1.1
 
 Read-only architecture review. No application code, migrations, or repository
-changes were produced by this task.
+changes were produced by this task. V1.1 is a clarification and consistency
+pass over V1 — no redesign, no new services, no database change. See §21 for
+what changed and the approval status.
 
 | | |
 |---|---|
@@ -366,16 +368,31 @@ staff RLS policies.
 
 ## 5. Authentication & Authorization
 
-### The three layers, kept distinct
+### The five layers, kept distinct
 
 | Layer | Owner | Question it answers |
 |---|---|---|
-| **Authentication** | Supabase Auth (phone OTP) | Who is this? → a `sub` in a signed JWT |
-| **Authorization** | NestJS guards + services | May this actor perform this operation? |
+| **Authentication** | Supabase Auth (phone OTP) | Who is this user? → a `sub` in a signed JWT |
+| **Global role / capability** | NestJS guards | What broad capability class does this user have — customer, merchant, rider, operator? |
+| **Domain membership** | `restaurant_members`, `riders`, `platform_staff` | Which specific merchant, restaurant, or rider domain does this user belong to? (DEC-APP-004) |
+| **Resource authorization** | NestJS guards + services | Can this user access or modify *this specific* resource — this restaurant, this delivery, this order? |
 | **RLS** | PostgreSQL | May this actor's session see/modify this row? — final, non-negotiable boundary |
 
 RLS is the last word on data access and is never duplicated as a client-side
-check. The client's job is to render, not to adjudicate.
+check. The client's job is to render, not to adjudicate. **Application-layer
+authorization and database RLS must never diverge** — DEC-APP-004 exists
+precisely because they had.
+
+### Required test cases (documented here; not implemented by this review)
+
+- Merchant A cannot access Restaurant B's data.
+- Rider A cannot access Rider B's protected data.
+- A suspended or inactive membership cannot perform privileged operations.
+- Customer A cannot access Customer B's protected data.
+- An unauthorized user cannot invoke a privileged operation.
+
+These are implementation-phase obligations (Phase B onward), listed here so
+the architecture states them explicitly rather than leaving them implicit.
 
 ### Flow (as built, and correct)
 
@@ -431,7 +448,7 @@ log out — a rider hitting a merchant endpoint is a bug, not a session problem.
 
 - Base `/api/v1`. Webhooks live outside it at `/webhooks/*`.
 - Success: `{ success: true, data }` (existing `ResponseInterceptor`).
-- Failure: `{ success: false, error: { code, message, details?, correlationId } }`.
+- Failure: `{ success: false, error: { code, details?, correlationId, message? } }` — `code` is the canonical, client-resolved contract; `message` (if present) is a developer-facing default only. See §10.
 - **Every state change is a command, never `PATCH { state }`** (ADR-009).
 - Mutations that create money or dispatch effects carry `Idempotency-Key`.
 - Authenticated by default; `@Public()` to opt out.
@@ -706,19 +723,27 @@ honestly.
 
 ## 10. Error Handling
 
-One shape, everywhere:
+One shape, everywhere. The **canonical contract is the code**, not any message
+string — clients own the user-facing sentence, in whatever language and wording
+fits their audience:
 
 ```json
 {
   "success": false,
   "error": {
     "code": "OFFER_TAKEN",
-    "message": "งานนี้มีไรเดอร์รับไปแล้ว",
     "details": { "deliveryId": "..." },
     "correlationId": "9f3c…"
   }
 }
 ```
+
+`message` may optionally be present as a developer-facing default (English,
+for logs and debugging) — it is never what a client renders to a user. A
+client resolves `error.code` to its own copy: e.g. `OFFER_TAKEN` becomes one
+Thai sentence in the customer app, a different Thai sentence in the merchant
+app, and a different one again for the rider app, all from the same code. The
+backend never decides presentation language or wording — see §20.
 
 | Class | HTTP | Codes | Client behaviour |
 |---|---|---|---|
@@ -770,8 +795,14 @@ order fail?* → `order_status_history` + `cause_code`. *Where did this baht go?
 
 ## 12. Cost / Infrastructure
 
-Target: **$0/month.** Every component justified, with the point it stops being
-free named.
+**Architectural target: $0/month.** This is a design target and a free-tier
+assumption, not a guarantee. Actual cost depends on traffic, provider pricing
+changes, and free-tier limits, all of which are outside this architecture's
+control. V1 is designed to operate within free tiers where realistically
+possible — every component below is justified, with the point it stops being
+free named, and pricing that could not be verified against an authoritative
+current source is flagged `COST VERIFICATION REQUIRED` rather than stated as
+fact.
 
 ### DEC-APP-008 — Reads client→Supabase; writes client→API→Supabase
 
@@ -811,7 +842,10 @@ Supabase-backed ones with no screen changes.
 
 **Decision.** Deploy the existing `apps/api` Dockerfile to Cloud Run in
 `asia-southeast3` (Bangkok), CPU allocated **only during requests**,
-`min-instances=0`, `max-instances` capped low.
+`min-instances=0`, `max-instances` capped low. `COST VERIFICATION REQUIRED` —
+the specific free-tier thresholds and the Bangkok-vs-Singapore price gap cited
+below should be re-verified against current GCP pricing before launch; they are
+not re-confirmed as part of this review.
 
 **Reason.** Cost: request-based billing means the free tier (2M requests/month,
 240k vCPU-s, 450k GiB-s) covers Stage 1 with room to spare, and idle costs
@@ -973,9 +1007,19 @@ condition under which it is done.
 `correlationId`; correlation-id middleware; webhook raw-body bootstrap and
 interceptor exclusion (DEC-APP-005); `worker.ts` entrypoint; `/internal/tick`
 with HMAC; Cloud Run + Cloudflare Pages deploy workflows; Sentry.
-*Tests:* contract tests for the envelope; a deploy that answers `/health`.
-*Done when:* the API is reachable at a URL, the tick fires, and CI deploys on
-merge to `main`.
+
+**Local validation gate, before any cloud deployment step:** documentation
+rewrite → auth/capability architecture validated on paper → local build
+passes → local test suite passes → `apps/api` starts in Docker locally → API
+integration tests pass against that local container → **only then** deploy to
+Cloud Run. Do not deploy an unverified foundation to discover basic issues in
+the cloud. This is a sequencing gate, not new CI/CD infrastructure — the
+existing `verify`/`docker` CI jobs already cover build, test, and image build.
+
+*Tests:* contract tests for the envelope; local Docker boot + integration
+pass; a deploy that answers `/health`.
+*Done when:* the local gate above is green, the API is reachable at a URL, the
+tick fires, and CI deploys on merge to `main`.
 
 **Phase B — Identity & capability resolution.** *Depends: A.* DEC-APP-004 —
 membership-based capability resolution across `restaurant_members`, `riders`,
@@ -1236,6 +1280,39 @@ families are the single most likely rendering failure — this raises the priori
 of the Phase A Android check rather than adding new work.
 
 ---
+
+## 21. Architecture Lock — V1.1
+
+> **BANHAO Application Architecture V1.1 — APPROVED / READY FOR IMPLEMENTATION**,
+> subject to `COST VERIFICATION REQUIRED` items in §12 being re-checked against
+> current provider pricing before launch.
+
+- **Database V1 remains locked.** `e471ec1d` remains the database checkpoint.
+  No database redesign is part of this task; no table, view, RLS policy, RPC,
+  or migration was created or modified.
+- No new technology, service, or application-stack component was introduced.
+  No new Architecture Decision was added — V1.1 only clarifies DEC-APP-005
+  (error contract), DEC-APP-004 (authorization layers), DEC-APP-009 (cost
+  verification caveat), and Phase A (local validation gate).
+- Application implementation must follow this architecture. Any future
+  architectural deviation requires a new Architecture Decision.
+
+### What changed from V1 to V1.1
+
+1. **Cost (§12, DEC-APP-009).** Distinguished architectural target, free-tier
+   assumption, and billing risk; flagged unverified Bangkok pricing as `COST
+   VERIFICATION REQUIRED` rather than asserted fact.
+2. **Error contract (§6, §10).** Made `error.code` the sole canonical contract;
+   removed Thai user-facing text as an API-level example. Clients resolve
+   `code` to their own language and wording.
+3. **Authorization (§5).** Expanded three layers to five (authentication,
+   global role, domain membership, resource authorization, RLS) and listed the
+   five required test cases as documentation, not implementation.
+4. **Phase A (§15).** Added an explicit local validation gate — build, tests,
+   local Docker boot, integration tests — before any Cloud Run deployment.
+5. **Language policy (§20, `CLAUDE.md`).** Confirmed: technical documentation,
+   code, identifiers, and API contracts are English; end-user UI is natural
+   Thai when explicitly designed.
 
 *Read-only review. No files in `kmandev/banhao-design` were created, modified,
 or committed; no migration was written; nothing was pushed. `git status
