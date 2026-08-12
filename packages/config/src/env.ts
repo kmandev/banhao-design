@@ -17,6 +17,11 @@ const serverEnvSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SUPABASE_JWT_SECRET: z.string().min(1),
+
+  // DEC-APP-010: authenticates POST /internal/tick (HMAC-SHA256 over the raw
+  // request body — see apps/api/src/common/guards/tick-hmac.guard.ts). Never
+  // sent to any client bundle; only apps/api reads it.
+  INTERNAL_TICK_SECRET: z.string().min(1),
 });
 
 export type ServerEnv = {
@@ -27,6 +32,7 @@ export type ServerEnv = {
   supabaseAnonKey: string;
   supabaseServiceRoleKey: string;
   supabaseJwtSecret: string;
+  internalTickSecret: string;
 };
 
 export class EnvValidationError extends Error {
@@ -59,5 +65,6 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEn
     supabaseAnonKey: env.SUPABASE_ANON_KEY,
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseJwtSecret: env.SUPABASE_JWT_SECRET,
+    internalTickSecret: env.INTERNAL_TICK_SECRET,
   };
 }

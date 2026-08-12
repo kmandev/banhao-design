@@ -5,6 +5,7 @@ const validEnv = {
   SUPABASE_ANON_KEY: 'anon-key',
   SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
   SUPABASE_JWT_SECRET: 'jwt-secret',
+  INTERNAL_TICK_SECRET: 'tick-secret',
 };
 
 describe('loadServerEnv', () => {
@@ -29,6 +30,24 @@ describe('loadServerEnv', () => {
     const { SUPABASE_JWT_SECRET: _omitted, ...incomplete } = validEnv;
 
     expect(() => loadServerEnv(incomplete)).toThrow(EnvValidationError);
+  });
+
+  it('loads INTERNAL_TICK_SECRET (DEC-APP-010)', () => {
+    const env = loadServerEnv(validEnv);
+
+    expect(env.internalTickSecret).toBe('tick-secret');
+  });
+
+  it('throws when INTERNAL_TICK_SECRET is missing', () => {
+    const { INTERNAL_TICK_SECRET: _omitted, ...incomplete } = validEnv;
+
+    expect(() => loadServerEnv(incomplete)).toThrow(EnvValidationError);
+  });
+
+  it('throws when INTERNAL_TICK_SECRET is empty', () => {
+    expect(() => loadServerEnv({ ...validEnv, INTERNAL_TICK_SECRET: '' })).toThrow(
+      EnvValidationError,
+    );
   });
 
   it('throws when SUPABASE_URL is not a URL', () => {
