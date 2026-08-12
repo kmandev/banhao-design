@@ -4,11 +4,53 @@
  * Keeping one shape across all four apps means error handling is written once
  * in @banhao/api-client rather than four times.
  */
+
+/**
+ * A failure, in its canonical machine-readable form.
+ *
+ * **`code` is the contract.** It is the only field a client may branch on, and
+ * the only field a client may derive displayed text from. A client resolves a
+ * code to its own copy, so one `OFFER_TAKEN` becomes one Thai sentence in the
+ * customer app, a different one in the merchant app, and a different one again
+ * for a rider — all from the same response (V1.1 §10, §20).
+ *
+ * The API therefore never decides presentation language or wording. **No
+ * user-facing copy — Thai or otherwise — belongs in any field of this type.**
+ */
 export interface ApiError {
+  /**
+   * Stable English technical identifier — e.g. `OFFER_TAKEN`, `INVALID_TRANSITION`.
+   *
+   * Never render this to a user; resolve it to client-owned copy first.
+   */
   code: string;
-  message: string;
-  /** Field-level detail, when the failure is a validation error. */
-  details?: Record<string, string[]>;
+
+  /**
+   * Structured, machine-readable context for the code — e.g.
+   * `{ deliveryId: '…' }`, or field errors for `VALIDATION_FAILED`.
+   *
+   * Values are data a client may use to build its own message. They are not
+   * prose to display verbatim.
+   */
+  details?: Record<string, unknown>;
+
+  /**
+   * Correlation id for the request that failed, so a user can quote it to
+   * support and an operator can find the matching log line.
+   *
+   * Optional until the correlation-id middleware lands (Phase A / A-4), which
+   * is what populates it.
+   */
+  correlationId?: string;
+
+  /**
+   * Developer-facing English default, for logs and debugging only.
+   *
+   * **Optional by design, and never rendered to a user.** A client that
+   * displays this is a bug: it bypasses `code`, hardcodes English into the UI,
+   * and couples user-visible copy to a server deploy.
+   */
+  message?: string;
 }
 
 export type ApiResponse<T> = { success: true; data: T } | { success: false; error: ApiError };

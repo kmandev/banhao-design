@@ -78,6 +78,111 @@ describe('ApiClient', () => {
     await expect(client.health()).rejects.toBeInstanceOf(ApiClientError);
   });
 
+  // --- canonical error contract (V1.1 §6, §10) --------------------------------
+  //
+  // These assert the machine-readable STRUCTURE. They deliberately never assert
+  // on user-facing prose: `code` is the contract, and copy belongs to clients.
+
+  it('accepts an error carrying only a code — message is not required', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ success: false, error: { code: 'OFFER_TAKEN' } }, 409));
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+
+    await expect(client.me()).rejects.toMatchObject({
+      name: 'ApiClientError',
+      status: 409,
+      code: 'OFFER_TAKEN',
+    });
+  });
+
+  it('falls back to the code for Error.message when the server sends none', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ success: false, error: { code: 'NOT_RELEASABLE' } }, 409));
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+
+    // Developer-facing only — a client renders copy resolved from `code`.
+    await expect(client.me()).rejects.toThrow('NOT_RELEASABLE');
+  });
+
+  it('surfaces structured non-validation details', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          success: false,
+          error: { code: 'NOT_RELEASABLE', details: { deliveryId: 'd-42', attempt: 2 } },
+        },
+        409,
+      ),
+    );
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+
+    await expect(client.me()).rejects.toMatchObject({
+      code: 'NOT_RELEASABLE',
+      details: { deliveryId: 'd-42', attempt: 2 },
+    });
+  });
+
+  it('surfaces field-level validation details', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          success: false,
+          error: { code: 'VALIDATION_FAILED', details: { phone: ['required'] } },
+        },
+        400,
+      ),
+    );
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+
+    await expect(client.me()).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { phone: ['required'] },
+    });
+  });
+
+  it('surfaces the correlation id when the API sends one', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(
+      jsonResponse(
+        { success: false, error: { code: 'INTERNAL_ERROR', correlationId: '9f3c-aa21' } },
+        500,
+      ),
+    );
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+
+    await expect(client.me()).rejects.toMatchObject({
+      code: 'INTERNAL_ERROR',
+      correlationId: '9f3c-aa21',
+    });
+  });
+
+  it('leaves correlationId undefined until the API populates it', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ success: false, error: { code: 'UNAUTHORIZED' } }, 401));
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+
+    await expect(client.me()).rejects.toMatchObject({ correlationId: undefined });
+  });
+
+  it('reports the failing path as structured detail on an unparseable response', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(new Response('<html>502</html>', { status: 502 }));
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+
+    await expect(client.health()).rejects.toMatchObject({
+      code: 'INVALID_RESPONSE',
+      details: { path: '/health' },
+    });
+  });
+
   it('strips a trailing slash from the base URL', async () => {
     const fetchMock = jest
       .fn()

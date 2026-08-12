@@ -17,17 +17,32 @@ export interface ApiClientOptions {
   fetch?: typeof fetch;
 }
 
+/**
+ * A failed API call, surfaced as an Error.
+ *
+ * Callers branch on `code` — never on `message`. `Error.message` here is a
+ * developer-facing string for stack traces and logs; it falls back to `code`
+ * precisely because the server is not required to send one, and must never be
+ * relied on for anything a user sees. Resolve `code` to client-owned copy.
+ */
 export class ApiClientError extends Error {
   readonly status: number;
+  /** The canonical machine-readable contract. Branch on this. */
   readonly code: string;
-  readonly details?: Record<string, string[]>;
+  /** Structured context for `code` — not prose to display. */
+  readonly details?: Record<string, unknown>;
+  /** Set once the API populates it (Phase A / A-4); quotable to support. */
+  readonly correlationId?: string;
 
   constructor(status: number, error: ApiError) {
-    super(error.message);
+    // `message` is optional in the contract, so fall back to the code rather
+    // than producing an Error with an empty message.
+    super(error.message ?? error.code);
     this.name = 'ApiClientError';
     this.status = status;
     this.code = error.code;
     this.details = error.details;
+    this.correlationId = error.correlationId;
   }
 }
 
@@ -59,6 +74,8 @@ export class ApiClient {
     } catch {
       throw new ApiClientError(response.status, {
         code: 'INVALID_RESPONSE',
+        // The path is structured context, not something to read out of prose.
+        details: { path },
         message: `Expected JSON from ${path} but could not parse the response body`,
       });
     }
