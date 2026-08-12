@@ -88,7 +88,13 @@ This `AI_CONTEXT.md` file will not be expanded further to hold that content — 
 
 ## Current Architecture
 
-There is no implemented system architecture — see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the full breakdown of what is *documented as intended design* (order state machine, payment state machine, webhook-driven payment confirmation, ledger model) versus what is genuinely unimplemented (backend, database, API, auth, hosting — all UNKNOWN/NOT VERIFIED).
+**The authoritative source for application implementation is [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md)** — *Application Architecture V1.1, APPROVED / READY FOR IMPLEMENTATION*: 12 `DEC-APP` decisions, 9 implementation phases plus F′. Where any other document conflicts with it, V1.1 wins.
+
+A system is built and running: a pnpm/Turborepo monorepo with a NestJS API (`/health`, `/api/v1/me`), an implemented Expo customer app, five shared packages, a deployed Supabase database (Postgres 17 + PostGIS, 16 migrations, 40 tables, **LOCKED** at `e471ec1d`), GitHub Actions CI, and a Dockerfile. What does **not** exist is business logic — no order creation, payment integration, dispatch, or settlement.
+
+See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the system as built and [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md) for what works, what is mocked, and what is unverified.
+
+> **Corrected 2026-08-12 (Phase A / A-1).** This section previously read *"There is no implemented system architecture."* True on 2026-08-09, false ever since, and actively misleading to any agent that read it first.
 
 ## Core Entities
 

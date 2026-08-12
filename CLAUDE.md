@@ -1,6 +1,12 @@
 # CLAUDE.md — BANHAO project state
 
-Orientation file for AI agents. Written 2026-08-10, updated 2026-08-10 after merge.
+Orientation file for AI agents. Written 2026-08-10, updated 2026-08-12 (Phase A /
+A-1) after the Application Architecture V1.1 approval.
+
+> **Authoritative for application implementation:**
+> [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
+> *Application Architecture V1.1, APPROVED / READY FOR IMPLEMENTATION*. This file
+> summarises it. **Where they conflict, V1.1 wins.**
 
 **Read these first, in order:** [`ai/HANDOFF.md`](ai/HANDOFF.md) →
 [`ai/MEMORY.md`](ai/MEMORY.md) → [`docs/AI_CONTEXT.md`](docs/AI_CONTEXT.md) →
@@ -37,23 +43,19 @@ Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 ## 3. Current branch
 
 ```
-feature/supabase-migration-v1     ← YOU ARE HERE — 11 migrations, 40 tables
-                                     tested (60/60), NOT merged to main
-feature/database-design-v1           46 tables designed, DEC-033/034 locked, PUSHED
-feature/technical-architecture-v1    ADR-001…012, TQ-001…016, PUSHED
-feature/p0-decisions-v1              DEC-016…DEC-032 locked, PUSHED
-feature/business-rules               EVENT-013 business rules, PUSHED
-main @ 9a60277e                      supabase-customer-auth merged, PUSHED
+main @ 14289652                   ← YOU ARE HERE — everything below is merged
+  e471ec1d                           supabase-migration-v1 merged (DB checkpoint)
+  14289652                           Application Architecture V1.1 added
 ```
 
-Five branches are stacked and unmerged. Each builds on the previous one.
+**All feature branches are merged into `main`.** `feature/supabase-migration-v1`,
+`feature/database-design-v1`, `feature/technical-architecture-v1`,
+`feature/p0-decisions-v1`, `feature/business-rules`, `feature/customer-app` and
+`feature/supabase-customer-auth` still exist remotely but are now fully contained
+in `main`. **Branch new work from `main`.**
 
-`feature/supabase-customer-auth` (which already contained everything from
-`feature/customer-app`) was reviewed by the Product Owner and merged into `main`
-on 2026-08-10 via `git merge --no-ff`. The full quality gate (lint, typecheck,
-test, build) was re-run on `main` after the merge and passed. **Both feature
-branches still exist remotely but are now fully contained in `main` — new work
-should branch from `main`, not from either of them.**
+`e471ec1d` is the **database checkpoint** — the commit V1.1 was reviewed against
+and the point at which the schema is LOCKED.
 
 ## 4. Completed work
 
@@ -74,7 +76,10 @@ should branch from `main`, not from either of them.**
 | EVENT-015 | Technical Architecture v1 — ADR-001…012, TQ-001…016, no code |
 | EVENT-016 | Supabase Database Design v1 — 46 tables, DBQ-001…014, no migration |
 | EVENT-017 | Database architecture decisions locked — DEC-033 (multi-role identity), DEC-034 (no zero-sum trigger) |
-| **EVENT-018** | **Supabase Migration v1 — 11 migrations, 40 tables, 60/60 assertions pass, live project untouched** (this update) |
+| EVENT-018 | Supabase Migration v1 — 11 new migrations (16 total), 40 tables, 60/60 assertions pass |
+| EVENT-019 | Migration set merged to `main` at `e471ec1d`; applied to `banhao-dev`. **Database V1 LOCKED** |
+| EVENT-020 | Application Architecture V1.1 — 12 `DEC-APP` decisions, 9 phases + F′, **APPROVED** |
+| **EVENT-021** | **Phase A / A-1 — stale documentation reconciled to V1.1; ADR-001…012 recorded `ACCEPTED`** (this update) |
 
 ## 5. Current implementation status
 
@@ -121,9 +126,9 @@ a guarded conditional `UPDATE` with the state check in the `WHERE` clause.
 Three `T0` technical questions block backend work: TQ-008, TQ-011, TQ-012.
 
 **The database is designed AND implemented as migrations** (EVENT-016 design →
-EVENT-017 DEC-033/034 lock → EVENT-018 migration). 11 migration files, 40
-tables, on `feature/supabase-migration-v1` — **not merged, and the live
-`banhao-dev` project was never touched.** Verified by two Docker-based test
+EVENT-017 DEC-033/034 lock → EVENT-018 migration). **16 migration files, 40
+tables, merged to `main` at `e471ec1d` and applied to `banhao-dev` — the schema
+is LOCKED.** Verified by two Docker-based test
 suites: **60/60 assertions pass**, including the rider race condition proven
 with two genuinely concurrent `psql` processes (see
 `docs/DATABASE_MIGRATION_V1_REPORT.md`). The live `profiles` RLS pattern
@@ -174,15 +179,19 @@ docs/PAYMENT_LIFECYCLE.md         payment/refund states, idempotency, PromptPay
 docs/SETTLEMENT_MODEL.md          ledger accounts, worked examples, payouts
 docs/OPEN_BUSINESS_QUESTIONS.md   BQ-001…BQ-039 — read before any domain work
 
-docs/TECHNICAL_ARCHITECTURE.md    how the decisions get built (PROPOSED)
-docs/ARCHITECTURE_DECISIONS.md    ADR-001…ADR-012, all PROPOSED
+docs/BANHAO-APP-ARCHITECTURE-V1.md  ★ AUTHORITATIVE — V1.1, APPROVED.
+                                    DEC-APP-001…012, 9 phases + F′. Read first.
+docs/ARCHITECTURE.md              the system as built — orientation summary
+docs/CURRENT_STATUS.md            what works, what does not, what is unverified
+docs/TECHNICAL_ARCHITECTURE.md    how the decisions get built
+docs/ARCHITECTURE_DECISIONS.md    ADR-001…ADR-012, all ACCEPTED (V1.1 §16)
 docs/OPEN_TECHNICAL_QUESTIONS.md  TQ-001…TQ-016 — read before backend work
 
 docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-033/034)
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
-docs/DATABASE_MIGRATION_V1_REPORT.md  11 migrations, 40 tables, 60/60 tests pass
+docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations, 40 tables, 60/60 tests pass
 
-supabase/migrations/20260811*.sql  the 11 new migrations — read before editing
+supabase/migrations/*.sql          16 migrations — LOCKED, do not edit or add
 ```
 
 ## 7. Database / Supabase status
@@ -195,7 +204,8 @@ supabase/migrations/20260811*.sql  the 11 new migrations — read before editing
 | Ref | `yssnwnboiwldogmlvvlw` |
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
-| Migrations | All 3 applied live |
+| Postgres | 17.6 + PostGIS |
+| Migrations | **All 16 applied live · 0 pending · schema LOCKED at `e471ec1d`** |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -254,30 +264,46 @@ terminate/relaunch Expo Go — reloading is not enough.
 
 ## 9. Next steps
 
-**Architect review of `feature/supabase-migration-v1`**, then applying it to
-the live `banhao-dev` project (needs an explicit instruction — nothing here
-does that automatically). Alongside it: retire `profiles.role` in
-`RolesGuard`/`set_user_role()`/the immutability trigger now that DEC-033
-deprecated it (`docs/TODO.md`).
+**Build the approved application architecture**, phase by phase, from
+[`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md)
+(V1.1 — APPROVED / READY FOR IMPLEMENTATION). That document is authoritative;
+this file summarises it.
 
-0. **Answer the remaining 8 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
-   Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-026, BQ-027, BQ-030. All the
-   structural questions are answered; what is left is numbers, the provider, and
-   legal.
-1. Close DQ-01…DQ-05 — all five are addressed by EVENT-013; see the DQ table in
-   `docs/OPEN_BUSINESS_QUESTIONS.md`.
-2. Verify on an Android emulator — per-weight font families are untested there.
-3. Verify the search **results** list and keyboard avoidance on a device that
+**Nine phases, in order.** Each depends on the one before unless stated:
+
+| Phase | What | State |
+|---|---|---|
+| **A** | Foundation hardening — docs, error envelope + `correlationId`, webhook raw body, `worker.ts`, `/internal/tick`, deploy workflows, Sentry | **IN PROGRESS** |
+| **B** | Identity & capability resolution — DEC-APP-004, membership-based guards | Next |
+| **C** | Catalog & merchant read path — replaces the customer app's mocks | |
+| **D** | Cart | |
+| **E** | Order — nine ACCEPTED states plus `CANCELLED`, as commands | |
+| **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | |
+| **G** | Rider & delivery — depends on E, **not** F | |
+| **H** | Notification — outbox via the tick | |
+| **I** | Admin operations | |
+| **F′** | Real payment provider — externally blocked; may land any time after F | |
+
+**Phase A local validation gate — do not skip, do not reorder:**
+implementation → local build → local tests → API starts in Docker locally →
+API integration tests → **only then** Cloud Run.
+
+Running alongside, not blocking:
+
+1. **Answer the remaining 8 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
+   Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-026, BQ-027, BQ-030. Every
+   structural question is answered; what is left is numbers, the provider, and
+   legal. **These block F′ only** — DEC-APP-007 keeps them off the critical path
+   for the other eight phases.
+2. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
+   external lead time, gates real-money work.
+3. Verify on an Android emulator — per-weight Thai font families are untested and
+   are the single most likely rendering failure.
+4. Verify the search **results** list and keyboard avoidance on a device that
    can type Thai (the Simulator cannot).
-4. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
-   external lead time, gates all payment work.
-5. Decide the P0 product questions blocking payment work (§10): Q-001, Q-002,
-   Q-010, Q-020.
 
-Merchant, Driver, and Admin apps, payment integration, order backend, dispatch,
-and settlement remain **out of scope** until those product decisions land — see
-the scope lock below. **Any of that work is a new decision, not a continuation
-of this merge — check in before starting it.**
+**Do not start Phase F′ or any settlement work** (settlement needs six deferred
+tables and a Product Owner decision). **Do not touch the database.**
 
 ## 10. Decisions and constraints
 
@@ -313,20 +339,33 @@ of this merge — check in before starting it.**
 - Do not enable cash payment (DEC-016) — and do not delete the cash model either.
 - Do not use the superseded order state names (`NEW`, `ACCEPTED`, `READY`,
   `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work.
-- **Every ADR is `PROPOSED`** — the architecture is not approved, so do not
-  start implementing it. A `DEC-` always beats an `ADR-`.
+- **ADR-001…012 are `ACCEPTED`**, ratified unchanged by V1.1 §16, and the 12
+  `DEC-APP` decisions in V1.1 build on them. Implement them. **Precedence is
+  `DEC-` > `DEC-APP-` > `ADR-`** — a business decision always wins, and if an
+  `ADR` appears to contradict a `DEC`, the `ADR` is the bug.
+- **Any deviation from V1.1 requires a new Architecture Decision**, not an
+  improvisation. If something looks like it needs an architectural change, stop
+  and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- 11 migrations exist on `feature/supabase-migration-v1` (EVENT-018) — read
-  `docs/DATABASE_MIGRATION_V1_REPORT.md` before adding to them. Never run
-  `supabase db push` or `supabase link` against the live project without an
-  explicit instruction — this branch never did either.
+- **16 migrations are merged and the schema is LOCKED at `e471ec1d`.** Read
+  `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near them. Do not add a
+  table, view, RLS policy, RPC, or migration, and never run `supabase db push`
+  or `supabase link`, without an explicit instruction.
+- **Do not weaken the two structural safeguards** in the deployed schema: the
+  rider views' `security_barrier = true` (load-bearing, not cosmetic) and
+  `release_rider_assignment()`'s `SECURITY INVOKER` + `service_role`-only
+  EXECUTE.
 - Every new table needs `revoke ... from anon, authenticated` **first** —
   Supabase grants `ALL` on public tables by default.
 
-**Open questions blocking real work:** Q-001 payment provider, Q-002 legal
-settlement model, Q-010 platform fee, Q-020 PromptPay refund mechanism (no
-provider supports native PromptPay refunds — see `ai/RESEARCH/PAYMENT_RESEARCH.md`).
+**Open questions blocking real money — and only real money:** Q-001 payment
+provider, Q-002 legal settlement model, Q-010 platform fee, Q-020 PromptPay
+refund mechanism (no provider supports native PromptPay refunds — see
+`ai/RESEARCH/PAYMENT_RESEARCH.md`). Under **DEC-APP-007** these gate **Phase F′
+only**; build the whole order → delivery flow against `NullPaymentProvider`. The
+schema stores **amounts, never rates**, so the open numbers can be set later
+without a migration — **do not invent a default anywhere in the application.**
 
 **Known gaps:** Android is **UNVERIFIED** (no SDK on this machine, and it is the
 platform most likely to differ on per-weight fonts). A physical iOS device, real
@@ -334,5 +373,12 @@ SMS delivery, keyboard avoidance, the search **results** list, and four state
 variants (empty cart, loading, network error, no driver) are also unverified —
 see `docs/CUSTOMER_APP_VISUAL_QA.md`. All 31 states themselves are verified.
 
-**Scope lock:** do not start Merchant, Driver, or Admin apps, payment
-integration, order backend, dispatch, or settlement.
+**Scope discipline (replaces the pre-V1.1 scope lock).** The Merchant, Driver and
+Admin apps, the order backend, dispatch and payment are **no longer out of
+scope** — they are Phases C through I of an approved roadmap. What is required is
+that they are built **in phase order, one phase at a time**, not opportunistically:
+
+- Build only the current phase. Do not start the next one early.
+- **Still hard-locked:** Phase F′ (real payment provider) and settlement.
+- **Still hard-locked:** the database. No migration, no schema change.
+- Merchant's approved target is **Next.js web**, not Expo (DEC-APP-003).

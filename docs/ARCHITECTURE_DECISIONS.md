@@ -24,11 +24,24 @@ Field structure matches `docs/DECISIONS.md` so the two read the same way.
 | Status | Meaning |
 |---|---|
 | `PROPOSED` | Argued here, **not approved**. Needs architecture review before implementation |
-| `ACCEPTED` | Approved. **No ADR below is ACCEPTED yet** — this is v1 of the architecture |
+| `ACCEPTED` | Approved. **Every ADR below is now ACCEPTED** — ratified 2026-08-12 |
 | `SUPERSEDED` | Replaced by a later ADR |
 
-> **Every ADR below is `PROPOSED`.** Per `ai/DEVELOPMENT_RULES.md`, an agent may
-> not mark a decision `ACCEPTED` without human approval.
+> **Every ADR below is `ACCEPTED`, ratified unchanged on 2026-08-12.**
+>
+> The approval is [`BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md)
+> (Application Architecture V1.1), whose §21 records *"APPROVED / READY FOR
+> IMPLEMENTATION"* and whose §16 states: *"Existing ADR-001 … ADR-012 are all
+> ratified unchanged by this review. None was contradicted."*
+>
+> `ai/DEVELOPMENT_RULES.md` rule 4 still holds — an agent may not mark a decision
+> `ACCEPTED` on its own initiative. This status change **records a human
+> approval that already happened**; it does not make one. No ADR's text,
+> reasoning, or decision was altered in the process.
+>
+> V1.1's own 12 `DEC-APP` entries are the application-level decisions built on
+> top of these; they live in V1.1 §16, not here, to avoid two homes for one
+> decision.
 
 ## Decisions inherited from the product record — *not* re-recorded here
 
@@ -56,24 +69,24 @@ a different question from whether to do them.
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
-| ADR-001 | NestJS is the only trusted writer of domain state | PROPOSED | 2026-08-11 |
-| ADR-002 | RLS is defence in depth; no client write grants on domain tables | PROPOSED | 2026-08-11 |
-| ADR-003 | Guarded conditional UPDATE as the universal concurrency primitive | PROPOSED | 2026-08-11 |
-| ADR-004 | Natural-key idempotency, records only where no natural key exists | PROPOSED | 2026-08-11 |
-| ADR-005 | Transactional outbox; no message broker | PROPOSED | 2026-08-11 |
-| ADR-006 | PostgreSQL as the job store for Phase 1, behind a `JobQueue` interface | PROPOSED | 2026-08-11 |
-| ADR-007 | Money: `bigint` satang, branded TS type, basis-point rates, residual allocation | PROPOSED | 2026-08-11 |
-| ADR-008 | Keep the existing `PaymentProvider` abstraction; split webhook ingest from processing | PROPOSED | 2026-08-11 |
-| ADR-009 | State transitions are commands, never `PATCH { state }` | PROPOSED | 2026-08-11 |
-| ADR-010 | Worker is a second entrypoint of the same codebase | PROPOSED | 2026-08-11 |
-| ADR-011 | Notification channels abstracted like payment providers | PROPOSED | 2026-08-11 |
-| ADR-012 | Module ownership contract for AI maintainability | PROPOSED | 2026-08-11 |
+| ADR-001 | NestJS is the only trusted writer of domain state | ACCEPTED | 2026-08-11 |
+| ADR-002 | RLS is defence in depth; no client write grants on domain tables | ACCEPTED | 2026-08-11 |
+| ADR-003 | Guarded conditional UPDATE as the universal concurrency primitive | ACCEPTED | 2026-08-11 |
+| ADR-004 | Natural-key idempotency, records only where no natural key exists | ACCEPTED | 2026-08-11 |
+| ADR-005 | Transactional outbox; no message broker | ACCEPTED | 2026-08-11 |
+| ADR-006 | PostgreSQL as the job store for Phase 1, behind a `JobQueue` interface | ACCEPTED | 2026-08-11 |
+| ADR-007 | Money: `bigint` satang, branded TS type, basis-point rates, residual allocation | ACCEPTED | 2026-08-11 |
+| ADR-008 | Keep the existing `PaymentProvider` abstraction; split webhook ingest from processing | ACCEPTED | 2026-08-11 |
+| ADR-009 | State transitions are commands, never `PATCH { state }` | ACCEPTED | 2026-08-11 |
+| ADR-010 | Worker is a second entrypoint of the same codebase | ACCEPTED | 2026-08-11 |
+| ADR-011 | Notification channels abstracted like payment providers | ACCEPTED | 2026-08-11 |
+| ADR-012 | Module ownership contract for AI maintainability | ACCEPTED | 2026-08-11 |
 
 ---
 
 ## ADR-001 — NestJS is the only trusted writer of domain state
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -113,7 +126,7 @@ DEC-009, DEC-011, DEC-018, DEC-019, REQ-002, CON-002 · ADR-002, ADR-009
 
 ## ADR-002 — RLS is defence in depth; no client write grants on domain tables
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -151,7 +164,7 @@ CON-005, DEC-010 · migration `20260809000003_harden_profiles_rls.sql` · ADR-00
 
 ## ADR-003 — Guarded conditional UPDATE as the universal concurrency primitive
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -205,7 +218,7 @@ DEC-019, DEC-020, DEC-021, DEC-022 · `TECHNICAL_ARCHITECTURE.md` § 11 · TQ-01
 
 ## ADR-004 — Natural-key idempotency, records only where no natural key exists
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -248,7 +261,7 @@ DEC-028, DEC-030, REQ-003, CON-003 · ADR-003
 
 ## ADR-005 — Transactional outbox; no message broker
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -288,7 +301,7 @@ DEC-014, DEC-018 · `TECHNICAL_ARCHITECTURE.md` § 19 · ADR-006
 
 ## ADR-006 — PostgreSQL as the job store for Phase 1, behind a `JobQueue` interface
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -333,7 +346,7 @@ DEC-009, DEC-014, DEC-031 · TQ-001 · ADR-005, ADR-010
 
 ## ADR-007 — Money: `bigint` satang, branded TS type, basis-point rates, residual allocation
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -383,7 +396,7 @@ CON-003, DEC-014, DEC-023, DEC-024, DEC-025 · `packages/types/src/money.ts`
 
 ## ADR-008 — Keep the existing `PaymentProvider` abstraction; split webhook ingest from processing
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -430,7 +443,7 @@ CON-002, DEC-015, DEC-016, DEC-027, DEC-028, DEC-029, DEC-030, Q-001, Q-020
 
 ## ADR-009 — State transitions are commands, never `PATCH { state }`
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -464,7 +477,7 @@ REQ-002, CON-002, DEC-019 · ADR-003
 
 ## ADR-010 — Worker is a second entrypoint of the same codebase
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -504,7 +517,7 @@ DEC-009, DEC-011, DEC-031 · ADR-006 · TQ-005
 
 ## ADR-011 — Notification channels abstracted like payment providers
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
@@ -540,7 +553,7 @@ BQ-035, Q-019 · TQ-003 · ADR-005
 
 ## ADR-012 — Module ownership contract for AI maintainability
 
-**Status:** PROPOSED · **Date:** 2026-08-11 · **Owner:** ARCHITECTURE_REVIEW
+**Status:** ACCEPTED · **Date:** 2026-08-11 · **Ratified:** 2026-08-12 (V1.1 §16) · **Owner:** ARCHITECTURE_REVIEW
 
 ### Decision
 
