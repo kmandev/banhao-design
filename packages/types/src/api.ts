@@ -1,3 +1,5 @@
+import type { ErrorCode } from './error-code';
+
 /**
  * Standard API envelope shared by every BANHAO client.
  *
@@ -21,9 +23,11 @@ export interface ApiError {
   /**
    * Stable English technical identifier — e.g. `OFFER_TAKEN`, `INVALID_TRANSITION`.
    *
-   * Never render this to a user; resolve it to client-owned copy first.
+   * Drawn from the canonical catalogue in `./error-code`, so the set of codes a
+   * client must handle is exhaustive and checkable. Never render this to a
+   * user; resolve it to client-owned copy first.
    */
-  code: string;
+  code: ErrorCode;
 
   /**
    * Structured, machine-readable context for the code — e.g.
