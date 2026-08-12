@@ -11,7 +11,11 @@ async function bootstrap(): Promise<void> {
   // first request.
   const env = loadServerEnv();
 
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true exposes req.rawBody as a Buffer of the original request
+  // bytes, alongside Nest's normal JSON body parsing. DEC-APP-005 requires
+  // this: a payment provider's signature is computed over its exact bytes, and
+  // a JSON-parsed-and-reserialized body will not verify.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableCors({ origin: env.corsOrigins, credentials: true });

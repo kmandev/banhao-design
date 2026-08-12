@@ -6,6 +6,7 @@ import { UsersModule } from './modules/users/users.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -29,6 +30,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
     HealthModule,
     AuthModule,
     PaymentsModule,
+    WebhooksModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: SupabaseAuthGuard },
