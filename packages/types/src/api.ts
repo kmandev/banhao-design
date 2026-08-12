@@ -42,8 +42,10 @@ export interface ApiError {
    * Correlation id for the request that failed, so a user can quote it to
    * support and an operator can find the matching log line.
    *
-   * Optional until the correlation-id middleware lands (Phase A / A-4), which
-   * is what populates it.
+   * Populated by the API from the `X-Request-Id` header — adopted if the client
+   * sent a valid one, generated otherwise — and echoed on that same response
+   * header (V1.1 §11). Remains optional: a response produced outside the
+   * request pipeline has no id to report.
    */
   correlationId?: string;
 

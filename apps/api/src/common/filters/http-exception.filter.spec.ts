@@ -11,6 +11,7 @@ import {
 import type { ApiResponse } from '@banhao/types';
 import { HttpExceptionFilter } from './http-exception.filter';
 import { DomainError } from '../errors/domain-error';
+import { runWithCorrelationId } from '../correlation/correlation';
 
 interface Captured {
   status: number;
@@ -22,8 +23,11 @@ interface Captured {
  *
  * Assertions below are on STRUCTURE — `code`, `details`, status — never on
  * user-facing prose, because prose is not part of the contract (V1.1 §10).
+ *
+ * The request double carries `correlationId` the way CorrelationMiddleware sets
+ * it; omitting it models a request that never passed through the middleware.
  */
-function captureResponse(): { host: ArgumentsHost; captured: Captured } {
+function captureResponse(correlationId?: string): { host: ArgumentsHost; captured: Captured } {
   const captured = { status: 0, body: undefined as unknown as ApiResponse<never> };
 
   const response = {
@@ -38,14 +42,17 @@ function captureResponse(): { host: ArgumentsHost; captured: Captured } {
   };
 
   const host = {
-    switchToHttp: () => ({ getResponse: () => response }),
+    switchToHttp: () => ({
+      getResponse: () => response,
+      getRequest: () => ({ correlationId }),
+    }),
   } as unknown as ArgumentsHost;
 
   return { host, captured: captured as Captured };
 }
 
-function run(exception: unknown): Captured {
-  const { host, captured } = captureResponse();
+function run(exception: unknown, correlationId?: string): Captured {
+  const { host, captured } = captureResponse(correlationId);
   new HttpExceptionFilter().catch(exception, host);
   return captured;
 }
@@ -186,8 +193,48 @@ describe('HttpExceptionFilter', () => {
       expect(error.details).toBeUndefined();
     });
 
-    it('does not populate correlationId — that is A-4', () => {
+    it('omits correlationId when the request carries none', () => {
       expect(errorOf(run(new DomainError('OFFER_TAKEN'))).correlationId).toBeUndefined();
+    });
+
+    it('surfaces the request correlation id on a domain error', () => {
+      expect(errorOf(run(new DomainError('OFFER_TAKEN'), 'cid-domain')).correlationId).toBe(
+        'cid-domain',
+      );
+    });
+
+    it('surfaces the correlation id on every error tier', () => {
+      // Tier 1 DomainError, tier 2 HttpException, tier 3 unexpected — a user can
+      // quote an id no matter which path produced the failure.
+      expect(errorOf(run(new DomainError('OFFER_TAKEN'), 'cid-1')).correlationId).toBe('cid-1');
+      expect(errorOf(run(new UnauthorizedException(), 'cid-2')).correlationId).toBe('cid-2');
+      expect(errorOf(run(new Error('boom'), 'cid-3')).correlationId).toBe('cid-3');
+    });
+
+    it('falls back to the async store when the request carries no id', () => {
+      const captured = runWithCorrelationId('cid-async', () => run(new DomainError('OFFER_TAKEN')));
+
+      expect(errorOf(captured).correlationId).toBe('cid-async');
+    });
+
+    it('prefers the request id over the async store', () => {
+      const captured = runWithCorrelationId('cid-async', () =>
+        run(new DomainError('OFFER_TAKEN'), 'cid-request'),
+      );
+
+      expect(errorOf(captured).correlationId).toBe('cid-request');
+    });
+
+    it('keeps code, details and correlationId together on one error', () => {
+      const error = errorOf(
+        run(new DomainError('NOT_RELEASABLE', { details: { deliveryId: 'd-9' } }), 'cid-all'),
+      );
+
+      expect(error).toMatchObject({
+        code: 'NOT_RELEASABLE',
+        details: { deliveryId: 'd-9' },
+        correlationId: 'cid-all',
+      });
     });
 
     it('emits no Thai user-facing copy anywhere in the envelope', () => {

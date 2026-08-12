@@ -9,6 +9,7 @@ import {
 import type { Response } from 'express';
 import type { ApiError, ApiResponse, ErrorCode } from '@banhao/types';
 import { DomainError } from '../errors/domain-error';
+import { type CorrelatedRequest, getCorrelationId } from '../correlation/correlation';
 
 /**
  * Renders every error in the shared { success: false, error } envelope.
@@ -26,17 +27,22 @@ import { DomainError } from '../errors/domain-error';
  * `error.code` is the contract; `message` is a developer-facing English default
  * for logs and is never what a client renders (V1.1 §10). No user-facing copy —
  * Thai or otherwise — is produced here.
+ *
+ * Every response carries the request's `correlationId` (V1.1 §11), so the id a
+ * user quotes from a 500 is the id in the server log line.
  */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    const response = host.switchToHttp().getResponse<Response>();
+    const http = host.switchToHttp();
+    const response = http.getResponse<Response>();
+    const correlationId = this.correlationIdFor(http.getRequest<CorrelatedRequest>());
 
     // 1. A domain condition that named itself.
     if (exception instanceof DomainError) {
-      this.send(response, exception.getStatus(), {
+      this.send(response, exception.getStatus(), correlationId, {
         code: exception.code,
         details: exception.details,
         message: exception.message,
@@ -49,7 +55,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const payload = exception.getResponse();
 
-      this.send(response, status, {
+      this.send(response, status, correlationId, {
         code: this.fallbackCodeFor(status),
         details: this.detailsFrom(payload),
         message: this.messageFrom(payload, exception.message),
@@ -57,20 +63,35 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // 3. Unexpected. Log everything, tell the client nothing specific.
+    // 3. Unexpected. Log everything, tell the client nothing specific — but tie
+    //    the two together, since the client is given only the correlation id.
     this.logger.error(
-      'Unhandled exception',
+      correlationId ? `Unhandled exception [correlationId=${correlationId}]` : 'Unhandled exception',
       exception instanceof Error ? exception.stack : String(exception),
     );
 
-    this.send(response, HttpStatus.INTERNAL_SERVER_ERROR, {
+    this.send(response, HttpStatus.INTERNAL_SERVER_ERROR, correlationId, {
       code: 'INTERNAL_ERROR',
       message: 'An unexpected error occurred',
     });
   }
 
-  private send(response: Response, status: number, error: ApiError): void {
-    const body: ApiResponse<never> = { success: false, error };
+  /**
+   * The request object is the primary source: it is the one thing the filter is
+   * always handed, and it stays readable even where async context does not
+   * survive. The async store is the fallback for a non-HTTP execution context.
+   */
+  private correlationIdFor(request: CorrelatedRequest | undefined): string | undefined {
+    return request?.correlationId ?? getCorrelationId();
+  }
+
+  private send(
+    response: Response,
+    status: number,
+    correlationId: string | undefined,
+    error: ApiError,
+  ): void {
+    const body: ApiResponse<never> = { success: false, error: { ...error, correlationId } };
     response.status(status).json(body);
   }
 
