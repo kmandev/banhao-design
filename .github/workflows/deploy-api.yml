@@ -139,7 +139,13 @@ jobs:
           # reserved env var Cloud Run injects itself — it is deliberately
           # NOT set in `env_vars` below; apps/api already reads it correctly
           # via packages/config/src/env.ts (verified in A-7).
-          flags: --min-instances=0 --max-instances=5 --allow-unauthenticated --port=8080
+          #
+          # --service-account: without this, Cloud Run defaults to the
+          # project's default compute service account (roles/editor — far
+          # broader than this app needs). banhao-runtime holds only
+          # roles/secretmanager.secretAccessor, matching the `secrets:` block
+          # below and nothing else (Stage 4 pre-deployment audit finding).
+          flags: --min-instances=0 --max-instances=5 --allow-unauthenticated --port=8080 --service-account=${{ vars.GCP_RUNTIME_SA_EMAIL }}
           secrets: |
             SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest
             SUPABASE_JWT_SECRET=SUPABASE_JWT_SECRET:latest
