@@ -10,6 +10,19 @@ on:
     workflows: ['CI']
     types: [completed]
     branches: [main]
+  # Manual trigger, deliberately with NO `inputs:`. Every value this workflow
+  # deploys with — project, region, Artifact Registry repo, Cloud Run service,
+  # both service accounts, the Secret Manager references — comes from the
+  # `production` GitHub Environment, never from the person dispatching. There
+  # is therefore nothing a dispatcher can redirect, and no free-text field that
+  # reaches a shell or a gcloud flag. The only thing a dispatch decides is
+  # *whether* to deploy the current main, not *where* or *as whom*.
+  #
+  # Note this path does NOT verify that CI passed for the commit; it is for
+  # deploying an already-CI-green main when the path filter legitimately found
+  # no application change (e.g. proving the pipeline end to end). Confirm CI is
+  # green on main before dispatching.
+  workflow_dispatch:
 
 concurrency:
   group: deploy-api-main
@@ -46,16 +59,26 @@ jobs:
     # config. This job's checkout-by-head_sha (below) closes the gap
     # completely regardless: it always deploys the exact commit CI tested,
     # never whatever main's tip happens to be when this job runs.
+    #
+    # A manual `workflow_dispatch` is admitted as a separate branch of this
+    # condition, restricted to main. That `github.ref` check is defence in
+    # depth, not the only control: the WIF provider's own attribute condition
+    # already refuses to issue a token for any ref other than refs/heads/main,
+    # so a dispatch from another branch fails at authentication regardless.
     if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.event == 'push'
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
 
     steps:
       - name: Checkout the exact commit CI tested
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          # On workflow_run: the exact commit CI tested. On workflow_dispatch:
+          # github.sha, the tip of main (the only ref the job condition admits).
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0 # full history — needed for the path-filter diff below
 
       # paths-filter never interprets `^`: it pattern-matches `base` with
@@ -65,10 +88,12 @@ jobs:
       # here and handed over as a literal (dorny/paths-filter#252). The
       # checkout above uses fetch-depth 0, so the parent commit is present.
       - name: Resolve base commit for path filtering
+        if: github.event_name == 'workflow_run'
         id: base
         run: echo "sha=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
 
       - name: Detect apps/api-relevant changes
+        if: github.event_name == 'workflow_run'
         id: filter
         uses: dorny/paths-filter@v3
         with:
@@ -87,8 +112,29 @@ jobs:
               - 'pnpm-workspace.yaml'
               - 'turbo.json'
 
+      # The single gate every deployment step below reads. Two modes, one
+      # decision:
+      #   workflow_run      → deploy exactly when the path filter matched,
+      #                       i.e. unchanged from the behaviour before manual
+      #                       dispatch existed.
+      #   workflow_dispatch → deploy unconditionally. The filter steps above
+      #                       are skipped in this mode (there is no meaningful
+      #                       "parent commit" diff to consult when the trigger
+      #                       is a human, not a push), so `steps.filter` has no
+      #                       output here and is deliberately not read.
+      - name: Decide whether to deploy
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'Manual dispatch — deploying the current main regardless of changed paths.'
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo 'workflow_run — deploying only if apps/api-relevant paths changed.'
+            echo "deploy=${{ steps.filter.outputs.api }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Authenticate to Google Cloud (Workload Identity Federation)
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
@@ -97,22 +143,22 @@ jobs:
           # OIDC. No long-lived key exists anywhere.
 
       - name: Set up Cloud SDK
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
 
       - name: Compute the immutable image tag
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         id: image
         run: |
-          echo "tag=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPOSITORY }}/banhao-api:${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPOSITORY }}/banhao-api:${{ github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
         # The commit SHA is the deployment identity — never `latest`.
 
       - name: Build API image (linux/amd64)
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         # Same Dockerfile CI already build-validates (ci.yml `docker` job) and
         # A-7 verified end-to-end. Not modified here. Built from the repo
         # root, exactly as the Dockerfile's own header comment specifies.
@@ -127,11 +173,11 @@ jobs:
             .
 
       - name: Push image to Artifact Registry
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         run: docker push "${{ steps.image.outputs.tag }}"
 
       - name: Deploy to Cloud Run
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
@@ -167,7 +213,7 @@ jobs:
             CORS_ORIGINS=${{ vars.CORS_ORIGINS }}
 
       - name: Smoke test — GET /health
-        if: steps.filter.outputs.api == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         run: |
           url="${{ steps.deploy.outputs.url }}/health"
           body="$(curl --fail --silent --show-error "$url")"
