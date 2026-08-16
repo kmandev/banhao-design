@@ -123,8 +123,16 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # workingDirectory makes wrangler-action resolve the local
+          # `wrangler` devDependency declared in apps/admin/package.json
+          # (mirroring apps/tick-worker's already-working pattern in
+          # deploy-worker.yml) instead of self-installing at the workspace
+          # root, which pnpm refuses (ERR_PNPM_ADDING_TO_ROOT — this repo is
+          # a pnpm workspace). `command:` paths are resolved relative to this
+          # directory, so `apps/admin/out` becomes just `out`.
+          workingDirectory: apps/admin
           command: >-
-            pages deploy apps/admin/out
+            pages deploy out
             --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }}
             --branch=main
         # main → production is Pages' own convention for the `--branch=main`
