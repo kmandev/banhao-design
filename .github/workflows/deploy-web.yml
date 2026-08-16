@@ -13,6 +13,11 @@ on:
     workflows: ['CI']
     types: [completed]
     branches: [main]
+  # Manual trigger, deliberately with NO `inputs:`. Every value this workflow
+  # deploys with — Cloudflare account, Pages project, the token itself —
+  # comes from the `production` GitHub Environment, never from the person
+  # dispatching. See deploy-api.yml for the full reasoning; identical here.
+  workflow_dispatch:
 
 concurrency:
   group: deploy-web-main
@@ -27,25 +32,34 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
 
+    # A manual `workflow_dispatch` is admitted as a separate branch of this
+    # condition, restricted to main. See deploy-api.yml for the identical
+    # pattern and reasoning.
     if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.event == 'push'
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
 
     steps:
       - name: Checkout the exact commit CI tested
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          # On workflow_run: the exact commit CI tested. On workflow_dispatch:
+          # github.sha, the tip of main (the only ref the job condition admits).
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0
 
       # See deploy-api.yml for why the parent must be resolved to a plain SHA
       # before paths-filter sees it (dorny/paths-filter#252).
       - name: Resolve base commit for path filtering
+        if: github.event_name == 'workflow_run'
         id: base
         run: echo "sha=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
 
       - name: Detect apps/admin-relevant changes
+        if: github.event_name == 'workflow_run'
         id: filter
         uses: dorny/paths-filter@v3
         with:
@@ -59,25 +73,38 @@ jobs:
               - 'pnpm-workspace.yaml'
               - 'turbo.json'
 
+      # The single gate every deployment step below reads. Two modes, one
+      # decision — see deploy-api.yml for the full reasoning, identical here.
+      - name: Decide whether to deploy
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'Manual dispatch — deploying the current main regardless of changed paths.'
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo 'workflow_run — deploying only if apps/admin-relevant paths changed.'
+            echo "deploy=${{ steps.filter.outputs.web }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Enable pnpm
-        if: steps.filter.outputs.web == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 9.15.0 # matches package.json "packageManager", ci.yml
 
       - name: Set up Node
-        if: steps.filter.outputs.web == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
-        if: steps.filter.outputs.web == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build apps/admin (and its workspace dependencies)
-        if: steps.filter.outputs.web == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         # Turborepo-aware build: the trailing `...` pulls in @banhao/ui,
         # @banhao/types, etc. per turbo.json's build.dependsOn — the same
         # dependency graph `pnpm build` already walks at the repo root, just
@@ -87,11 +114,11 @@ jobs:
         run: pnpm exec turbo run build --filter=@banhao/admin...
 
       - name: Verify static export exists
-        if: steps.filter.outputs.web == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         run: test -f apps/admin/out/index.html
 
       - name: Deploy to Cloudflare Pages
-        if: steps.filter.outputs.web == 'true'
+        if: steps.gate.outputs.deploy == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
