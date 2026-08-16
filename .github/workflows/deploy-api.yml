@@ -67,7 +67,15 @@ jobs:
           # to date. A worst-case false positive here means one redundant,
           # harmless redeploy of an unchanged image; it is not a correctness
           # or security risk, so no more elaborate mechanism is used.
-          base: ${{ github.event.workflow_run.head_sha }}^
+          #
+          # base: HEAD^, not `${{ ...head_sha }}^` — paths-filter resolves a
+          # SHA-shaped `base` via `git show-ref`, which cannot parse a `^`
+          # suffix (that's rev-parse syntax, not a ref name), so the literal
+          # SHA form fails with "invalid refspec". The checkout step above
+          # already checks out this exact commit with fetch-depth 0, so HEAD
+          # here *is* that commit — HEAD^ resolves locally and means the same
+          # thing (dorny/paths-filter#252).
+          base: HEAD^
           filters: |
             api:
               - 'apps/api/**'

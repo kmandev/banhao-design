@@ -42,7 +42,11 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v3
         with:
-          base: ${{ github.event.workflow_run.head_sha }}^
+          # base: HEAD^, not `${{ ...head_sha }}^` — see deploy-api.yml for
+          # why the literal-SHA form fails (dorny/paths-filter#252). The
+          # checkout step above already checks out this exact commit with
+          # fetch-depth 0, so HEAD^ resolves locally and means the same thing.
+          base: HEAD^
           filters: |
             worker:
               # The Worker has no dependency on any other workspace package
