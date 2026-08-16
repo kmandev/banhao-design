@@ -58,6 +58,16 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0 # full history — needed for the path-filter diff below
 
+      # paths-filter never interprets `^`: it pattern-matches `base` with
+      # `git show-ref`, then falls back to passing it verbatim to
+      # `git fetch` as a refspec — and `^` is invalid in both. `git rev-parse`
+      # *does* understand it, so the parent is resolved to a plain 40-char SHA
+      # here and handed over as a literal (dorny/paths-filter#252). The
+      # checkout above uses fetch-depth 0, so the parent commit is present.
+      - name: Resolve base commit for path filtering
+        id: base
+        run: echo "sha=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+
       - name: Detect apps/api-relevant changes
         id: filter
         uses: dorny/paths-filter@v3
@@ -67,15 +77,7 @@ jobs:
           # to date. A worst-case false positive here means one redundant,
           # harmless redeploy of an unchanged image; it is not a correctness
           # or security risk, so no more elaborate mechanism is used.
-          #
-          # base: HEAD^, not `${{ ...head_sha }}^` — paths-filter resolves a
-          # SHA-shaped `base` via `git show-ref`, which cannot parse a `^`
-          # suffix (that's rev-parse syntax, not a ref name), so the literal
-          # SHA form fails with "invalid refspec". The checkout step above
-          # already checks out this exact commit with fetch-depth 0, so HEAD
-          # here *is* that commit — HEAD^ resolves locally and means the same
-          # thing (dorny/paths-filter#252).
-          base: HEAD^
+          base: ${{ steps.base.outputs.sha }}
           filters: |
             api:
               - 'apps/api/**'
