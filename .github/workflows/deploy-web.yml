@@ -1,0 +1,99 @@
+name: Deploy Web (Cloudflare Pages)
+
+# apps/admin only. apps/customer and apps/driver are Expo/native — a separate
+# EAS/App Store/Google Play track, never Pages. apps/merchant is still an
+# Expo shell (DEC-APP-003 conversion has not happened) and has no Pages
+# target yet — this workflow does not build or deploy it.
+#
+# See .github/workflows/deploy-api.yml for the full reasoning behind gating
+# on workflow_run + head_sha rather than a raw push trigger; identical logic
+# applies here.
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-web-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and deploy apps/admin to Cloudflare Pages
+    runs-on: ubuntu-latest
+    environment: production
+
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+
+    steps:
+      - name: Checkout the exact commit CI tested
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Detect apps/admin-relevant changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ github.event.workflow_run.head_sha }}^
+          filters: |
+            web:
+              - 'apps/admin/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+
+      - name: Enable pnpm
+        if: steps.filter.outputs.web == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0 # matches package.json "packageManager", ci.yml
+
+      - name: Set up Node
+        if: steps.filter.outputs.web == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.web == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build apps/admin (and its workspace dependencies)
+        if: steps.filter.outputs.web == 'true'
+        # Turborepo-aware build: the trailing `...` pulls in @banhao/ui,
+        # @banhao/types, etc. per turbo.json's build.dependsOn — the same
+        # dependency graph `pnpm build` already walks at the repo root, just
+        # scoped to what apps/admin needs. `next.config.mjs` sets
+        # `output: 'export'` (locked in docs/DEPLOYMENT-ARCHITECTURE-V1.md
+        # §6), which is what makes apps/admin/out exist below.
+        run: pnpm exec turbo run build --filter=@banhao/admin...
+
+      - name: Verify static export exists
+        if: steps.filter.outputs.web == 'true'
+        run: test -f apps/admin/out/index.html
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.filter.outputs.web == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy apps/admin/out
+            --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+            --branch=main
+        # main → production is Pages' own convention for the `--branch=main`
+        # deployment; this workflow never runs for a pull_request (see the
+        # workflow_run gate above), so no PR can reach a production deploy.

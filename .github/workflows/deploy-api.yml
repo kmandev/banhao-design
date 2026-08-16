@@ -1,0 +1,162 @@
+name: Deploy API
+
+# Gated on CI (.github/workflows/ci.yml, workflow name "CI") having completed
+# successfully — not on a raw push to main. See the safety notes on the `if`
+# condition and the checkout step below; both exist to satisfy the same
+# requirement: never deploy a commit that did not pass CI, and never deploy a
+# commit other than the one CI actually tested.
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-api-main
+  # A half-finished deploy should be allowed to finish, then the next one
+  # runs — not be cancelled mid-flight (docs/DEPLOYMENT-ARCHITECTURE-V1.md).
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Required for google-github-actions/auth's Workload Identity Federation —
+  # no service-account key exists anywhere in this repository or its secrets.
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build, push, and deploy apps/api to Cloud Run
+    runs-on: ubuntu-latest
+    environment: production
+
+    # Three independent conditions, all required:
+    #   1. conclusion == 'success' — CI actually passed for this commit.
+    #   2. head_branch == 'main'   — the CI run this fired for was itself a
+    #      run against main, not a pull_request run (a PR's CI run reports
+    #      head_branch as the PR's source branch, never "main"), so this
+    #      alone keeps every PR from ever reaching this job.
+    #   3. event == 'push'         — belt-and-suspenders: only a direct push
+    #      to main (never any other event shape) can satisfy this workflow.
+    #
+    # Note also that ci.yml's own `concurrency: cancel-in-progress: true` on
+    # `${{ github.workflow }}-${{ github.ref }}` means an in-flight CI run for
+    # an old commit on main is cancelled (conclusion: cancelled, not success)
+    # the moment a newer commit is pushed — so the "stale successful run"
+    # hazard is unlikely to occur in the first place under this repo's CI
+    # config. This job's checkout-by-head_sha (below) closes the gap
+    # completely regardless: it always deploys the exact commit CI tested,
+    # never whatever main's tip happens to be when this job runs.
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+
+    steps:
+      - name: Checkout the exact commit CI tested
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0 # full history — needed for the path-filter diff below
+
+      - name: Detect apps/api-relevant changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          # Diffs against this commit's parent. Assumes a linear main history
+          # (single-commit or squash pushes) — true of this repo's workflow
+          # to date. A worst-case false positive here means one redundant,
+          # harmless redeploy of an unchanged image; it is not a correctness
+          # or security risk, so no more elaborate mechanism is used.
+          base: ${{ github.event.workflow_run.head_sha }}^
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        if: steps.filter.outputs.api == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA_EMAIL }}
+          # No credentials_json input — WIF issues a short-lived token via
+          # OIDC. No long-lived key exists anywhere.
+
+      - name: Set up Cloud SDK
+        if: steps.filter.outputs.api == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        if: steps.filter.outputs.api == 'true'
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Compute the immutable image tag
+        if: steps.filter.outputs.api == 'true'
+        id: image
+        run: |
+          echo "tag=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPOSITORY }}/banhao-api:${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+        # The commit SHA is the deployment identity — never `latest`.
+
+      - name: Build API image (linux/amd64)
+        if: steps.filter.outputs.api == 'true'
+        # Same Dockerfile CI already build-validates (ci.yml `docker` job) and
+        # A-7 verified end-to-end. Not modified here. Built from the repo
+        # root, exactly as the Dockerfile's own header comment specifies.
+        # No --build-arg / -e of any kind: the image accepts no secrets at
+        # build time, and none are given here either. Runtime secrets are
+        # injected by Cloud Run from Secret Manager in the deploy step below.
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            -f apps/api/Dockerfile \
+            -t "${{ steps.image.outputs.tag }}" \
+            .
+
+      - name: Push image to Artifact Registry
+        if: steps.filter.outputs.api == 'true'
+        run: docker push "${{ steps.image.outputs.tag }}"
+
+      - name: Deploy to Cloud Run
+        if: steps.filter.outputs.api == 'true'
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ vars.CLOUD_RUN_SERVICE }}
+          region: ${{ vars.GCP_REGION }}
+          image: ${{ steps.image.outputs.tag }}
+          # DEC-APP-009: min=0/max=5, request-based billing. --allow-unauthenticated
+          # is required (docs/DEPLOYMENT-ARCHITECTURE-V1.md §2) — /webhooks/*
+          # and /internal/tick must be reachable by parties with no Google
+          # identity. Every route stays behind its own application-level
+          # guard (SupabaseAuthGuard / TickHmacGuard / provider signature)
+          # regardless of network-level accessibility.
+          #
+          # --port=8080 matches Cloud Run's default container port. PORT is a
+          # reserved env var Cloud Run injects itself — it is deliberately
+          # NOT set in `env_vars` below; apps/api already reads it correctly
+          # via packages/config/src/env.ts (verified in A-7).
+          flags: --min-instances=0 --max-instances=5 --allow-unauthenticated --port=8080
+          secrets: |
+            SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest
+            SUPABASE_JWT_SECRET=SUPABASE_JWT_SECRET:latest
+            INTERNAL_TICK_SECRET=INTERNAL_TICK_SECRET:latest
+          env_vars: |
+            NODE_ENV=production
+            SUPABASE_URL=${{ vars.SUPABASE_URL }}
+            SUPABASE_ANON_KEY=${{ vars.SUPABASE_ANON_KEY }}
+            CORS_ORIGINS=${{ vars.CORS_ORIGINS }}
+
+      - name: Smoke test — GET /health
+        if: steps.filter.outputs.api == 'true'
+        run: |
+          url="${{ steps.deploy.outputs.url }}/health"
+          body="$(curl --fail --silent --show-error "$url")"
+          echo "$body" | grep -q '"success":true' || { echo "::error::/health did not report success:true — $body"; exit 1; }
+          echo "$body" | grep -q '"status":"ok"' || { echo "::error::/health did not report status:ok — $body"; exit 1; }
+          echo "Smoke test passed: $url"
+        # Payment processing is deliberately not exercised here — Q-001 is
+        # OPEN and no payment credential exists to test against.

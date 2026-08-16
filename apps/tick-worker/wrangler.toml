@@ -1,0 +1,29 @@
+# BANHAO tick worker (DEC-APP-010) — Cloudflare Worker cron.
+#
+# Calls POST /internal/tick every minute, HMAC-signed for TickHmacGuard
+# (apps/api/src/common/guards/tick-hmac.guard.ts). See
+# docs/DEPLOYMENT-ARCHITECTURE-V1.md for the full operational sequence.
+#
+# No account_id here — deliberately. Deploys resolve the account from the
+# CLOUDFLARE_API_TOKEN's scope (or --account-id on the CLI), so this file
+# stays identical across every developer's machine and CI.
+
+name = "banhao-tick-worker"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# Non-secret: the Cloud Run URL the tick is sent to. Empty until the API's
+# first production deploy exists — see docs/DEPLOYMENT-ARCHITECTURE-V1.md
+# "Operational sequence". Update this and redeploy the Worker once known;
+# nothing here discovers it automatically.
+API_URL = ""
+
+# INTERNAL_TICK_SECRET is NOT declared here. It is a Wrangler *secret*, set
+# with:
+#   wrangler secret put INTERNAL_TICK_SECRET
+# and must match the value in Google Secret Manager that Cloud Run injects
+# into apps/api. Never put its value in this file or in Git.

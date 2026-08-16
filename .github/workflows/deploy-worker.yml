@@ -1,0 +1,77 @@
+name: Deploy Tick Worker
+
+# apps/tick-worker only (DEC-APP-010). See deploy-api.yml for the full
+# reasoning behind the workflow_run + head_sha gate; identical logic here.
+#
+# Operational note (docs/DEPLOYMENT-ARCHITECTURE-V1.md): this workflow does
+# NOT set INTERNAL_TICK_SECRET. That secret is provisioned once, out of band,
+# with `wrangler secret put INTERNAL_TICK_SECRET` — this workflow only
+# redeploys the Worker's code, never touches the secret.
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-worker-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy apps/tick-worker to Cloudflare Workers
+    runs-on: ubuntu-latest
+    environment: production
+
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+
+    steps:
+      - name: Checkout the exact commit CI tested
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Detect apps/tick-worker changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ github.event.workflow_run.head_sha }}^
+          filters: |
+            worker:
+              # The Worker has no dependency on any other workspace package
+              # (see apps/tick-worker/package.json) — its path filter is
+              # deliberately narrow, unlike deploy-api.yml/deploy-web.yml.
+              - 'apps/tick-worker/**'
+
+      - name: Enable pnpm
+        if: steps.filter.outputs.worker == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Set up Node
+        if: steps.filter.outputs.worker == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.worker == 'true'
+        run: pnpm install --frozen-lockfile --filter @banhao/tick-worker
+
+      - name: Deploy Worker
+        if: steps.filter.outputs.worker == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/tick-worker
+          command: deploy

@@ -46,3 +46,8 @@ service-account*.json
 
 # Supabase CLI local state (linked project ref, versions)
 supabase/.temp/
+
+# Cloudflare Wrangler (apps/tick-worker) — local dev secrets and build cache
+.wrangler/
+.dev.vars
+.dev.vars.*
