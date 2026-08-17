@@ -569,7 +569,7 @@
             <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
               <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em">วิธีชำระเงิน</div>
               <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
-                <sc-for list="{{ payOpts }}" as="p" hint-placeholder-count="2">
+                <sc-for list="{{ payOpts }}" as="p" hint-placeholder-count="1">
                   <div onClick="{{ p.pick }}" style="{{ p.style }}">
                     <span style="font-size:20px">{{ p.icon }}</span>
                     <div style="flex:1">
@@ -580,17 +580,7 @@
                   </div>
                 </sc-for>
               </div>
-              <sc-if value="{{ isCash }}" hint-placeholder-val="{{ false }}">
-                <div style="margin-top:14px;padding-top:14px;border-top:1px solid #F0E8DD">
-                  <div style="font-size:13px;font-weight:600">เตรียมเงินมาเท่าไหร่ เผื่อไรเดอร์เตรียมเงินทอน</div>
-                  <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-                    <sc-for list="{{ cashOpts }}" as="c" hint-placeholder-count="4">
-                      <div onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</div>
-                    </sc-for>
-                  </div>
-                  <div style="font-size:13px;color:#0F8B5F;margin-top:10px">{{ changeNote }}</div>
-                </div>
-              </sc-if>
+              <!-- DEC-016: Phase 1 is online-payment-only. Cash/COD is intentionally not offered here. -->
             </div>
             <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px;display:flex;align-items:center;gap:10px">
               <span style="font-size:19px">🎟️</span>
@@ -651,7 +641,7 @@
               <div style="font-size:32px;font-weight:700;margin-top:2px">฿{{ total }}</div>
               <div style="font-size:12px;color:#9A8C7E;margin-top:4px">ออเดอร์ #BH000125</div>
               <div style="width:172px;height:172px;margin:16px auto 0;border-radius:16px;background:repeating-conic-gradient(#1F1A16 0% 25%,#fff 0% 50%) 0 0/14px 14px;border:8px solid #fff;box-shadow:0 0 0 1px #E9E0D5"></div>
-              <div style="font-size:13px;color:#7A6E64;margin-top:14px">บ้านเฮา เดลิเวอรี่ (ตัวอย่าง)</div>
+              <div style="font-size:13px;color:#7A6E64;margin-top:14px">ตัวอย่าง — ยังไม่กำหนดผู้ให้บริการ</div>
               <div style="font-size:14px;font-weight:600;margin-top:4px">กรุณาชำระภายใน 9:58 นาที</div>
             </div>
             <div style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:13px 15px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4">
@@ -814,6 +804,19 @@
           </div>
         </sc-if>
 
+        <!--
+          STAGE 8E IMPLEMENTATION NOTE
+          The tracking timeline below is a visual representation only.
+          The backend DEC-019 order state is the single source of truth.
+          The Customer App must represent all canonical order states:
+          PENDING_PAYMENT, PAID, MERCHANT_ACCEPTED, PREPARING, READY_FOR_PICKUP,
+          PICKED_UP, DELIVERING, DELIVERED, CANCELLED.
+          The UI must derive the visual timeline/progress from the real backend
+          order state. Do not infer order state from a timer, ETA, percentage,
+          or hard-coded sequence. Do not implement a second order state machine
+          inside the Customer App. CANCELLED must remain explicitly representable
+          as a terminal state.
+        -->
         <sc-if value="{{ isTrack }}" hint-placeholder-val="{{ false }}">
           <div style="height:100%;display:flex;flex-direction:column">
             <div style="flex:1;position:relative;min-height:300px">
@@ -964,7 +967,7 @@
             <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px">
               <sc-for list="{{ history }}" as="h" hint-placeholder-count="3">
                 <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:14px 16px">
-                  <div style="display:flex;align-items:center;gap:11px">
+                  <div onClick="{{ h.go }}" style="display:flex;align-items:center;gap:11px;cursor:pointer">
                     <div style="width:42px;height:42px;border-radius:14px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:20px">{{ h.emoji }}</div>
                     <div style="flex:1">
                       <div style="font-size:15px;font-weight:700">{{ h.name }}</div>
@@ -980,6 +983,46 @@
                 </div>
               </sc-for>
             </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isOrderDetail }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:8px 0 24px">
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 16px">
+              <div onClick="{{ goOrders }}" style="font-size:22px;cursor:pointer">←</div>
+              <div style="font-size:20px;font-weight:700">รายละเอียดออเดอร์</div>
+            </div>
+            <div style="margin:0 16px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:18px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="padding:5px 10px;border-radius:9px;background:#E7F4EE;color:#0F8B5F;font-size:12px;font-weight:600">จัดส่งสำเร็จ</div>
+                <div style="font-size:12px;color:#9A8C7E">#BH-24802</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+                <div style="width:42px;height:42px;border-radius:14px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font-size:20px">🍜</div>
+                <div>
+                  <div style="font-size:16px;font-weight:700">ก๋วยเตี๋ยวลุงหนวด (ตัวอย่าง)</div>
+                  <div style="font-size:12px;color:#7A6E64;margin-top:2px">5 ส.ค. 2569 · 12:14 น.</div>
+                </div>
+              </div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em;margin-bottom:8px">รายการอาหาร</div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span>ก๋วยเตี๋ยวเรือน้ำตก ×2</span><span style="font-weight:600">฿60</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0"><span>เกี๊ยวทอด ×1</span><span style="font-weight:600">฿20</span></div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ค่าอาหาร</span><span style="font-weight:600">฿80</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ค่าส่ง</span><span style="font-weight:600">฿10</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0"><span style="color:#7A6E64">ค่าบริการ</span><span style="font-weight:600">฿5</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding-top:12px;margin-top:8px;border-top:1px solid #F0E8DD"><span>ยอดรวม</span><span>฿95</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;padding-top:12px;margin-top:4px;color:#7A6E64"><span>ชำระโดย</span><span style="font-weight:600;color:#1F1A16">พร้อมเพย์ QR</span></div>
+            </div>
+            <div style="margin:12px 16px 0;border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px">
+              <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.04em;margin-bottom:8px">ที่อยู่จัดส่ง</div>
+              <div style="font-size:14px;line-height:1.6">88 หมู่ 4 บ้านบุณฑริก ต.บุณฑริก อ.บุณฑริก (ที่อยู่ตัวอย่าง)</div>
+              <div style="font-size:12.5px;color:#7A6E64;margin-top:4px">จุดสังเกต: ใกล้ตลาดสดบุณฑริก</div>
+            </div>
+            <div onClick="{{ goRating }}" style="margin:16px 16px 0;height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer">ให้คะแนนร้านนี้</div>
           </div>
         </sc-if>
 
@@ -1084,7 +1127,7 @@ class Component extends DCLogic {
   state = {
     screen: 'home',
     meat: 'หมู', spicy: 'เผ็ดน้อย', egg: 'ไข่ดาว', qty: 1,
-    pay: 'promptpay', addr: 'home', cash: 0,
+    pay: 'promptpay', addr: 'home',
     cart: [
       { name:'ส้มตำไทยไข่เค็ม', base:60, opts:'เผ็ดน้อย · ไม่ใส่ถั่ว', note:'', qty:1 },
       { name:'ผัดกะเพราหมูสับ', base:50, opts:'หมู · เผ็ดน้อย · ไข่ดาว +10', note:'หมายเหตุ: ไม่ใส่ผัก', qty:1 }
@@ -1124,7 +1167,7 @@ class Component extends DCLogic {
       { title:'เข้าใช้งาน', items:[['splash','01 Splash'],['onboard','02 Onboarding'],['login','03 เข้าสู่ระบบ'],['otp','04 ยืนยัน OTP']] },
       { title:'ค้นหา & สั่ง', items:[['home','05 หน้าแรก'],['search','06 ค้นหา'],['shop','07 หน้าร้าน'],['item','08 เลือกตัวเลือกอาหาร'],['cart','09 ตะกร้า'],['checkout','10 ยืนยันการสั่ง'],['address','11 ที่อยู่จัดส่ง'],['qr','12 พร้อมเพย์ QR'],['confirm','13 สั่งสำเร็จ']] },
       { title:'การชำระเงิน', items:[['paycheck','12b กำลังตรวจสอบ'],['paysuccess','12c ชำระสำเร็จ'],['payfail','12d ยืนยันไม่ได้'],['payexpired','12e QR หมดอายุ'],['paydup','12f จ่ายซ้ำ / จ่ายแล้ว'],['paydetail','12g รายละเอียดการจ่าย'],['refund','12h การคืนเงิน']] },
-      { title:'หลังสั่ง', items:[['track','14 ติดตามออเดอร์'],['rating','15 ให้คะแนน'],['orders','16 ออเดอร์ของฉัน'],['notif','17 แจ้งเตือน'],['profile','18 บัญชีของฉัน']] },
+      { title:'หลังสั่ง', items:[['track','14 ติดตามออเดอร์'],['rating','15 ให้คะแนน'],['orders','16 ออเดอร์ของฉัน'],['orderDetail','19 รายละเอียดออเดอร์'],['notif','17 แจ้งเตือน'],['profile','18 บัญชีของฉัน']] },
       { title:'States', items:[['homeLoading','⏳ กำลังโหลด'],['homeError','📡 เน็ตมีปัญหา'],['closed','🌙 ร้านปิด'],['emptyResults','🔍 ค้นหาไม่เจอ'],['itemSoldOut','🚫 เมนูหมด'],['cartEmptyS','🧺 ตะกร้าว่าง'],['cartConflict','⚠️ ตะกร้ามีเมนูที่หมด'],['priceChanged','💱 ราคาเปลี่ยนตอนเช็คเอาต์'],['addressZone','📍 นอกพื้นที่บริการ'],['nodriver','🛵 ไม่มีไรเดอร์'],['cancelConfirm','❓ ยืนยันยกเลิกออเดอร์'],['trackOffline','📡 เน็ตหลุดระหว่างติดตาม'],['cancelled','🚫 ออเดอร์ถูกยกเลิก']] }
     ];
     const navGroups = nav.map(g => ({
@@ -1168,9 +1211,8 @@ class Component extends DCLogic {
       isQr: s==='qr', isPayFail: s==='payfail', isConfirm: s==='confirm', isTrack: s==='track', isTrackOffline: s==='trackOffline',
       isPayCheck: s==='paycheck', isPaySuccess: s==='paysuccess', isPayExpired: s==='payexpired',
       isPayDup: s==='paydup', isPayDetail: s==='paydetail', isRefund: s==='refund',
-      isCash: this.state.pay === 'cash',
       isNoDriver: s==='nodriver', isCancelConfirm: s==='cancelConfirm', isCancelled: s==='cancelled', isRating: s==='rating',
-      isOrders: s==='orders', isNotif: s==='notif', isProfile: s==='profile',
+      isOrders: s==='orders', isOrderDetail: s==='orderDetail', isNotif: s==='notif', isProfile: s==='profile',
 
       cartEmpty: s === 'cartEmptyS' || this.state.cart.length === 0,
       cartHasItems: s !== 'cartEmptyS' && this.state.cart.length > 0,
@@ -1183,25 +1225,13 @@ class Component extends DCLogic {
       showShopBar: s === 'shop' && this.state.cart.length > 0,
       showCartBar: s === 'cart' && this.state.cart.length > 0,
       showPayBar: s === 'checkout',
-      payCta: this.state.pay === 'promptpay' ? 'ไปสแกนจ่าย ฿' + this.total() : 'ยืนยันสั่ง ฿' + this.total() + ' (เงินสด)',
+      payCta: 'ไปสแกนจ่าย ฿' + this.total(),
 
       goHome: go('home'), goLogin: go('login'), goOtp: go('otp'), goSearch: go('search'),
       goShop: go('shop'), goCart: go('cart'), goCheckout: go('checkout'), goAddress: go('address'),
       goQr: go('qr'), goConfirm: go('confirm'), goTrack: go('track'), goRating: go('rating'),
-      goOrders: go('orders'), goNotif: go('notif'), goCancelConfirm: go('cancelConfirm'), goCancelled: go('cancelled'),
+      goOrders: go('orders'), goOrderDetail: go('orderDetail'), goNotif: go('notif'), goCancelConfirm: go('cancelConfirm'), goCancelled: go('cancelled'),
       goPayCheck: go('paycheck'), goPaySuccess: go('paysuccess'), goPayDetail: go('paydetail'),
-
-      cashOpts: [0, 100, 200, 500].map(v => ({
-        label: v === 0 ? 'จ่ายพอดี' : '฿' + v,
-        pick: () => this.setState({ cash: v }),
-        style: 'padding:11px 16px;border-radius:13px;font-size:14px;font-weight:600;cursor:pointer;border:1.5px solid ' +
-          (this.state.cash === v ? '#E4572E;background:#FDECE6;color:#C2431F' : '#E9E0D5;background:#fff;color:#1F1A16')
-      })),
-      changeNote: this.state.cash === 0
-        ? 'ไรเดอร์จะไม่เตรียมเงินทอนให้'
-        : this.state.cash < this.total()
-          ? 'เงินที่เตรียมน้อยกว่ายอดที่ต้องจ่าย'
-          : 'ไรเดอร์จะเตรียมเงินทอน ฿' + (this.state.cash - this.total()) + ' มาให้',
 
       refundSteps: [
         { name:'ได้รับคำขอคืนเงิน', time:'9 ส.ค. 18:52 น.', done:1 },
@@ -1240,8 +1270,7 @@ class Component extends DCLogic {
       eggOpts: this.opt('egg', [{l:'ไม่เพิ่ม'},{l:'ไข่ดาว',p:10},{l:'ไข่เจียว',p:15}], 'egg'),
 
       payOpts: [
-        { id:'cash', label:'เงินสด', icon:'💵', hint:'จ่ายให้ไรเดอร์ตอนได้รับอาหาร' },
-        { id:'promptpay', label:'พร้อมเพย์ QR', icon:'📱', hint:'สแกนจ่ายทันทีจากแอปธนาคาร' }
+        { id:'promptpay', label:'พร้อมเพย์ QR', icon:'📱', hint:'สแกนจ่ายทันทีจากแอปธนาคาร · ผู้ให้บริการยังไม่กำหนด (ตัวอย่างเพื่อการออกแบบ)' }
       ].map(p => ({
         label: p.label, icon: p.icon, hint: p.hint,
         pick: () => this.setState({ pay: p.id }),
@@ -1290,11 +1319,11 @@ class Component extends DCLogic {
 
       history: [
         { name:'ก๋วยเตี๋ยวลุงหนวด (ตัวอย่าง)', emoji:'🍜', date:'เมื่อวาน 12:14 น.', status:'ส่งสำเร็จ', total:95,
-          items:'ก๋วยเตี๋ยวเรือน้ำตก ×2, เกี๊ยวทอด ×1', badge: badge('#E7F4EE','#0F8B5F'), reorder: go('shop') },
+          items:'ก๋วยเตี๋ยวเรือน้ำตก ×2, เกี๊ยวทอด ×1', badge: badge('#E7F4EE','#0F8B5F'), go: go('orderDetail'), reorder: go('shop') },
         { name:'ไก่ย่างเจ๊หมวย (ตัวอย่าง)', emoji:'🍗', date:'6 ส.ค. 19:02 น.', status:'ส่งสำเร็จ', total:170,
-          items:'ไก่ทอดน่องบน ×3, ข้าวเหนียว ×2', badge: badge('#E7F4EE','#0F8B5F'), reorder: go('shop') },
+          items:'ไก่ทอดน่องบน ×3, ข้าวเหนียว ×2', badge: badge('#E7F4EE','#0F8B5F'), go: go('orderDetail'), reorder: go('shop') },
         { name:'ส้มตำป้าทองดี (ตัวอย่าง)', emoji:'🥗', date:'2 ส.ค. 18:20 น.', status:'ยกเลิก', total:130,
-          items:'ตำซั่ว ×1, ไก่ย่าง ×1 · ไม่มีไรเดอร์', badge: badge('#F3EDE4','#7A6E64'), reorder: go('shop') }
+          items:'ตำซั่ว ×1, ไก่ย่าง ×1 · ไม่มีไรเดอร์', badge: badge('#F3EDE4','#7A6E64'), go: go('orderDetail'), reorder: go('shop') }
       ],
 
       notifs: [

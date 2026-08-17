@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#F2EBE1;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}a:hover{color:#C2431F}
+</style>
+</helmet>
+
+<div style="max-width:1180px;margin:0 auto;padding:56px 60px 120px;background:#FBF7F1">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:40px">
+    <div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:46px;height:46px;border-radius:14px;background:#1F1A16;color:#FBF7F1;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;letter-spacing:.06em">V1</div>
+        <div>
+          <div style="font-size:21px;font-weight:700;letter-spacing:.14em">BANHAO</div>
+          <div style="font-size:13px;color:#7A6E64;margin-top:-1px">Application Architecture V1.1 · read-only review document</div>
+        </div>
+      </div>
+      <div style="font-size:29px;font-weight:700;line-height:1.35;margin-top:28px;max-width:660px;text-wrap:pretty">How the application should be built on the locked Database V1</div>
+      <div style="font-size:16px;line-height:1.7;color:#4A4038;margin-top:14px;max-width:680px;text-wrap:pretty">12 Architecture Decisions, 9 implementation phases, and a $0/month infrastructure target. This review wrote no code, produced no migration, and committed nothing. V1.1 is a clarification pass only — no redesign, no new services, database unchanged.</div>
+    </div>
+    <div style="flex:0 0 268px;border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:14px">CHECKPOINT</div>
+      <div style="display:flex;flex-direction:column;gap:11px">
+        <sc-for list="{{ checkpoint }}" as="c" hint-placeholder-count="6">
+          <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px">
+            <span style="color:#9A8C7E">{{ c.k }}</span>
+            <span style="font-weight:600;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px">{{ c.v }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — READ THIS FIRST</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Two documents in the repository are stale</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:22px;text-wrap:pretty">Neither correction changes a single decision in this document. They change who is allowed to believe what.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <sc-for list="{{ corrections }}" as="c" hint-placeholder-count="2">
+      <div style="border:1px solid #F0DFC4;background:#FDF3E6;border-radius:18px;padding:20px 22px">
+        <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#B4622A;margin-bottom:8px">{{ c.file }}</div>
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:8px">{{ c.claim }}</div>
+        <div style="font-size:14px;line-height:1.75;color:#5A4E42">{{ c.truth }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — WHAT ACTUALLY EXISTS</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">The repository architecture today</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:22px;text-wrap:pretty">pnpm 9.15 with Turborepo, TypeScript 5.7 with the full strict set, React pinned at 18.3.1 across the monorepo. The foundation is correctly shaped and nothing in it should be replaced.</div>
+  <div style="border:1px solid #EAE1D6;border-radius:20px;background:#fff;overflow:hidden">
+    <div style="display:flex;padding:13px 22px;background:#FAF5EE;border-bottom:1px solid #EAE1D6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+      <div style="flex:0 0 190px">WORKSPACE UNIT</div>
+      <div style="flex:0 0 200px">FRAMEWORK</div>
+      <div style="flex:1;min-width:0">STATE AT e471ec1d</div>
+      <div style="flex:0 0 96px;text-align:right">VERDICT</div>
+    </div>
+    <sc-for list="{{ repoUnits }}" as="u" hint-placeholder-count="11">
+      <div style="display:flex;align-items:flex-start;padding:15px 22px;border-bottom:1px solid #F5EEE4;font-size:14px;line-height:1.65">
+        <div style="flex:0 0 190px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#1F1A16">{{ u.name }}</div>
+        <div style="flex:0 0 200px;color:#7A6E64;font-size:13px">{{ u.fw }}</div>
+        <div style="flex:1;min-width:0;overflow-wrap:anywhere;color:#4A4038;padding-right:16px">{{ u.state }}</div>
+        <div style="flex:0 0 96px;text-align:right"><span style="{{ u.badge }}">{{ u.status }}</span></div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:16px 20px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:14px;line-height:1.75;color:#5A4E42">
+    Not present anywhere — hosting configuration, deployment workflow, worker entrypoint, domain endpoints, payment provider, notification transport, storage usage, realtime usage, maps provider.
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — SYSTEM SHAPE</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Reads and writes split at the Supabase boundary</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:22px;text-wrap:pretty">The single most consequential decision in this document. It is what makes a $0 architecture viable and what satisfies ADR-001 and ADR-002 without contradiction — NestJS is the only trusted <strong>writer</strong>, and nothing in either ADR forbids clients reading under RLS.</div>
+  <div style="border:1px solid #EAE1D6;border-radius:20px;background:#1F1A16;padding:28px 30px;overflow-x:auto">
+    <pre style="margin:0;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.75;color:#F2EBE1;white-space:pre">Customer (Expo)   Driver (Expo)     Merchant (Next.js)   Admin (Next.js)
+      │                 │                  │                  │
+      │  READ — anon key · RLS is the real boundary           │  no direct read:
+      ├────────────┬────┴─────────┬─────────┘                 │  operator data
+      │            ▼              │                           │  is API-only
+      │   ┌───────────────────────────────────────┐           │
+      │   │ Supabase PostgREST · Realtime         │           │
+      │   │ catalog · orders · deliveries ·       │           │
+      │   │ notifications · rider_*_view          │           │
+      │   └───────────────────────────────────────┘           │
+      │                                                       │
+      │  WRITE — @banhao/api-client · Bearer JWT              │
+      └───────────────┬───────────────────────────────────────┘
+                      ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  NestJS API — modular monolith · Cloud Run asia-southeast3         │
+│  SupabaseAuthGuard → CapabilityGuard → ResponseInterceptor         │
+├────────────────────────────────────────────────────────────────────┤
+│ identity · merchants · catalog · cart · orders · payments ·        │
+│ refunds · ledger · riders · delivery · dispatch · notifications ·  │
+│ admin · audit                                                      │
+│                                                                    │
+│ entrypoint 1 — main.ts        entrypoint 2 — worker.ts             │
+│   /api/v1/*                     /internal/tick — outbox, jobs,     │
+│   /webhooks/payments/:provider  QR expiry, payment events,         │
+│   (public · raw body ·          reconciliation                     │
+│    signature-verified · no envelope)                               │
+└──────────────────────────────┬─────────────────────────────────────┘
+                               │ service_role — bypasses RLS · backend only
+                               ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  Supabase · PostgreSQL 17 + PostGIS · ap-southeast-1               │
+│  40 tables · 62 FKs · 61 CHECKs · 110 indexes · 52 triggers        │
+│  55 RLS policies — zero profiles.role references                   │
+│  immutability triggers bind service_role too                       │
+│  release_rider_assignment() — service_role only, SECURITY INVOKER  │
+│  rider_*_view — security_barrier = true                            │
+│  ══════════════  DATABASE V1 — LOCKED  ══════════════              │
+└────────────────────────────────────────────────────────────────────┘
+
+Cloudflare Worker cron ──HMAC──► /internal/tick        every 60s
+Cloudflare Pages ──────────────► merchant + admin
+Expo Push / FCM ◄── outbox      SMS ThaiBulkSMS ◄── outbox
+PaymentProvider adapter ◄── payments/providers/ only — Null in V1</pre>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — DATABASE → DOMAIN</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">12 domains, and who may read them</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:22px;text-wrap:pretty">Every table below was read from the migration files at <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">e471ec1d</span>, not assumed. <strong>API-only</strong> means the table carries no client policy at all, so the boundary is enforced by the database rather than by developer discipline.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <sc-for list="{{ domains }}" as="d" hint-placeholder-count="12">
+      <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+          <div style="font-size:15px;font-weight:700;letter-spacing:.04em">{{ d.name }}</div>
+          <span style="{{ d.badge }}">{{ d.access }}</span>
+        </div>
+        <div style="font-size:12.5px;font-family:'IBM Plex Mono',monospace;line-height:1.7;color:#7A6E64;margin-bottom:10px;overflow-wrap:anywhere">{{ d.tables }}</div>
+        <div style="font-size:13.5px;line-height:1.75;color:#4A4038">{{ d.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:16px 20px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:14px;line-height:1.75;color:#5A4E42">
+    Deferred in the database, therefore deferred in the application — <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">settlements, settlement_items, delivery_fee_bands, zones, service_areas, delivery_attempts</span>. Do not build a settlement module in V1: its tables do not exist, and DEC-034's reconciliation obligation is already met by <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">reconciliation_cases</span> plus the in-transaction zero-sum assertion.
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — ORDER STATE MACHINE</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Nine accepted states, and the join point</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:24px;text-wrap:pretty">Taken from the deployed <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">orders.state</span> CHECK and DEC-019, not assumed. Every transition is a guarded conditional UPDATE whose WHERE clause repeats the expected current state — <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">rowCount</span> of 1 succeeded, 0 means someone else moved it first.</div>
+  <div style="border:1px solid #EAE1D6;border-radius:20px;background:#fff;overflow:hidden">
+    <sc-for list="{{ orderStates }}" as="s" hint-placeholder-count="9">
+      <div style="display:flex;align-items:flex-start;padding:15px 22px;border-bottom:1px solid #F5EEE4;font-size:14px;line-height:1.65">
+        <div style="flex:0 0 38px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#C7B9A9;padding-top:3px">{{ s.n }}</div>
+        <div style="flex:0 0 196px;min-width:0">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;overflow-wrap:anywhere">{{ s.state }}</div>
+          <div style="font-size:12.5px;color:#9A8C7E;margin-top:3px">{{ s.label }}</div>
+        </div>
+        <div style="flex:0 0 138px"><span style="{{ s.actorBadge }}">{{ s.actor }}</span></div>
+        <div style="flex:1;min-width:0;overflow-wrap:anywhere;color:#4A4038;padding-left:8px">{{ s.effect }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+    <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+      <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">Two tracks run in parallel</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038">After <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">MERCHANT_ACCEPTED</span> the kitchen and the rider search proceed in two separate domains; a merchant never waits for a rider before starting to cook. <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">PICKED_UP</span> is the join point: it requires both <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">READY_FOR_PICKUP</span> in the order domain and an assigned rider in the delivery domain. Either may arrive first, and neither blocks the other.</div>
+    </div>
+    <div style="border:1px solid #F0DFC4;border-radius:18px;background:#FDF3E6;padding:20px 22px">
+      <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">Five exception states sit in the CHECK — build none of them yet</div>
+      <div style="font-size:14px;line-height:1.8;color:#5A4E42">Their <em>names</em> are still <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">PROPOSED</span> and four policies remain <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">OPEN</span> (BQ-013, BQ-015, BQ-016, BQ-017). Building against an unapproved name means a later rename touches the transition table, history rows already written to production, copy in four apps, and every test. A failed payment simply leaves the order in <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">PENDING_PAYMENT</span>, which DEC-019 permits and the customer app already renders.</div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — MONEY</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Payment, ledger, and idempotency</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:22px;text-wrap:pretty">Every table in both domains is API-only, and a signature-verified webhook is the only path to <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">SUCCESS</span> or <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">REFUNDED</span>. Ingest and processing are separate transactions, so a crash mid-flight can never erase the evidence that an event arrived.</div>
+  <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:16px">
+    <div style="border:1px solid #EAE1D6;border-radius:20px;background:#fff;overflow:hidden">
+      <div style="display:flex;padding:13px 22px;background:#FAF5EE;border-bottom:1px solid #EAE1D6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+        <div style="flex:0 0 160px">OPERATION</div>
+        <div style="flex:1;min-width:0">IDEMPOTENCY KEY</div>
+      </div>
+      <sc-for list="{{ idempotency }}" as="i" hint-placeholder-count="7">
+        <div style="display:flex;align-items:flex-start;padding:13px 22px;border-bottom:1px solid #F5EEE4;font-size:13.5px;line-height:1.65">
+          <div style="flex:0 0 160px;color:#4A4038">{{ i.op }}</div>
+          <div style="flex:1;min-width:0;overflow-wrap:anywhere;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#7A6E64">{{ i.key }}</div>
+        </div>
+      </sc-for>
+      <div style="padding:15px 22px;font-size:13.5px;line-height:1.75;color:#7A6E64">Natural keys first; <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">idempotency_records</span> only where no natural key exists (ADR-004).</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">A duplicate webhook and a duplicate payment are different things</div>
+        <div style="font-size:14px;line-height:1.8;color:#4A4038">A repeated <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">provider_event_id</span> violates a unique constraint; the handler reads back the stored outcome and returns 200 so the provider stops retrying. A <em>second successful transaction</em> against an already-SUCCESS payment is something else entirely: it is real money, it is recorded in <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">payment_transactions</span>, and it becomes a refund obligation. Never swallow it as a duplicate.</div>
+      </div>
+      <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">The ledger has no zero-sum trigger — deliberately</div>
+        <div style="font-size:14px;line-height:1.8;color:#4A4038">CON-003 still binds; DEC-034 only moved <em>where</em> it is enforced. The service asserts that each group sums to zero inside the transaction and aborts if it does not, and scheduled reconciliation re-verifies afterwards. A correction is a reversing entry in a new group, never an edit. Do not add a trigger.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — RIDER &amp; DELIVERY</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Three layers against the race, one sanctioned release path</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px">
+    <sc-for list="{{ raceLayers }}" as="l" hint-placeholder-count="3">
+      <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:8px">{{ l.label }}</div>
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">{{ l.title }}</div>
+        <div style="font-size:13.5px;line-height:1.8;color:#4A4038;overflow-wrap:anywhere">{{ l.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:22px 24px;border-radius:18px;background:#1F1A16;color:#F2EBE1">
+    <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">Riders have exactly one read path, and it must not be widened</div>
+    <div style="font-size:14px;line-height:1.85;color:#D9CFC2;max-width:920px;text-wrap:pretty">Riders hold <strong>no policy</strong> on <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">orders</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">order_items</span> or <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">order_item_options</span> — those policies were dropped and replaced by three column-scoped views with <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">security_barrier = true</span>. The barrier is required, not cosmetic: without it the planner may evaluate a rider-supplied predicate before the row check, turning query errors into an oracle for rows the rider may not see. That was proven by execution, not by reasoning. The application's obligations are: never re-add a rider policy to the base tables, never <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">select *</span> in rider context, and give <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">@banhao/types</span> a distinct <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">RiderOrderView</span> type so the type system enforces the boundary the views enforce.</div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — COST</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">$0/month is a target, not a guarantee</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:14px;text-wrap:pretty">V1 is designed to operate within free tiers where realistically possible. Actual cost depends on traffic, provider pricing, and free-tier limits — all outside this architecture's control. One line is not free regardless: SMS OTP, roughly $2/month, plus unavoidable store fees at launch.</div>
+  <div style="display:inline-block;font-size:12px;font-weight:600;letter-spacing:.06em;color:#B4622A;background:#FDF3E6;border:1px solid #F0DFC4;border-radius:8px;padding:5px 11px;margin-bottom:22px">COST VERIFICATION REQUIRED — re-check Cloud Run Bangkok pricing and free-tier thresholds before launch</div>
+  <div style="border:1px solid #EAE1D6;border-radius:20px;background:#fff;overflow:hidden">
+    <div style="display:flex;padding:13px 22px;background:#FAF5EE;border-bottom:1px solid #EAE1D6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+      <div style="flex:0 0 176px">COMPONENT</div>
+      <div style="flex:0 0 226px">CHOICE</div>
+      <div style="flex:0 0 76px">COST</div>
+      <div style="flex:1;min-width:0">BECOMES PAID WHEN</div>
+    </div>
+    <sc-for list="{{ costLines }}" as="c" hint-placeholder-count="11">
+      <div style="display:flex;align-items:flex-start;padding:14px 22px;border-bottom:1px solid #F5EEE4;font-size:13.5px;line-height:1.65">
+        <div style="flex:0 0 176px;font-weight:500;padding-right:12px">{{ c.item }}</div>
+        <div style="flex:0 0 226px;color:#4A4038;padding-right:14px;overflow-wrap:anywhere">{{ c.choice }}</div>
+        <div style="flex:0 0 76px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#3D6B3A">{{ c.cost }}</div>
+        <div style="flex:1;min-width:0;overflow-wrap:anywhere;color:#7A6E64">{{ c.paidWhen }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:16px 20px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:14px;line-height:1.75;color:#5A4E42">
+    Deliberately avoided — Redis, a message broker, Kubernetes, a separate worker service, log aggregation, and a second database. Every one of these is available free somewhere and would still cost more than it returns, in operational surface rather than in dollars.
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — LANGUAGE</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Thai is the product default; copy lives in the clients, not the database</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:22px;text-wrap:pretty">The application-layer consequence of a Thai-first product is not translation. It is deciding <em>where a string lives</em>, and the deployed architecture already answers that correctly in three places that must not be undone.</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <sc-for list="{{ langPillars }}" as="p" hint-placeholder-count="3">
+      <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:8px">{{ p.tag }}</div>
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:10px">{{ p.title }}</div>
+        <div style="font-size:13.5px;line-height:1.8;color:#4A4038;overflow-wrap:anywhere">{{ p.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="border:1px solid #EAE1D6;border-radius:20px;background:#fff;overflow:hidden;margin-top:16px">
+    <div style="display:flex;padding:13px 22px;background:#FAF5EE;border-bottom:1px solid #EAE1D6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+      <div style="flex:0 0 140px">CONCERN</div>
+      <div style="flex:1;min-width:0">POSITION</div>
+      <div style="flex:0 0 130px;text-align:right">ADDED COST</div>
+    </div>
+    <sc-for list="{{ conventions }}" as="t" hint-placeholder-count="8">
+      <div style="display:flex;align-items:flex-start;padding:14px 22px;border-bottom:1px solid #F5EEE4;font-size:13.5px;line-height:1.75">
+        <div style="flex:0 0 140px;font-weight:600">{{ t.k }}</div>
+        <div style="flex:1;min-width:0;overflow-wrap:anywhere;color:#4A4038;padding-right:16px">{{ t.v }}</div>
+        <div style="flex:0 0 130px;text-align:right;color:#7A6E64;font-size:13px">{{ t.cost }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:16px 20px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:14px;line-height:1.75;color:#5A4E42">
+    English is used where it is more precise — variable, function and class names, table and column names, API routes, technical identifiers, package names, standard engineering terminology, and external product names. Never translate a technical identifier, and keep every English name in the deployed schema exactly as it is.
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — ARCHITECTURE DECISIONS</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Twelve decisions, with the rejected options and why</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:22px;text-wrap:pretty">ADR-001 through ADR-012 are ratified unchanged and none was contradicted. Four of the decisions below are simply the deployment-shaped consequences of the existing ADRs.</div>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="12">
+      <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 24px">
+        <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:12px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:500;color:#E4572E;flex:0 0 104px">{{ d.id }}</div>
+          <div style="font-size:16px;font-weight:600;line-height:1.45">{{ d.title }}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-left:118px">
+          <div>
+            <div style="font-size:10.5px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:6px">REASON</div>
+            <div style="font-size:13.5px;line-height:1.8;color:#4A4038;overflow-wrap:anywhere">{{ d.reason }}</div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:6px">REJECTED, AND WHY</div>
+            <div style="font-size:13.5px;line-height:1.8;color:#7A6E64;overflow-wrap:anywhere">{{ d.rejected }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — IMPLEMENTATION ROADMAP</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Nine phases, plus one that sits to the side</div>
+  <div style="font-size:16px;line-height:1.7;color:#4A4038;max-width:740px;margin-bottom:24px;text-wrap:pretty">Phase F′ — the real payment provider — is blocked on Q-001, Q-002 and Q-020, all of which wait on people outside the project, so nothing is allowed to depend on it. Building the whole flow against the existing <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">NullPaymentProvider</span> is what keeps eight domains off someone else's calendar.</div>
+  <div style="border:1px solid #EAE1D6;border-radius:20px;background:#fff;overflow:hidden">
+    <sc-for list="{{ phases }}" as="p" hint-placeholder-count="10">
+      <div style="display:flex;align-items:flex-start;padding:18px 24px;border-bottom:1px solid #F5EEE4;font-size:14px;line-height:1.7">
+        <div style="flex:0 0 78px">
+          <div style="width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;{{ p.chip }}">{{ p.letter }}</div>
+        </div>
+        <div style="flex:0 0 190px;padding-right:18px">
+          <div style="font-size:15px;font-weight:600;line-height:1.4;margin-bottom:5px">{{ p.name }}</div>
+          <div style="font-size:11.5px;color:#A2968A;font-family:'IBM Plex Mono',monospace;overflow-wrap:anywhere">{{ p.deps }}</div>
+        </div>
+        <div style="flex:1;min-width:0;overflow-wrap:anywhere;color:#4A4038;padding-right:18px">{{ p.deliver }}</div>
+        <div style="flex:0 0 232px;min-width:0;overflow-wrap:anywhere;color:#7A6E64;font-size:13.5px;border-left:1px solid #F5EEE4;padding-left:18px"><span style="color:#A2968A">Done when — </span>{{ p.done }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — RISKS</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 24px">What can still go wrong</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ risks }}" as="r" hint-placeholder-count="13">
+      <div style="display:flex;align-items:flex-start;gap:18px;border:1px solid #EAE1D6;border-radius:16px;background:#fff;padding:17px 22px">
+        <div style="flex:0 0 42px"><span style="{{ r.sev }}">{{ r.p }}</span></div>
+        <div style="flex:0 0 320px;min-width:0;overflow-wrap:anywhere;font-size:14.5px;font-weight:500;line-height:1.6;padding-right:16px">{{ r.risk }}</div>
+        <div style="flex:1;min-width:0;overflow-wrap:anywhere;font-size:14px;line-height:1.75;color:#4A4038">{{ r.position }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — NEXT TASK</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 22px">Phase A, in this order</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <sc-for list="{{ nextSteps }}" as="s" hint-placeholder-count="3">
+      <div style="border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:22px 24px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:#EAE1D6;line-height:1">{{ s.n }}</div>
+        <div style="font-size:16px;font-weight:600;line-height:1.45;margin:12px 0 10px">{{ s.title }}</div>
+        <div style="font-size:14px;line-height:1.8;color:#4A4038;overflow-wrap:anywhere">{{ s.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:20px 22px;border-radius:18px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:14.5px;line-height:1.8;color:#5A4E42">
+    Then <strong>Phase B</strong>, because membership-based capability resolution blocks every merchant and rider endpoint. Do not start Phase F′ or any settlement work, and do not touch the database.
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="border-radius:20px;background:#1F1A16;color:#F2EBE1;padding:26px 28px">
+    <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#C7B9A9;margin-bottom:10px">ARCHITECTURE LOCK — V1.1</div>
+    <div style="font-size:18px;font-weight:700;line-height:1.4;margin-bottom:12px">APPROVED / READY FOR IMPLEMENTATION — subject to the COST VERIFICATION REQUIRED items in §07</div>
+    <div style="font-size:14px;line-height:1.85;color:#D9CFC2;max-width:920px">Database V1 remains locked; <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">e471ec1d</span> remains the database checkpoint. No database redesign, migration, table, view, RLS policy, or RPC changed. No new technology, service, or stack component was introduced, and no new Architecture Decision was added — V1.1 only clarifies the cost caveat, the error contract, the authorization layers, and the Phase A validation gate. Application implementation must follow this architecture; any future deviation requires a new Architecture Decision.</div>
+  </div>
+
+  <div style="margin-top:24px;padding-top:26px;border-top:1px solid #EAE1D6;display:flex;justify-content:space-between;align-items:flex-end;gap:30px">
+    <div style="font-size:13px;line-height:1.8;color:#9A8C7E;max-width:580px">Read-only review. No file in <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">kmandev/banhao-design</span> was created, modified, or committed; no migration was written; nothing was pushed. The full report — every API contract, error code, and testing layer — is in <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">BANHAO-APP-ARCHITECTURE-V1.md</span>.</div>
+    <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#C7B9A9;text-align:right;line-height:1.8">e471ec1d<br>2026-08-11</div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180}}">
+class Component extends DCLogic {
+  renderVals() {
+    const ok = 'display:inline-block;padding:3px 9px;border-radius:8px;background:#E8F1E7;color:#3D6B3A;font-size:11px;font-weight:600';
+    const shell = 'display:inline-block;padding:3px 9px;border-radius:8px;background:#F3EDE4;color:#9A8C7E;font-size:11px;font-weight:600';
+    const part = 'display:inline-block;padding:3px 9px;border-radius:8px;background:#FDF3E6;color:#B4622A;font-size:11px;font-weight:600';
+    const apiOnly = 'display:inline-block;padding:4px 10px;border-radius:8px;background:#1F1A16;color:#F2EBE1;font-size:11px;font-weight:600;white-space:nowrap';
+    const clientRead = 'display:inline-block;padding:4px 10px;border-radius:8px;background:#E8F1E7;color:#3D6B3A;font-size:11px;font-weight:600;white-space:nowrap';
+    const clientWrite = 'display:inline-block;padding:4px 10px;border-radius:8px;background:#EFE7F5;color:#6B4A85;font-size:11px;font-weight:600;white-space:nowrap';
+    const mixed = 'display:inline-block;padding:4px 10px;border-radius:8px;background:#F3EDE4;color:#7A6E64;font-size:11px;font-weight:600;white-space:nowrap';
+
+    const actor = (bg, fg) => 'display:inline-block;padding:3px 10px;border-radius:8px;background:' + bg + ';color:' + fg + ';font-size:11.5px;font-weight:600;white-space:nowrap';
+    const aSystem = actor('#F3EDE4', '#7A6E64');
+    const aWebhook = actor('#1F1A16', '#F2EBE1');
+    const aMerchant = actor('#FDF3E6', '#B4622A');
+    const aRider = actor('#E8F1E7', '#3D6B3A');
+
+    const sev = (bg, fg) => 'display:inline-block;padding:4px 9px;border-radius:8px;background:' + bg + ';color:' + fg + ';font-size:11px;font-weight:700;font-family:\'IBM Plex Mono\',monospace';
+    const p0 = sev('#F7DCD4', '#A93818');
+    const p1 = sev('#FDF3E6', '#B4622A');
+    const p2 = sev('#F3EDE4', '#7A6E64');
+    const p3 = sev('#F3EDE4', '#A2968A');
+
+    const chipDone = 'background:#F3EDE4;color:#7A6E64';
+    const chipNow = 'background:#E4572E;color:#fff';
+    const chipNext = 'background:#1F1A16;color:#F2EBE1';
+    const chipSide = 'background:#FDF3E6;color:#B4622A;border:1px solid #F0DFC4';
+
+    return {
+      checkpoint: [
+        { k: 'Repository', v: 'banhao-design' },
+        { k: 'Commit', v: 'e471ec1d' },
+        { k: 'Database', v: 'V1 LOCKED' },
+        { k: 'Migrations', v: '16 / 16' },
+        { k: 'Budget / month', v: '$0' },
+        { k: 'Decisions', v: '12' }
+      ],
+
+      corrections: [
+        {
+          file: 'docs/ARCHITECTURE.md',
+          claim: 'States that there is no backend, no database, no API, no auth, and no deployment infrastructure.',
+          truth: 'True on 2026-08-09, false at e471ec1d. A pnpm/Turborepo monorepo now exists with a running NestJS API, an implemented Expo customer app, five shared packages, CI, and a Dockerfile. Any agent that reads this file first will design from a blank slate and duplicate work that already exists.'
+        },
+        {
+          file: 'docs/CURRENT_STATUS.md',
+          claim: 'Reports 3 migrations applied, 11 not merged, and the live project never modified.',
+          truth: 'The file is dated 2026-08-10; the migration work landed 2026-08-11. Treat the deployed database and the migration files at e471ec1d as truth, not this document.'
+        }
+      ],
+
+      repoUnits: [
+        { name: 'apps/api', fw: 'NestJS 10 · Express · Swagger', state: 'Foundation only. GET /health and GET /api/v1/me, with a global Supabase JWT guard, a roles guard, a response envelope and an exception filter. PaymentProvider interface plus NullPaymentProvider. Dockerfile present.', status: 'foundation', badge: part },
+        { name: 'apps/customer', fw: 'Expo · React Native 0.76', state: 'Implemented. 31 design states, a 4-tab RootNavigator, phone-OTP auth against live Supabase, profiles read/write under RLS, a repository seam, and 4 test suites. Everything except auth and profiles is mock-backed.', status: 'implemented', badge: ok },
+        { name: 'apps/merchant', fw: 'Expo', state: 'Shell only — App.tsx and app.json, no src/.', status: 'shell', badge: shell },
+        { name: 'apps/driver', fw: 'Expo', state: 'Shell only — same.', status: 'shell', badge: shell },
+        { name: 'apps/admin', fw: 'Next.js 15 App Router', state: 'Shell only — layout.tsx and page.tsx.', status: 'shell', badge: shell },
+        { name: '@banhao/types', fw: 'TypeScript', state: 'Role, Money and ApiResponse compiled to dist, no runtime code.', status: 'built', badge: ok },
+        { name: '@banhao/config', fw: 'zod', state: 'loadServerEnv() is called before NestFactory.create — a misconfigured deployment fails at boot rather than on the first request.', status: 'built', badge: ok },
+        { name: '@banhao/validation', fw: 'zod', state: 'Shared schemas, jest configured.', status: 'built', badge: ok },
+        { name: '@banhao/api-client', fw: 'TypeScript', state: 'Typed client for all four apps, unwrapping the shared response envelope.', status: 'built', badge: ok },
+        { name: '@banhao/ui', fw: 'React Native', state: 'Design tokens and components exported from source with a ./theme entry point; React and RN are peer dependencies.', status: 'built', badge: ok },
+        { name: 'CI', fw: 'GitHub Actions', state: 'Four jobs — verify (lint/typecheck/test/build), rls (applies every migration to a throwaway Postgres), docker (build only), secrets-scan.', status: 'built', badge: ok }
+      ],
+
+      domains: [
+        { name: 'IDENTITY', access: 'client read', badge: clientRead, tables: 'profiles · platform_staff · addresses', note: 'Own row only, with a trigger rejecting changes to id, phone and role. A valid JWT with no profile row returns 401 — deliberately not auto-provisioned, so role assignment stays an explicit auditable action.' },
+        { name: 'MERCHANT', access: 'mixed', badge: mixed, tables: 'merchants · restaurants · restaurant_members · merchant_bank_accounts', note: 'ACTIVE restaurants are publicly readable including anon. is_restaurant_member() is the membership predicate across merchant policies. Bank accounts are API-only.' },
+        { name: 'CATALOG', access: 'client read', badge: clientRead, tables: 'restaurant_hours · menu_categories · menu_items · menu_option_groups · menu_options', note: 'Two policies per table: public when the restaurant is active, and member access. This domain is the entire replacement target for the customer app catalog mocks.' },
+        { name: 'CART', access: 'client write', badge: clientWrite, tables: 'carts · cart_items · cart_item_options', note: 'The only domain where clients write domain tables, DELETE included, because a cart is not financial data — the order snapshot, not the cart, is what becomes the contract.' },
+        { name: 'ORDER', access: 'mixed', badge: mixed, tables: 'orders · order_items · order_item_options · order_status_history + 3 rider views', note: 'Money and snapshot columns are immutable after insert, for service_role too, and DELETE is refused. Items and history are write-once. Riders hold no policy on the base tables at all.' },
+        { name: 'PAYMENT', access: 'API-only', badge: apiOnly, tables: 'payments · payment_attempts · payment_events · payment_transactions · refunds', note: 'No client policy on any table. Duplicate protection is a database unique constraint rather than a convention. Every table in the file is API-only.' },
+        { name: 'LEDGER', access: 'API-only', badge: apiOnly, tables: 'ledger_entry_groups · ledger_entries', note: 'Append-only, signed satang, no UPDATE or DELETE for any role. Nine accounts, and deliberately no zero-sum trigger — the service asserts it inside the transaction.' },
+        { name: 'RIDER', access: 'client write', badge: clientWrite, tables: 'riders · rider_documents · rider_availability', note: 'Availability is own-row select and update, the second client-writable surface and non-financial. A PostGIS partial index covers online status and location.' },
+        { name: 'DELIVERY', access: 'mixed', badge: mixed, tables: 'deliveries · delivery_status_history · rider_assignments · rider_assignment_attempts', note: 'deliveries.rider_id is the authoritative answer to who is delivering now; rider_assignments is history and is never read for that question. Offers are the rider read path before accepting.' },
+        { name: 'AUDIT', access: 'API-only', badge: apiOnly, tables: 'audit_logs', note: 'Append-only, indexed by entity and actor, written in the same transaction as the operation it records. Privileged actions carry a mandatory reason.' },
+        { name: 'NOTIFICATION', access: 'client read', badge: clientRead, tables: 'notifications · notification_deliveries', note: 'Own-row select and update for read receipts. Per-channel delivery attempts are API-only.' },
+        { name: 'INFRASTRUCTURE', access: 'API-only', badge: apiOnly, tables: 'idempotency_records · outbox · jobs · reconciliation_cases', note: 'Partial indexes on undispatched and due rows already exist — this is why no message broker is needed. All four tables are drained by a single tick.' }
+      ],
+
+      orderStates: [
+        { n: '01', state: 'CREATED', label: 'Order created', actor: 'System', actorBadge: aSystem, effect: 'Validates the cart, that the restaurant is open, and that the address is in zone; writes items, options, history and the price snapshot in one transaction.' },
+        { n: '02', state: 'PENDING_PAYMENT', label: 'Awaiting payment', actor: 'System', actorBadge: aSystem, effect: 'Creates the payment and first attempt, issues the QR, and schedules a 10-minute expiry job. The order survives a failed or expired attempt.' },
+        { n: '03', state: 'PAID', label: 'Payment confirmed', actor: 'Webhook only', actorBadge: aWebhook, effect: 'Signature, amount and order match verified; sets paid_at, writes the ledger group, notifies the merchant, starts the 3-minute accept timer.' },
+        { n: '04', state: 'MERCHANT_ACCEPTED', label: 'Merchant accepted', actor: 'Merchant', actorBadge: aMerchant, effect: 'Must fall within the accept window. Creates the delivery row and starts the rider search here — in the delivery domain, running in parallel.' },
+        { n: '05', state: 'PREPARING', label: 'Kitchen preparing', actor: 'Merchant', actorBadge: aMerchant, effect: 'Cooking has started. Runs alongside RIDER_SEARCHING; the merchant never waits for a rider.' },
+        { n: '06', state: 'READY_FOR_PICKUP', label: 'Food ready', actor: 'Merchant', actorBadge: aMerchant, effect: 'Sets ready_at and notifies the assigned rider if there is one.' },
+        { n: '07', state: 'PICKED_UP', label: 'Rider collected the order', actor: 'Rider', actorBadge: aRider, effect: 'The join point: requires both READY_FOR_PICKUP and an assigned rider. Either may arrive first.' },
+        { n: '08', state: 'DELIVERING', label: 'On the way', actor: 'Rider', actorBadge: aRider, effect: 'The delivery moves to EN_ROUTE. Customer tracking reads the same value in its own wording.' },
+        { n: '09', state: 'DELIVERED', label: 'Delivered', actor: 'Rider', actorBadge: aRider, effect: 'Terminal success. Sets delivered_at, writes the completion ledger group, and prompts for a rating.' }
+      ],
+
+      idempotency: [
+        { op: 'Create payment', key: 'order_id — payments_order_id_key' },
+        { op: 'Regenerate QR', key: '(payment_id, attempt_no)' },
+        { op: 'Webhook ingest', key: '(provider, provider_event_id)' },
+        { op: 'Money movement', key: 'provider_transaction_id' },
+        { op: 'Ledger group', key: 'group_key — payment:PAY-BH000125:txn:<id>' },
+        { op: 'Refund', key: 'refund_reference · (provider, provider_refund_id)' },
+        { op: 'No natural key', key: 'Idempotency-Key header → idempotency_records' }
+      ],
+
+      raceLayers: [
+        { label: 'LAYER 1 · APPLICATION', title: 'Guarded conditional UPDATE', body: 'WHERE state IN (RIDER_SEARCHING, RIDER_REASSIGNING) AND rider_id IS NULL. One row affected means won, zero means lost. No advisory locks, no queue, no SELECT before UPDATE. The loser gets a clean 409, which the driver app must render as a normal outcome rather than an error.' },
+        { label: 'LAYER 2 · DATABASE', title: 'Partial unique index', body: 'rider_assignments_one_active makes two ACCEPTED rows per delivery physically impossible. Proven with two genuinely concurrent psql processes racing the same row, not a single-session simulation.' },
+        { label: 'LAYER 3 · RELEASE', title: 'release_rider_assignment()', body: 'The only sanctioned release path. Both statements of the invariant run in one invocation: either both happen or neither is ever visible. Omitting either one makes the delivery permanently unassignable, which is why callers are not allowed to attempt it themselves.' }
+      ],
+
+      langPillars: [
+        { tag: 'REQ-002', title: 'States are English identifiers; Thai labels live in the clients', body: 'Every client reads the same state value and only the wording differs, and no screen computes its own status. The stored value is READY_FOR_PICKUP while the customer, the merchant and the rider each see their own phrasing. A Thai label column in the database would force one wording on all three parties.' },
+        { tag: 'ERROR MODEL', title: 'error.code is the canonical contract; presentation is the client\u2019s job', body: 'The API returns a stable English code as the sole canonical contract, with an optional English message as a developer-facing default only. Each client resolves the code to its own user-facing text — the same OFFER_TAKEN becomes a different Thai sentence in the customer, merchant and rider apps. The backend never decides presentation language or wording, and changing one word should never require a backend deploy.' },
+        { tag: 'SNAPSHOT', title: 'Snapshot columns already accept Thai text', body: 'delivery_address_snapshot, delivery_landmark and recipient_name_snapshot are already free text, and that shape fits Thai addressing exactly. In Buntharik a landmark is often more useful than a house number, so delivery_landmark is a first-class field in the address form rather than an afterthought.' }
+      ],
+
+      conventions: [
+        { k: 'Phone', v: 'Store E.164 (+66…) because Supabase Auth requires it; display 0XX-XXX-XXXX because that is what Thai users read and dial. apps/customer/src/lib/phone.ts already converts both directions and is tested — promote it to @banhao/validation so all four apps share one implementation.', cost: 'none' },
+        { k: 'Money', v: 'bigint satang in code and database; the ฿ symbol and the word บาท only at the display edge. Never store a formatted string, and never round mid-calculation.', cost: 'none' },
+        { k: 'Time', v: 'Store timestamptz in UTC always. Display 24-hour (19:30, never 7:30 PM). Order timelines use relative Thai phrasing because that is how a waiting customer reads a timeline; full dates use the Buddhist era.', cost: 'none' },
+        { k: 'Address', v: 'House number, moo, tambon, amphoe, changwat, plus a landmark field. The existing column structure already accommodates all of it.', cost: 'none' },
+        { k: 'Search', v: 'Thai does not put spaces between words, so ILIKE substring matching is both simpler and better behaved than tokenised search at this catalogue size. Full-text search would need a Thai segmenter and a tsvector column — a migration, therefore out of scope.', cost: 'none in V1' },
+        { k: 'Sorting', v: 'Thai collation for restaurant and menu lists. Verify against the deployed collation before assuming the default is acceptable.', cost: 'none' },
+        { k: 'Type', v: 'IBM Plex Sans Thai, line-height 1.55–1.75 per the existing design system, minimum 12px and only for metadata.', cost: 'none' },
+        { k: 'Copy length', v: 'Thai runs longer than English at the same information density and does not wrap on spaces. Buttons and status chips must be tested with the longest real string, not a placeholder.', cost: 'none' }
+      ],
+
+      decisions: [
+        { id: 'DEC-APP-001', title: 'One monorepo, five shared packages, no second repository', reason: 'Four clients consume one order state machine and one Money type. A Money change or a state rename must land atomically across five consumers. The tooling is already correct, and shared packages only pay off inside a single repository.', rejected: 'Repo-per-app and repo-per-platform. Both require publishing or vendoring the shared packages. Independent release cadence is the usual argument for splitting — BANHAO has one developer and one launch, so there is no cadence to decouple.' },
+        { id: 'DEC-APP-002', title: 'Modular monolith, single deployable, worker as a second entrypoint', reason: 'The schema already carries what a broker would provide: outbox and jobs with exactly the partial indexes a poller wants, plus idempotency_records, and the module rules are already written down.', rejected: 'Edge Functions for the whole API would fork the domain layer into Deno for no architectural gain. Per-domain services break the single transaction that payment, ledger and audit writes require. A hosted queue duplicates outbox and jobs and adds a bill.' },
+        { id: 'DEC-APP-003', title: 'Merchant becomes a web app; driver stays native', reason: 'A restaurant accepts orders on whatever screen is already on the counter, needs no GPS, no camera and no background execution, and benefits from printing. Web also removes store review from the critical path for the one surface a merchant needs on day one.', rejected: 'Merchant on Expo buys nothing a merchant needs and costs store review plus device management. Expo-web produces a mobile-shaped layout on a counter tablet. A driver genuinely needs background location, push while backgrounded, and a camera — that is native.' },
+        { id: 'DEC-APP-004', title: 'Capability resolution moves from profiles.role to domain membership', reason: 'All 55 RLS policies contain zero profiles.role references, so the guard authorizes against a value the database no longer consults, and the divergence is silent. Membership is also scoped — a role cannot express "may accept orders for restaurant X", which is the question every merchant endpoint actually asks. Authorization is five distinct layers, kept separate: authentication (who), global role (what class), domain membership (which restaurant/rider), resource authorization (this specific resource), and RLS as the final, non-negotiable boundary. Application authorization and RLS must never diverge.', rejected: 'Syncing profiles.role from membership creates two sources of truth for authorization, which is the defect being fixed. JWT claims go stale for the token lifetime, which is unacceptable when suspending a rider.' },
+        { id: 'DEC-APP-005', title: 'The webhook route bypasses the global response envelope', reason: 'A provider expects its own agreed shape and status, not ours, and signature verification requires the unparsed raw body — which must be configured at bootstrap, because a re-serialized body will not verify.', rejected: 'Enveloping everything uniformly. Uniformity is a convenience for our own clients; a provider contract is not ours to shape, and a provider that reads a 200 as failure will retry forever.' },
+        { id: 'DEC-APP-006', title: 'Implement the nine accepted states plus CANCELLED, nothing else', reason: 'The lifecycle document states plainly that no exception-path code may be written while its policy is OPEN, and four remain open. A failed payment simply leaves the order in PENDING_PAYMENT, which DEC-019 permits.', rejected: 'Implementing all 14 now, or inventing interim names. Both convert an open product question into deployed history rows that later have to be migrated.' },
+        { id: 'DEC-APP-007', title: 'Build the whole flow on NullPaymentProvider; gate only real money', reason: 'Q-001, Q-002 and Q-020 are externally blocked and COD was removed, so treating payment as a blocking phase would stall order, delivery, notification and admin behind someone else\u2019s calendar. The PaymentProvider interface already isolates this cleanly.', rejected: 'Waiting for Q-001 idles the project. Picking a provider early is worse: the best structural fit may be the most expensive per small order, and the choice is gated on a legal model that does not yet exist.' },
+        { id: 'DEC-APP-008', title: 'Reads client→Supabase; writes client→API→Supabase', reason: 'PostgREST and Realtime are already-running, always-warm, free infrastructure, and the deployed schema was designed to be read this way. Every table that must not be client-read carries no client policy at all.', rejected: 'API-for-everything puts a cold start in front of a menu browse, re-implements filtering PostgREST already does, wastes 55 RLS policies, and needs paid always-on compute. Direct-for-everything cannot create an order without exposing service_role.' },
+        { id: 'DEC-APP-009', title: 'Cloud Run in Bangkok, request-based billing, min-instances 0', reason: 'The free tier covers Stage 1 with room to spare, idle costs nothing, and Bangkok is cheaper on CPU than Singapore while being physically closer — so cost and latency do not trade off. It uses the Dockerfile that already exists, and data stays in-country. COST VERIFICATION REQUIRED: the specific free-tier thresholds and the Bangkok-vs-Singapore price gap should be re-checked against current GCP pricing before launch.', rejected: 'A VPS is the strongest runner-up but is not $0 and hands one developer OS patching, TLS renewal and backups. Render free spins down after 15 minutes. Lambda\u2019s cold-start fix bills while idle. EKS is roughly $73/month before a single pod runs.' },
+        { id: 'DEC-APP-010', title: 'One scheduled tick from a Cloudflare Worker cron', reason: 'All that is missing is something to call the poller. A Worker cron is free, provider-independent and trivially observable, and a one-minute tick keeps an instance warm during trading hours at roughly 43k requests per month.', rejected: 'pg_cron would put business logic in the database, contradicting the schema\u2019s own insistence that logic lives in NestJS. GitHub Actions cron is unreliable at minute granularity. A long-running worker container is always-on compute, which a $0 target cannot afford.' },
+        { id: 'DEC-APP-011', title: 'No mobile E2E automation in V1', reason: 'The existing suites already cover what is genuinely dangerous — concurrency, RLS, column isolation and money — and those are the failures that cost real baht. One developer\u2019s hours are the actual scarce resource.', rejected: 'Detox and Maestro are both a multi-day build plus ongoing repair, funded from the same hours needed to ship the merchant surface. Revisit when a second developer joins — the same trigger that starts the Sentry bill.' },
+        { id: 'DEC-APP-012', title: 'Thai is the default language; copy is keyed, not stored', reason: 'REQ-002 requires every client to read the same value and differ only in wording, so labels are per-app copy rather than a column, and the error model already separates code from message. One copy module per app, with @banhao/types owning the key union, makes a missing string a typecheck failure rather than a blank screen.', rejected: 'Label tables in the database require a migration to change a word and force one wording on all actors. A translation layer in the API puts UX copy behind a deploy of the wrong service. An i18n library for a single language is bundle weight and indirection with no second locale to justify it.' }
+      ],
+
+      phases: [
+        { letter: 'A', chip: chipNow, name: 'Foundation hardening', deps: 'Depends: nothing', deliver: 'Rewrite the two stale documents; error envelope with correlationId; correlation middleware; webhook raw-body bootstrap and envelope exclusion; worker.ts; /internal/tick with HMAC; Cloud Run and Pages deploy workflows; Sentry. Local gate before any cloud step: build passes, tests pass, apps/api boots in Docker locally, integration tests pass against it — only then deploy.', done: 'the local gate is green, the API answers /health at a real URL, the tick fires, and CI deploys on merge to main' },
+        { letter: 'B', chip: chipNext, name: 'Identity and capability resolution', deps: 'Depends: A', deliver: 'Membership-based capability resolution across restaurant_members, riders and platform_staff; a scoped capability guard; GET and PATCH /me; address CRUD.', done: 'a merchant user is authorized for their own restaurants and no others, and nothing reads profiles.role' },
+        { letter: 'C', chip: chipDone, name: 'Catalog and merchant read path', deps: 'Depends: B', deliver: 'A Supabase-backed CatalogRepository replacing the mocks behind the existing seam; restaurants, hours, menu, options and availability; merchant menu writes; the sample-data labels come off.', done: 'the customer app browses real data and no screen imports from src/mocks/' },
+        { letter: 'D', chip: chipDone, name: 'Cart', deps: 'Depends: C', deliver: 'Client-side cart writes under RLS, a server-side /cart/validate, and one-cart-one-restaurant enforced by the composite FK plus service validation.', done: 'a stale cart cannot become an order' },
+        { letter: 'E', chip: chipDone, name: 'Order', deps: 'Depends: D', deliver: 'POST /orders with full snapshotting; the nine transitions plus CANCELLED as commands rather than PATCH state; a timeline derived from order_status_history; Realtime replacing polling; the legacy mock states reconciled to DEC-019.', done: 'an order runs CREATED to DELIVERED end to end against the null provider' },
+        { letter: 'F', chip: chipDone, name: 'Payment · null provider', deps: 'Depends: E', deliver: 'Payment and attempt creation; two-phase webhook ingest; a dev-only signed event simulator; the QR expiry job; ledger groups with the in-transaction zero-sum assertion; reconciliation opening cases.', done: 'every payment path is exercised without a real provider and the ledger balances in all of them' },
+        { letter: 'G', chip: chipDone, name: 'Rider and delivery', deps: 'Depends: E, not F', deliver: 'Driver screens; broadcast dispatch; guarded-UPDATE claim; release_rider_assignment wiring with correct error mapping; rider reads exclusively through the three views with a distinct RiderOrderView type; rider earnings from the ledger.', done: 'two riders racing one offer produce exactly one assignment and a clean 409 for the loser' },
+        { letter: 'H', chip: chipDone, name: 'Notification', deps: 'Depends: F, G', deliver: 'Outbox dispatch via the tick; Expo Push, SMS and LINE adapters behind one interface; notifications and notification_deliveries; the 5-minute no-rider notice with its 3-minute extension.', done: 'every state change the design specifies reaches its recipient exactly once' },
+        { letter: 'I', chip: chipDone, name: 'Admin operations', deps: 'Depends: F, G, H', deliver: 'Order monitor, manual dispatch, reassignment with a mandatory reason, refund initiation, ledger view, reconciliation queue, merchant and rider onboarding, and an audit log viewer.', done: 'an operator can resolve a stuck order without opening a database client' },
+        { letter: "F\u2032", chip: chipSide, name: 'Real payment provider', deps: 'Blocked: Q-001, Q-002, Q-020', deliver: 'One provider adapter behind the existing interface, real signature verification, real QR payloads, the refund mechanism Q-020 settles, and provider reconciliation against payment_transactions.', done: 'a real ฿1 payment appears in the ledger and reconciles and a real refund completes. It can land any time after Phase F, because nothing waits on it' }
+      ],
+
+      costLines: [
+        { item: 'Database, Auth, PostgREST, Realtime', choice: 'Supabase Free (already live)', cost: '$0', paidWhen: '500 MB database, 2 GB egress, 50k MAU or 200 concurrent realtime connections → Pro at $25' },
+        { item: 'Customer and driver apps', choice: 'Expo with OTA updates', cost: '$0', paidWhen: 'Apple $99/yr plus Google $25 one-off — unavoidable, and the only certain launch cost' },
+        { item: 'Merchant and admin web', choice: 'Cloudflare Pages', cost: '$0', paidWhen: 'effectively never' },
+        { item: 'API hosting', choice: 'Cloud Run asia-southeast3, min-instances 0', cost: '$0', paidWhen: 'sustained traffic beyond the request and CPU free tier, or when min-instances 1 is bought at $5–10/month' },
+        { item: 'Scheduled tick', choice: 'Cloudflare Worker cron, HMAC-signed', cost: '$0', paidWhen: 'never, realistically, at this scale' },
+        { item: 'Order tracking updates', choice: 'Supabase Realtime on orders and deliveries', cost: '$0', paidWhen: '200 concurrent connections' },
+        { item: 'Push notifications', choice: 'Expo Push plus FCM', cost: '$0', paidWhen: 'never' },
+        { item: 'SMS OTP', choice: 'ThaiBulkSMS, roughly ฿0.15 per credit', cost: '~$2', paidWhen: 'immediately, at any real volume — the one line that is not free' },
+        { item: 'Images', choice: 'Supabase Storage free tier, R2 at Stage 2', cost: '$0', paidWhen: 'beyond 1 GB, then Cloudflare R2 with zero egress' },
+        { item: 'Maps', choice: 'MapLibre GL with OSM tiles', cost: '$0', paidWhen: 'tile usage policy at volume; self-hosted OSRM is the Stage 3 answer' },
+        { item: 'Error tracking', choice: 'Sentry free tier', cost: '$0', paidWhen: 'a second developer joins → $26/month' },
+        { item: 'CI', choice: 'GitHub Actions free tier', cost: '$0', paidWhen: '2,000 minutes per month on private repositories' }
+      ],
+
+      risks: [
+        { p: 'P0', sev: p0, risk: 'The payment provider is unselected and the legal model is unresolved, both with external lead time', position: 'COD was removed, so 100% of revenue depends on this. DEC-APP-007 takes it off the critical path for eight domains, but it cannot be taken out of launch.' },
+        { p: 'P0', sev: p0, risk: 'No examined provider supports native PromptPay refunds', position: 'Every cancellation policy depends on a mechanism research says may not exist. Unresolvable at the application layer — refund() exists because the domain needs the concept, not because a provider call satisfies it.' },
+        { p: 'P0', sev: p0, risk: 'Open business numbers: commission, delivery and service fees, rider earnings, wasted-food cost', position: 'The schema stores amounts, never rates, so these can be set later without a migration. Do not invent a default anywhere in the application.' },
+        { p: 'P1', sev: p1, risk: 'docs/ARCHITECTURE.md describes an empty repository', position: 'Currently a trap for any agent that reads it first. First task of Phase A.' },
+        { p: 'P1', sev: p1, risk: 'RolesGuard authorizes against a column no RLS policy consults', position: 'Two authorization layers diverging silently. DEC-APP-004, Phase B — it blocks every merchant and rider endpoint.' },
+        { p: 'P1', sev: p1, risk: 'Exception state names are PROPOSED and the customer app still encodes twelve superseded states', position: 'Reconcile to the nine plus CANCELLED in Phase C/E, and add nothing speculative.' },
+        { p: 'P1', sev: p1, risk: 'Android is completely unverified, and Thai rendering is the likeliest failure', position: 'Thai per-weight font families are the probable break. Add it to the Phase A manual checklist.' },
+        { p: 'P2', sev: p2, risk: 'Cold start on a command path with min-instances 0', position: 'Accepted, and mitigated by DEC-APP-008 plus the 60-second tick. If it hurts, min-instances 1 costs $5–10/month. Do not re-architect for it.' },
+        { p: 'P2', sev: p2, risk: 'Merchant on web loses push-style order alerting', position: 'Accepted under DEC-APP-003. Realtime plus an audible alert on an always-open counter tablet. Revisit if merchants report missed orders.' },
+        { p: 'P2', sev: p2, risk: 'Six deferred tables mean settlement cannot be built', position: 'Correct and deliberate. Reconciliation via reconciliation_cases satisfies DEC-034 in V1; settlement needs a new migration set and a Product Owner decision.' },
+        { p: 'P2', sev: p2, risk: 'Maps provider unselected and the tracking map is a placeholder', position: 'MapLibre with OSM at Stage 1, and never poll aggressively — it is the most volatile cost line in the model.' },
+        { p: 'P2', sev: p2, risk: 'Thai full-text search has no segmenter in the deployed schema', position: 'ILIKE is correct at Buntharik catalogue size. Do not add tsvector columns — that is a migration, and the database is locked. Revisit at Stage 2.' },
+        { p: 'P3', sev: p3, risk: 'Sentry free tier is single-user', position: '$26/month the moment a second developer joins. Budget it as the first real bill.' }
+      ],
+
+      nextSteps: [
+        { n: '01', title: 'Rewrite the two stale documents', body: 'Nothing else should be built while the primary architecture document tells the next reader that the repository is empty.' },
+        { n: '02', title: 'Deploy on a real workflow', body: 'apps/api to Cloud Run and the two web apps to Cloudflare Pages on merge to main. A URL that answers /health converts every later phase from written to shipped.' },
+        { n: '03', title: 'Lay the tick and webhook plumbing', body: 'worker.ts, /internal/tick, the Worker cron, and the webhook raw-body and envelope handling. Cheap now, invasive later.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
