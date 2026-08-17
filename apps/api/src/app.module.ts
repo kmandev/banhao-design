@@ -15,8 +15,9 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 /**
  * BANHAO API — modular monolith (DEC-009).
  *
- * Guard order matters: SupabaseAuthGuard runs first and populates request.user,
- * then RolesGuard checks that user's database-backed role. Both are global, so
+ * Guard order matters: SupabaseAuthGuard runs first and populates request.user
+ * with capabilities resolved from database domain membership (DEC-033 /
+ * DEC-APP-004), then RolesGuard checks those capabilities. Both are global, so
  * routes are protected by default and must opt out with @Public().
  *
  * CorrelationModule is listed first for readability only — its middleware runs

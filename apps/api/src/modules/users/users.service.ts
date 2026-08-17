@@ -16,8 +16,14 @@ interface ProfileRow {
  * Reads application user profiles.
  *
  * Uses the service-role client deliberately: the API enforces authorization in
- * its own guards, and needs to read a profile before a request's role is known.
- * RLS still protects direct client access to the same table.
+ * its own guards, and needs to read a profile before a request's capabilities
+ * are known. RLS still protects direct client access to the same table.
+ *
+ * **`role` here is NOT an authorization input** (DEC-033 / DEC-APP-004). It is
+ * the deprecated legacy `profiles.role` column, carried only so the existing
+ * `GET /api/v1/me` client contract keeps working. Authorization is resolved
+ * from domain membership by {@link CapabilitiesService}; nothing in the guard
+ * chain reads this field.
  */
 @Injectable()
 export class UsersService {
@@ -57,8 +63,10 @@ export class UsersService {
 
   /**
    * The database constrains role via an enum, so an unknown value means the
-   * schema and this code have drifted. Fail closed to the least-privileged role
-   * rather than trusting an unrecognised value.
+   * schema and this code have drifted. Falls back to the least-privileged value
+   * rather than trusting an unrecognised one.
+   *
+   * @deprecated Presentation only — this value authorizes nothing (DEC-APP-004).
    */
   private parseRole(value: string, userId: string): Role {
     if (isRole(value)) {

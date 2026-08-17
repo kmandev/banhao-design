@@ -1,8 +1,11 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SupabaseAuthGuard } from './supabase-auth.guard';
+import { NO_CAPABILITIES } from '../types';
+import type { ActorCapabilities, AuthenticatedUser } from '../types';
 import type { SupabaseService } from '../../supabase/supabase.service';
 import type { UsersService } from '../../modules/users/users.service';
+import type { CapabilitiesService } from '../../modules/users/capabilities.service';
 
 interface MockRequest {
   headers: Record<string, string | undefined>;
@@ -26,10 +29,14 @@ const profile = {
   updatedAt: '2026-08-09T00:00:00Z',
 };
 
+const customerOnly: ActorCapabilities = { ...NO_CAPABILITIES, customer: true };
+
 function buildGuard(options: {
   isPublic?: boolean;
   claims?: { sub: string } | null;
   profileResult?: typeof profile | null;
+  capabilities?: ActorCapabilities;
+  capabilitiesError?: Error;
 }) {
   const reflector = {
     getAllAndOverride: jest.fn().mockReturnValue(options.isPublic ?? false),
@@ -43,7 +50,18 @@ function buildGuard(options: {
     findById: jest.fn().mockResolvedValue(options.profileResult ?? null),
   } as unknown as UsersService;
 
-  return { guard: new SupabaseAuthGuard(reflector, supabase, users), supabase, users };
+  const capabilities = {
+    resolve: options.capabilitiesError
+      ? jest.fn().mockRejectedValue(options.capabilitiesError)
+      : jest.fn().mockResolvedValue(options.capabilities ?? customerOnly),
+  } as unknown as CapabilitiesService;
+
+  return {
+    guard: new SupabaseAuthGuard(reflector, supabase, users, capabilities),
+    supabase,
+    users,
+    capabilities,
+  };
 }
 
 describe('SupabaseAuthGuard', () => {
@@ -84,17 +102,33 @@ describe('SupabaseAuthGuard', () => {
     await expect(guard.canActivate(contextWith(request))).rejects.toThrow(UnauthorizedException);
   });
 
-  it('attaches the database-backed user on success', async () => {
+  it('attaches the database-backed user with resolved capabilities on success', async () => {
     const { guard } = buildGuard({ claims: { sub: 'user-1' }, profileResult: profile });
     const request: MockRequest = { headers: { authorization: 'Bearer good-token' } };
 
     await expect(guard.canActivate(contextWith(request))).resolves.toBe(true);
-    expect(request.user).toEqual({ id: 'user-1', role: 'CUSTOMER', phone: '+66812345678' });
+    expect(request.user).toEqual({
+      id: 'user-1',
+      phone: '+66812345678',
+      capabilities: customerOnly,
+    });
   });
 
-  it('takes the role from the database, not from the token claims', async () => {
-    // A token claiming ADMIN must not produce an ADMIN principal — the profile wins.
-    const { guard } = buildGuard({
+  it('does not put the legacy profile role on the principal at all', async () => {
+    const { guard } = buildGuard({ claims: { sub: 'user-1' }, profileResult: profile });
+    const request: MockRequest = { headers: { authorization: 'Bearer good-token' } };
+
+    await guard.canActivate(contextWith(request));
+
+    // DEC-APP-004: profiles.role authorizes nothing and must not travel with
+    // the request, or it will drift back into an authorization decision.
+    expect(request.user).not.toHaveProperty('role');
+  });
+
+  it('resolves capabilities from the database, not from token claims', async () => {
+    // A token claiming ADMIN must not produce a privileged principal — the
+    // database membership is the only source, and here it grants nothing.
+    const { guard, capabilities } = buildGuard({
       claims: { sub: 'user-1', role: 'ADMIN' } as { sub: string },
       profileResult: profile,
     });
@@ -102,6 +136,22 @@ describe('SupabaseAuthGuard', () => {
 
     await guard.canActivate(contextWith(request));
 
-    expect((request.user as { role: string }).role).toBe('CUSTOMER');
+    expect(capabilities.resolve).toHaveBeenCalledWith('user-1');
+    const user = request.user as AuthenticatedUser;
+    expect(user.capabilities.platformStaff).toBeNull();
+    expect(user.capabilities.merchant).toEqual([]);
+    expect(user.capabilities.rider).toBeNull();
+  });
+
+  it('rejects the request when capabilities cannot be resolved, rather than proceeding', async () => {
+    const { guard } = buildGuard({
+      claims: { sub: 'user-1' },
+      profileResult: profile,
+      capabilitiesError: new Error('connection reset'),
+    });
+    const request: MockRequest = { headers: { authorization: 'Bearer good-token' } };
+
+    await expect(guard.canActivate(contextWith(request))).rejects.toThrow(UnauthorizedException);
+    expect(request.user).toBeUndefined();
   });
 });

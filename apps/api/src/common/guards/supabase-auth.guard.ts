@@ -9,15 +9,17 @@ import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { UsersService } from '../../modules/users/users.service';
+import { CapabilitiesService } from '../../modules/users/capabilities.service';
 import type { AuthenticatedUser } from '../types';
 
 /**
  * Verifies the Supabase-issued JWT on every request and attaches the resulting
- * user to `request.user`.
+ * user — with its resolved capabilities — to `request.user`.
  *
  * Registered globally, so routes are authenticated by default and must opt out
- * with @Public(). The role is read from the database profile row — never from a
- * client-supplied header or JWT claim the client could influence.
+ * with @Public(). Capabilities are resolved from domain membership in the
+ * database (DEC-033 / DEC-APP-004) — never from `profiles.role`, and never from
+ * a client-supplied header or a JWT claim the client could influence.
  */
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
@@ -27,6 +29,7 @@ export class SupabaseAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly supabase: SupabaseService,
     private readonly users: UsersService,
+    private readonly capabilities: CapabilitiesService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -57,16 +60,29 @@ export class SupabaseAuthGuard implements CanActivate {
     const profile = await this.users.findById(claims.sub);
     if (!profile) {
       // Authenticated with Supabase but no application profile row exists yet.
-      // Treated as unauthorized rather than auto-provisioning, so role
+      // Treated as unauthorized rather than auto-provisioning, so membership
       // assignment stays an explicit, auditable server-side action.
       this.logger.warn(`No profile for authenticated user ${claims.sub}`);
       throw new UnauthorizedException('User profile not found');
     }
 
+    // DEC-APP-004: capabilities come from domain membership, read now, not from
+    // profile.role. If they cannot be determined we do not know what this actor
+    // may do, so the request is refused rather than proceeding with a guess.
+    let capabilities;
+    try {
+      capabilities = await this.capabilities.resolve(profile.id);
+    } catch (error) {
+      this.logger.error(
+        `Capability resolution failed for ${profile.id}: ${(error as Error).message}`,
+      );
+      throw new UnauthorizedException('Could not resolve permissions');
+    }
+
     request.user = {
       id: profile.id,
-      role: profile.role,
       phone: profile.phone,
+      capabilities,
     };
 
     return true;
