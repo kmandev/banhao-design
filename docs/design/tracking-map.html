@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BANHAO tracking map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<style>
+  html,body{margin:0;height:100%;background:#EFE7DC}
+  #map{height:100%;width:100%}
+  .leaflet-control-attribution{font-size:9px}
+  .pin{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;
+       box-shadow:0 4px 12px rgba(31,26,22,.35);font-size:16px;border:3px solid #fff}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+(function(){
+  // ตัวอย่าง: อ.บุณฑริก จ.อุบลราชธานี (พิกัดโดยประมาณ, ข้อมูลจำลอง)
+  var shop=[14.3735,105.4090], cust=[14.3689,105.4165], drv=[14.3712,105.4128];
+  var map=L.map('map',{zoomControl:false,attributionControl:true}).setView([14.3712,105.4128],15);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'© OpenStreetMap contributors'
+  }).addTo(map);
+  function icon(bg,glyph){
+    return L.divIcon({className:'',iconSize:[34,34],iconAnchor:[17,17],
+      html:'<div class="pin" style="background:'+bg+'">'+glyph+'</div>'});
+  }
+  L.marker(shop,{icon:icon('#D6A419','🍜')}).addTo(map).bindTooltip('ร้านตัวอย่าง: ส้มตำป้าทองดี (ข้อมูลจำลอง)');
+  L.marker(cust,{icon:icon('#1F1A16','🏠')}).addTo(map).bindTooltip('บ้านของฉัน (ตัวอย่าง)');
+  var driver=L.marker(drv,{icon:icon('#E4572E','🛵')}).addTo(map).bindTooltip('ไรเดอร์ตัวอย่าง: พี่สมชาย');
+  var route=[[14.3735,105.4090],[14.3725,105.4108],[14.3712,105.4128],[14.3700,105.4148],[14.3689,105.4165]];
+  L.polyline(route,{color:'#E4572E',weight:5,opacity:.85,dashArray:'1,10',lineCap:'round'}).addTo(map);
+  L.polyline(route.slice(0,3),{color:'#E4572E',weight:5,opacity:.95}).addTo(map);
+  map.fitBounds(L.latLngBounds(route).pad(0.25));
+
+  // ไรเดอร์เคลื่อนที่ตามเส้นทาง
+  var i=2,t=0;
+  setInterval(function(){
+    var a=route[i],b=route[Math.min(i+1,route.length-1)];
+    t+=0.02; if(t>=1){t=0;i++; if(i>=route.length-1){i=2;}}
+    driver.setLatLng([a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]);
+  },120);
+})();
+</script>
+</body>
+</html>
