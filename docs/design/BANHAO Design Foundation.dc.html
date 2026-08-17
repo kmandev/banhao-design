@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}
+  a:hover{color:#C2431F}
+  @keyframes shimmer{0%{background-position:-320px 0}100%{background-position:320px 0}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+</style>
+</helmet>
+
+<div style="max-width:1440px;margin:0 auto;padding:48px 40px 120px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex:0 0 auto">🏠</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">BANHAO — DESIGN FOUNDATION</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">Stage 8D · UI foundation across Customer / Merchant / Rider / Admin · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:24px">
+    <sc-for list="{{ sectionNav }}" as="n" hint-placeholder-count="8">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.7;color:#5A4E42;max-width:900px">
+    ทุกโทเคน สี ตัวอักษร ระยะห่าง และคอมโพเนนต์อ้างอิงจาก BANHAO-UX-SPEC-V1 §9 โดยตรง — ดูรายละเอียดเต็มที่
+    <a href="./BANHAO Design System.dc.html">BANHAO Design System v1.0</a> และตัวอย่างแอปลูกค้าแบบใช้งานได้จริงที่
+    <a href="./BANHAO Customer App.dc.html">BANHAO Customer App</a>. หน้านี้แสดงตัวแทนหน้าจอของทั้งสี่แอป ไม่ใช่ทั้ง 69 หน้าจอ
+    ส่วนที่ยังไม่ได้ข้อสรุปผลิตภัณฑ์ (ผู้ให้บริการชำระเงิน / แผนที่) แสดงเป็นพื้นที่ placeholder ที่ระบุชัดเจน ไม่ได้สมมติขึ้นเอง
+  </div>
+
+  <!-- ================= SECTION A — BRAND RECAP ================= -->
+  <div id="secA" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION A — BRAND / VISUAL DIRECTION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 22px">ภาษาภาพของ BANHAO</div>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
+    <sc-for list="{{ brandColors }}" as="c" hint-placeholder-count="6">
+      <div style="border-radius:16px;overflow:hidden;border:1px solid #EAE1D6;background:#fff">
+        <div style="{{ c.swatch }}"></div>
+        <div style="padding:10px 12px 12px">
+          <div style="font-size:13px;font-weight:600">{{ c.name }}</div>
+          <div style="font-size:11px;color:#9A8C7E;margin-top:2px;font-family:'IBM Plex Mono',monospace">{{ c.hex }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">ตัวอักษร — IBM Plex Sans Thai</div>
+      <div style="font-size:28px;font-weight:700;line-height:1.4">สั่งอาหารร้านโปรด</div>
+      <div style="font-size:15px;color:#4A4038;margin-top:6px;line-height:1.65">พร้อมให้ไรเดอร์รับ · ส่งถึงมือใน 25 นาที</div>
+      <div style="font-size:12px;color:#9A8C7E;margin-top:6px;font-family:'IBM Plex Mono',monospace">Mono — ฿130 · #ORD-10245</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">ระยะห่าง (ฐาน 4) และมุมโค้ง</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{ spacing }}" as="s" hint-placeholder-count="5">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:40px;font-size:11px;color:#9A8C7E;font-family:'IBM Plex Mono',monospace">{{ s.px }}</div>
+            <div style="{{ s.bar }}"></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">Elevation</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="height:44px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;padding:0 14px;font-size:12px;color:#7A6E64">flat</div>
+        <div style="height:44px;border-radius:12px;background:#fff;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;align-items:center;padding:0 14px;font-size:12px;color:#7A6E64">raised</div>
+        <div style="height:44px;border-radius:12px;background:#1F1A16;color:#fff;box-shadow:0 -8px 30px rgba(31,26,22,.16);display:flex;align-items:center;padding:0 14px;font-size:12px">sheet / ink</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SECTION B — COMPONENTS ================= -->
+  <div id="secB" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION B — COMPONENT LIBRARY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 22px">คอมโพเนนต์ที่ใช้ร่วมกันทั้งสี่แอป</div>
+
+  <div style="font-size:14px;font-weight:600;color:#5A4E42;margin-bottom:10px">สถานะออเดอร์ (state เดียวกันทุกแอป สีเดียวกันเสมอ)</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:28px">
+    <sc-for list="{{ statusChips }}" as="s" hint-placeholder-count="10">
+      <div style="padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;background:{{ s.bg }};color:{{ s.fg }}">{{ s.label }}</div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">Countdown chip — merchant accept / rider offer / QR</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <sc-for list="{{ countdowns }}" as="cd" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+            <div style="padding:7px 14px;border-radius:10px;font-size:14px;font-weight:700;font-family:'IBM Plex Mono',monospace;{{ cd.style }}">{{ cd.mmss }}</div>
+            <div style="font-size:11px;color:#9A8C7E">{{ cd.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">Status strip — rider operational state</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{ statusStrips }}" as="ss" hint-placeholder-count="4">
+          <div style="height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600;{{ ss.style }}">
+            <span style="width:8px;height:8px;border-radius:50%;background:currentColor"></span>{{ ss.label }}
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">Connection banner — silence must never look like calm</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="padding:9px 12px;border-radius:10px;background:#FBEAEA;color:#B23030;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:#D93A3A;animation:blink 1.2s infinite"></span>การเชื่อมต่อขาดหาย ระบบจะพยายามเชื่อมต่อใหม่โดยอัตโนมัติ
+        </div>
+        <div style="padding:9px 12px;border-radius:10px;background:#FDF3E6;color:#9A7810;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px">
+          <span style="width:12px;height:12px;border:2px solid #9A7810;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span>กำลังเชื่อมต่อใหม่…
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:16px;margin-bottom:28px">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:14px">Order queue card — สามคอลัมน์ของ merchant board</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <sc-for list="{{ queueCards }}" as="q" hint-placeholder-count="3">
+          <div style="border-radius:16px;border:1px solid #EAE1D6;background:{{ q.bg }};padding:14px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#7A6E64">#{{ q.id }}</div>
+              <div style="padding:4px 8px;border-radius:8px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;{{ q.chipStyle }}">{{ q.mmss }}</div>
+            </div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:4px">{{ q.summary }}</div>
+            <div style="font-size:12px;color:#7A6E64;margin-bottom:12px">{{ q.meta }}</div>
+            <div style="height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;{{ q.actionStyle }}">{{ q.actionLabel }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:14px">Offer card — rider งานใหม่ (ต้องเหมือนกันทั้ง 12s และ 20s)</div>
+      <div style="border-radius:18px;background:#1F1A16;color:#fff;padding:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:13px;font-weight:600;opacity:.8">งานจัดส่งใหม่</div>
+          <div style="padding:5px 10px;border-radius:8px;background:#D6A419;color:#1F1A16;font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">00:14</div>
+        </div>
+        <div style="margin-top:14px;font-size:13px;line-height:1.7">
+          <div>📍 รับที่ <b>ร้านส้มตำป้าแดง</b></div>
+          <div>🏁 ส่งที่ <b>บ้านเลขที่ 45 หมู่ 3 ต.บุณฑริก</b></div>
+          <div style="color:#C9BCAE">ระยะทางรวม 3.2 กม. · ค่ารอบนี้ ฿38</div>
+        </div>
+        <div style="height:52px;border-radius:14px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;margin-top:14px">รับงานนี้</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1.3fr 0.7fr;gap:16px;margin-bottom:28px">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:14px">Data table — admin / merchant history (dense, mono สำหรับตัวเลข)</div>
+      <div style="border-radius:14px;border:1px solid #EAE1D6;overflow:hidden">
+        <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr 0.8fr 1fr;background:#F5EEE4;font-size:11px;font-weight:700;color:#7A6E64;padding:10px 14px">
+          <div>เลขออเดอร์</div><div>ร้าน / ลูกค้า</div><div>เวลา</div><div>ยอดรวม</div><div>สถานะ</div>
+        </div>
+        <sc-for list="{{ tableRows }}" as="r" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr 0.8fr 1fr;padding:11px 14px;border-top:1px solid #F0E8DC;font-size:13px;align-items:center">
+            <div style="font-family:'IBM Plex Mono',monospace;color:#7A6E64">#{{ r.id }}</div>
+            <div>{{ r.who }}</div>
+            <div style="color:#9A8C7E">{{ r.time }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace">฿{{ r.amount }}</div>
+            <div><span style="padding:4px 9px;border-radius:8px;font-size:11.5px;font-weight:600;background:{{ r.bg }};color:{{ r.fg }}">{{ r.label }}</span></div>
+          </div>
+        </sc-for>
+        <div style="padding:10px 14px;border-top:1px solid #F0E8DC;display:flex;justify-content:space-between;font-size:12px;color:#9A8C7E">
+          <span>แสดง 5 จาก 128 รายการ</span><span>‹ 1 2 3 … 26 ›</span>
+        </div>
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:14px">Timeline — order_status_history</div>
+      <div style="display:flex;flex-direction:column">
+        <sc-for list="{{ timeline }}" as="t" hint-placeholder-count="5">
+          <div style="display:flex;gap:12px">
+            <div style="display:flex;flex-direction:column;align-items:center">
+              <div style="width:11px;height:11px;border-radius:50%;{{ t.dot }}"></div>
+              <div style="width:2px;flex:1;background:#E9E0D5"></div>
+            </div>
+            <div style="padding-bottom:18px">
+              <div style="font-size:13px;font-weight:600;{{ t.textStyle }}">{{ t.label }}</div>
+              <div style="font-size:11px;color:#9A8C7E">{{ t.time }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:14px">Reason dialog — action ที่ย้อนกลับไม่ได้ต้องมีเหตุผลเสมอ (DEC-032)</div>
+      <div style="border-radius:20px;border:1px solid #EAE1D6;padding:20px;background:#FBF7F1">
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">ปฏิเสธออเดอร์นี้?</div>
+        <div style="font-size:13px;color:#7A6E64;line-height:1.6;margin-bottom:14px">ลูกค้าจะได้รับเงินคืนเต็มจำนวนโดยอัตโนมัติ การกระทำนี้ย้อนกลับไม่ได้</div>
+        <div style="height:76px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;padding:10px 12px;font-size:13px;color:#9A8C7E">ระบุเหตุผล เช่น วัตถุดิบหมด…</div>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1;height:46px;border-radius:13px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+          <div style="flex:1;height:46px;border-radius:13px;background:#D93A3A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">ยืนยันปฏิเสธ</div>
+        </div>
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:14px">Map surface — placeholder จนกว่าจะเลือกผู้ให้บริการแผนที่ (Q-018)</div>
+      <div style="border-radius:16px;background:repeating-linear-gradient(45deg,#F3E7D6,#F3E7D6 10px,#EFE0CB 10px,#EFE0CB 20px);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;color:#9A7810">
+        <div style="font-size:28px">🗺️</div>
+        <div style="font-size:13px;font-weight:600">พื้นที่แผนที่ (map provider ยังไม่กำหนด)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SECTION C — CUSTOMER ================= -->
+  <div id="secC" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION C — CUSTOMER UI</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">เรียกดู → ร้าน → ตะกร้า → ชำระเงิน → ติดตาม</div>
+  <div style="font-size:13.5px;color:#7A6E64;margin-bottom:22px">แอปลูกค้าแบบใช้งานได้จริงทั้งหมดอยู่ที่ <a href="./BANHAO Customer App.dc.html">BANHAO Customer App</a> — ที่นี่แสดงจุดเปลี่ยนสำคัญของ flow</div>
+  <div style="display:flex;gap:18px;overflow:auto;padding-bottom:8px">
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:220px;height:476px;border-radius:30px;background:#FBF7F1;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A;display:flex;flex-direction:column">
+        <div style="padding:14px 12px;display:flex;flex-direction:column;gap:9px">
+          <div style="font-size:10px;color:#7A6E64">ส่งถึง · อ.บุณฑริก</div>
+          <div style="font-size:15px;font-weight:700">สั่งอาหารร้านโปรด</div>
+          <div style="height:32px;border-radius:10px;background:#fff;border:1px solid #E9E0D5;display:flex;align-items:center;padding:0 10px;font-size:11px;color:#9A8C7E">ค้นหาร้าน เมนู…</div>
+          <div style="display:flex;gap:8px;padding:8px;background:#fff;border:1px solid #EAE1D6;border-radius:12px">
+            <div style="width:42px;height:42px;border-radius:10px;background:#F3E7D6;flex:0 0 auto"></div>
+            <div><div style="font-size:12px;font-weight:600">ร้านส้มตำป้าแดง</div><div style="font-size:10px;color:#9A8C7E">4.7 · 15-20 นาที</div></div>
+          </div>
+          <div style="display:flex;gap:8px;padding:8px;background:#fff;border:1px solid #EAE1D6;border-radius:12px">
+            <div style="width:42px;height:42px;border-radius:10px;background:#F3E7D6;flex:0 0 auto"></div>
+            <div><div style="font-size:12px;font-weight:600">ไก่ย่างวิเชียร</div><div style="font-size:10px;color:#9A8C7E">4.5 · 20-25 นาที</div></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">C-01 หน้าแรก</div>
+    </div>
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:220px;height:476px;border-radius:30px;background:#FBF7F1;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A">
+        <div style="height:110px;background:#F3E7D6"></div>
+        <div style="padding:12px">
+          <div style="font-size:15px;font-weight:700">ร้านส้มตำป้าแดง</div>
+          <div style="font-size:10px;color:#9A8C7E;margin-bottom:8px">4.7 · เปิดรับออเดอร์</div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #F0E8DC;font-size:12px"><span>ส้มตำไทย</span><span style="font-family:'IBM Plex Mono',monospace">฿45</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #F0E8DC;font-size:12px"><span>ไก่ย่างครึ่งตัว</span><span style="font-family:'IBM Plex Mono',monospace">฿90</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #F0E8DC;font-size:12px"><span>ข้าวเหนียว</span><span style="font-family:'IBM Plex Mono',monospace">฿10</span></div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">C-06 รายละเอียดร้าน / เมนู</div>
+    </div>
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:220px;height:476px;border-radius:30px;background:#FBF7F1;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A;display:flex;flex-direction:column">
+        <div style="padding:14px;display:flex;flex-direction:column;height:100%;box-sizing:border-box">
+          <div style="font-size:15px;font-weight:700;margin-bottom:10px">ตะกร้าของคุณ</div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;font-size:12px"><span>ส้มตำไทย ×2</span><span style="font-family:'IBM Plex Mono',monospace">฿90</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px"><span>ไก่ย่างครึ่งตัว ×1</span><span style="font-family:'IBM Plex Mono',monospace">฿90</span></div>
+          </div>
+          <div style="border-top:1px solid #E9E0D5;padding-top:10px;display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:10px"><span>รวมทั้งหมด</span><span style="font-family:'IBM Plex Mono',monospace">฿190</span></div>
+          <div style="height:42px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">ไปชำระเงิน</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">C-09 ตะกร้า</div>
+    </div>
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:220px;height:476px;border-radius:30px;background:#FBF7F1;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+        <div style="font-size:13px;font-weight:700">สแกนเพื่อชำระเงิน</div>
+        <div style="width:140px;height:140px;border-radius:14px;background:repeating-linear-gradient(45deg,#F3E7D6,#F3E7D6 8px,#EFE0CB 8px,#EFE0CB 16px);display:flex;align-items:center;justify-content:center;font-size:11px;color:#9A7810;text-align:center;padding:8px;box-sizing:border-box">พื้นที่ QR (ผู้ให้บริการชำระเงินยังไม่กำหนด)</div>
+        <div style="font-size:12px;color:#7A6E64">หมดอายุใน</div>
+        <div style="padding:6px 12px;border-radius:9px;background:#FDF3E6;color:#9A7810;font-size:13px;font-weight:700;font-family:'IBM Plex Mono',monospace">04:32</div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">C-12 ชำระเงิน (QR placeholder)</div>
+    </div>
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:220px;height:476px;border-radius:30px;background:#1F1A16;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A">
+        <div style="padding:16px;color:#fff;display:flex;flex-direction:column;gap:12px;height:100%;box-sizing:border-box">
+          <div style="font-size:13px;opacity:.8">ออเดอร์ #10245</div>
+          <div style="font-size:16px;font-weight:700">กำลังเตรียมอาหาร</div>
+          <div style="flex:1;border-radius:14px;background:repeating-linear-gradient(45deg,#2A231D,#2A231D 8px,#241E19 8px,#241E19 16px);display:flex;align-items:center;justify-content:center;font-size:11px;color:#9A8C7E">พื้นที่แผนที่ (placeholder)</div>
+          <div style="font-size:12px;color:#C9BCAE">คาดว่าจะถึงมือคุณ 13:35</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">C-14 ติดตามออเดอร์</div>
+    </div>
+
+  </div>
+
+  <!-- ================= SECTION D — MERCHANT ================= -->
+  <div id="secD" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION D — MERCHANT UI</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">กระดานทำงานของร้าน — ไม่ใช่แดชบอร์ดการตลาด</div>
+  <div style="font-size:13.5px;color:#7A6E64;margin-bottom:22px">Desktop / แท็บเล็ตหน้าเคาน์เตอร์ · ขอบเขตร้านต้องชัดเจนเสมอ (DEC-UX-005)</div>
+
+  <div style="border-radius:22px;border:1px solid #E9E0D5;background:#fff;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.06)">
+    <div style="padding:14px 22px;background:#1F1A16;color:#fff;display:flex;align-items:center;gap:14px">
+      <div style="width:34px;height:34px;border-radius:10px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:16px">🍲</div>
+      <div>
+        <div style="font-size:14px;font-weight:700">ร้านส้มตำป้าแดง</div>
+        <div style="font-size:11px;color:#C9BCAE">ร้านของฉัน · เปิดรับออเดอร์</div>
+      </div>
+      <div style="margin-left:6px;padding:4px 10px;border-radius:8px;background:#0F8B5F;font-size:11px;font-weight:700">● เปิดร้าน</div>
+      <div style="flex:1"></div>
+      <div style="font-size:12px;color:#C9BCAE">เปลี่ยนร้าน ▾</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#EAE1D6">
+      <sc-for list="{{ boardColumns }}" as="col" hint-placeholder-count="3">
+        <div style="background:#FBF7F1;padding:18px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700">{{ col.title }}</div>
+            <div style="font-size:11px;color:#9A8C7E">{{ col.count }} รายการ</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <sc-for list="{{ col.cards }}" as="q" hint-placeholder-count="2">
+              <div style="border-radius:16px;border:1px solid #EAE1D6;background:{{ q.bg }};padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#7A6E64">#{{ q.id }}</div>
+                  <div style="padding:4px 8px;border-radius:8px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;{{ q.chipStyle }}">{{ q.mmss }}</div>
+                </div>
+                <div style="font-size:14px;font-weight:600;margin-bottom:4px">{{ q.summary }}</div>
+                <div style="font-size:12px;color:#7A6E64;margin-bottom:12px">{{ q.meta }}</div>
+                <div style="height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;{{ q.actionStyle }}">{{ q.actionLabel }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">M-04 รายละเอียดออเดอร์</div>
+      <div style="font-size:13px;line-height:1.9">
+        <div>#10245 · โต๊ะจัดส่ง</div>
+        <div style="color:#7A6E64">ส้มตำไทย ×2, ไก่ย่าง ×1, ข้าวเหนียว ×2</div>
+        <div style="font-family:'IBM Plex Mono',monospace;margin-top:4px">รวม ฿186</div>
+      </div>
+      <div style="height:44px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-top:12px">พร้อมให้ไรเดอร์รับ</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">M-11 จัดการเมนู</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{ menuRows }}" as="m" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0E8DC">
+            <div style="font-size:13px">{{ m.name }}</div>
+            <div style="width:38px;height:22px;border-radius:11px;background:{{ m.toggleBg }};position:relative">
+              <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;{{ m.togglePos }}"></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">M-13 รายได้</div>
+      <div style="font-size:28px;font-weight:700;font-family:'IBM Plex Mono',monospace">฿4,280</div>
+      <div style="font-size:12px;color:#7A6E64;margin-bottom:12px">วันนี้ · 32 ออเดอร์</div>
+      <div style="display:flex;gap:3px;align-items:flex-end;height:56px">
+        <sc-for list="{{ earningsBars }}" as="b" hint-placeholder-count="7">
+          <div style="flex:1;border-radius:4px 4px 0 0;background:#F3D9C7;height:{{ b.h }}"></div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SECTION E — RIDER ================= -->
+  <div id="secE" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION E — RIDER UI</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">ใช้งานมือเดียวได้ ระหว่างขับ</div>
+  <div style="font-size:13.5px;color:#7A6E64;margin-bottom:22px">64px primary action · ไม่มี gesture · action ทำลายล้างต้องผ่าน dialog เสมอ</div>
+
+  <div style="display:flex;gap:18px;overflow:auto;padding-bottom:8px">
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:240px;height:520px;border-radius:32px;background:#FBF7F1;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A;display:flex;flex-direction:column">
+        <div style="height:38px;background:#EAF6EF;color:#0F8B5F;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700"><span style="width:7px;height:7px;border-radius:50%;background:#0F8B5F"></span>ออนไลน์ พร้อมรับงาน</div>
+        <div style="flex:1;padding:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#9A8C7E">
+          <div style="font-size:26px">🛵</div><div style="font-size:12px">รอออเดอร์ใหม่…</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">R-01 หน้าหลัก / สถานะ</div>
+    </div>
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:240px;height:520px;border-radius:32px;background:#1F1A16;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A">
+        <div style="padding:16px;color:#fff;height:100%;box-sizing:border-box;display:flex;flex-direction:column">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:12px;opacity:.8">งานจัดส่งใหม่</div>
+            <div style="padding:4px 9px;border-radius:8px;background:#D6A419;color:#1F1A16;font-size:12px;font-weight:700;font-family:'IBM Plex Mono',monospace">00:14</div>
+          </div>
+          <div style="flex:1;font-size:12px;line-height:1.9;margin-top:12px">
+            <div>📍 รับที่ ร้านส้มตำป้าแดง</div>
+            <div>🏁 ส่งที่ หมู่ 3 ต.บุณฑริก</div>
+            <div style="color:#C9BCAE">3.2 กม. · ฿38</div>
+          </div>
+          <div style="height:52px;border-radius:14px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">รับงานนี้</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">R-05 งานเสนอเข้ามา</div>
+    </div>
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:240px;height:520px;border-radius:32px;background:#FBF7F1;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A;display:flex;flex-direction:column">
+        <div style="height:36px;background:#1F1A16;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">กำลังจัดส่งงาน #10245</div>
+        <div style="flex:1;background:repeating-linear-gradient(45deg,#F3E7D6,#F3E7D6 8px,#EFE0CB 8px,#EFE0CB 16px);display:flex;align-items:center;justify-content:center;font-size:11px;color:#9A7810;text-align:center;padding:8px">พื้นที่แผนที่ (placeholder)</div>
+        <div style="padding:12px">
+          <div style="font-size:12px;color:#5A4E42;margin-bottom:8px">ปลายทาง: บ้านเลขที่ 45 หมู่ 3</div>
+          <div style="height:52px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">ถึงจุดส่งแล้ว</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">R-09 กำลังจัดส่ง</div>
+    </div>
+
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="width:240px;height:520px;border-radius:32px;background:#FBF7F1;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.18),0 0 0 7px #16110D,0 0 0 8px #3A302A">
+        <div style="padding:16px;display:flex;flex-direction:column;gap:12px;height:100%;box-sizing:border-box">
+          <div style="font-size:13px;font-weight:700">ยืนยันการส่งสำเร็จ</div>
+          <div style="flex:1;border-radius:14px;background:#F5EEE4;display:flex;align-items:center;justify-content:center;font-size:26px">📷</div>
+          <div style="font-size:11px;color:#9A8C7E">ถ่ายรูปหลักฐานการส่ง (ถ้าจำเป็น)</div>
+          <div style="height:52px;border-radius:14px;background:#0F8B5F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700">ยืนยันส่งสำเร็จ</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;font-weight:600;color:#5A4E42">R-11 หลักฐานการส่ง</div>
+    </div>
+
+  </div>
+
+  <!-- ================= SECTION F — ADMIN ================= -->
+  <div id="secF" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION F — ADMIN UI</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">แน่น เป็นตาราง มองเห็นทั้งแพลตฟอร์ม</div>
+  <div style="font-size:13.5px;color:#7A6E64;margin-bottom:22px">Desktop-first · action อันตรายต้องมี reason dialog เสมอ</div>
+
+  <div style="display:flex;gap:1px;background:#EAE1D6;border-radius:22px;overflow:hidden;border:1px solid #E9E0D5;box-shadow:0 4px 14px rgba(31,26,22,.06)">
+    <div style="width:210px;flex:0 0 210px;background:#1F1A16;color:#F5EFE7;padding:18px 14px">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.1em;margin-bottom:16px">BANHAO ADMIN</div>
+      <sc-for list="{{ adminNav }}" as="a" hint-placeholder-count="9">
+        <div style="padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:2px;{{ a.style }}">{{ a.label }}</div>
+      </sc-for>
+    </div>
+    <div style="flex:1;background:#FBF7F1;padding:22px">
+      <div style="display:flex;gap:14px;margin-bottom:18px">
+        <sc-for list="{{ adminStats }}" as="st" hint-placeholder-count="4">
+          <div style="flex:1;background:#fff;border:1px solid #EAE1D6;border-radius:16px;padding:14px 16px">
+            <div style="font-size:11px;color:#9A8C7E;margin-bottom:4px">{{ st.label }}</div>
+            <div style="font-size:22px;font-weight:700;font-family:'IBM Plex Mono',monospace">{{ st.value }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:#fff;border:1px solid #EAE1D6;border-radius:16px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr 0.8fr 1fr;background:#F5EEE4;font-size:11px;font-weight:700;color:#7A6E64;padding:10px 14px">
+          <div>เลขออเดอร์</div><div>ร้าน / ลูกค้า</div><div>เวลา</div><div>ยอดรวม</div><div>สถานะ</div>
+        </div>
+        <sc-for list="{{ tableRows }}" as="r" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:1fr 1.4fr 1fr 0.8fr 1fr;padding:11px 14px;border-top:1px solid #F0E8DC;font-size:13px;align-items:center">
+            <div style="font-family:'IBM Plex Mono',monospace;color:#7A6E64">#{{ r.id }}</div>
+            <div>{{ r.who }}</div>
+            <div style="color:#9A8C7E">{{ r.time }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace">฿{{ r.amount }}</div>
+            <div><span style="padding:4px 9px;border-radius:8px;font-size:11.5px;font-weight:600;background:{{ r.bg }};color:{{ r.fg }}">{{ r.label }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">A-09 อนุมัติไรเดอร์</div>
+      <sc-for list="{{ riderApprovals }}" as="ra" hint-placeholder-count="2">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #F0E8DC">
+          <div>
+            <div style="font-size:13px;font-weight:600">{{ ra.name }}</div>
+            <div style="font-size:11px;color:#9A8C7E">{{ ra.meta }}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <div style="padding:6px 12px;border-radius:9px;border:1px solid #E9E0D5;font-size:12px;font-weight:600">ปฏิเสธ</div>
+            <div style="padding:6px 12px;border-radius:9px;background:#0F8B5F;color:#fff;font-size:12px;font-weight:700">อนุมัติ</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:13px;font-weight:600;color:#7A6E64;margin-bottom:12px">A-13 มอบหมายไรเดอร์ใหม่ (ต้องระบุเหตุผล)</div>
+      <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-bottom:10px">ออเดอร์ #10245 — ไรเดอร์เดิมไม่ตอบสนองเกิน 5 นาที</div>
+      <div style="height:60px;border-radius:12px;border:1px solid #E9E0D5;background:#FBF7F1;padding:10px 12px;font-size:13px;color:#9A8C7E;margin-bottom:12px">ระบุเหตุผลการมอบหมายใหม่…</div>
+      <div style="height:44px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">ยืนยันมอบหมายไรเดอร์ใหม่</div>
+    </div>
+  </div>
+
+  <!-- ================= SECTION G — STATE LIBRARY ================= -->
+  <div id="secG" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION G — STATE LIBRARY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 22px">ไม่มีทางตัน ทุก error ต้องมีทางไปต่อ</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <sc-for list="{{ stateLibrary }}" as="st" hint-placeholder-count="6">
+      <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.1em;color:#9A8C7E">{{ st.kind }}</div>
+        <div style="{{ st.visual }}"></div>
+        <div style="font-size:14px;font-weight:700">{{ st.title }}</div>
+        <div style="font-size:12.5px;color:#7A6E64;line-height:1.6">{{ st.desc }}</div>
+        <div style="height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;{{ st.actionStyle }}">{{ st.actionLabel }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ================= SECTION H — RESPONSIVE ================= -->
+  <div id="secH" style="height:1px;background:#EAE1D6;margin:52px 0 36px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION H — RESPONSIVE BEHAVIOR</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">ความหนาแน่นเปลี่ยนตามอุปกรณ์ ไม่ใช่แค่ย่อขนาด</div>
+  <div style="font-size:13.5px;color:#7A6E64;margin-bottom:22px">Merchant board: desktop 3 คอลัมน์เต็ม → tablet 3 คอลัมน์แคบ (นับนิ้วเคาน์เตอร์) → ไม่รองรับมือถือในเวอร์ชันนี้</div>
+  <div style="display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap">
+    <div style="flex:0 0 auto">
+      <div style="width:520px;border-radius:16px;border:1px solid #E9E0D5;background:#FBF7F1;padding:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <sc-for list="{{ responsiveMini }}" as="m" hint-placeholder-count="3">
+          <div style="background:{{ m.bg }};border-radius:10px;padding:8px;font-size:10px;font-weight:700;{{ m.fg }}">{{ m.title }}</div>
+        </sc-for>
+      </div>
+      <div style="text-align:center;font-size:12px;color:#9A8C7E;margin-top:8px">Desktop 1280px+</div>
+    </div>
+    <div style="flex:0 0 auto">
+      <div style="width:340px;border-radius:16px;border:1px solid #E9E0D5;background:#FBF7F1;padding:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+        <sc-for list="{{ responsiveMini }}" as="m" hint-placeholder-count="3">
+          <div style="background:{{ m.bg }};border-radius:8px;padding:6px 4px;font-size:9px;font-weight:700;{{ m.fg }}">{{ m.title }}</div>
+        </sc-for>
+      </div>
+      <div style="text-align:center;font-size:12px;color:#9A8C7E;margin-top:8px">Tablet 834px — counter</div>
+    </div>
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px">
+      <div style="width:150px;height:326px;border-radius:22px;background:#FBF7F1;overflow:hidden;position:relative;box-shadow:0 0 0 5px #16110D,0 0 0 6px #3A302A;display:flex;flex-direction:column">
+        <div style="background:#E4572E;color:#fff;padding:10px;font-size:9px;font-weight:700">รายการอาหาร</div>
+        <div style="flex:1;padding:8px;display:flex;flex-direction:column;gap:6px">
+          <div style="height:36px;border-radius:8px;background:#F3E7D6"></div>
+          <div style="height:36px;border-radius:8px;background:#F3E7D6"></div>
+          <div style="height:36px;border-radius:8px;background:#F3E7D6"></div>
+        </div>
+        <div style="height:30px;background:#1F1A16;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">ตะกร้า · ฿186</div>
+      </div>
+      <div style="font-size:12px;color:#9A8C7E">Customer / Rider — mobile only</div>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const CHIP = 'padding:4px 8px;border-radius:8px;font-size:11px;font-weight:700;font-family:"IBM Plex Mono",monospace';
+const NORMAL_CD = 'background:#EAF6EF;color:#0F8B5F';
+const WARN_CD = 'background:#FDF3E6;color:#B98418';
+const EXP_CD = 'background:#FBEAEA;color:#D93A3A';
+
+const STATUS = [
+  ['CREATED','สร้างออเดอร์แล้ว','#EEF3F8','#2E6FB7'],
+  ['PENDING_PAYMENT','รอชำระเงิน','#FDF3E6','#B98418'],
+  ['PAID','ชำระเงินแล้ว','#EAF6EF','#0F8B5F'],
+  ['MERCHANT_ACCEPTED','ร้านรับออเดอร์แล้ว','#FDEEE7','#C2431F'],
+  ['PREPARING','กำลังเตรียมอาหาร','#FDEEE7','#E4572E'],
+  ['READY_FOR_PICKUP','พร้อมให้ไรเดอร์รับ','#FBF1DC','#9A7810'],
+  ['PICKED_UP','ไรเดอร์รับอาหารแล้ว','#EFEAE4','#5A4E42'],
+  ['DELIVERING','กำลังจัดส่ง','#1F1A16','#FFFFFF'],
+  ['DELIVERED','จัดส่งสำเร็จ','#EAF6EF','#0F8B5F'],
+  ['CANCELLED','ออเดอร์ถูกยกเลิก','#FBEAEA','#D93A3A'],
+];
+
+class Component extends DCLogic {
+  renderVals() {
+    const sectionNav = [
+      {href:'#secA', label:'A · Brand'},
+      {href:'#secB', label:'B · Components'},
+      {href:'#secC', label:'C · Customer'},
+      {href:'#secD', label:'D · Merchant'},
+      {href:'#secE', label:'E · Rider'},
+      {href:'#secF', label:'F · Admin'},
+      {href:'#secG', label:'G · States'},
+      {href:'#secH', label:'H · Responsive'},
+    ];
+
+    const brandColors = [
+      {name:'Primary', hex:'#E4572E', swatch:'height:56px;background:#E4572E'},
+      {name:'Primary pressed', hex:'#C2431F', swatch:'height:56px;background:#C2431F'},
+      {name:'Gold', hex:'#D6A419', swatch:'height:56px;background:#D6A419'},
+      {name:'Ink', hex:'#1F1A16', swatch:'height:56px;background:#1F1A16'},
+      {name:'Cream', hex:'#FBF7F1', swatch:'height:56px;background:#FBF7F1;border-bottom:1px solid #EAE1D6'},
+      {name:'Surface', hex:'#FFFFFF', swatch:'height:56px;background:#FFFFFF;border-bottom:1px solid #EAE1D6'},
+    ];
+
+    const spacing = [4,8,12,16,24,32].map(px => ({px: px+'px', bar:`height:8px;border-radius:4px;background:#E4572E;width:${px*4}px`}));
+
+    const statusChips = STATUS.map(([code,label,bg,fg]) => ({code,label,bg,fg}));
+    const statusByCode = Object.fromEntries(STATUS.map(([code,label,bg,fg]) => [code,{label,bg,fg}]));
+
+    const countdowns = [
+      {label:'ปกติ', mmss:'04:32', style:NORMAL_CD},
+      {label:'ใกล้หมดเวลา', mmss:'00:48', style:WARN_CD},
+      {label:'หมดเวลา', mmss:'00:00', style:EXP_CD},
+    ];
+
+    const statusStrips = [
+      {label:'ออนไลน์ พร้อมรับงาน', style:'background:#EAF6EF;color:#0F8B5F'},
+      {label:'กำลังจัดส่งงาน', style:'background:#1F1A16;color:#fff'},
+      {label:'พักงานชั่วคราว', style:'background:#FDF3E6;color:#9A7810'},
+      {label:'ออฟไลน์', style:'background:#F0EAE2;color:#9A8C7E'},
+    ];
+
+    const queueCards = [
+      {id:'10245', mmss:'02:14', chipStyle:WARN_CD, bg:'#fff', summary:'ส้มตำไทย ×2, ไก่ย่าง ×1', meta:'รอร้านรับออเดอร์', actionLabel:'รับออเดอร์', actionStyle:'background:#E4572E;color:#fff'},
+      {id:'10241', mmss:'06:40', chipStyle:NORMAL_CD, bg:'#fff', summary:'ข้าวเหนียวหมูปิ้ง ×3', meta:'กำลังเตรียมอาหาร', actionLabel:'พร้อมให้รับ', actionStyle:'background:#E4572E;color:#fff'},
+      {id:'10238', mmss:'—', chipStyle:'background:#EAF6EF;color:#0F8B5F', bg:'#fff', summary:'ต้มยำกุ้ง ×1', meta:'รอไรเดอร์มารับ', actionLabel:'พร้อมแล้ว', actionStyle:'background:#F0EAE2;color:#7A6E64'},
+    ];
+
+    const tableRows = [
+      {id:'10245', who:'ส้มตำป้าแดง / สมชาย ใจดี', time:'13:20', amount:'186', ...statusByCode.PREPARING},
+      {id:'10244', who:'ไก่ย่างวิเชียร / นภา ทองดี', time:'13:12', amount:'220', ...statusByCode.DELIVERING},
+      {id:'10243', who:'ก๋วยเตี๋ยวเรือ / อรุณ พิทักษ์', time:'12:58', amount:'90', ...statusByCode.DELIVERED},
+      {id:'10242', who:'ส้มตำป้าแดง / วิภา สายทอง', time:'12:41', amount:'156', ...statusByCode.DELIVERED},
+      {id:'10241', who:'ครัวคุณยาย / ธนกร ชัยมงคล', time:'12:30', amount:'310', ...statusByCode.CANCELLED},
+    ];
+
+    const timeline = [
+      {label:'สั่งอาหารสำเร็จ', time:'13:02', dot:'background:#0F8B5F', textStyle:'color:#1F1A16'},
+      {label:'ชำระเงินแล้ว', time:'13:03', dot:'background:#0F8B5F', textStyle:'color:#1F1A16'},
+      {label:'ร้านรับออเดอร์แล้ว', time:'13:05', dot:'background:#0F8B5F', textStyle:'color:#1F1A16'},
+      {label:'กำลังเตรียมอาหาร', time:'ตอนนี้', dot:'background:#E4572E;box-shadow:0 0 0 4px #FDEEE7', textStyle:'color:#E4572E'},
+      {label:'ไรเดอร์กำลังจัดส่ง', time:'ต่อไป', dot:'background:#E9E0D5', textStyle:'color:#9A8C7E'},
+    ];
+
+    const menuRows = [
+      {name:'ส้มตำไทย', toggleBg:'#0F8B5F', togglePos:'right:2px'},
+      {name:'ไก่ย่าง', toggleBg:'#0F8B5F', togglePos:'right:2px'},
+      {name:'ข้าวเหนียว (หมดชั่วคราว)', toggleBg:'#E9E0D5', togglePos:'left:2px'},
+    ];
+
+    const earningsBars = [22,30,18,40,52,34,46].map(h => ({h: h+'px'}));
+
+    const boardColumns = [
+      {title:'ออเดอร์ใหม่', count:2, cards:[queueCards[0], {id:'10246', mmss:'04:58', chipStyle:NORMAL_CD, bg:'#fff', summary:'ต้มแซ่บกระดูกหมู ×1', meta:'รอร้านรับออเดอร์', actionLabel:'รับออเดอร์', actionStyle:'background:#E4572E;color:#fff'}]},
+      {title:'กำลังเตรียม', count:1, cards:[queueCards[1]]},
+      {title:'พร้อมส่ง', count:1, cards:[queueCards[2]]},
+    ];
+
+    const adminNav = ['ภาพรวม','ออเดอร์','ร้านค้า','ไรเดอร์','ลูกค้า','พนักงาน','สิทธิ์การใช้งาน','จัดการงานจัดส่ง','บันทึกการตรวจสอบ'].map((label,i) =>
+      ({label, style: i===1 ? 'background:#E4572E;color:#fff;font-weight:700' : 'color:#C9BCAE'}));
+
+    const adminStats = [
+      {label:'ออเดอร์วันนี้', value:'214'},
+      {label:'กำลังดำเนินการ', value:'18'},
+      {label:'ค้างเกินเวลา', value:'2'},
+      {label:'รายได้แพลตฟอร์มวันนี้', value:'฿2,140'},
+    ];
+
+    const riderApprovals = [
+      {name:'สมหมาย รักสงบ', meta:'สมัคร 2 วันที่แล้ว · เอกสารครบ'},
+      {name:'ปิยะ วงศ์คำ', meta:'สมัครวันนี้ · รอตรวจใบขับขี่'},
+    ];
+
+    const stateLibrary = [
+      {kind:'LOADING', title:'กำลังโหลดรายการร้าน', desc:'แสดง skeleton แทนพื้นที่จริง ไม่ใช้ spinner เต็มจอ', visual:'height:70px;border-radius:12px;background:linear-gradient(90deg,#F0E8DC 0%,#F7F1E8 50%,#F0E8DC 100%);background-size:640px 100%;animation:shimmer 1.4s infinite', actionLabel:'—', actionStyle:'background:#F0EAE2;color:#B0A499'},
+      {kind:'EMPTY', title:'ยังไม่มีออเดอร์เข้ามา', desc:'อธิบายสถานะที่แท้จริง พร้อมสิ่งที่ทำได้ต่อ', visual:'height:70px;border-radius:12px;background:#F5EEE4;display:flex;align-items:center;justify-content:center;font-size:26px', actionLabel:'ดูเมนูร้าน', actionStyle:'background:#F0EAE2;color:#5A4E42'},
+      {kind:'ERROR', title:'ยืนยันการสั่งซื้อไม่ได้', desc:'ไม่สามารถยืนยันการสั่งซื้อได้ กรุณาตรวจสอบรายการอาหารอีกครั้ง', visual:'height:70px;border-radius:12px;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-size:26px;color:#D93A3A', actionLabel:'ลองอีกครั้ง', actionStyle:'background:#E4572E;color:#fff'},
+      {kind:'OFFLINE / RECONNECT', title:'การเชื่อมต่อขาดหาย', desc:'ระบบจะพยายามเชื่อมต่อใหม่โดยอัตโนมัติ — ความเงียบต้องไม่ดูเหมือนไม่มีออเดอร์', visual:'height:70px;border-radius:12px;background:#FDF3E6;display:flex;align-items:center;justify-content:center;font-size:26px;color:#9A7810', actionLabel:'เชื่อมต่อใหม่ตอนนี้', actionStyle:'background:#F0EAE2;color:#5A4E42'},
+      {kind:'PERMISSION', title:'บัญชีถูกระงับการใช้งาน', desc:'ร้านนี้ไม่อยู่ในสิทธิ์การเข้าถึงของคุณ ติดต่อผู้ดูแลระบบหากคิดว่าไม่ถูกต้อง', visual:'height:70px;border-radius:12px;background:#F5EEE4;display:flex;align-items:center;justify-content:center;font-size:26px', actionLabel:'ติดต่อผู้ดูแลระบบ', actionStyle:'background:#F0EAE2;color:#5A4E42'},
+      {kind:'DESTRUCTIVE CONFIRM', title:'ยกเลิกออเดอร์นี้?', desc:'ลูกค้าได้ชำระเงินแล้ว การยกเลิกจะคืนเงินอัตโนมัติและย้อนกลับไม่ได้', visual:'height:70px;border-radius:12px;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-size:26px;color:#D93A3A', actionLabel:'ยืนยันยกเลิก', actionStyle:'background:#D93A3A;color:#fff'},
+    ];
+
+    const responsiveMini = [
+      {title:'ออเดอร์ใหม่', bg:'#fff', fg:'color:#1F1A16'},
+      {title:'กำลังเตรียม', bg:'#fff', fg:'color:#1F1A16'},
+      {title:'พร้อมส่ง', bg:'#fff', fg:'color:#1F1A16'},
+    ];
+
+    return {
+      sectionNav, brandColors, spacing, statusChips, countdowns, statusStrips,
+      queueCards, tableRows, timeline, menuRows, earningsBars, boardColumns,
+      adminNav, adminStats, riderApprovals, stateLibrary, responsiveMini,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
