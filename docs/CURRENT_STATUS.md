@@ -171,6 +171,16 @@ Phone auth enabled with Supabase Test OTP (no SMS provider). Setup:
 > states the live project was never touched. That statement was accurate for the
 > migration-authoring task it documents; the application step happened
 > afterwards. The report's verification content remains valid and unchanged.
+>
+> **Independent read-only verification.** A subsequent task ran `supabase
+> projects list` (confirming the linked project is `banhao-dev`,
+> `yssnwnboiwldogmlvvlw`) and `supabase migration list` (a read-only
+> local-vs-remote comparison — no apply, no repair, no mutation) directly
+> against the live project. Result: all 16 local migration versions
+> (`20260809000001` … `20260811000013`) matched an identical remote entry —
+> **16/16 applied, 0 pending, 0 remote-only, 0 mismatches, correct order.** No
+> schema or data was modified by this check. The 16/16 claim above is no
+> longer solely the Product Owner's brief — it is now independently confirmed.
 
 DEC-033 replaced the proposed generic `user_roles` table with **domain
 membership** — Customer implicit, Merchant via `restaurant_members`, Rider via

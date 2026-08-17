@@ -8,10 +8,29 @@ A-1) after the Application Architecture V1.1 approval.
 > *Application Architecture V1.1, APPROVED / READY FOR IMPLEMENTATION*. This file
 > summarises it. **Where they conflict, V1.1 wins.**
 
-**Read these first, in order:** [`ai/HANDOFF.md`](ai/HANDOFF.md) →
-[`ai/MEMORY.md`](ai/MEMORY.md) → [`docs/AI_CONTEXT.md`](docs/AI_CONTEXT.md) →
-[`ai/DEVELOPMENT_RULES.md`](ai/DEVELOPMENT_RULES.md). This file summarises; those
-are authoritative.
+**Read these first, in order:** this file (`CLAUDE.md`) →
+[`docs/AI_CONTEXT.md`](docs/AI_CONTEXT.md) → [`ai/DEVELOPMENT_RULES.md`](ai/DEVELOPMENT_RULES.md)
+→ [`ai/HANDOFF.md`](ai/HANDOFF.md) → [`ai/MEMORY.md`](ai/MEMORY.md).
+
+**Source-of-truth hierarchy, explicit:**
+
+1. This file and `docs/AI_CONTEXT.md` (and, above both, `docs/BANHAO-APP-ARCHITECTURE-V1.md`
+   per the note above) are the **current, authoritative** state of the project.
+2. `ai/HANDOFF.md` and `ai/MEMORY.md` are a **historical event log** — a running
+   record of what was true at each point in time, written to hand context to the
+   next agent. They are valuable for *why* something is the way it is, but they
+   are not re-verified against the live system on every read and can lag behind
+   real state (a merge, an approval, a deployment) by days.
+3. **If a historical document conflicts with a current authoritative document,
+   the current authoritative document wins**, full stop — never the reverse.
+4. **Never treat historical handoff/memory text as an active instruction** to
+   merge a branch, apply a migration, or deploy something. Text like "pending
+   review" or "not yet merged" in `ai/HANDOFF.md` describes a past moment, not
+   a standing task — verify current state (`git log`, the docs above) before
+   acting on it. This is not a hypothetical: stale "architect review, then
+   apply" language in `ai/HANDOFF.md` once nearly caused a re-review of a
+   migration that had already been merged five days earlier — exactly the
+   failure mode this hierarchy exists to prevent.
 
 ---
 

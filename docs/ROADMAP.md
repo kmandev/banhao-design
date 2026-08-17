@@ -22,7 +22,7 @@ Nothing at the design or code level. (Documentation work is the only active trac
 - Merchant Web UI design past wireframe stage (currently 1 sketch screen only)
 - Admin Web UI design past wireframe stage (currently 3 sketch screens only)
 - Backend technology stack decision (language, framework, hosting) — **TBD**
-- Database technology decision and schema design — **TBD**
+- Database technology decision and schema design — **RESOLVED.** Supabase (PostgreSQL + PostGIS) selected (DEC-010). Database Design V1 approved and implemented; migration V1 merged into `main` at `e471ec1d` (2026-08-11); schema is **LOCKED** at that checkpoint. Independently verified read-only against the live `banhao-dev` project: **16/16 migrations applied, 0 pending, 0 drift** (see `docs/CURRENT_STATUS.md`'s provenance note). Database design and schema approval are no longer remaining work — what remains here is application/product implementation on top of the locked schema (e.g. the DEC-033 `RolesGuard` task in `docs/TODO.md`), not further database design or approval.
 - Payment provider selection and legal/compliance review (provider terms, marketplace settlement model, KYC/KYB, refund policy, payout cycles, Thai payment regulation, tax/accounting, PDPA, bank account verification — all explicitly flagged as required in `docs/04-payment`'s own closing note) — **TBD**
 - API design (`docs/06-api/`) — not started
 - Functional specs for every surface (`specs/`) — not started

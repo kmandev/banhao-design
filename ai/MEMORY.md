@@ -62,7 +62,7 @@ The business layer is documented, and **its P0 decisions are now approved** (EVE
 
 ## Technical Architecture
 
-**Designed, not built** (EVENT-015, 2026-08-11): [`docs/TECHNICAL_ARCHITECTURE.md`](../docs/TECHNICAL_ARCHITECTURE.md) · [`docs/ARCHITECTURE_DECISIONS.md`](../docs/ARCHITECTURE_DECISIONS.md) (**ADR-001…ADR-012, all `PROPOSED`**) · [`docs/OPEN_TECHNICAL_QUESTIONS.md`](../docs/OPEN_TECHNICAL_QUESTIONS.md) (**TQ-001…TQ-016**).
+**Designed at EVENT-015 (2026-08-11)**: [`docs/TECHNICAL_ARCHITECTURE.md`](../docs/TECHNICAL_ARCHITECTURE.md) · [`docs/ARCHITECTURE_DECISIONS.md`](../docs/ARCHITECTURE_DECISIONS.md) (**ADR-001…ADR-012 — `ACCEPTED`, ratified 2026-08-12 via Application Architecture V1.1 §16; `PROPOSED` only at the time of EVENT-015**) · [`docs/OPEN_TECHNICAL_QUESTIONS.md`](../docs/OPEN_TECHNICAL_QUESTIONS.md) (**TQ-001…TQ-016**).
 
 The spine: **NestJS writes, clients read, Postgres decides.** Domain tables grant no `INSERT`/`UPDATE`/`DELETE` to `authenticated`; every mutation goes through NestJS on the service-role client inside a transaction, guarded by the owning module's state machine. RLS is defence in depth, not the authorization system.
 
@@ -74,7 +74,9 @@ Concurrency is a **guarded conditional UPDATE** — the state check lives in the
 
 **Designed AND implemented** (EVENT-016 design, EVENT-017 DEC-033/034 lock, EVENT-018 migration, all 2026-08-11): [`docs/DATABASE_DESIGN.md`](../docs/DATABASE_DESIGN.md) (46 tables conceptually) · [`docs/OPEN_DATABASE_QUESTIONS.md`](../docs/OPEN_DATABASE_QUESTIONS.md) (**DBQ-001…DBQ-015** — 2 answered by DEC-033/034, 1 raised by implementation) · [`docs/DATABASE_MIGRATION_V1_REPORT.md`](../docs/DATABASE_MIGRATION_V1_REPORT.md).
 
-**11 migrations on `feature/supabase-migration-v1`** (not merged), applied strictly after the three existing ones, which remain byte-identical and untouched. **The live/remote Supabase project (`banhao-dev`) was never touched** — no `supabase db push`, no `supabase link` — verified by two Docker-based test suites: **60/60 assertions pass**, including the rider race condition proven with two genuinely concurrent `psql` client processes racing the same delivery row (not a single-session simulation). The winner differed run to run, confirming real database-level serialisation.
+**At EVENT-018 (2026-08-11), 11 new migrations existed on `feature/supabase-migration-v1`**, applied strictly after the three existing ones, which remained byte-identical and untouched; two further hardening migrations were added afterwards (EVENT-019/020, rider view row isolation and reassignment atomicity), bringing the new-migration count to 13 and the total to 16. **At that time**, the live/remote Supabase project (`banhao-dev`) had not been touched — no `supabase db push`, no `supabase link` — verified by two Docker-based test suites: **60/60 assertions pass**, including the rider race condition proven with two genuinely concurrent `psql` client processes racing the same delivery row (not a single-session simulation); the winner differed run to run, confirming real database-level serialisation.
+
+**Subsequently merged and applied.** All 16 migrations are merged into `main` (merge commit `e471ec1d`, 2026-08-11) and the schema is **LOCKED** at that checkpoint. A later read-only task independently verified the live `banhao-dev` project directly (`supabase migration list`, no mutation): **16/16 applied, 0 pending, 0 drift** — see `docs/CURRENT_STATUS.md`'s provenance note for the full result. Do not re-merge this branch and do not re-apply these migrations.
 
 The live `profiles` RLS pattern is the template every new table follows: **revoke-first**, narrow column grants, RLS on, policies scoped `to authenticated`, `security definer` trigger backstop. Only three tables accept a direct client write — `addresses`, `carts`, `notifications.read_at`.
 
