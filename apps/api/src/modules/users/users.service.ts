@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Role, UserProfile } from '@banhao/types';
 import { isRole } from '@banhao/types';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { DomainError } from '../../common/errors/domain-error';
 
 interface ProfileRow {
   id: string;
@@ -48,6 +49,35 @@ export class UsersService {
     }
 
     return this.toProfile(data);
+  }
+
+  /**
+   * Updates the caller's own display name.
+   *
+   * `display_name` is the only column a user may change about themselves — the
+   * deployed grant is literally `grant update (display_name) on public.profiles
+   * to authenticated` (migration `20260809000003`). `role`, `phone` and `id` are
+   * not updatable by anyone through this path, so there is no field here that
+   * could carry authorization meaning even if a caller tried.
+   *
+   * Scoped by `id = userId`, where `userId` is the verified JWT subject. A user
+   * cannot address another user's row: the filter is not derived from anything
+   * in the request body.
+   */
+  async updateDisplayName(userId: string, displayName: string): Promise<UserProfile | null> {
+    const { data, error } = await this.supabase.admin
+      .from('profiles')
+      .update({ display_name: displayName })
+      .eq('id', userId)
+      .select('id, role, phone, display_name, created_at, updated_at')
+      .maybeSingle<ProfileRow>();
+
+    if (error) {
+      this.logger.error(`Failed to update profile ${userId}: ${error.message}`);
+      throw new DomainError('INTERNAL_ERROR', { message: 'Could not update profile' });
+    }
+
+    return data ? this.toProfile(data) : null;
   }
 
   private toProfile(row: ProfileRow): UserProfile {

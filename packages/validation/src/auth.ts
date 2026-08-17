@@ -18,9 +18,22 @@ export const verifyOtpSchema = z.object({
 });
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
-export const updateProfileSchema = z.object({
-  displayName: displayNameSchema.optional(),
-});
+/**
+ * The only self-service profile edit. `displayName` is the sole field, matching
+ * the deployed grant (`grant update (display_name) on public.profiles`) — role,
+ * phone and id are not writable by their owner at any layer.
+ *
+ * `.strict()` is load-bearing rather than tidy. Zod's default is to *strip*
+ * unknown keys, so `{ role: 'ADMIN' }` would parse to `{}` and return 200: safe,
+ * but silent. Rejecting instead means an attempt to write an authorization field
+ * is reported as invalid and shows up in logs, rather than looking to the caller
+ * like it might have worked.
+ */
+export const updateProfileSchema = z
+  .object({
+    displayName: displayNameSchema.optional(),
+  })
+  .strict();
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 /**
