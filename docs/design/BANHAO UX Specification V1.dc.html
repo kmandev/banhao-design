@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#F2EBE1;font-family:'IBM Plex Sans','IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}a:hover{color:#C2431F}
+</style>
+</helmet>
+
+<div style="max-width:1180px;margin:0 auto;padding:56px 60px 120px;background:#FBF7F1">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:40px">
+    <div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:46px;height:46px;border-radius:14px;background:#1F1A16;color:#FBF7F1;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;letter-spacing:.06em">8A</div>
+        <div>
+          <div style="font-size:21px;font-weight:700;letter-spacing:.14em">BANHAO</div>
+          <div style="font-size:13px;color:#7A6E64;margin-top:-1px">Product UX Specification V1 · Stage 8A · design only</div>
+        </div>
+      </div>
+      <div style="font-size:29px;font-weight:700;line-height:1.35;margin-top:28px;max-width:680px;text-wrap:pretty">One order, four viewpoints: the UX foundation for Customer, Merchant, Rider and Admin</div>
+      <div style="font-size:16px;line-height:1.75;color:#4A4038;margin-top:14px;max-width:700px;text-wrap:pretty">The design contract implementation works against — navigation, screen inventory, per-actor wording for every order state, non-happy-path behaviour, and an explicit MVP boundary. It invents no business rule. Where the repository says a rule is open, the screen is designed so either answer fits and the question is recorded instead of guessed.</div>
+    </div>
+    <div style="flex:0 0 268px;border:1px solid #EAE1D6;border-radius:18px;background:#fff;padding:20px 22px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:14px">CHECKPOINT</div>
+      <div style="display:flex;flex-direction:column;gap:11px">
+        <sc-for list="{{ checkpoint }}" as="c" hint-placeholder-count="7">
+          <div style="display:flex;justify-content:space-between;gap:12px;font-size:13px">
+            <span style="color:#9A8C7E">{{ c.k }}</span>
+            <span style="font-weight:600;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px">{{ c.v }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — VISION</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">A district, not a platform</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:740px;margin-bottom:24px;text-wrap:pretty">In อ.บุณฑริก everyone on all four sides of a transaction may plausibly know each other. Discovery is confirmation — “is ป้าสมร open, and how long?” — not exploration. Ranking and recommendation machinery earns nothing at a few dozen shops and costs the core path steps CON-004 forbids.</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+    <sc-for list="{{ pillars }}" as="p" hint-placeholder-count="4">
+      <div style="border:1px solid #EAE1D6;background:#fff;border-radius:18px;padding:18px 20px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:8px">{{ p.title }}</div>
+        <div style="font-size:14px;line-height:1.7;color:#5A4E42">{{ p.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:16px;border:1px solid #EAE1D6;background:#fff;border-radius:18px;overflow:hidden">
+    <div style="display:flex;gap:24px;padding:13px 22px;background:#F7F0E6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+      <div style="flex:0 0 300px">COPY RULE</div><div style="flex:1">YES</div><div style="flex:1">NO</div>
+    </div>
+    <sc-for list="{{ tone }}" as="t" hint-placeholder-count="6">
+      <div style="display:flex;gap:24px;padding:14px 22px;border-top:1px solid #F5EEE4;font-size:14px;line-height:1.7">
+        <div style="flex:0 0 300px;color:#5A4E42">{{ t.rule }}</div>
+        <div style="flex:1;color:#0F8B5F">{{ t.yes }}</div>
+        <div style="flex:1;color:#B4622A">{{ t.no }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — PERSONAS</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Four people, four constraints</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:740px;margin-bottom:24px;text-wrap:pretty">No user research exists in the repository. These are design personas derived from the service area and the four capability classes, written for the constraint each puts on the design.</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
+    <sc-for list="{{ personas }}" as="p" hint-placeholder-count="4">
+      <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:22px 24px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="{{ p.dot }}"></div>
+          <div style="font-size:16px;font-weight:700">{{ p.name }}</div>
+          <div style="font-size:12px;color:#9A8C7E;font-family:'IBM Plex Mono',monospace">{{ p.cap }}</div>
+        </div>
+        <div style="font-size:14px;line-height:1.75;color:#5A4E42">{{ p.line }}</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #F5EEE4;font-size:14px;line-height:1.75;color:#1F1A16">{{ p.consequence }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — THE PRIMARY JOURNEY</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">One order seen four ways</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:740px;margin-bottom:24px;text-wrap:pretty">The MVP is this journey and its four viewpoints. Every transition has exactly one actor who may cause it; the other three observe. No screen computes its own status (REQ-002).</div>
+  <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+    <sc-for list="{{ lanes }}" as="l" hint-placeholder-count="4">
+      <div style="display:flex;align-items:center;gap:22px;padding:18px 24px;border-bottom:1px solid #F5EEE4">
+        <div style="flex:0 0 120px;display:flex;align-items:center;gap:9px">
+          <div style="{{ l.dot }}"></div>
+          <div style="font-size:13px;font-weight:600;letter-spacing:.04em">{{ l.actor }}</div>
+        </div>
+        <div style="flex:1;font-size:13px;line-height:1.9;font-family:'IBM Plex Mono',monospace;color:#4A4038">{{ l.steps }}</div>
+      </div>
+    </sc-for>
+    <div style="padding:16px 24px;background:#FDF3E6;font-size:14px;line-height:1.75;color:#5A4E42">Payment is confirmed by nobody — only a signature-verified provider webhook may move an order to <span style="font-family:'IBM Plex Mono',monospace">PAID</span> (CON-002). Rider search starts at <span style="font-family:'IBM Plex Mono',monospace">MERCHANT_ACCEPTED</span> and runs parallel to cooking (DEC-020). A rider can never cancel an order (DEC-021).</div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — INFORMATION ARCHITECTURE</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 24px">Four shells, chosen by capability</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
+    <sc-for list="{{ ia }}" as="a" hint-placeholder-count="4">
+      <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:22px 24px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px">
+          <div style="font-size:17px;font-weight:700">{{ a.app }}</div>
+          <div style="font-size:12px;color:#9A8C7E;font-family:'IBM Plex Mono',monospace">{{ a.device }}</div>
+        </div>
+        <div style="font-size:13px;line-height:1.8;font-family:'IBM Plex Mono',monospace;color:#4A4038;background:#FBF7F1;border-radius:12px;padding:12px 14px">{{ a.nav }}</div>
+        <div style="font-size:14px;line-height:1.75;color:#5A4E42;margin-top:14px">{{ a.note }}</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-top:14px;padding-top:14px;border-top:1px solid #F5EEE4">
+          <div style="font-size:13px;line-height:1.7"><span style="color:#9A8C7E">primary action · </span>{{ a.action }}</div>
+          <div style="font-size:13px;line-height:1.7"><span style="color:#9A8C7E">destructive · </span>{{ a.destructive }}</div>
+          <div style="font-size:13px;line-height:1.7"><span style="color:#9A8C7E">empty state · </span>{{ a.empty }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — SCREEN INVENTORY</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">{{ inventoryHeading }}</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:740px;margin-bottom:18px;text-wrap:pretty">Customer numbering follows the app already built (31 design states) rather than a new scheme — renumbering live code is a cost with no benefit. A dotted border means the screen does not exist yet.</div>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:22px;font-size:13px;color:#5A4E42">
+    <sc-for list="{{ legend }}" as="g" hint-placeholder-count="4">
+      <div style="display:flex;align-items:center;gap:8px"><div style="{{ g.chip }}"></div>{{ g.label }}</div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:start">
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">Customer</div>
+      <div style="font-size:12px;color:#9A8C7E;margin-bottom:14px">{{ custCount }}</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <sc-for list="{{ custScreens }}" as="s" hint-placeholder-count="10">
+          <div style="{{ s.style }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.75">{{ s.id }}</span> {{ s.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">Merchant</div>
+      <div style="font-size:12px;color:#9A8C7E;margin-bottom:14px">{{ merchCount }}</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <sc-for list="{{ merchScreens }}" as="s" hint-placeholder-count="10">
+          <div style="{{ s.style }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.75">{{ s.id }}</span> {{ s.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">Rider</div>
+      <div style="font-size:12px;color:#9A8C7E;margin-bottom:14px">{{ riderCount }}</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <sc-for list="{{ riderScreens }}" as="s" hint-placeholder-count="10">
+          <div style="{{ s.style }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.75">{{ s.id }}</span> {{ s.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">Admin</div>
+      <div style="font-size:12px;color:#9A8C7E;margin-bottom:14px">{{ adminCount }}</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <sc-for list="{{ adminScreens }}" as="s" hint-placeholder-count="10">
+          <div style="{{ s.style }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.75">{{ s.id }}</span> {{ s.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px">
+    <sc-for list="{{ deltas }}" as="d" hint-placeholder-count="3">
+      <div style="border:1px solid #F0DFC4;background:#FDF3E6;border-radius:18px;padding:20px 22px">
+        <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#B4622A;margin-bottom:8px">{{ d.id }}</div>
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:8px">{{ d.title }}</div>
+        <div style="font-size:14px;line-height:1.75;color:#5A4E42">{{ d.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — ORDER STATE UX</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">One state value, four vocabularies</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:760px;margin-bottom:24px;text-wrap:pretty">The nine ACCEPTED states of DEC-019 plus <span style="font-family:'IBM Plex Mono',monospace">CANCELLED</span>. Nothing else is implemented in V1 (DEC-APP-006), and no state name, cause code or error code is ever rendered to a user — all four apps resolve a code to Thai copy from their own <span style="font-family:'IBM Plex Mono',monospace">copy/th.ts</span>.</div>
+  <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+    <div style="display:flex;gap:16px;padding:13px 22px;background:#F7F0E6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+      <div style="flex:0 0 176px">STATE</div><div style="flex:1">CUSTOMER</div><div style="flex:1">MERCHANT</div><div style="flex:1">RIDER</div><div style="flex:0 0 150px">WHO MAY ACT</div>
+    </div>
+    <sc-for list="{{ orderStates }}" as="o" hint-placeholder-count="10">
+      <div style="display:flex;gap:16px;padding:14px 22px;border-top:1px solid #F5EEE4;font-size:14px;line-height:1.7">
+        <div style="flex:0 0 176px"><span style="{{ o.tag }}">{{ o.state }}</span></div>
+        <div style="flex:1">{{ o.cust }}</div>
+        <div style="flex:1;color:#5A4E42">{{ o.merch }}</div>
+        <div style="flex:1;color:#5A4E42">{{ o.rider }}</div>
+        <div style="flex:0 0 150px;font-size:13px;color:#9A8C7E">{{ o.actor }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:16px;margin-top:16px">
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+      <div style="padding:16px 22px 12px;font-size:15px;font-weight:600">Delivery state — a separate machine (DEC-018)</div>
+      <div style="font-size:14px;line-height:1.7;color:#5A4E42;padding:0 22px 14px">Never blended into the order status text. It surfaces as a secondary line beneath it.</div>
+      <sc-for list="{{ deliveryStates }}" as="d" hint-placeholder-count="5">
+        <div style="display:flex;gap:14px;padding:12px 22px;border-top:1px solid #F5EEE4;font-size:13px;line-height:1.7">
+          <div style="flex:0 0 170px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7A6E64">{{ d.state }}</div>
+          <div style="flex:1">{{ d.cust }}</div>
+          <div style="flex:1;color:#5A4E42">{{ d.rider }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border:1px solid #F0DFC4;background:#FDF3E6;border-radius:20px;padding:22px 24px">
+      <div style="font-size:15px;font-weight:600;margin-bottom:10px">Prolonged rider search is not an order state</div>
+      <div style="font-size:14px;line-height:1.8;color:#5A4E42">After 5 minutes the customer is told — <span style="font-weight:600;color:#1F1A16">ยังหาไรเดอร์ไม่ได้ · เรากำลังเร่งหาให้</span> — with the 3-minute extension offer, and an operator alert opens in A-13. The order stays in <span style="font-family:'IBM Plex Mono',monospace">PREPARING</span> or <span style="font-family:'IBM Plex Mono',monospace">READY_FOR_PICKUP</span>. Only an operator decision ends it, and cancelling is one option among several (DEC-022).</div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #F0DFC4;font-size:14px;line-height:1.8;color:#5A4E42">Cancellation availability mirrors <span style="font-family:'IBM Plex Mono',monospace">ORDER_LIFECYCLE.md</span> §5 exactly and derives nothing: free before cooking, merchant-confirmed during, support-only from <span style="font-family:'IBM Plex Mono',monospace">PICKED_UP</span>. Every dialog states the refund consequence before it asks for confirmation.</div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — CAPABILITY-AWARE UX</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">The UI renders capabilities, never a role column</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:760px;margin-bottom:24px;text-wrap:pretty">Stage 7E resolved capability from domain membership, and DEC-APP-004 makes that the only authorization source. <span style="font-family:'IBM Plex Mono',monospace">profiles.role</span> is legacy and read by nothing — including the UI.</div>
+  <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden;margin-bottom:16px">
+    <div style="display:flex;gap:16px;padding:13px 22px;background:#F7F0E6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+      <div style="flex:0 0 150px">CAPABILITY</div><div style="flex:0 0 230px">SOURCE OF TRUTH</div><div style="flex:1">SURFACE</div><div style="flex:1">SCOPE</div>
+    </div>
+    <sc-for list="{{ capabilities }}" as="c" hint-placeholder-count="4">
+      <div style="display:flex;gap:16px;padding:14px 22px;border-top:1px solid #F5EEE4;font-size:14px;line-height:1.7">
+        <div style="flex:0 0 150px;font-weight:600">{{ c.cap }}</div>
+        <div style="flex:0 0 230px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7A6E64">{{ c.source }}</div>
+        <div style="flex:1">{{ c.surface }}</div>
+        <div style="flex:1;color:#5A4E42">{{ c.scope }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
+    <sc-for list="{{ capRules }}" as="r" hint-placeholder-count="4">
+      <div style="border:1px solid #EAE1D6;background:#fff;border-radius:18px;padding:18px 20px">
+        <div style="font-size:15px;font-weight:600;margin-bottom:8px">{{ r.title }}</div>
+        <div style="font-size:14px;line-height:1.75;color:#5A4E42">{{ r.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — DESIGN SYSTEM</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">v1.0 stays in force; eleven additions carry the three new surfaces</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:760px;margin-bottom:24px;text-wrap:pretty">Nothing is redesigned. The tokens below are the ones implementation must use; the additions are components genuinely absent from v1.0 because merchant, rider and admin did not exist when it was written.</div>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px">
+    <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="10">
+      <div style="border:1px solid #EAE1D6;background:#fff;border-radius:16px;overflow:hidden">
+        <div style="{{ t.swatch }}"></div>
+        <div style="padding:11px 13px 13px">
+          <div style="font-size:13px;font-weight:600">{{ t.name }}</div>
+          <div style="font-size:11px;color:#7A6E64;margin-top:3px;font-family:'IBM Plex Mono',monospace">{{ t.hex }}</div>
+          <div style="font-size:11px;color:#7A6E64;margin-top:6px;line-height:1.55">{{ t.use }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+      <div style="padding:18px 22px 6px;font-size:15px;font-weight:600">Additions required by Stage 8A</div>
+      <sc-for list="{{ additions }}" as="a" hint-placeholder-count="11">
+        <div style="display:flex;gap:14px;padding:11px 22px;border-top:1px solid #F5EEE4;font-size:13px;line-height:1.7">
+          <div style="flex:0 0 168px;font-weight:600">{{ a.name }}</div>
+          <div style="flex:1;color:#5A4E42">{{ a.needed }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+        <div style="padding:18px 22px 6px;font-size:15px;font-weight:600">Contrast, measured against v1.0</div>
+        <sc-for list="{{ contrast }}" as="c" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 22px;border-top:1px solid #F5EEE4;font-size:13px;line-height:1.6">
+            <div style="flex:1">{{ c.pair }}</div>
+            <div style="flex:0 0 62px;font-family:'IBM Plex Mono',monospace;color:#7A6E64">{{ c.ratio }}</div>
+            <div style="{{ c.badge }}">{{ c.verdict }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border:1px solid #F0DFC4;background:#FDF3E6;border-radius:20px;padding:20px 22px">
+        <div style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:#B4622A;margin-bottom:8px">UX-FINDING-01 · needs a Product Owner answer</div>
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:8px">A 16px primary button label on #E4572E does not meet AA</div>
+        <div style="font-size:14px;line-height:1.75;color:#5A4E42">Two cheap remedies, and this specification chooses neither because the primary colour is a brand decision: raise primary labels to 17–18px/700 — defensible on a 56px button and better for Thai anyway — or use #C2431F as the fill for text-bearing buttons and keep #E4572E for fills and accents. Recorded as UX-Q-001. It touches every button in the product, so it should be answered before implementation, not after.</div>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:16px;border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px">Thai-first typography rules — binding</div>
+    <div style="font-size:14px;line-height:1.85;color:#5A4E42;text-wrap:pretty">Every component is laid out against the longest real Thai string it will carry, never an English placeholder — <span style="font-weight:600;color:#1F1A16">พร้อมให้ไรเดอร์รับ</span> and <span style="font-weight:600;color:#1F1A16">บัญชีถูกระงับการใช้งาน</span> are the stress tests for chips and strips. Thai does not wrap on spaces, so every single-line element declares its overflow behaviour: chips and buttons grow, table cells truncate with a title, status text never truncates. Line height stays 1.55–1.75 everywhere. Numerals are Arabic. No Latin placeholder text anywhere, including skeletons. Android must be verified for per-weight Thai font families before launch — the single most likely rendering failure.</div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — EMPTY, ERROR AND EDGE STATES</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Designed with real Thai copy, not as an afterthought</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:760px;margin-bottom:24px;text-wrap:pretty">A selection from the full table in the specification. Two rules apply to all of them: no technical token, constraint name or SQLSTATE ever reaches a user, and every error offers a way forward — back, retry, or contact — never a dead end.</div>
+  <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+    <div style="display:flex;gap:16px;padding:13px 22px;background:#F7F0E6;font-size:11px;font-weight:600;letter-spacing:.14em;color:#A2968A">
+      <div style="flex:0 0 210px">STATE</div><div style="flex:0 0 110px">WHERE</div><div style="flex:1">COPY</div><div style="flex:0 0 190px">ACTION</div>
+    </div>
+    <sc-for list="{{ edgeStates }}" as="e" hint-placeholder-count="14">
+      <div style="display:flex;gap:16px;padding:13px 22px;border-top:1px solid #F5EEE4;font-size:14px;line-height:1.7">
+        <div style="flex:0 0 210px;color:#5A4E42">{{ e.state }}</div>
+        <div style="flex:0 0 110px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9A8C7E">{{ e.where }}</div>
+        <div style="flex:1;font-weight:500">{{ e.copy }}</div>
+        <div style="flex:0 0 190px;color:#7A6E64">{{ e.action }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — MVP SCOPE</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">The smallest product that completes one real order
+</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:760px;margin-bottom:24px;text-wrap:pretty">MUST is what launch is impossible without. SHOULD arrives in the first weeks. LATER is named so it stays out, not so it gets built.</div>
+  <div style="display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:16px;align-items:start">
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:22px 24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:14px">MUST HAVE</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <sc-for list="{{ mustList }}" as="m" hint-placeholder-count="5">
+          <div style="font-size:14px;line-height:1.75;color:#1F1A16">{{ m }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;padding:22px 24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:14px">SHOULD HAVE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ shouldList }}" as="s" hint-placeholder-count="6">
+          <div style="font-size:14px;line-height:1.7;color:#5A4E42">{{ s }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border:1px solid #EAE1D6;background:#FBF7F1;border-radius:20px;padding:22px 24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#A2968A;margin-bottom:14px">LATER — DELIBERATELY OUT</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ laterList }}" as="l" hint-placeholder-count="7">
+          <div style="font-size:14px;line-height:1.7;color:#7A6E64">{{ l }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — OPEN UX DECISIONS</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 6px">Twelve questions, none of them blocking the MUST list</div>
+  <div style="font-size:16px;line-height:1.75;color:#4A4038;max-width:760px;margin-bottom:24px;text-wrap:pretty">Each blocks one specific screen detail and is named here so nobody guesses. Where a repository question is open, the screen is built to accommodate either answer.</div>
+  <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+    <sc-for list="{{ openQ }}" as="q" hint-placeholder-count="12">
+      <div style="display:flex;gap:16px;padding:14px 22px;border-top:1px solid #F5EEE4;font-size:14px;line-height:1.7">
+        <div style="flex:0 0 92px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#B4622A">{{ q.id }}</div>
+        <div style="flex:1">{{ q.q }}</div>
+        <div style="flex:0 0 230px;color:#7A6E64;font-size:13px">{{ q.blocks }}</div>
+        <div style="flex:0 0 130px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9A8C7E">{{ q.rel }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{ showRisks }}" hint-placeholder-val="{{ true }}">
+    <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+    <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — DESIGN RISKS</div>
+    <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 24px">What is most likely to go wrong, and the position taken</div>
+    <div style="border:1px solid #EAE1D6;background:#fff;border-radius:20px;overflow:hidden">
+      <sc-for list="{{ risks }}" as="r" hint-placeholder-count="8">
+        <div style="display:flex;gap:18px;padding:16px 22px;border-top:1px solid #F5EEE4">
+          <div style="flex:0 0 22px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#9A8C7E">{{ r.n }}</div>
+          <div style="flex:0 0 300px;font-size:14px;line-height:1.7;font-weight:600">{{ r.risk }}</div>
+          <div style="{{ r.sevStyle }}">{{ r.sev }}</div>
+          <div style="flex:1;font-size:14px;line-height:1.75;color:#5A4E42">{{ r.position }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — IMPLEMENTATION HANDOFF</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 24px">What implementation needs so it never invents product behaviour</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+    <sc-for list="{{ handoff }}" as="h" hint-placeholder-count="6">
+      <div style="border:1px solid #EAE1D6;background:#fff;border-radius:18px;padding:20px 22px">
+        <div style="font-size:15px;font-weight:600;line-height:1.5;margin-bottom:9px">{{ h.title }}</div>
+        <div style="font-size:14px;line-height:1.75;color:#5A4E42">{{ h.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;border:1px solid #F0DFC4;background:#FDF3E6;border-radius:20px;padding:22px 24px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:12px">Before an MVP screen is called done</div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <sc-for list="{{ doneGates }}" as="g" hint-placeholder-count="5">
+        <div style="font-size:14px;line-height:1.7;color:#5A4E42">{{ g }}</div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">14 — DECISIONS RECORDED BY THIS STAGE</div>
+  <div style="font-size:25px;font-weight:700;line-height:1.35;margin:8px 0 24px">Thirteen UX decisions, all inside the approved architecture</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="13">
+      <div style="display:flex;gap:14px;align-items:baseline;border:1px solid #EAE1D6;background:#fff;border-radius:14px;padding:14px 18px">
+        <div style="flex:0 0 96px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#B4622A">{{ d.id }}</div>
+        <div style="flex:1;font-size:14px;line-height:1.7">{{ d.text }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#EAE1D6;margin:52px 0 40px"></div>
+  <div style="border:1px solid #1F1A16;background:#1F1A16;border-radius:22px;padding:30px 34px;color:#FBF7F1">
+    <div style="font-size:11px;font-weight:600;letter-spacing:.18em;color:#A2968A;margin-bottom:6px">STAGE 8A CHECKPOINT</div>
+    <div style="font-size:23px;font-weight:700;line-height:1.4;margin-bottom:22px">Design specification complete. Nothing implemented, committed, pushed or deployed.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 40px">
+      <sc-for list="{{ footer }}" as="f" hint-placeholder-count="8">
+        <div style="display:flex;gap:16px;font-size:14px;line-height:1.7;border-top:1px solid rgba(251,247,241,.14);padding-top:12px">
+          <div style="flex:0 0 152px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A;letter-spacing:.06em">{{ f.k }}</div>
+          <div style="flex:1">{{ f.v }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</div></x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#E4572E&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#E4572E&quot;,&quot;#C2431F&quot;,&quot;#1F1A16&quot;,&quot;#0F8B5F&quot;],&quot;section&quot;:&quot;Presentation&quot;},&quot;inventoryFilter&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;All screens&quot;,&quot;options&quot;:[&quot;All screens&quot;,&quot;MVP only&quot;,&quot;Not built yet&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Presentation&quot;},&quot;showRisks&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Presentation&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#E4572E';
+    const filter = this.props.inventoryFilter ?? 'All screens';
+    const showRisks = this.props.showRisks ?? true;
+
+    const dot = (c) => 'width:10px;height:10px;border-radius:5px;background:' + c;
+    const tag = (bg, col) => 'font-family:\'IBM Plex Mono\',monospace;font-size:11px;font-weight:600;padding:4px 8px;border-radius:8px;background:' + bg + ';color:' + col;
+    const sw = (hex, col) => 'height:52px;background:' + hex + ';color:' + (col || '#fff') + ';display:flex;align-items:flex-end;padding:8px 10px;font-size:11px;font-family:\'IBM Plex Mono\',monospace';
+    const badge = (bg, col) => 'flex:0 0 58px;text-align:center;font-size:11px;font-weight:600;padding:4px 0;border-radius:8px;background:' + bg + ';color:' + col;
+
+    const scopeColor = { MUST: [accent, '#fff'], SHOULD: ['#F3E7D6', '#7A5A2E'], LATER: ['#F2EBE1', '#9A8C7E'] };
+    const screen = (id, label, scope, built) => ({ id, label, scope, built });
+    const chip = (s) => {
+      const c = scopeColor[s.scope];
+      const dim = (filter === 'MVP only' && s.scope !== 'MUST') || (filter === 'Not built yet' && s.built);
+      return {
+        id: s.id, label: s.label,
+        style: 'font-size:13px;line-height:1.5;padding:7px 10px;border-radius:10px;background:' + c[0] + ';color:' + c[1] +
+          ';border:' + (s.built ? '1px solid transparent' : '1px dashed ' + (s.scope === 'MUST' ? 'rgba(255,255,255,.65)' : '#C9B79F')) +
+          (dim ? ';opacity:.28' : '')
+      };
+    };
+
+    const cust = [
+      screen('C-01', 'Splash', 'MUST', true), screen('C-03', 'เข้าสู่ระบบ', 'MUST', true),
+      screen('C-04', 'ยืนยัน OTP', 'MUST', true), screen('C-05', 'หน้าแรก', 'MUST', true),
+      screen('C-06', 'ค้นหา', 'MUST', true), screen('C-07', 'หน้าร้าน + เมนู', 'MUST', true),
+      screen('C-08', 'เลือกตัวเลือกอาหาร', 'MUST', true), screen('C-09', 'ตะกร้า', 'MUST', true),
+      screen('C-11', 'ที่อยู่จัดส่ง', 'MUST', true), screen('C-10', 'ยืนยันการสั่ง', 'MUST', true),
+      screen('C-12', 'พร้อมเพย์ QR', 'MUST', true), screen('C-12b', 'กำลังตรวจสอบ', 'MUST', true),
+      screen('C-12c', 'ชำระสำเร็จ', 'MUST', true), screen('C-13', 'สั่งสำเร็จ', 'MUST', true),
+      screen('C-14', 'ติดตามออเดอร์', 'MUST', true), screen('C-16', 'ออเดอร์ของฉัน', 'MUST', true),
+      screen('C-19', 'รายละเอียดออเดอร์', 'MUST', false), screen('C-18', 'บัญชีของฉัน', 'MUST', true),
+      screen('C-02', 'Onboarding', 'SHOULD', true), screen('C-20', 'เลือกพื้นที่จัดส่ง', 'SHOULD', false),
+      screen('C-12d', 'ยืนยันไม่ได้', 'SHOULD', true), screen('C-12e', 'QR หมดอายุ', 'SHOULD', true),
+      screen('C-17', 'แจ้งเตือน', 'SHOULD', true), screen('C-15', 'ให้คะแนน', 'LATER', true),
+      screen('C-12f', 'จ่ายซ้ำ', 'LATER', true), screen('C-12g', 'รายละเอียดการจ่าย', 'LATER', true),
+      screen('C-12h', 'การคืนเงิน', 'LATER', true)
+    ];
+    const merch = [
+      screen('M-01', 'เข้าสู่ระบบ', 'MUST', false), screen('M-02', 'เลือกร้าน (ถ้ามีหลายร้าน)', 'MUST', false),
+      screen('M-03', 'ออเดอร์วันนี้ — บอร์ด', 'MUST', false), screen('M-04', 'รายละเอียดออเดอร์', 'MUST', false),
+      screen('M-05', 'รับออเดอร์', 'MUST', false), screen('M-07', 'กำลังทำอาหาร', 'MUST', false),
+      screen('M-08', 'พร้อมให้ไรเดอร์รับ', 'MUST', false), screen('M-11', 'จัดการเมนู', 'MUST', false),
+      screen('M-12', 'เวลาเปิด-ปิดร้าน', 'MUST', false), screen('M-06', 'ปฏิเสธออเดอร์', 'SHOULD', false),
+      screen('M-09', 'ประวัติออเดอร์', 'SHOULD', false), screen('M-10', 'ข้อมูลร้าน', 'SHOULD', false),
+      screen('M-13', 'รายได้ร้าน', 'LATER', false), screen('M-14', 'ตั้งค่า / ผู้ใช้', 'LATER', false)
+    ];
+    const rider = [
+      screen('R-01', 'เข้าสู่ระบบ', 'MUST', false), screen('R-02', 'สถานะการตรวจสอบ', 'MUST', false),
+      screen('R-03', 'หน้าหลัก', 'MUST', false), screen('R-04', 'เปิด/ปิดรับงาน', 'MUST', false),
+      screen('R-05', 'งานใหม่ (นับถอยหลัง)', 'MUST', false), screen('R-06', 'งานถูกรับไปแล้ว', 'MUST', false),
+      screen('R-07', 'ไปที่ร้าน', 'MUST', false), screen('R-08', 'ถึงร้านแล้ว', 'MUST', false),
+      screen('R-09', 'รับอาหารแล้ว', 'MUST', false), screen('R-10', 'ไปส่งลูกค้า', 'MUST', false),
+      screen('R-11', 'ส่งสำเร็จ', 'MUST', false), screen('R-12', 'ประวัติการส่ง', 'SHOULD', false),
+      screen('R-13', 'รายได้', 'SHOULD', false), screen('R-14', 'บัญชี / เอกสาร', 'LATER', false)
+    ];
+    const admin = [
+      screen('A-01', 'Staff login', 'MUST', false), screen('A-02', 'ภาพรวม — counters', 'MUST', false),
+      screen('A-03', 'Orders', 'MUST', false), screen('A-04', 'Order detail', 'MUST', false),
+      screen('A-05', 'Restaurants', 'MUST', false), screen('A-06', 'Restaurant detail', 'MUST', false),
+      screen('A-08', 'Riders', 'MUST', false), screen('A-09', 'Rider detail', 'MUST', false),
+      screen('A-13', 'Alerts queue', 'MUST', false), screen('A-07', 'Merchant members', 'SHOULD', false),
+      screen('A-10', 'Customers', 'SHOULD', false), screen('A-11', 'Staff', 'SHOULD', false),
+      screen('A-12', 'Staff detail', 'SHOULD', false), screen('A-14', 'Audit / activity', 'SHOULD', false),
+      screen('A-15', 'Settings', 'LATER', false)
+    ];
+    const count = (list) => list.filter(s => s.scope === 'MUST').length + ' must · ' + list.length + ' total · ' +
+      list.filter(s => !s.built).length + ' not built';
+
+    return {
+      checkpoint: [
+        { k: 'Stage', v: '8A' }, { k: 'Type', v: 'design only' }, { k: 'Repo commit', v: '14289652' },
+        { k: 'Database', v: 'e471ec1d LOCKED' }, { k: 'Design system', v: 'v1.0 in force' },
+        { k: 'UX decisions', v: '13 DEC-UX' }, { k: 'Open questions', v: '12 UX-Q' },
+        { k: 'Conflicts', v: 'none' }
+      ],
+      pillars: [
+        { title: 'Local before comprehensive', body: 'A customer already knows most of the shops. Discovery confirms rather than explores, so ranking and recommendation machinery is absent.' },
+        { title: 'Legible, not polished', body: 'Every actor answers “what is happening, and what do I do next?” from one glance at one screen. The order state is the product.' },
+        { title: 'Built for the least technical hand', body: 'A merchant cooking alone at lunchtime; a rider reading a phone in sunlight. Large targets, one action, no new vocabulary.' },
+        { title: 'Practical about money', body: 'Totals are visible before every commitment and never recomputed silently. Fee numbers are open questions, so screens show server data, never a designed-in default.' }
+      ],
+      tone: [
+        { rule: 'Speak plainly, second person', yes: 'ร้านกำลังทำอาหารของคุณ', no: 'ออเดอร์อยู่ในสถานะ PREPARING' },
+        { rule: 'No technical token reaches a user', yes: 'ยืนยันการชำระเงินไม่ได้', no: 'PAYMENT_FAILED' },
+        { rule: 'Errors say what happened and what to do', yes: 'เน็ตหลุดชั่วคราว · ลองอีกครั้ง', no: 'เกิดข้อผิดพลาด' },
+        { rule: 'Currency as Thai users read it', yes: '฿130 · 130 บาท', no: '130.00 THB' },
+        { rule: '24-hour time, relative timelines', yes: '19:30 · 5 นาทีที่แล้ว', no: '7:30 PM' },
+        { rule: 'No emoji, no stacked exclamation', yes: 'สั่งสำเร็จ', no: 'สั่งสำเร็จ!!! 🎉' }
+      ],
+      personas: [
+        { name: 'นก · 34 · teacher', cap: 'customer', dot: dot(accent), line: 'Orders 2–3 times a week on a mid-range Android phone. Knows the shops by name. Dislikes paying before being sure a shop is open.', consequence: 'Hours and “open now” are first-class on every restaurant card, and the QR step must never feel like a point of no return without a clear state after it.' },
+        { name: 'ป้าสมร · 52 · ร้านตามสั่ง', cap: 'merchant · 1 restaurant', dot: dot('#1F1A16'), line: 'One counter tablet, cooking while orders arrive, cannot watch a screen continuously.', consequence: 'Arrival must be audible and unmissable; accepting is one large button; the whole day is one queue. Never more than one restaurant in view unless her membership covers more.' },
+        { name: 'บอย · 26 · rider', cap: 'rider · approved', dot: dot('#0F8B5F'), line: 'Phone mounted, gloves, sun. Reads at arm’s length. Cares about earnings per trip and not losing a job to a race he did not know he was in.', consequence: 'One screen per step with one action; status is never ambiguous; a lost offer is shown calmly, not as an error.' },
+        { name: 'ผู้ดูแลระบบ · operator', cap: 'platformStaff', dot: dot('#2E6FB7'), line: 'Handles what the other three cannot: a stuck order, a missing rider, a refund. Works in a browser with a keyboard.', consequence: 'Dense tables, lookup by reference or phone, a mandatory reason on every privileged action, and nothing destructive without confirmation.' }
+      ],
+      lanes: [
+        { actor: 'CUSTOMER', dot: dot(accent), steps: 'home → restaurant → item → cart → checkout → pay → placed → tracking → delivered' },
+        { actor: 'MERCHANT', dot: dot('#1F1A16'), steps: 'new order → accept → preparing → ready → handed off' },
+        { actor: 'RIDER', dot: dot('#0F8B5F'), steps: 'offer → accept → to shop → picked up → to customer → delivered' },
+        { actor: 'OPERATOR', dot: dot('#2E6FB7'), steps: 'watches — and intervenes only on exception' }
+      ],
+      ia: [
+        { app: 'Customer', device: 'phone only', nav: 'หน้าแรก · ออเดอร์ · แจ้งเตือน · บัญชี', note: 'Four fixed tabs. home → restaurant → item is the only three-level path; nothing goes four deep. A live order pins a state strip above the tab bar.', action: 'สั่งอาหาร ฿NNN', destructive: 'clear cart on restaurant switch · cancel order (state-dependent)', empty: 'every list has loading, empty and error' },
+        { app: 'Merchant web', device: 'desktop + counter tablet', nav: 'ออเดอร์วันนี้ · ประวัติ · เมนู · ร้านของฉัน · ตั้งค่า', note: 'Restaurant scope lives in the header at all times. One restaurant means static text with no affordance to change it. The board is three columns: รอตอบรับ · กำลังทำ · พร้อมให้ไรเดอร์รับ.', action: 'รับออเดอร์ → เริ่มทำอาหาร → อาหารพร้อม', destructive: 'ปฏิเสธออเดอร์ (reason) · ปิดรับออเดอร์', empty: 'ยังไม่มีออเดอร์ใหม่ — with open/closed restated' },
+        { app: 'Rider', device: 'phone only', nav: 'หน้าหลัก · งานของฉัน · รายได้ · บัญชี', note: 'The tab bar is hidden while a delivery is active — during a job the app is one screen with one action. The status strip is present on every screen, including inside a job.', action: 'รับงาน → ถึงร้านแล้ว → รับอาหารแล้ว → ส่งสำเร็จ', destructive: 'ยกเลิกงาน (reason) — releases the delivery, never the order', empty: 'กำลังรอออเดอร์ใหม่ with a live indicator' },
+        { app: 'Admin web', device: 'desktop first', nav: 'ภาพรวม · Orders · Restaurants · Riders · Customers · Staff · Alerts · Audit · Settings', note: 'Nine sidebar items, no nesting. Every list is a table; every row opens a linkable detail page. ภาพรวม is one counter row linking into filtered tables — no charts in V1.', action: 'reassign · cancel · refund · approve · grant', destructive: 'all of the above — dialog + mandatory reason + stated consequence', empty: 'ไม่มีรายการค้าง — an empty queue is good news' }
+      ],
+      inventoryHeading: filter === 'All screens' ? '70 screens across four surfaces' : filter,
+      legend: [
+        { label: 'MUST', chip: 'width:14px;height:14px;border-radius:5px;background:' + accent },
+        { label: 'SHOULD', chip: 'width:14px;height:14px;border-radius:5px;background:#F3E7D6' },
+        { label: 'LATER', chip: 'width:14px;height:14px;border-radius:5px;background:#F2EBE1' },
+        { label: 'dashed = not built yet', chip: 'width:14px;height:14px;border-radius:5px;border:1px dashed #C9B79F' }
+      ],
+      custScreens: cust.map(chip), merchScreens: merch.map(chip),
+      riderScreens: rider.map(chip), adminScreens: admin.map(chip),
+      custCount: count(cust), merchCount: count(merch), riderCount: count(rider), adminCount: count(admin),
+      deltas: [
+        { id: 'DEC-UX-003', title: 'Restaurant detail and menu are one screen', body: 'The brief lists them separately. Splitting adds a tap to the core path for no information gain, which CON-004 forbids. Category jump-links inside C-07 cover the navigation the second screen would have provided.' },
+        { id: 'DEC-UX-004', title: 'No location-permission gate at first run', body: 'In a single-district service area there is nothing for GPS to disambiguate at launch, and a permission prompt before any value is delivered is the highest-abandonment screen a delivery app can have. Permission is requested at address entry, where “ใช้ตำแหน่งปัจจุบัน” is a visible benefit. Denial never blocks ordering — a Thai address plus a จุดสังเกต is enough.' },
+        { id: 'DEC-UX-002', title: 'Existing customer numbering is retained', body: 'The implemented app already has 31 numbered design states. The brief’s 18-item list is mapped onto it rather than substituted for it; renumbering live code is a cost with no benefit.' }
+      ],
+      orderStates: [
+        { state: 'PENDING_PAYMENT', tag: tag('#F7F0E6', '#7A5A2E'), cust: 'รอชำระเงิน + QR + นับถอยหลัง', merch: '—', rider: '—', actor: 'customer / system' },
+        { state: 'PAID', tag: tag('#E7F4EE', '#0B6B49'), cust: 'ส่งให้ร้านแล้ว · รอร้านรับออเดอร์', merch: 'ออเดอร์ใหม่ · รอตอบรับ + countdown', rider: '—', actor: 'merchant' },
+        { state: 'MERCHANT_ACCEPTED', tag: tag('#E7F4EE', '#0B6B49'), cust: 'ร้านรับออเดอร์แล้ว', merch: 'รับแล้ว · เริ่มทำอาหาร', rider: 'งานใหม่ (offer broadcast)', actor: 'merchant / riders' },
+        { state: 'PREPARING', tag: tag('#E7F4EE', '#0B6B49'), cust: 'ร้านกำลังทำอาหาร', merch: 'กำลังทำอาหาร', rider: 'ร้านกำลังทำอาหาร · ไปรับได้', actor: 'merchant' },
+        { state: 'READY_FOR_PICKUP', tag: tag('#E7F4EE', '#0B6B49'), cust: 'อาหารพร้อมแล้ว', merch: 'รอไรเดอร์มารับ', rider: 'รับอาหารได้เลย', actor: 'rider (join point)' },
+        { state: 'PICKED_UP', tag: tag('#E7F4EE', '#0B6B49'), cust: 'ไรเดอร์รับอาหารแล้ว', merch: 'ส่งมอบให้ไรเดอร์แล้ว', rider: 'รับอาหารแล้ว · ไปส่ง', actor: 'rider' },
+        { state: 'DELIVERING', tag: tag('#E7F4EE', '#0B6B49'), cust: 'กำลังไปส่ง + ETA', merch: 'กำลังจัดส่ง', rider: 'กำลังไปส่ง', actor: 'rider' },
+        { state: 'DELIVERED', tag: tag('#E7F4EE', '#0B6B49'), cust: 'จัดส่งสำเร็จ', merch: 'สำเร็จ', rider: 'ส่งสำเร็จ', actor: '— terminal' },
+        { state: 'CANCELLED', tag: tag('#FBE9E9', '#A62828'), cust: 'ออเดอร์ถูกยกเลิก + เหตุผล + สถานะคืนเงิน', merch: 'ออเดอร์ถูกยกเลิก', rider: 'งานนี้ถูกยกเลิก', actor: 'operator / customer' }
+      ],
+      deliveryStates: [
+        { state: 'RIDER_SEARCHING', cust: 'กำลังหาไรเดอร์', rider: 'offer' },
+        { state: 'RIDER_ASSIGNED', cust: 'ชื่อไรเดอร์ + เบอร์โทร', rider: 'active job' },
+        { state: 'AT_MERCHANT', cust: 'ไรเดอร์ถึงร้านแล้ว', rider: 'at shop' },
+        { state: 'RIDER_REASSIGNING', cust: 'กำลังหาไรเดอร์คนใหม่', rider: 'released' },
+        { state: 'EN_ROUTE', cust: 'กำลังไปส่ง + ETA', rider: 'job steps' }
+      ],
+      capabilities: [
+        { cap: 'customer', source: 'implicit for any profile', surface: 'Customer app', scope: 'own rows only' },
+        { cap: 'merchant', source: 'restaurant_members', surface: 'Merchant web', scope: 'per restaurant — never global' },
+        { cap: 'rider', source: 'riders (approval + suspension)', surface: 'Rider app', scope: 'own rows + assigned delivery, through the three views only' },
+        { cap: 'platformStaff', source: 'platform_staff', surface: 'Admin web', scope: 'platform-wide' }
+      ],
+      capRules: [
+        { title: 'The shell is chosen by capability, not by role', body: 'No app asks “what are you?” at login. A customer who signs in to merchant web sees บัญชีนี้ยังไม่ได้เป็นร้านค้า and a route back — never an empty merchant dashboard.' },
+        { title: 'Absence for a capability you lack', body: 'A disabled control teaches a user that a capability exists and is being withheld. No capability means the control is not rendered at all.' },
+        { title: 'Disablement for a capability you cannot use right now', body: 'An approved rider who is offline sees เปิดรับงาน. A suspended rider sees no toggle whatsoever. That distinction is the whole point of DEC-APP-004.' },
+        { title: 'Revocation lands on the next read', body: 'Suspension, revoked membership and staff revocation are read per request — never cached across a session, never carried in a token claim. A 403 shows คุณไม่มีสิทธิ์ทำรายการนี้ and does not log the user out.' }
+      ],
+      tokens: [
+        { name: 'Primary', hex: '#E4572E', use: 'primary fill, active state', swatch: sw('#E4572E') },
+        { name: 'Primary pressed', hex: '#C2431F', use: 'hover / pressed', swatch: sw('#C2431F') },
+        { name: 'Gold', hex: '#D6A419', use: 'promotion + badge only', swatch: sw('#D6A419') },
+        { name: 'Ink', hex: '#1F1A16', use: 'body text, live-order card', swatch: sw('#1F1A16') },
+        { name: 'Cream', hex: '#FBF7F1', use: 'every background', swatch: sw('#FBF7F1', '#7A6E64') },
+        { name: 'Surface', hex: '#FFFFFF', use: 'cards, sheets, inputs', swatch: sw('#FFFFFF', '#7A6E64') },
+        { name: 'Border', hex: '#E9E0D5', use: 'card + input borders', swatch: sw('#E9E0D5', '#7A6E64') },
+        { name: 'Success', hex: '#0F8B5F', use: 'delivered, open', swatch: sw('#0F8B5F') },
+        { name: 'Warning', hex: '#D6A419', use: 'waiting, near timeout', swatch: sw('#D6A419') },
+        { name: 'Error', hex: '#D93A3A', use: 'failure, cancel, delete', swatch: sw('#D93A3A') }
+      ],
+      additions: [
+        { name: 'Data table', needed: 'admin, merchant history — 14px body, 44px rows, Mono for references and amounts' },
+        { name: 'Sidebar navigation', needed: 'admin — 9 items, collapses to icons below 1280px' },
+        { name: 'Scope header', needed: 'merchant — restaurant identity, load-bearing for DEC-UX-005' },
+        { name: 'Order queue card', needed: 'merchant board — three variants, one primary action each' },
+        { name: 'Countdown chip', needed: 'accept window, rider offer, QR validity — value from configuration (DEC-031)' },
+        { name: 'Status strip', needed: 'rider — four variants, never collapsible' },
+        { name: 'Offer card', needed: 'rider — full screen, 64px action, must render 12s and 20s identically' },
+        { name: 'Reason dialog', needed: 'admin, merchant reject, rider cancel — mandatory reason (DEC-032) plus stated consequence' },
+        { name: 'Map surface', needed: 'customer tracking, rider navigation — labelled placeholder until Q-018' },
+        { name: 'Connection banner', needed: 'merchant board, customer tracking — silence must never look like calm' },
+        { name: 'Timeline', needed: 'derived from order_status_history — past steps plus the next one, never a stored copy' }
+      ],
+      contrast: [
+        { pair: 'Ink on Cream', ratio: '15.5:1', verdict: 'pass', badge: badge('#E7F4EE', '#0B6B49') },
+        { pair: 'Muted #7A6E64 on Cream', ratio: '4.65:1', verdict: 'pass', badge: badge('#E7F4EE', '#0B6B49') },
+        { pair: '#9A8C7E on Cream', ratio: '3.06:1', verdict: 'fail', badge: badge('#FBE9E9', '#A62828') },
+        { pair: 'White on Primary #E4572E', ratio: '3.68:1', verdict: 'large', badge: badge('#F7F0E6', '#7A5A2E') },
+        { pair: 'White on #C2431F', ratio: '5.09:1', verdict: 'pass', badge: badge('#E7F4EE', '#0B6B49') },
+        { pair: 'White on Error #D93A3A', ratio: '4.0:1', verdict: 'large', badge: badge('#F7F0E6', '#7A5A2E') }
+      ],
+      edgeStates: [
+        { state: 'Loading, first paint', where: 'all lists', copy: 'skeleton — no text, never a full-screen spinner', action: '—' },
+        { state: 'Empty cart', where: 'C-09', copy: 'ตะกร้ายังว่างอยู่', action: 'เลือกอาหาร' },
+        { state: 'Offline', where: 'all', copy: 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต', action: 'ลองอีกครั้ง' },
+        { state: 'Connection lost mid-session', where: 'C-14, M-03', copy: 'การเชื่อมต่อหลุด · กำลังเชื่อมต่อใหม่', action: 'auto-retry (persistent banner)' },
+        { state: 'Network timeout on a write', where: 'any', copy: 'ระบบตอบกลับช้า · ลองอีกครั้ง', action: 'retry with the same Idempotency-Key' },
+        { state: 'Session expired (401)', where: 'any', copy: 'เซสชันหมดอายุ · เข้าสู่ระบบอีกครั้ง', action: 'to login, session cleared' },
+        { state: 'Forbidden (403)', where: 'any', copy: 'คุณไม่มีสิทธิ์ทำรายการนี้', action: 'back — do not log out' },
+        { state: 'Restaurant closed', where: 'C-07', copy: 'ร้านปิดอยู่ · เปิด 08:00 พรุ่งนี้', action: 'ดูเวลาเปิดร้าน' },
+        { state: 'Item unavailable', where: 'C-07, C-09', copy: 'วันนี้หมด (inline; a marked diff at checkout)', action: 'นำออกจากตะกร้า' },
+        { state: 'Price changed at checkout', where: 'C-10', copy: 'ราคามีการเปลี่ยนแปลง + old → new per line', action: 'รับทราบและไปต่อ' },
+        { state: 'Payment not confirmed', where: 'C-12d', copy: 'ยืนยันการชำระเงินไม่ได้ — the order is still alive', action: 'สร้าง QR ใหม่' },
+        { state: 'No rider yet', where: 'C-14', copy: 'ยังหาไรเดอร์ไม่ได้ · เรากำลังเร่งหาให้', action: 'รอต่อ / ติดต่อฝ่ายช่วยเหลือ' },
+        { state: 'Offer lost to another rider', where: 'R-06', copy: 'งานนี้มีไรเดอร์รับไปแล้ว — neutral, not an error', action: 'auto-return to waiting' },
+        { state: 'Rider suspended', where: 'R-03', copy: 'บัญชีถูกระงับการใช้งาน + reason if available', action: 'ติดต่อผู้ดูแลระบบ · no online toggle at all' },
+        { state: 'Accept window expired', where: 'M-03', copy: 'หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ', action: 'no automatic action — BQ-013 is open' },
+        { state: 'Server error (500)', where: 'any', copy: 'ระบบมีปัญหาชั่วคราว + a correlation id the user can quote', action: 'ลองอีกครั้ง' }
+      ],
+      mustList: [
+        'Customer · 18 screens — splash, login, OTP, home, search, restaurant+menu, item, cart, address, checkout, QR + verifying + succeeded, placed, tracking, history, order detail, profile',
+        'Merchant · 9 — login, restaurant selection (conditional), board, order detail, accept, preparing, ready, menu availability, hours',
+        'Rider · 11 — login, status, home, online/offline, offer, offer lost, to shop, arrived, pickup, to customer, completion',
+        'Admin · 9 — login, counters, orders, order detail, restaurants (+detail), riders (+detail), alerts',
+        'Cross-cutting — every §13 state on a MUST screen, the §10 vocabulary in all four apps, the eleven component additions'
+      ],
+      shouldList: [
+        'C-02 onboarding · C-20 area selection', 'C-12d / C-12e payment failure and expiry', 'C-17 notifications',
+        'M-06 reject dialog · M-09 history · M-10 restaurant profile', 'R-12 delivery history · R-13 earnings',
+        'A-07 merchant members · A-10 customers · A-11/A-12 staff · A-14 audit viewer'
+      ],
+      laterList: [
+        'C-15 rating', 'C-12f/g/h duplicate payment, payment detail, refund status', 'M-13 merchant earnings · M-14 settings',
+        'R-14 rider profile and documents', 'A-15 settings editor',
+        'Every screen for a PROPOSED exception state — PAYMENT_FAILED, PAYMENT_EXPIRED, MERCHANT_REJECTED, DELIVERY_FAILED',
+        'Promotions, coupons, ratings, chat, favourites, scheduled orders, multi-restaurant carts, tipping, loyalty, referral, phases 2–4'
+      ],
+      openQ: [
+        { id: 'UX-Q-001', q: 'Primary-button contrast remedy: larger label, or #C2431F fill for text-bearing buttons?', blocks: 'token usage in all four apps', rel: 'UX-FINDING-01' },
+        { id: 'UX-Q-002', q: 'Rider offer window — 12s or 20s? The repository contradicts itself', blocks: 'R-05 default (layout tolerates both)', rel: 'BQ-020' },
+        { id: 'UX-Q-003', q: 'Merchant accept-window expiry: auto-reject, or escalate to an operator?', blocks: 'M-03 expired card · A-13 row', rel: 'BQ-013' },
+        { id: 'UX-Q-004', q: 'Is proof-of-delivery mandatory, optional, or absent in V1?', blocks: 'R-11 photo slot · storage bucket', rel: 'BQ-018' },
+        { id: 'UX-Q-005', q: 'Cancellation fee policy and its wording', blocks: 'C-14 cancel dialog copy', rel: 'Q-003, BQ-016' },
+        { id: 'UX-Q-006', q: 'Which operator options are offered on a no-rider order, in what order?', blocks: 'A-13 and A-04 action bars', rel: 'DEC-022' },
+        { id: 'UX-Q-007', q: 'Maps provider, and whether V1 shows a live rider marker or a coarse ETA', blocks: 'C-14 map · R-07/R-10 navigation', rel: 'Q-018' },
+        { id: 'UX-Q-008', q: 'Notification channels at launch: push only, or push + SMS + LINE?', blocks: 'C-17 · notification copy set', rel: 'ADR-011' },
+        { id: 'UX-Q-009', q: 'Exception state names', blocks: 'LATER screens · C-12d/e copy keys', rel: 'ORDER_LIFECYCLE §3' },
+        { id: 'UX-Q-010', q: 'Fee presentation once numbers exist: one ค่าส่ง line or itemised?', blocks: 'C-09 and C-10 fee block', rel: 'BQ-026, BQ-027' },
+        { id: 'UX-Q-011', q: 'Does a merchant see rider identity before handoff?', blocks: 'M-03 card · M-04 detail', rel: 'not in repo' },
+        { id: 'UX-Q-012', q: 'Order reference format shown to users', blocks: 'every surface showing a reference', rel: 'not in repo' }
+      ],
+      showRisks,
+      risks: [
+        { n: '1', risk: 'Merchant misses an order on web — no push, and a tablet on another tab or with autoplay blocked is silent', sev: 'P0', sevStyle: badge('#FBE9E9', '#A62828'), position: 'Realtime board + repeating audible alert + tab title count, plus a connection banner. If merchants still miss orders the answer is a native merchant app — a DEC-APP-003 reversal, not a UX patch.' },
+        { n: '2', risk: 'The customer’s wait is the weakest moment — payment confirmation is asynchronous by CON-002 and the map is a placeholder', sev: 'P0', sevStyle: badge('#FBE9E9', '#A62828'), position: 'C-12b and C-14 are specified as informative waiting states, not spinners. UX-Q-007 decides how much tracking fidelity V1 ships.' },
+        { n: '3', risk: 'Thai string length breaks chips, strips and table cells', sev: 'P1', sevStyle: badge('#F7F0E6', '#7A5A2E'), position: 'Longest-string layout is a requirement, with explicit overflow rules per component.' },
+        { n: '4', risk: 'Android unverified, and Thai per-weight font families are the likely failure', sev: 'P1', sevStyle: badge('#F7F0E6', '#7A5A2E'), position: 'Already a Phase A checklist item. A verification gate, not a design change.' },
+        { n: '5', risk: 'Rider one-handed use in traffic — a mis-tap has a real-world consequence', sev: 'P1', sevStyle: badge('#F7F0E6', '#7A5A2E'), position: '64px actions in the bottom third, no gestures, destructive actions behind a reason dialog.' },
+        { n: '6', risk: 'Operator power without guardrails — reassign, cancel and refund are irreversible to a user', sev: 'P1', sevStyle: badge('#F7F0E6', '#7A5A2E'), position: 'Mandatory reason, consequence stated in every dialog, audit_logs on every action.' },
+        { n: '7', risk: 'Fee numbers are unknown, so checkout cannot be finished visually', sev: 'P1', sevStyle: badge('#F7F0E6', '#7A5A2E'), position: 'Server-driven fee rows with a คำนวณเมื่อยืนยัน placeholder. No invented default anywhere.' },
+        { n: '8', risk: 'Scope creep through the admin surface — the easiest place to add “just one report”', sev: 'P2', sevStyle: badge('#F2EBE1', '#7A6E64'), position: 'Admin is capped at nine sections and the anti-scope is named explicitly.' }
+      ],
+      decisions: [
+        { id: 'DEC-UX-001', text: 'One order state value, four actor vocabularies; no screen computes status' },
+        { id: 'DEC-UX-002', text: 'Customer numbering stays as implemented; the brief’s list is mapped onto it' },
+        { id: 'DEC-UX-003', text: 'Restaurant detail and menu are one screen' },
+        { id: 'DEC-UX-004', text: 'No location-permission gate at first run; denial never blocks ordering' },
+        { id: 'DEC-UX-005', text: 'Merchant restaurant scope is persistent header identity; no global merchant view exists' },
+        { id: 'DEC-UX-006', text: 'Rider status is a persistent strip; unavailable capability is absent, not disabled' },
+        { id: 'DEC-UX-007', text: 'Admin overview is a counter row into filtered tables; no charts in V1' },
+        { id: 'DEC-UX-008', text: 'The customer sees order state plus a payment outcome, never a payment state machine' },
+        { id: 'DEC-UX-009', text: 'No screen is designed or built for a PROPOSED exception state' },
+        { id: 'DEC-UX-010', text: 'No in-app capability switcher in V1 — one capability, one app' },
+        { id: 'DEC-UX-011', text: 'One primary action per screen: 56px mobile, 64px rider in-job, bottom-pinned' },
+        { id: 'DEC-UX-012', text: 'Skeletons for first paint, in-button spinners for actions; never a full-screen spinner' },
+        { id: 'DEC-UX-013', text: 'Thai copy is keyed per app; no literal string in a screen file' }
+      ],
+      handoff: [
+        { title: 'Order of work', body: 'Phase B capability resolution and Phase C catalog land first, or every new surface is built against mocks a second time. Then the customer MUST-list corrections, then merchant web, then rider, then admin.' },
+        { title: 'Copy lives in copy/th.ts per app', body: 'Keyed by state, error code, empty state, validation and notification. @banhao/types owns the key unions so a missing Thai string fails typecheck. No literal in a screen file.' },
+        { title: 'Status comes from the server’s state value only', body: 'No screen computes status, no client-side state machine, no stored timeline — the timeline is derived from order_status_history.' },
+        { title: 'Rider screens type against RiderOrderView', body: 'No rider screen may reference an order money column, customer_id or address_id before assignment. The type system enforces what the security_barrier views enforce.' },
+        { title: 'Every state change is a command', body: 'accept, ready, picked-up — never a state PATCH. A 409 renders as a refresh, not a failure. Idempotency-Key on every retryable write behind a retry button.' },
+        { title: 'Timers come from configuration', body: 'Accept window, QR validity, offer window, no-rider notice (DEC-031). No hardcoded duration in a component.' }
+      ],
+      doneGates: [
+        'All four of loading, empty, error and offline exist for the screen',
+        'Thai copy keyed, longest real string laid out and screenshotted',
+        'Contrast and touch targets checked, including the UX-Q-001 resolution',
+        'Capability behaviour verified — absent without the capability, and a 403 does not log the user out',
+        'Verified on iOS and Android; desktop and counter tablet for merchant; keyboard-only for admin'
+      ],
+      footer: [
+        { k: 'STATUS', v: 'Complete — design specification only, no implementation' },
+        { k: 'FILES CREATED', v: 'BANHAO-UX-SPEC-V1.md · BANHAO UX Specification V1.dc.html' },
+        { k: 'REPOSITORY', v: 'Nothing created, modified, committed or pushed in kmandev/banhao-design' },
+        { k: 'DATABASE', v: 'Untouched — e471ec1d remains LOCKED' },
+        { k: 'MVP SCOPE', v: '18 customer · 9 merchant · 11 rider · 9 admin MUST screens' },
+        { k: 'OPEN DECISIONS', v: '12 UX questions, each mapped to the repository question it depends on' },
+        { k: 'CONFLICTS', v: 'None with any ACCEPTED DEC, ADR or DEC-APP' },
+        { k: 'READINESS', v: 'Ready after Phase B and Phase C land; no database, service or technology change required' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
