@@ -5,6 +5,17 @@ import { CartProvider } from '../hooks/useCart';
 import { RootNavigator, headerOptions } from '../navigation/RootNavigator';
 
 /**
+ * Catalog reads are Supabase-backed in production (Phase C / C-7). Screen tests
+ * bind the repository seam to the fixtures instead, so these stay deterministic
+ * and offline — the seam is exactly what makes that a one-line swap.
+ */
+jest.mock('../repositories', () => {
+  const actual = jest.requireActual('../repositories');
+  return { ...actual, repositories: actual.mockRepositories };
+});
+
+
+/**
  * MOCK TEST — no network, no Supabase project, no real session.
  *
  * These assert that the app routes correctly given a session object. They are

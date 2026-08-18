@@ -18,7 +18,8 @@ import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { useCart } from '../hooks/useCart';
 import { repositories } from '../repositories';
-import { formatBaht, SAMPLE_DISCOUNT_CODE } from '../mocks/pricing';
+import { formatBaht } from '../lib/money';
+import { SAMPLE_DISCOUNT_CODE } from '../mocks/pricing';
 import type { PaymentMethod } from '../mocks/types';
 import type { CustomerStackParamList } from '../navigation/types';
 

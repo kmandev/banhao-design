@@ -16,7 +16,8 @@ import {
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { useCart, lineTotal } from '../hooks/useCart';
-import { formatBaht, SAMPLE_DISCOUNT_CODE } from '../mocks/pricing';
+import { formatBaht } from '../lib/money';
+import { SAMPLE_DISCOUNT_CODE } from '../mocks/pricing';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;

@@ -107,6 +107,20 @@ if grep -q "FAIL" /tmp/banhao-oracle-out.log; then
 fi
 
 echo ""
+echo "==> Running catalog availability assertions (PC-Q-001 Option A)"
+docker cp "$REPO_ROOT/supabase/tests/catalog_availability_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/catalog_availability_test.sql 2>&1 | tee /tmp/banhao-catalog-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> Catalog availability verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-catalog-out.log; then
+  echo "==> Catalog availability verification FAILED"
+  exit 1
+fi
+
+echo ""
 echo "==> Seeding rider race condition fixtures"
 run_sql "$REPO_ROOT/supabase/tests/rider_race_setup.sql"
 

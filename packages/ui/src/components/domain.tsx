@@ -9,29 +9,52 @@ export interface ShopCardProps {
   name: string;
   /** The design represents shop imagery with an emoji glyph. */
   glyph: string;
-  rating: string;
-  /** e.g. "อาหารอีสาน · 1.1 กม. · 15–20 นาที · ค่าส่ง ฿10" */
+  /**
+   * Formatted rating, e.g. "4.8". Optional because `restaurants.rating_avg` is
+   * nullable — an unrated shop shows no rating line at all rather than a
+   * placeholder score.
+   */
+  rating?: string;
+  /** e.g. "อาหารอีสาน · ⭐ 4.8 (326)" */
   meta: string;
   badge?: { label: string; tone: BadgeTone };
+  /**
+   * Closed right now. UX-SPEC § 5.3: "Closed restaurants are visibly dimmed
+   * and remain tappable (a customer may want tomorrow's hours) but cannot be
+   * ordered from." Unlike `MenuRow`'s `unavailable`, this does NOT withhold
+   * `onPress` — the card stays a real button, only its appearance changes.
+   */
+  closed?: boolean;
   onPress?: () => void;
   testID?: string;
 }
 
-export function ShopCard({ name, glyph, rating, meta, badge, onPress, testID }: ShopCardProps) {
+export function ShopCard({
+  name,
+  glyph,
+  rating,
+  meta,
+  badge,
+  closed = false,
+  onPress,
+  testID,
+}: ShopCardProps) {
   return (
-    <Card onPress={onPress} testID={testID} style={styles.shopCard}>
+    <Card onPress={onPress} testID={testID} style={[styles.shopCard, closed && styles.shopCardClosed]}>
       <View style={styles.shopThumb}>
         <Text style={styles.shopGlyph}>{glyph}</Text>
       </View>
       <View style={styles.shopBody}>
         <View style={styles.shopTitleRow}>
-          <Text style={styles.shopName} numberOfLines={1}>
+          <Text style={[styles.shopName, closed && styles.shopTextClosed]} numberOfLines={1}>
             {name}
           </Text>
           {badge ? <Badge label={badge.label} tone={badge.tone} /> : null}
         </View>
-        <Text style={styles.shopRating}>⭐ {rating}</Text>
-        <Text style={styles.shopMeta} numberOfLines={2}>
+        {rating ? (
+          <Text style={[styles.shopRating, closed && styles.shopTextClosed]}>⭐ {rating}</Text>
+        ) : null}
+        <Text style={[styles.shopMeta, closed && styles.shopTextClosed]} numberOfLines={2}>
           {meta}
         </Text>
       </View>
@@ -41,12 +64,16 @@ export function ShopCard({ name, glyph, rating, meta, badge, onPress, testID }: 
 
 /* -------------------------------------------------------------- MenuRow */
 
+/** UX-SPEC § 5.3 / § 13 — the only wording for a sold-out item. */
+export const UNAVAILABLE_LABEL = 'วันนี้หมด';
+
 export function MenuRow({
   name,
   description,
   price,
   glyph,
   onPress,
+  unavailable = false,
   testID,
 }: {
   name: string;
@@ -54,20 +81,41 @@ export function MenuRow({
   price: string;
   glyph: string;
   onPress?: () => void;
+  /**
+   * Sold out today (`menu_items.is_available = false`).
+   *
+   * The row stays visible — hiding it would make the menu inconsistent with
+   * what the customer saw yesterday (UX-SPEC § 5.3) — but becomes inert.
+   */
+  unavailable?: boolean;
   testID?: string;
 }) {
   return (
-    <Card onPress={onPress} testID={testID} style={styles.menuRow}>
+    // Withholding onPress is the enforcement, not the dimming: Card renders a
+    // plain View when it has no handler, so an unavailable row is not a
+    // Pressable at all and cannot be tapped, long-pressed, or reached by an
+    // accessibility activation. Opacity alone would only look disabled.
+    <Card
+      onPress={unavailable ? undefined : onPress}
+      testID={testID}
+      style={[styles.menuRow, unavailable && styles.menuRowUnavailable]}
+    >
       <View style={styles.menuBody}>
-        <Text style={styles.menuName}>{name}</Text>
+        <Text style={[styles.menuName, unavailable && styles.menuTextUnavailable]}>{name}</Text>
         {description ? (
-          <Text style={styles.menuDesc} numberOfLines={2}>
+          <Text
+            style={[styles.menuDesc, unavailable && styles.menuTextUnavailable]}
+            numberOfLines={2}
+          >
             {description}
           </Text>
         ) : null}
-        <Text style={styles.menuPrice}>{price}</Text>
+        <View style={styles.menuPriceRow}>
+          <Text style={[styles.menuPrice, unavailable && styles.menuTextUnavailable]}>{price}</Text>
+          {unavailable ? <Badge label={UNAVAILABLE_LABEL} tone="neutral" /> : null}
+        </View>
       </View>
-      <View style={styles.menuThumb}>
+      <View style={[styles.menuThumb, unavailable && styles.menuThumbUnavailable]}>
         <Text style={styles.menuGlyph}>{glyph}</Text>
       </View>
     </Card>
@@ -243,6 +291,9 @@ export function StatusTimeline({
 
 const styles = StyleSheet.create({
   shopCard: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  // Dimmed, not disabled — the card stays tappable per UX-SPEC § 5.3.
+  shopCardClosed: { opacity: 0.55 },
+  shopTextClosed: { color: colors.textMuted },
   shopThumb: {
     width: 64,
     height: 64,
@@ -264,6 +315,11 @@ const styles = StyleSheet.create({
   shopMeta: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSubtle, lineHeight: 18 },
 
   menuRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  // Dimmed, but still legible — the customer needs to read what is sold out.
+  menuRowUnavailable: { opacity: 0.55 },
+  menuTextUnavailable: { color: colors.textMuted },
+  menuThumbUnavailable: { opacity: 0.5 },
+  menuPriceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   menuBody: { flex: 1, gap: 3 },
   menuName: { fontSize: fontSize.lg, fontFamily: fontFamily.semibold, color: colors.textPrimary },
   menuDesc: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted, lineHeight: 18 },

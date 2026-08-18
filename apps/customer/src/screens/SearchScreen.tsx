@@ -6,7 +6,14 @@ import { Input, MenuRow, SectionHeader, ShopCard, StateView, spacing } from '@ba
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
-import { formatBaht } from '../mocks/pricing';
+import { formatBaht } from '../lib/money';
+import {
+  formatRating,
+  formatShopMeta,
+  ITEM_PLACEHOLDER_GLYPH,
+  SHOP_PLACEHOLDER_GLYPH,
+} from '../lib/catalogDisplay';
+import { presentLoadError } from '../lib/loadError';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
@@ -51,18 +58,20 @@ export function SearchScreen() {
       ) : state.status === 'error' ? (
         <StateView
           kind="error"
-          glyph="📡"
-          title="ค้นหาไม่สำเร็จ"
-          message={state.message}
-          actionLabel="ลองใหม่"
+          glyph={presentLoadError(state.message).glyph}
+          title={presentLoadError(state.message).title}
+          actionLabel={presentLoadError(state.message).actionLabel}
           onAction={state.reload}
         />
       ) : state.data.shops.length === 0 && state.data.items.length === 0 ? (
         <StateView
           kind="empty"
           glyph="🙈"
-          title="ไม่พบผลลัพธ์"
-          message={`ไม่พบร้านหรือเมนูที่ตรงกับ "${query}"`}
+          // UX-SPEC § 13 C-06 empty state, verbatim.
+          title="ไม่พบร้านหรืออาหารที่ค้นหา"
+          actionLabel="ดูร้านทั้งหมด"
+          // "All shops" is the Home listing this screen was pushed over.
+          onAction={() => navigation.goBack()}
           testID="state-search-empty"
         />
       ) : (
@@ -74,9 +83,16 @@ export function SearchScreen() {
                 <ShopCard
                   key={shop.id}
                   name={shop.name}
-                  glyph={shop.glyph}
-                  rating={shop.rating}
-                  meta={`ร้าน · ${shop.distanceKm} กม. · ${shop.etaMinutes} นาที`}
+                  glyph={SHOP_PLACEHOLDER_GLYPH}
+                  rating={formatRating(shop.ratingAvg) ?? undefined}
+                  // PC-Q-002: distance and delivery fee have no authoritative
+                  // source; today's hours are appended per UX-SPEC § 5.3.
+                  meta={[formatShopMeta(shop), shop.todayHours].filter(Boolean).join(' · ')}
+                  badge={{
+                    label: shop.isOpen ? 'เปิดอยู่' : 'ปิดอยู่',
+                    tone: shop.isOpen ? 'success' : 'neutral',
+                  }}
+                  closed={!shop.isOpen}
                   onPress={() => navigation.navigate('Shop', { shopId: shop.id })}
                 />
               ))}
@@ -90,12 +106,20 @@ export function SearchScreen() {
                 <MenuRow
                   key={item.id}
                   name={item.name}
-                  description={item.description}
+                  description={item.description ?? undefined}
                   price={formatBaht(item.priceSatang)}
-                  glyph={item.glyph}
-                  onPress={() =>
-                    navigation.navigate('ItemOptions', { shopId: item.shopId, itemId: item.id })
-                  }
+                  glyph={ITEM_PLACEHOLDER_GLYPH}
+                  // PC-Q-001: search can now return sold-out items (RLS no
+                  // longer hides them). UX-SPEC is silent on search-result
+                  // treatment specifically, so this reuses C-07's rule — stay
+                  // visible, stay unreachable — rather than inventing a new
+                  // one. Same double guard as ShopScreen: MenuRow withholds
+                  // onPress, and the handler re-checks.
+                  unavailable={!item.isAvailable}
+                  onPress={() => {
+                    if (!item.isAvailable) return;
+                    navigation.navigate('ItemOptions', { shopId: item.shopId, itemId: item.id });
+                  }}
                 />
               ))}
             </>

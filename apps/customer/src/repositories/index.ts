@@ -1,44 +1,31 @@
 /**
- * Repository layer — the seam between UI and data source.
+ * Repository bindings — the swap point between UI and data source.
  *
- *   Screen → Hook → Repository → (Mock | API)
+ *   Screen → Hook → Repository → (Mock | Supabase)
  *
- * Screens depend only on these interfaces, so replacing the mock with a real
- * API means writing a new implementation and changing `repositories` below.
- * No screen imports from src/mocks/ directly. See brief §12–13.
+ * Screens depend only on the interfaces in `./types`, which is what made the
+ * Phase C catalog swap a one-line change here rather than a rewrite of four
+ * screens.
  */
 
-import type { Category, Shop, MenuItem, OrderSummary, AppNotification, Address } from '../mocks/types';
+import type { OrderSummary, AppNotification, Address } from '../mocks/types';
 import {
-  categories as mockCategories,
-  shops as mockShops,
-  menuByShop,
   orders as mockOrders,
   notifications as mockNotifications,
   addresses as mockAddresses,
 } from '../mocks/data';
+import { supabaseCatalogRepository } from './supabaseCatalog';
+import { mockCatalogRepository } from './mockCatalog';
+import type {
+  AddressRepository,
+  NotificationRepository,
+  OrderRepository,
+  Repositories,
+} from './types';
 
-export interface CatalogRepository {
-  listCategories(): Promise<Category[]>;
-  listShops(): Promise<Shop[]>;
-  getShop(shopId: string): Promise<Shop | null>;
-  listMenu(shopId: string): Promise<MenuItem[]>;
-  getMenuItem(shopId: string, itemId: string): Promise<MenuItem | null>;
-  search(query: string): Promise<{ shops: Shop[]; items: MenuItem[] }>;
-}
-
-export interface OrderRepository {
-  listOrders(): Promise<OrderSummary[]>;
-  getOrder(orderId: string): Promise<OrderSummary | null>;
-}
-
-export interface NotificationRepository {
-  listNotifications(): Promise<AppNotification[]>;
-}
-
-export interface AddressRepository {
-  listAddresses(): Promise<Address[]>;
-}
+export * from './types';
+export { mockCatalogRepository } from './mockCatalog';
+export { supabaseCatalogRepository, createSupabaseCatalogRepository } from './supabaseCatalog';
 
 /**
  * Simulated latency, so loading states are actually exercised in development
@@ -50,53 +37,40 @@ function delay<T>(value: T): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
 }
 
-const allMenuItems = Object.values(menuByShop).flat();
-
-export const mockCatalogRepository: CatalogRepository = {
-  listCategories: () => delay(mockCategories),
-  listShops: () => delay(mockShops),
-  getShop: (shopId) => delay(mockShops.find((s) => s.id === shopId) ?? null),
-  listMenu: (shopId) => delay(menuByShop[shopId] ?? []),
-  getMenuItem: (shopId, itemId) =>
-    delay((menuByShop[shopId] ?? []).find((m) => m.id === itemId) ?? null),
-  search: (query) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return delay({ shops: [], items: [] });
-
-    // Shops first, then menu items — see DQ-05 in the implementation map; the
-    // design does not specify ranking.
-    return delay({
-      shops: mockShops.filter((s) => s.name.toLowerCase().includes(q)),
-      items: allMenuItems.filter((m) => m.name.toLowerCase().includes(q)),
-    });
-  },
-};
-
 export const mockOrderRepository: OrderRepository = {
-  listOrders: () => delay(mockOrders),
+  listOrders: (): Promise<OrderSummary[]> => delay(mockOrders),
   getOrder: (orderId) => delay(mockOrders.find((o) => o.id === orderId) ?? null),
 };
 
 export const mockNotificationRepository: NotificationRepository = {
-  listNotifications: () => delay(mockNotifications),
+  listNotifications: (): Promise<AppNotification[]> => delay(mockNotifications),
 };
 
 export const mockAddressRepository: AddressRepository = {
-  listAddresses: () => delay(mockAddresses),
+  listAddresses: (): Promise<Address[]> => delay(mockAddresses),
 };
 
 /**
  * The active repositories.
  *
- * Everything except authentication and `profiles` is mock-backed, because the
- * domain schema does not exist yet (brief §23 — no database expansion in this
- * step). Swap these bindings when the real endpoints land.
+ * **Catalog is live** — Supabase-backed as of Phase C / C-7, read directly from
+ * PostgREST under RLS with the anon key (DEC-APP-008).
+ *
+ * Orders, notifications and addresses remain mock-backed: they belong to later
+ * phases and Phase C deliberately does not touch them. (An addresses API now
+ * exists from Phase B, but wiring the customer app to it is not Phase C work.)
  */
-export const repositories = {
-  catalog: mockCatalogRepository,
+export const repositories: Repositories = {
+  catalog: supabaseCatalogRepository,
   orders: mockOrderRepository,
   notifications: mockNotificationRepository,
   addresses: mockAddressRepository,
 };
 
-export type Repositories = typeof repositories;
+/** Fixture bindings, for tests and offline UI work. */
+export const mockRepositories: Repositories = {
+  catalog: mockCatalogRepository,
+  orders: mockOrderRepository,
+  notifications: mockNotificationRepository,
+  addresses: mockAddressRepository,
+};

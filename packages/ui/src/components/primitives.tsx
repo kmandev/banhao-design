@@ -23,7 +23,13 @@ export function Card({
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }) {
-  const content = <View style={[styles.card, style]}>{children}</View>;
+  // testID is applied on both paths: a non-pressable Card is exactly what an
+  // unavailable menu row renders as, and that row still has to be findable.
+  const content = (
+    <View style={[styles.card, style]} testID={testID}>
+      {children}
+    </View>
+  );
 
   if (!onPress) return content;
 

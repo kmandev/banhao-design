@@ -17,7 +17,7 @@ import {
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { useCart } from '../hooks/useCart';
-import { formatBaht } from '../mocks/pricing';
+import { formatBaht } from '../lib/money';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;

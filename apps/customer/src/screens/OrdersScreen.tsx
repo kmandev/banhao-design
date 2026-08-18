@@ -16,7 +16,7 @@ import {
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
-import { formatBaht } from '../mocks/pricing';
+import { formatBaht } from '../lib/money';
 import type { OrderState } from '../mocks/types';
 import type { CustomerStackParamList } from '../navigation/types';
 

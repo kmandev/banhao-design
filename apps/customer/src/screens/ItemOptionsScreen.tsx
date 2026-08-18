@@ -15,12 +15,31 @@ import {
   fontSize,
   radius,
   spacing,
+  UNAVAILABLE_LABEL,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { useCart } from '../hooks/useCart';
 import { repositories } from '../repositories';
-import { formatBaht } from '../mocks/pricing';
+import { formatBaht } from '../lib/money';
+import { ITEM_PLACEHOLDER_GLYPH } from '../lib/catalogDisplay';
+import { presentLoadError } from '../lib/loadError';
+import { isRequiredGroup } from '../domain/catalog';
+import type { MenuOptionGroup } from '../domain/catalog';
+
+/**
+ * The option a required group starts on.
+ *
+ * Deliberately the first **available** option, not `options[0]`: pre-selecting
+ * a sold-out choice would let an unavailable option satisfy a required group
+ * and silently price the line (PC-Q-001). A group whose every option is sold
+ * out selects nothing, which is the honest outcome — the customer has no valid
+ * choice to make.
+ */
+function defaultSelectionFor(group: MenuOptionGroup): string | undefined {
+  if (!isRequiredGroup(group)) return undefined;
+  return group.options.find((option) => option.isAvailable)?.id;
+}
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
@@ -56,9 +75,11 @@ export function ItemOptionsScreen() {
     let delta = 0;
 
     for (const group of item.optionGroups) {
-      const chosenId = selections[group.id] ?? (group.required ? group.options[0]?.id : undefined);
+      const chosenId = selections[group.id] ?? defaultSelectionFor(group);
       const chosen = group.options.find((o) => o.id === chosenId);
-      if (!chosen) continue;
+      // An unavailable option contributes nothing to the line total, even if a
+      // stale selection somehow names one (PC-Q-001).
+      if (!chosen || !chosen.isAvailable) continue;
       labels.push(
         chosen.priceDeltaSatang > 0
           ? `${chosen.label} +${chosen.priceDeltaSatang / 100}`
@@ -78,11 +99,26 @@ export function ItemOptionsScreen() {
     );
   }
 
-  if (!item) {
+  if (state.status === 'error') {
+    const presentation = presentLoadError(state.message);
     return (
       <Screen testID="screen-item-error">
         <StateView
           kind="error"
+          glyph={presentation.glyph}
+          title={presentation.title}
+          actionLabel={presentation.actionLabel}
+          onAction={state.reload}
+        />
+      </Screen>
+    );
+  }
+
+  if (!item) {
+    return (
+      <Screen testID="screen-item-error">
+        <StateView
+          kind="empty"
           glyph="🙈"
           title="ไม่พบเมนูนี้"
           actionLabel="กลับ"
@@ -95,7 +131,7 @@ export function ItemOptionsScreen() {
   const lineTotalSatang = (item.priceSatang + optionsDelta) * quantity;
 
   function onAddToCart() {
-    if (!item) return;
+    if (!item || !item.isAvailable) return;
     addLine({
       menuItemId: item.id,
       shopId: item.shopId,
@@ -116,8 +152,15 @@ export function ItemOptionsScreen() {
       footer={
         <BottomBar>
           <Button
-            label="เพิ่มลงตะกร้า"
-            trailing={formatBaht(lineTotalSatang)}
+            // Step 8 direct-entry safety: the whole item can be unavailable
+            // (not just one of its options) — reachable via a stale nav
+            // param, a deep link, or a search result. ShopScreen and
+            // SearchScreen already keep an unavailable item from being
+            // navigated to at all, but this is the one place that holds
+            // regardless of how the screen was reached.
+            label={item.isAvailable ? 'เพิ่มลงตะกร้า' : UNAVAILABLE_LABEL}
+            trailing={item.isAvailable ? formatBaht(lineTotalSatang) : undefined}
+            disabled={!item.isAvailable}
             onPress={onAddToCart}
             testID="button-add-to-cart"
           />
@@ -125,7 +168,7 @@ export function ItemOptionsScreen() {
       }
     >
       <View style={styles.hero}>
-        <Text style={styles.heroGlyph}>{item.glyph}</Text>
+        <Text style={styles.heroGlyph}>{ITEM_PLACEHOLDER_GLYPH}</Text>
       </View>
 
       <View style={styles.header}>
@@ -137,26 +180,37 @@ export function ItemOptionsScreen() {
       </View>
 
       {item.optionGroups?.map((group) => {
-        const activeId = selections[group.id] ?? (group.required ? group.options[0]?.id : undefined);
+        const required = isRequiredGroup(group);
+        const activeId = selections[group.id] ?? defaultSelectionFor(group);
 
         return (
           <View key={group.id} style={styles.group}>
             <SectionHeader
               title={group.title}
-              action={group.required ? <Badge label="ต้องเลือก" tone="primary" /> : undefined}
+              action={required ? <Badge label="ต้องเลือก" tone="primary" /> : undefined}
             />
             <View style={styles.options}>
               {group.options.map((option) => (
                 <ListRow
                   key={option.id}
                   title={option.label}
+                  // Sold-out options stay listed rather than vanishing, so the
+                  // menu reads the same as it did yesterday (UX-SPEC § 5.3).
                   trailing={
-                    option.priceDeltaSatang > 0
-                      ? `+${formatBaht(option.priceDeltaSatang)}`
+                    option.isAvailable
+                      ? option.priceDeltaSatang > 0
+                        ? `+${formatBaht(option.priceDeltaSatang)}`
+                        : undefined
+                      : UNAVAILABLE_LABEL
+                  }
+                  selected={option.isAvailable && activeId === option.id}
+                  // No handler at all when unavailable — inert by structure,
+                  // not merely by appearance.
+                  onPress={
+                    option.isAvailable
+                      ? () => setSelections((prev) => ({ ...prev, [group.id]: option.id }))
                       : undefined
                   }
-                  selected={activeId === option.id}
-                  onPress={() => setSelections((prev) => ({ ...prev, [group.id]: option.id }))}
                   testID={`option-${group.id}-${option.id}`}
                 />
               ))}

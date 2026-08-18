@@ -40,6 +40,17 @@ import {
 
 const mockRouteParams: Record<string, unknown> = {};
 
+/**
+ * Catalog reads are Supabase-backed in production (Phase C / C-7). Screen tests
+ * bind the repository seam to the fixtures instead, so these stay deterministic
+ * and offline — the seam is exactly what makes that a one-line swap.
+ */
+jest.mock('../repositories', () => {
+  const actual = jest.requireActual('../repositories');
+  return { ...actual, repositories: actual.mockRepositories };
+});
+
+
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
@@ -113,10 +124,14 @@ describe('Screen smoke tests', () => {
     await waitFor(() => expect(screen.getByTestId('screen-shop')).toBeTruthy());
   });
 
-  it('07 Shop renders the closed state for a closed shop', async () => {
+  it('07 Shop shows a persistent closed banner AND keeps the menu browsable', async () => {
+    // C-9: UX-SPEC § 5.3 — a closed restaurant gets a non-dismissable banner,
+    // not a screen that hides the menu. The customer may still want to browse
+    // it (and tomorrow's hours), so `screen-shop` itself must still render.
     mockRouteParams.shopId = 'shop-grilled-chicken-je-muay';
     renderScreen(<ShopScreen />);
-    await waitFor(() => expect(screen.getByTestId('state-shop-closed')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('screen-shop')).toBeTruthy());
+    expect(screen.getByTestId('banner-shop-closed')).toBeTruthy();
   });
 
   it('08 ItemOptions renders', async () => {

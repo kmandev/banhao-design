@@ -43,8 +43,8 @@ export function calculateTotals(subtotalSatang: Satang): OrderTotals {
   };
 }
 
-/** Formats satang as the design displays it, e.g. `฿130`. */
-export function formatBaht(satang: Satang): string {
-  const baht = satang / 100;
-  return `฿${Number.isInteger(baht) ? baht : baht.toFixed(2)}`;
-}
+/**
+ * Re-exported from its production home so existing fixture code keeps working.
+ * Production modules must import it from `src/lib/money.ts` (Phase C / C-2).
+ */
+export { formatBaht } from '../lib/money';
