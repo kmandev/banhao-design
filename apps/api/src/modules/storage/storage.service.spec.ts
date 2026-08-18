@@ -27,6 +27,18 @@ jest.mock('@aws-sdk/client-s3', () => {
   class FakeDeleteObjectCommand {
     constructor(public readonly input: Record<string, unknown>) {}
   }
+  class FakeHeadObjectCommand {
+    constructor(public readonly input: Record<string, unknown>) {}
+  }
+  // Mirrors the real `NotFound` exception's `instanceof`-checkable shape.
+  // Defined inside the factory — jest.mock() factories may not reference
+  // out-of-scope variables/classes.
+  class FakeNotFound extends Error {
+    constructor() {
+      super('NotFound');
+      this.name = 'NotFound';
+    }
+  }
   class FakeS3Client {
     constructor(config: Record<string, unknown>) {
       s3ClientConstructorSpy(config);
@@ -37,6 +49,8 @@ jest.mock('@aws-sdk/client-s3', () => {
     S3Client: FakeS3Client,
     PutObjectCommand: FakePutObjectCommand,
     DeleteObjectCommand: FakeDeleteObjectCommand,
+    HeadObjectCommand: FakeHeadObjectCommand,
+    NotFound: FakeNotFound,
   };
 });
 
@@ -51,6 +65,7 @@ jest.mock('@banhao/config', () => ({
 }));
 
 // Imported after the mocks above so StorageService picks them up.
+import { NotFound } from '@aws-sdk/client-s3';
 import { StorageService, StorageConfigError } from './storage.service';
 
 const FULL_ENV: Partial<ServerEnv> = {
@@ -252,6 +267,36 @@ describe('StorageService.upload', () => {
     await expect(
       service().upload({ key: '../escape', body: Buffer.from(''), contentType: 'image/webp' }),
     ).rejects.toThrow();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('StorageService.exists', () => {
+  it('returns true when HeadObject succeeds', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    await expect(service().exists('restaurants/r1/cover.webp')).resolves.toBe(true);
+
+    const command = sendMock.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect(command.input).toEqual({ Bucket: 'banhao-assets', Key: 'restaurants/r1/cover.webp' });
+  });
+
+  it('returns false for a real NotFound, rather than throwing', async () => {
+    sendMock.mockRejectedValueOnce(new NotFound({ message: 'not found', $metadata: {} }));
+
+    await expect(service().exists('restaurants/r1/cover.webp')).resolves.toBe(false);
+  });
+
+  it('rethrows any other failure — a 404 is not the same as "cannot tell"', async () => {
+    sendMock.mockRejectedValueOnce(new Error('network timeout'));
+
+    await expect(service().exists('restaurants/r1/cover.webp')).rejects.toThrow(
+      'network timeout',
+    );
+  });
+
+  it('rejects an unsafe key before ever calling R2', async () => {
+    await expect(service().exists('../escape')).rejects.toThrow();
     expect(sendMock).not.toHaveBeenCalled();
   });
 });

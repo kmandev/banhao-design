@@ -30,6 +30,24 @@ export function isAllowedImageMimeType(mimeType: string): mimeType is AllowedIma
   return Object.prototype.hasOwnProperty.call(ALLOWED_IMAGE_MIME_TYPES, mimeType);
 }
 
+/**
+ * The reverse of `ALLOWED_IMAGE_MIME_TYPES` — extension back to MIME type.
+ *
+ * Exists so a caller that only has a *key* (e.g. a client-submitted
+ * `objectKey` at upload-complete time, M-11) can recover the MIME type that
+ * would have produced it, and then re-derive the canonical key from trusted
+ * inputs to check the two match — never by trusting the submitted key
+ * directly. Built once from the same map `restaurantCoverObjectKey` uses, so
+ * the two can never independently drift out of sync.
+ */
+const MIME_TYPE_BY_EXTENSION: Record<string, AllowedImageMimeType> = Object.fromEntries(
+  Object.entries(ALLOWED_IMAGE_MIME_TYPES).map(([mime, ext]) => [ext, mime]),
+) as Record<string, AllowedImageMimeType>;
+
+export function mimeTypeForExtension(extension: string): AllowedImageMimeType | undefined {
+  return MIME_TYPE_BY_EXTENSION[extension];
+}
+
 /** Thrown for a restaurant id that isn't a UUID, or a MIME type not in the allow-list. */
 export class InvalidObjectKeyInputError extends Error {
   constructor(message: string) {

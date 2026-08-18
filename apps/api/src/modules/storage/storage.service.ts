@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   DeleteObjectCommand,
+  HeadObjectCommand,
+  NotFound,
   PutObjectCommand,
   S3Client,
   type S3ClientConfig,
@@ -18,16 +20,15 @@ import { loadServerEnv } from '@banhao/config';
  * Run, not a Worker.
  *
  * **No business module may import `@aws-sdk/client-s3` directly.** Everything
- * outside this file depends on `StorageService`'s four methods, never on
+ * outside this file depends on `StorageService`'s methods, never on
  * `S3Client`/`PutObjectCommand`/etc. — that is the whole point: swapping R2
  * for another S3-compatible provider later touches this one file only.
  *
- * Has **no live caller yet**. No merchant/restaurant upload endpoint exists
- * to authorize a request before it would reach this service (Step 12) — this
- * is the storage foundation the future endpoint will depend on, not a
- * complete vertical feature. Object-key shaping for restaurant covers lives
- * in `object-key.ts`, kept separate so this class stays entity-agnostic and
- * reusable for menu/delivery storage later without modification.
+ * First live caller: M-11, `apps/api/src/modules/merchant/restaurant-cover.*`
+ * — the restaurant cover upload flow. Object-key shaping for restaurant
+ * covers lives in `object-key.ts`, kept separate so this class stays
+ * entity-agnostic and reusable for menu/delivery storage later without
+ * modification.
  *
  * **Constructor takes no arguments** — matches `SupabaseService` exactly, and
  * for the same reason: a design-time TypeScript type (`ServerEnv`) is not a
@@ -156,6 +157,29 @@ export class StorageService {
     assertSafeObjectKey(key);
 
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  /**
+   * Whether an object exists — added for M-11's upload-complete step, which
+   * must confirm a client actually used its presigned URL before the database
+   * is updated (a presigned URL merely *authorizes* a PUT; issuing one is not
+   * proof one happened). `HeadObjectCommand` fetches no body, only metadata.
+   *
+   * Distinguishes a genuine 404 (`NotFound`, the SDK's typed exception for
+   * exactly this) from every other failure — a transient network error or a
+   * credentials problem must not be reported as "the object doesn't exist,"
+   * since a caller here treats `false` as license to reject the request.
+   */
+  async exists(key: string): Promise<boolean> {
+    assertSafeObjectKey(key);
+
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return true;
+    } catch (error) {
+      if (error instanceof NotFound) return false;
+      throw error;
+    }
   }
 
   /**

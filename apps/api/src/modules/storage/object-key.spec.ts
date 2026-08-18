@@ -2,6 +2,7 @@ import {
   ALLOWED_IMAGE_MIME_TYPES,
   InvalidObjectKeyInputError,
   isAllowedImageMimeType,
+  mimeTypeForExtension,
   restaurantCoverObjectKey,
 } from './object-key';
 
@@ -67,5 +68,30 @@ describe('isAllowedImageMimeType', () => {
 
   it('rejects an arbitrary string', () => {
     expect(isAllowedImageMimeType('text/html')).toBe(false);
+  });
+});
+
+describe('mimeTypeForExtension', () => {
+  it.each(Object.entries(ALLOWED_IMAGE_MIME_TYPES))(
+    'maps extension .%s back to %s',
+    (mimeType, ext) => {
+      expect(mimeTypeForExtension(ext)).toBe(mimeType);
+    },
+  );
+
+  it('is the exact inverse of restaurantCoverObjectKey for every allowed type', () => {
+    // M-11's complete-upload step depends on this round-tripping exactly —
+    // otherwise a legitimately-uploaded object could fail its own re-derived
+    // key check.
+    for (const mimeType of Object.keys(ALLOWED_IMAGE_MIME_TYPES)) {
+      const key = restaurantCoverObjectKey(RESTAURANT_ID, mimeType);
+      const ext = key.split('.').pop() as string;
+      expect(mimeTypeForExtension(ext)).toBe(mimeType);
+    }
+  });
+
+  it('returns undefined for an unknown extension', () => {
+    expect(mimeTypeForExtension('gif')).toBeUndefined();
+    expect(mimeTypeForExtension('')).toBeUndefined();
   });
 });
