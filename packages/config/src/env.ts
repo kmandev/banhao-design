@@ -22,6 +22,21 @@ const serverEnvSchema = z.object({
   // request body — see apps/api/src/common/guards/tick-hmac.guard.ts). Never
   // sent to any client bundle; only apps/api reads it.
   INTERNAL_TICK_SECRET: z.string().min(1),
+
+  // Cloudflare R2 (object storage) — optional at this schema's level
+  // deliberately. Nothing in the API calls StorageService yet (no
+  // merchant/restaurant upload endpoint exists to authorize a caller before
+  // reaching it — see apps/api/src/modules/storage), so requiring these here
+  // would fail every unrelated route's startup — cart, auth, payments — for a
+  // feature with zero live callers. StorageService itself validates presence
+  // of all five at construction time, which is where "R2 is actually needed"
+  // becomes true. R2_SECRET_ACCESS_KEY must never reach a client bundle —
+  // same rule as SUPABASE_SERVICE_ROLE_KEY above.
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_BUCKET: z.string().min(1).optional(),
+  R2_PUBLIC_URL: z.string().url().optional(),
 });
 
 export type ServerEnv = {
@@ -33,6 +48,11 @@ export type ServerEnv = {
   supabaseServiceRoleKey: string;
   supabaseJwtSecret: string;
   internalTickSecret: string;
+  r2AccountId: string | undefined;
+  r2AccessKeyId: string | undefined;
+  r2SecretAccessKey: string | undefined;
+  r2Bucket: string | undefined;
+  r2PublicUrl: string | undefined;
 };
 
 export class EnvValidationError extends Error {
@@ -66,5 +86,10 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEn
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseJwtSecret: env.SUPABASE_JWT_SECRET,
     internalTickSecret: env.INTERNAL_TICK_SECRET,
+    r2AccountId: env.R2_ACCOUNT_ID,
+    r2AccessKeyId: env.R2_ACCESS_KEY_ID,
+    r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    r2Bucket: env.R2_BUCKET,
+    r2PublicUrl: env.R2_PUBLIC_URL,
   };
 }

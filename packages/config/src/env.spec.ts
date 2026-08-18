@@ -55,4 +55,39 @@ describe('loadServerEnv', () => {
       EnvValidationError,
     );
   });
+
+  describe('R2 (optional — no live caller yet)', () => {
+    it('loads successfully with no R2 variables at all, as undefined', () => {
+      const env = loadServerEnv(validEnv);
+
+      expect(env.r2AccountId).toBeUndefined();
+      expect(env.r2AccessKeyId).toBeUndefined();
+      expect(env.r2SecretAccessKey).toBeUndefined();
+      expect(env.r2Bucket).toBeUndefined();
+      expect(env.r2PublicUrl).toBeUndefined();
+    });
+
+    it('loads all five when present', () => {
+      const env = loadServerEnv({
+        ...validEnv,
+        R2_ACCOUNT_ID: 'acct-1',
+        R2_ACCESS_KEY_ID: 'key-1',
+        R2_SECRET_ACCESS_KEY: 'secret-1',
+        R2_BUCKET: 'banhao-assets',
+        R2_PUBLIC_URL: 'https://assets.banhao.app',
+      });
+
+      expect(env.r2AccountId).toBe('acct-1');
+      expect(env.r2AccessKeyId).toBe('key-1');
+      expect(env.r2SecretAccessKey).toBe('secret-1');
+      expect(env.r2Bucket).toBe('banhao-assets');
+      expect(env.r2PublicUrl).toBe('https://assets.banhao.app');
+    });
+
+    it('throws when R2_PUBLIC_URL is present but not a URL', () => {
+      expect(() =>
+        loadServerEnv({ ...validEnv, R2_PUBLIC_URL: 'not-a-url' }),
+      ).toThrow(EnvValidationError);
+    });
+  });
 });
