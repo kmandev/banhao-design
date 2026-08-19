@@ -22,6 +22,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
+  OrderHistoryRow,
   OrderItemOptionRow,
   OrderItemRow,
   OrderRow,
@@ -38,6 +39,10 @@ const ORDER_ITEM_OPTION_COLUMNS =
   'id, order_item_id, group_name_snapshot, option_name_snapshot, price_delta_satang';
 
 const ORDER_STATUS_HISTORY_COLUMNS = 'to_state, occurred_at, reason';
+
+/** The history card needs strictly less than the detail screen — see `OrderHistoryEntry`. */
+const ORDER_HISTORY_COLUMNS =
+  'id, order_number, state, payment_method, restaurant_name_snapshot, grand_total_satang, placed_at';
 
 /** Turns a PostgREST error into a thrown Error, never an empty success. */
 function raise(operation: string, message: string): never {
@@ -60,6 +65,56 @@ export async function fetchOrder(
 
   if (error) raise('detail', error.message);
   return data;
+}
+
+/**
+ * The caller's own order history (C-16), newest first.
+ *
+ * **There is no customer filter in this query, and that is the point.**
+ * `orders_select_customer` is `using (customer_id = auth.uid())`, so an
+ * unfiltered select returns exactly the caller's own rows and nothing else —
+ * identity comes from the verified session the Supabase client holds, never
+ * from anything the UI could supply. Adding `.eq('customer_id', …)` here would
+ * duplicate the security boundary in the one place that cannot enforce it,
+ * which is precisely what `catalogQueries.ts` refuses to do for `status` and
+ * `archived_at`.
+ *
+ * `placed_at desc` is served by `orders_customer_idx (customer_id, placed_at
+ * desc)`.
+ */
+export async function fetchOrderHistory(client: SupabaseClient): Promise<OrderHistoryRow[]> {
+  const { data, error } = await client
+    .from('orders')
+    .select(ORDER_HISTORY_COLUMNS)
+    .order('placed_at', { ascending: false })
+    .returns<OrderHistoryRow[]>();
+
+  if (error) raise('history', error.message);
+  return data ?? [];
+}
+
+/**
+ * Line names and quantities for a batch of orders — one query for the whole
+ * history list, not one per card.
+ *
+ * `order_items_select_customer` scopes these to lines of the caller's own
+ * orders, so this needs no ownership filter either.
+ */
+export async function fetchOrderItemsForOrders(
+  client: SupabaseClient,
+  orderIds: string[],
+): Promise<OrderItemRow[]> {
+  if (orderIds.length === 0) return [];
+
+  const { data, error } = await client
+    .from('order_items')
+    .select(ORDER_ITEM_COLUMNS)
+    .in('order_id', orderIds)
+    .order('created_at', { ascending: true })
+    .returns<OrderItemRow[]>();
+
+  if (error) raise('history items', error.message);
+  return data ?? [];
 }
 
 /** Every line of the order, in creation order (no `sort_order` column exists on `order_items`). */

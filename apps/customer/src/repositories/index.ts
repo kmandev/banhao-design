@@ -8,12 +8,8 @@
  * screens.
  */
 
-import type { OrderSummary, AppNotification, Address } from '../mocks/types';
-import {
-  orders as mockOrders,
-  notifications as mockNotifications,
-  addresses as mockAddresses,
-} from '../mocks/data';
+import type { AppNotification, Address } from '../mocks/types';
+import { notifications as mockNotifications, addresses as mockAddresses } from '../mocks/data';
 import { supabaseCatalogRepository } from './supabaseCatalog';
 import { mockCatalogRepository } from './mockCatalog';
 import { supabaseCartRepository } from './supabaseCart';
@@ -22,6 +18,7 @@ import { apiCartValidationRepository } from './apiCartValidation';
 import { apiOrderCreationRepository } from './apiOrderCreation';
 import { apiAddressRepository } from './apiAddresses';
 import { supabaseOrderDetailRepository } from './supabaseOrderDetail';
+import { supabaseOrderHistoryRepository } from './supabaseOrderHistory';
 import type {
   AddressRepository,
   CartValidationRepository,
@@ -55,6 +52,10 @@ export {
   supabaseOrderDetailRepository,
   createSupabaseOrderDetailRepository,
 } from './supabaseOrderDetail';
+export {
+  supabaseOrderHistoryRepository,
+  createSupabaseOrderHistoryRepository,
+} from './supabaseOrderHistory';
 
 /**
  * Simulated latency, so loading states are actually exercised in development
@@ -66,9 +67,17 @@ function delay<T>(value: T): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
 }
 
+/**
+ * Fixture order history.
+ *
+ * Empty, not fabricated. The old `mocks/data.ts` `orders` fixture carried the
+ * superseded 12-state vocabulary and non-UUID ids (`BH000125`) — feeding those
+ * into a screen that now navigates by real order id would produce rows whose
+ * only possible outcome is a failed detail read. A suite that wants history
+ * rows binds its own stub, exactly as the cart and order-creation suites do.
+ */
 export const mockOrderRepository: OrderRepository = {
-  listOrders: (): Promise<OrderSummary[]> => delay(mockOrders),
-  getOrder: (orderId) => delay(mockOrders.find((o) => o.id === orderId) ?? null),
+  listOrders: () => delay([]),
 };
 
 export const mockNotificationRepository: NotificationRepository = {
@@ -123,18 +132,22 @@ export const mockOrderDetailRepository: OrderDetailRepository = {
  *
  * **Order detail is live** — Phase E-3B.1. A single order the caller owns,
  * with its item/option snapshots and status history, read directly from
- * Supabase under RLS (DEC-APP-008) — `orderDetail` is additive, alongside
- * `orders` rather than replacing it.
+ * Supabase under RLS (DEC-APP-008).
  *
- * Order history (the `orders` list) and notifications remain mock-backed:
- * they are later-phase work this task does not touch.
+ * **Order history is live** — Phase E-3B.3. `orders_select_customer` returns
+ * the caller's own orders and nothing else, which is what finally makes C-16 →
+ * C-19 real: the history card now carries a genuine order UUID rather than a
+ * fixture string.
+ *
+ * Notifications remain mock-backed: they are later-phase work this task does
+ * not touch.
  */
 export const repositories: Repositories = {
   catalog: supabaseCatalogRepository,
   cart: supabaseCartRepository,
   cartValidation: apiCartValidationRepository,
   orderCreation: apiOrderCreationRepository,
-  orders: mockOrderRepository,
+  orders: supabaseOrderHistoryRepository,
   orderDetail: supabaseOrderDetailRepository,
   notifications: mockNotificationRepository,
   addresses: apiAddressRepository,

@@ -15,8 +15,8 @@ import type { MenuItem, Shop } from '../domain/catalog';
 import type { Cart } from '../domain/cart';
 import type { CartValidation, ExpectedLine } from '../domain/cartValidation';
 import type { Category } from '../domain/categoryTaxonomy';
-import type { OrderDetail } from '../domain/order';
-import type { OrderSummary, AppNotification, Address } from '../mocks/types';
+import type { OrderDetail, OrderHistoryEntry } from '../domain/order';
+import type { AppNotification, Address } from '../mocks/types';
 
 export interface CatalogRepository {
   listCategories(): Promise<Category[]>;
@@ -78,9 +78,21 @@ export interface CartValidationRepository {
   validate(expectedLines: ExpectedLine[]): Promise<CartValidation>;
 }
 
+/**
+ * The customer's own order history (C-16, Phase E-3B.3).
+ *
+ * Real Supabase data as of E-3B.3 — previously mock-backed. `getOrder` is
+ * gone: a single order belongs to `OrderDetailRepository` (C-19), and keeping
+ * a second detail method here would be the duplicate order model this seam
+ * exists to prevent.
+ *
+ * No `customerId` parameter, deliberately and permanently. Ownership is
+ * `orders_select_customer` (`customer_id = auth.uid()`) against the verified
+ * session — an id the UI could pass would be an authorization decision made on
+ * a device.
+ */
 export interface OrderRepository {
-  listOrders(): Promise<OrderSummary[]>;
-  getOrder(orderId: string): Promise<OrderSummary | null>;
+  listOrders(): Promise<OrderHistoryEntry[]>;
 }
 
 /**

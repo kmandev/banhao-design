@@ -11,38 +11,40 @@ import {
   fontSize,
   radius,
   spacing,
-  type BadgeTone,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
 import { formatBaht } from '../lib/money';
-import type { OrderState } from '../mocks/types';
+import { presentLoadError } from '../lib/loadError';
+import { SHOP_PLACEHOLDER_GLYPH } from '../lib/catalogDisplay';
+import {
+  formatOrderPlacedAt,
+  orderStateLabel,
+  orderStateTone,
+  paymentMethodLabel,
+  summariseItems,
+} from '../lib/orderDisplay';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 
 /**
- * Customer-facing wording for each order state, taken from the Order State
- * Machine table in docs/ARCHITECTURE.md (the "ลูกค้าเห็น" column). The customer
- * never sees the raw state name.
+ * 16 ออเดอร์ของฉัน — C-16, real Supabase order history as of Phase E-3B.3.
+ *
+ * The card structure is unchanged from the mock-backed version; only its data
+ * source and its destination moved. The destination change restores design
+ * intent rather than inventing it: every history card in the design canvas
+ * carries `go: go('orderDetail')` (`docs/design/BANHAO Customer App.dc.html`),
+ * so C-16 → C-19 is what the design always specified. It could not be
+ * implemented until now because the previous fixture ids (`BH000125`) were
+ * order *numbers*, and C-19 reads by order id.
+ *
+ * State copy and badge tones come from `lib/orderDisplay.ts`, which transcribes
+ * UX-SPEC §10 — the superseded 12-state map that used to live in this file is
+ * gone, per the roadmap's own instruction to "replace the 12 mock order states
+ * with the §10 vocabulary (DEC-019)".
  */
-const ORDER_STATE_LABEL: Record<OrderState, { text: string; tone: BadgeTone }> = {
-  NEW: { text: 'ส่งออเดอร์ให้ร้านแล้ว', tone: 'neutral' },
-  ACCEPTED: { text: 'ร้านรับออเดอร์แล้ว', tone: 'warning' },
-  PREPARING: { text: 'ร้านกำลังเตรียมอาหาร', tone: 'warning' },
-  READY: { text: 'อาหารพร้อมแล้ว', tone: 'success' },
-  DRIVER_ASSIGNED: { text: 'ไรเดอร์กำลังไปรับอาหาร', tone: 'primary' },
-  PICKED_UP: { text: 'ไรเดอร์รับอาหารแล้ว', tone: 'primary' },
-  DELIVERING: { text: 'อาหารกำลังเดินทางมาหาคุณ', tone: 'primary' },
-  COMPLETED: { text: 'ส่งสำเร็จ', tone: 'success' },
-  NO_DRIVER: { text: 'ยังหาไรเดอร์ไม่ได้', tone: 'warning' },
-  PAYMENT_FAILED: { text: 'ชำระเงินไม่สำเร็จ', tone: 'warning' },
-  REJECTED: { text: 'ร้านไม่สามารถรับออเดอร์ได้', tone: 'neutral' },
-  CANCELLED: { text: 'ออเดอร์ถูกยกเลิก', tone: 'neutral' },
-};
-
-/** 16 ออเดอร์ของฉัน. */
 export function OrdersScreen() {
   const navigation = useNavigation<Nav>();
   const state = useAsyncData(() => repositories.orders.listOrders());
@@ -54,59 +56,63 @@ export function OrdersScreen() {
       {state.status === 'loading' ? (
         <StateView kind="loading" title="กำลังโหลด…" />
       ) : state.status === 'error' ? (
+        // UX-SPEC §13 copy, via the shared classifier the catalog screens use —
+        // offline and server failure read differently and must not be merged.
         <StateView
           kind="error"
-          glyph="📡"
-          title="โหลดออเดอร์ไม่สำเร็จ"
-          message={state.message}
-          actionLabel="ลองใหม่"
+          glyph={presentLoadError(state.message).glyph}
+          title={presentLoadError(state.message).title}
+          actionLabel={presentLoadError(state.message).actionLabel}
           onAction={state.reload}
+          testID="state-orders-error"
         />
       ) : state.data.length === 0 ? (
+        // UX-SPEC §13, "Empty — no orders | C-16": `ยังไม่มีประวัติการสั่ง`,
+        // action `สั่งอาหาร`. The previous wording predates that table.
         <StateView
           kind="empty"
           glyph="🧾"
-          title="ยังไม่มีออเดอร์"
-          message="เมื่อคุณสั่งอาหาร ออเดอร์จะแสดงที่นี่"
+          title="ยังไม่มีประวัติการสั่ง"
+          actionLabel="สั่งอาหาร"
+          onAction={() => navigation.navigate('Tabs')}
           testID="state-orders-empty"
         />
       ) : (
         state.data.map((order) => {
-          const label = ORDER_STATE_LABEL[order.orderState];
+          const label = orderStateLabel(order.state);
+          const placedAt = formatOrderPlacedAt(order.placedAt);
           return (
             <Card
-              key={order.id}
-              onPress={() =>
-                navigation.navigate('OrderTracking', {
-                  orderId: order.id,
-                  state: order.orderState,
-                })
-              }
-              testID={`order-card-${order.id}`}
+              key={order.orderId}
+              onPress={() => navigation.navigate('OrderDetail', { orderId: order.orderId })}
+              testID={`order-card-${order.orderId}`}
               style={styles.card}
             >
               <View style={styles.row}>
                 <View style={styles.thumb}>
-                  <Text style={styles.glyph}>{order.glyph}</Text>
+                  <Text style={styles.glyph}>{SHOP_PLACEHOLDER_GLYPH}</Text>
                 </View>
                 <View style={styles.body}>
                   <Text style={styles.shop} numberOfLines={1}>
-                    {order.shopName}
+                    {order.restaurantNameSnapshot}
                   </Text>
                   <Text style={styles.meta} numberOfLines={1}>
-                    #{order.id} · {order.placedAt}
+                    #{order.orderNumber}
+                    {placedAt ? ` · ${placedAt}` : ''}
                   </Text>
-                  <Text style={styles.items} numberOfLines={1}>
-                    {order.itemSummary}
-                  </Text>
+                  {order.items.length > 0 ? (
+                    <Text style={styles.items} numberOfLines={1}>
+                      {summariseItems(order.items)}
+                    </Text>
+                  ) : null}
                 </View>
-                <Text style={styles.total}>{formatBaht(order.totalSatang)}</Text>
+                <Text style={styles.total}>{formatBaht(order.grandTotalSatang)}</Text>
               </View>
               <View style={styles.footer}>
-                <Badge label={label.text} tone={label.tone} />
-                <Text style={styles.method}>
-                  {order.paymentMethod === 'CASH' ? 'เงินสด' : 'พร้อมเพย์'}
-                </Text>
+                {/* No badge when the design has no approved wording for the
+                    state — §10 forbids rendering the identifier itself. */}
+                {label ? <Badge label={label} tone={orderStateTone(order.state)} /> : <View />}
+                <Text style={styles.method}>{paymentMethodLabel(order.paymentMethod)}</Text>
               </View>
             </Card>
           );

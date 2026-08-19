@@ -69,6 +69,32 @@ export interface OrderStatusEvent {
 }
 
 /**
+ * One row of the customer's own order history (C-16), as the list needs it.
+ *
+ * Deliberately a summary, not a trimmed `OrderDetail`: the history list reads
+ * four tables' worth of nothing — it needs the order row plus each line's name
+ * and quantity, and nothing else. Fetching full option snapshots and status
+ * history for every row to then discard them would be an N+1 in service of
+ * data the card never renders.
+ *
+ * `items` stays structured rather than a pre-joined `"A ×2, B ×1"` string:
+ * that string is a wording choice (the `×` and the separator both come from
+ * the design), and this module holds facts. `summariseItems` in
+ * `lib/orderDisplay.ts` owns the wording.
+ */
+export interface OrderHistoryEntry {
+  orderId: string;
+  orderNumber: string;
+  state: OrderState;
+  paymentMethod: OrderPaymentMethod;
+  restaurantNameSnapshot: string;
+  grandTotalSatang: Satang;
+  /** `orders.placed_at`, ISO-8601 as PostgREST returns `timestamptz`. */
+  placedAt: string;
+  items: { nameSnapshot: string; quantity: number }[];
+}
+
+/**
  * A single order, as the customer who placed it may read it.
  *
  * Every field below is either a stored column or a write-once snapshot —

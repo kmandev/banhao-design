@@ -21,7 +21,7 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
 import { formatBaht } from '../lib/money';
 import { presentLoadError } from '../lib/loadError';
-import type { OrderState } from '../domain/order';
+import { orderStateLabel } from '../lib/orderDisplay';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
@@ -42,41 +42,14 @@ type DetailRoute = RouteProp<CustomerStackParamList, 'OrderDetail'>;
  * already-approved primitives (`Card`, `SectionHeader`, `StatusTimeline`,
  * `PriceRow`, `ListRow`, `StateView`) is the smaller, safer change.
  *
- * State labels are the approved customer-facing copy from
- * `docs/design/BANHAO-UX-SPEC-V1.md` §10 ("One state value, four
- * vocabularies") — transcribed, not invented. `CREATED` has no copy there
- * ("transient — no screen"); it is included anyway because a customer can
- * still land here in the instant before the first real transition, and a
- * blank state would be worse.
+ * State labels come from `lib/orderDisplay.ts`, which transcribes the approved
+ * customer copy in `docs/design/BANHAO-UX-SPEC-V1.md` §10 ("One state value,
+ * four vocabularies").
  *
- * **Not wired from any existing screen.** `PromptPayQrScreen` and
- * `OrderConfirmedScreen` are both design-locked (CLAUDE.md: "the design
- * artifact is the source of truth… do not re-design"), and the design's own
- * footer for the QR screen has exactly two buttons. Reachable today by
- * `navigation.navigate('OrderDetail', { orderId })` and by direct test
- * rendering; wiring a tap-through is left for whoever resolves that design
- * question, not guessed here.
+ * **Reached from C-16** (`OrdersScreen`) as of Phase E-3B.3 — the path the
+ * design canvas always specified (`go: go('orderDetail')` on every history
+ * card). It could not be wired until order history returned real order ids.
  */
-
-const ORDER_STATE_LABEL: Record<OrderState, string> = {
-  CREATED: 'กำลังสร้างออเดอร์',
-  PENDING_PAYMENT: 'รอชำระเงิน',
-  PAID: 'ส่งให้ร้านแล้ว · รอร้านรับออเดอร์',
-  MERCHANT_ACCEPTED: 'ร้านรับออเดอร์แล้ว',
-  PREPARING: 'ร้านกำลังทำอาหาร',
-  READY_FOR_PICKUP: 'อาหารพร้อมแล้ว',
-  PICKED_UP: 'ไรเดอร์รับอาหารแล้ว',
-  DELIVERING: 'กำลังไปส่ง',
-  DELIVERED: 'จัดส่งสำเร็จ',
-  CANCELLED: 'ออเดอร์ถูกยกเลิก',
-  // Exception states remain PROPOSED (docs/ORDER_LIFECYCLE.md §3) — the
-  // customer-facing copy for these three is not yet approved anywhere, so
-  // the state name is what renders rather than a fabricated phrase.
-  PAYMENT_FAILED: 'PAYMENT_FAILED',
-  PAYMENT_EXPIRED: 'PAYMENT_EXPIRED',
-  MERCHANT_REJECTED: 'MERCHANT_REJECTED',
-  DELIVERY_FAILED: 'DELIVERY_FAILED',
-};
 
 export function OrderDetailScreen() {
   const navigation = useNavigation<Nav>();
@@ -126,11 +99,22 @@ export function OrderDetailScreen() {
   }
 
   const order = state.data;
-  const timelineSteps = order.statusHistory.map((event, i) => ({
-    label: ORDER_STATE_LABEL[event.toState] ?? event.toState,
+  const stateLabel = orderStateLabel(order.state);
+
+  // Events whose state has no approved customer wording are omitted rather
+  // than rendered as their English identifier — UX-SPEC §10: "No state name,
+  // cause code, or error code is ever rendered to a user." In V1 this only
+  // ever drops `CREATED` (§10 lists it as transient, with no screen) and the
+  // four exception states DEC-APP-006 leaves unimplemented.
+  const labelled = order.statusHistory
+    .map((event) => ({ label: orderStateLabel(event.toState), reason: event.reason }))
+    .filter((event): event is { label: string; reason: string | null } => event.label !== null);
+
+  const timelineSteps = labelled.map((event, i) => ({
+    label: event.label,
     caption: event.reason ?? undefined,
-    done: i < order.statusHistory.length - 1,
-    active: i === order.statusHistory.length - 1,
+    done: i < labelled.length - 1,
+    active: i === labelled.length - 1,
   }));
 
   return (
@@ -145,7 +129,7 @@ export function OrderDetailScreen() {
     >
       <Card style={styles.summary}>
         <Text style={styles.orderNumber}>ออเดอร์ #{order.orderNumber}</Text>
-        <Text style={styles.stateLabel}>{ORDER_STATE_LABEL[order.state] ?? order.state}</Text>
+        {stateLabel ? <Text style={styles.stateLabel}>{stateLabel}</Text> : null}
       </Card>
 
       <SectionHeader title="สถานะออเดอร์" />

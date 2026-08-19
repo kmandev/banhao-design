@@ -13,6 +13,7 @@
 
 import type {
   OrderDetail,
+  OrderHistoryEntry,
   OrderItemOption,
   OrderLineItem,
   OrderPaymentMethod,
@@ -61,6 +62,33 @@ export interface OrderStatusHistoryRow {
   to_state: string;
   occurred_at: string;
   reason: string | null;
+}
+
+/** The subset of `orders` the history list selects — see `ORDER_HISTORY_COLUMNS`. */
+export interface OrderHistoryRow {
+  id: string;
+  order_number: string;
+  state: string;
+  payment_method: string;
+  restaurant_name_snapshot: string;
+  grand_total_satang: number;
+  placed_at: string;
+}
+
+export function toOrderHistoryEntry(
+  row: OrderHistoryRow,
+  items: { nameSnapshot: string; quantity: number }[],
+): OrderHistoryEntry {
+  return {
+    orderId: row.id,
+    orderNumber: row.order_number,
+    state: row.state as OrderState,
+    paymentMethod: row.payment_method as OrderPaymentMethod,
+    restaurantNameSnapshot: row.restaurant_name_snapshot,
+    grandTotalSatang: row.grand_total_satang,
+    placedAt: row.placed_at,
+    items,
+  };
 }
 
 export function toOrderItemOption(row: OrderItemOptionRow): OrderItemOption {
