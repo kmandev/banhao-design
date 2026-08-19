@@ -2,298 +2,256 @@
 
 ## Last Updated
 
-2026-08-12 — Phase A / A-1 (documentation reconciliation).
+2026-08-19 — after Phase D / Cart closure (`b0b9ad88`).
 
-> **Historical note.** Until 2026-08-09 this file correctly read *"No application
-> exists."* Until 2026-08-12 it reported **three** migrations applied and eleven
-> unmerged, with the live project never modified — accurate on 2026-08-10, stale
-> after the migration work landed on 2026-08-11. Both earlier states are preserved
-> in [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) and in Git history; nothing has
-> been erased, only superseded.
+> **Historical note.** This file has been rewritten in full each time it fell
+> too far behind the repository to patch incrementally — 2026-08-09 ("No
+> application exists"), 2026-08-12 (Phase A / A-1), and now. Earlier states are
+> preserved in [`PROJECT_HISTORY.md`](PROJECT_HISTORY.md) and in Git history;
+> nothing is erased, only superseded.
 
-## Overall Status
+## 1. Project Overview
 
-**Application code exists and runs. The database is deployed and locked. The
-application architecture is approved.** What does not exist is business logic —
-no order creation, payment integration, dispatch, or settlement. That is
-deliberate, not an omission.
+**BANHAO | บ้านเฮา** — a Local Super App for อำเภอบุณฑริก จังหวัดอุบลราชธานี,
+Thailand. Phase 1 is Food Delivery; later phases (Parcel, Ride, Shopping) are
+concept-only. Three-sided marketplace: Customer → BANHAO → Merchant + Driver.
+Built by a solo founder using AI as the development team.
 
-Phase A (foundation hardening) is **in progress**; A-1 is this documentation
-reconciliation.
-
-## Authoritative Baseline
+## 2. Current Architecture State
 
 | | |
 |---|---|
-| Branch | `main` |
-| Current commit | `14289652` |
-| Database checkpoint | `e471ec1d` — **LOCKED** |
+| Branch | `main`, 4 commits ahead of `origin/main` (not pushed) |
+| Current commit | `b0b9ad88` — `feat(cart): complete phase d cart and checkout validation` |
+| Database checkpoint | `e471ec1d` — schema **LOCKED**; one additive policy migration since (§9) |
 | Application architecture | [`BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md) — V1.1, **APPROVED / READY FOR IMPLEMENTATION** |
 
-V1.1 is the authoritative source for application implementation: 12 `DEC-APP`
-decisions, 9 phases plus F′, no database redesign. Where any other repository
-document conflicts with it, **V1.1 wins**. A `DEC-NNN` business decision still
-outranks both.
+V1.1 is authoritative for application implementation: 12 `DEC-APP` decisions,
+9 phases (A–I) plus F′. Where any other document conflicts with it, **V1.1
+wins**. A `DEC-NNN` business decision outranks both.
 
-## Current Phase
+## 3. Completed Phases — ✅ COMPLETE
 
-Phase 1 — Food Delivery. **Phase A of the application roadmap: foundation
-hardening.**
-
-The nine phases: **A** foundation → **B** identity & capability → **C** catalog →
-**D** cart → **E** order → **F** payment (null provider) → **G** rider &
-delivery → **H** notification → **I** admin operations. **F′** (real payment
-provider) is externally blocked and can land any time after F.
-
-## Working Features
-
-- **Customer App (React Native + Expo)** — all 31 design states; 4-tab
-  navigation; design tokens and shared components in `packages/ui`.
-- **Phone OTP authentication** against the live `banhao-dev` Supabase project —
-  request OTP, verify, resend, session persistence across app restart, logout.
-- **`profiles` read/write under RLS** — a customer can read only its own row and
-  write only `display_name`. Verified by execution.
-- **NestJS API foundation** — `GET /health`, `GET /api/v1/me`, global Supabase
-  JWT auth guard, role guard, response envelope, OpenAPI.
-- **Deployed database** — 16 migrations, 40 application tables, RLS on every one.
-- **Monorepo tooling** — pnpm + Turborepo; lint, typecheck, test and build all
-  pass; GitHub Actions CI with four jobs.
-
-## Partially Working
-
-- **Payment screens (12, 12b–12h)** render every payment **state**, but no
-  provider is integrated (Q-001 `OPEN`, DEC-015). The QR is a labelled
-  placeholder and the transitions on 12b are marked `จำลอง:`. CON-002 means only
-  a signature-verified provider webhook may ever confirm a payment.
-- **Order tracking (14)** renders the status timeline, but the map is a labelled
-  placeholder pending a maps provider (Q-018).
-- **API error contract** — the success envelope is correct; the error envelope is
-  not yet contract-compliant. See "Code Diverging From Approved Decisions".
-
-## Mock / Placeholder
-
-- Everything except authentication and `profiles` is **mock-backed** through
-  `apps/customer/src/repositories/` — shops, menu, cart pricing, orders,
-  notifications, addresses. Mock data lives in `apps/customer/src/mocks/` and is
-  labelled `(ตัวอย่าง)` on screen. That repository seam is the designated swap
-  point for Supabase-backed reads in Phase C.
-- `design/tracking/tracking-map.html` — Leaflet prototype with mock coordinates.
-
-## Not Implemented
-
-- Order backend, dispatch, settlement, ledger writes
-- Payment provider integration and webhooks
-- Merchant, Driver and Admin apps (shells only)
-- `worker.ts`, `/internal/tick`, outbox dispatch
-- Storage, Realtime, notifications
-- Production deployment (Docker + CI exist; nothing is hosted)
-
-## Known Bugs
-
-None open. Five defects found in the 2026-08-10 QA pass (DEF-01…DEF-05) are all
-fixed and merged — see [`CUSTOMER_APP_VISUAL_QA.md`](CUSTOMER_APP_VISUAL_QA.md).
-
-## Code Diverging From Approved Decisions
-
-Not bugs — the code was correct when written and later decisions moved the
-target. Each has an assigned phase; none is to be fixed opportunistically.
-
-| Divergence | Conflicts with | Assigned |
+| Phase | What | Evidence |
 |---|---|---|
-| `RolesGuard` authorizes on `profiles.role`, a column **no RLS policy consults** | DEC-033, **DEC-APP-004** | **Phase B** |
-| `HttpExceptionFilter` derives `error.code` from HTTP status; no `correlationId`; `message` required | V1.1 §6/§10 error contract | **Phase A / A-2–A-4** |
-| No raw-body handling or envelope exclusion for `/webhooks/*` | **DEC-APP-005** | **Phase A / A-5** |
-| `apps/customer/src/mocks/types.ts` encodes the superseded 12 order states | **DEC-019** | Phase C/E |
-| Checkout (screen 10) still offers a cash option and prepared-amount selector | **DEC-016** — COD disabled | Phase C/E |
+| **A** — Foundation hardening | Error envelope with `correlationId`, webhook raw-body handling, `apps/tick-worker` + `POST /internal/tick` (HMAC-guarded), four GitHub Actions workflows (`ci`, `deploy-api`, `deploy-web`, `deploy-worker`) | `apps/api/src/common/filters/http-exception.filter.ts`, `apps/api/src/modules/webhooks/`, `apps/tick-worker/src/index.ts`, `.github/workflows/` |
+| **B** — Identity & capability resolution | Membership-based `RolesGuard`/`RestaurantScopeGuard` (DEC-033/DEC-APP-004, capability-based — no `profiles.role` reference remains), addresses API | `apps/api/src/common/guards/roles.guard.ts`, `apps/api/src/modules/users/` — commits `9c250b77`, `91f77489` |
+| **C** — Catalog & merchant read path | Customer app reads shops/menu live from Supabase; `apps/customer/src/mocks/` no longer the catalog source | `apps/customer/src/data/catalogQueries.ts`, `apps/customer/src/domain/catalog.ts` — commit `8be44f05` |
+| **D** — Cart | Persisted Supabase cart under RLS, `POST /api/v1/cart/validate`, fail-closed checkout revalidation | §8 below — commit `b0b9ad88` |
 
-`RolesGuard` is inert today — no route uses `@Roles()` — but the divergence
-between application authorization and database RLS is silent, which is why
-DEC-APP-004 exists.
+**Not yet started as lettered phases:** E (Order), F (Payment/null provider),
+F′ (real provider), G (Rider & delivery), H (Notification), I (Admin
+operations).
 
-## Technical Debt
+## 4. Infrastructure — Storage (R2) — ✅ COMPLETE, not phase-lettered
 
-- **Database test harness pins PostgreSQL 16; production runs 17.**
-  `supabase/tests/run-domain-tests.sh` and `run-rls-tests.sh` default to
-  `postgis/postgis:16-3.4`, so the CI `rls` job validates against a different
-  major version than the deployed database. Overridable via the existing `IMAGE`
-  environment variable.
-- `support.js` (the design-canvas runtime) is intentionally duplicated 4× — see
-  `CHANGELOG.md`. All copies must change together.
-- The iOS Simulator cannot hold an HTTP/3 connection to Supabase, so Simulator QA
-  runs through `scripts/sim-supabase-proxy.mjs`. An environment limitation, not
-  app code — see [`SUPABASE_DEVELOPMENT.md`](SUPABASE_DEVELOPMENT.md).
+Cloudflare R2 object storage was implemented ahead of the phase sequence, as a
+prerequisite for merchant catalog images rather than as one of the nine
+lettered phases. **Terminology note:** the storage code's own doc comments
+label this work "Phase D," which collides with the roadmap's actual Phase D
+(Cart, §8). That label is a misnomer in the source comments, not a real phase;
+this document does not use it. See §9 for the one open architecture-decision
+gap this created.
 
-## Security Concerns
+| | Status |
+|---|---|
+| `StorageService` (S3-compatible client over R2, `apps/api/src/modules/storage/storage.service.ts`) | ✅ presigned `PUT`, `HeadObject`-based `exists()`, `getPublicUrl()`, safe-key assertion |
+| Object-key shaping (`object-key.ts`) | ✅ server-templated keys only; MIME allow-list; UUID validation; structural parser for client-submitted keys |
+| Environment configuration | ✅ `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` — `StorageConfigError` fails loudly if any is missing |
+| Tests | ✅ `storage.service.spec.ts`, `object-key.spec.ts` |
 
-- **RLS is verified by execution**, not by reasoning. Role escalation, phone/id
-  rewriting, fabricated inserts and deletes are all rejected.
-- Two structural fixes are in the deployed schema and must not be weakened: the
-  rider's column-scoped views (`security_barrier = true` is load-bearing, not
-  cosmetic) and `release_rider_assignment()` (`SECURITY INVOKER`,
-  `service_role`-only EXECUTE, atomic release invariant).
-- No secret is in Git. `apps/customer/.env` is gitignored, the mobile app holds
-  only the anon key, and `SUPABASE_SERVICE_ROLE_KEY` appears in no app, no
-  client-read `.env`, and no document.
-- Payment security is **not yet assessable** — no provider, no webhook.
+## 5. Merchant Image Upload — ✅ COMPLETE
 
-## Deployment Status
+| | M-11 Restaurant Cover | M-12 Menu Item Primary Image |
+|---|---|---|
+| `upload-url` endpoint | ✅ `POST /api/v1/merchant/restaurants/:restaurantId/cover/upload-url` | ✅ `POST /api/v1/merchant/menu-items/:menuItemId/image/upload-url` |
+| `complete` endpoint | ✅ | ✅ |
+| Authorization | ✅ `@Roles('MERCHANT')` + `@RestaurantScope()` (route carries `restaurantId`) | ✅ `@Roles('MERCHANT')` + manual `hasMerchantAccess` check (route has no `restaurantId`; resolved from `menu_items.restaurant_id`) |
+| Object-key validation | ✅ deterministic `restaurants/{id}/cover.{ext}`, recompute-and-compare | ✅ `menu-items/{id}/{uuid}.{ext}`, structural parse + `StorageService.exists()` (recompute-and-compare not possible — key contains a random UUID) |
+| DB `image_url` update | ✅ `restaurants.image_url` | ✅ `menu_items.image_url` |
+| Idempotency | ✅ same key re-completed → same UPDATE, no error | ✅ same, documented shared "orphan on format change" behavior |
+| Tests | ✅ `restaurant-cover.controller.spec.ts`, `restaurant-cover.service.spec.ts` | ✅ `menu-item-image.controller.spec.ts`, `menu-item-image.service.spec.ts` |
 
-**Not deployed.** The API Dockerfile and GitHub Actions CI exist and pass; no
-hosting is configured yet.
+## 6. Authentication — ✅ COMPLETE (dev-verified)
 
-Approved targets (V1.1 §12): Cloud Run `asia-southeast3` (Bangkok), request-based
-billing, `min-instances=0` (DEC-APP-009); Cloudflare Pages for the web apps;
-Cloudflare Worker cron for the tick (DEC-APP-010). Architectural target $0/month
-— a free-tier assumption, not a guarantee; the Cloud Run / Bangkok pricing
-figures carry `COST VERIFICATION REQUIRED`.
+- **ES256 / JWKS** (`apps/api/src/supabase/supabase.service.ts`): tokens
+  verified via `jose`'s `createRemoteJWKSet` against the project's published
+  JWKS, algorithm pinned to `['ES256']` only (no HS256 fallback — the
+  algorithm-confusion defence), issuer and audience checked against
+  server-side configuration only, never client input. `verifyAccessToken`
+  returns `null` on any failure with no detail leaked to the caller.
+- Phone OTP authentication against the live `banhao-dev` Supabase project —
+  request, verify, resend, session persistence, logout — verified end to end
+  in EVENT-011 (2026-08-10) and unchanged since.
+- **⚠️ One pre-existing flaky test discovered during this audit** — see §14.
 
-Deployment happens only after the Phase A local validation gate passes:
-build → tests → local Docker boot → API integration tests → **then** Cloud Run.
+## 7. Customer App State — Frontend: ✅ COMPLETE (31/31 states); backing data: mixed
 
-## Database Status
+- 31/31 design states implemented and screenshot-verified on iPhone 16 Pro
+  (2026-08-10, unchanged since).
+- Catalog (shops, menu, options): **live**, Supabase-backed (Phase C).
+- Cart: **live**, Supabase-backed under RLS (Phase D, §8).
+- Cart validation: **live**, calls `POST /api/v1/cart/validate` (Phase D).
+- Orders, notifications, addresses screens: still **mock-backed** — Phase E
+  is what replaces the order path; an addresses API exists from Phase B but
+  wiring the customer screens to it was not in Phase C or D's scope.
+- Android: **UNVERIFIED** (no SDK on this machine).
 
-**Live and LOCKED at checkpoint `e471ec1d`.** Supabase project `banhao-dev`,
-`ap-southeast-1`, PostgreSQL 17.6 + PostGIS.
+## 8. Cart / Phase D — ✅ COMPLETE
 
-**16 migrations, 0 pending, no migration divergence.** 40 application tables, 62
-foreign keys, 61 check constraints, 110 indexes, 52 triggers, across ten domains.
-Phone auth enabled with Supabase Test OTP (no SMS provider). Setup:
-[`SUPABASE_DEVELOPMENT.md`](SUPABASE_DEVELOPMENT.md).
+- **Persistence.** `carts` / `cart_items` / `cart_item_options` are the
+  source of truth (DEC-D-02); the client holds a cached copy only.
+  `apps/customer/src/repositories/supabaseCart.ts` writes directly to
+  Supabase under RLS — cart CRUD is one of DEC-APP-008's two documented
+  client-write exceptions.
+- **Ownership / RLS.** Every cart policy keys on `auth.uid()`
+  (`carts_select_own`/`insert_own`/`update_own`/`delete_own` and the joined
+  equivalents on `cart_items`/`cart_item_options`); no client-supplied cart
+  id appears anywhere in a read or write path.
+- **One-cart-one-restaurant (DEC-017).** Enforced structurally by
+  `carts_user_id_key UNIQUE(user_id)` plus the composite foreign keys
+  `cart_items(cart_id, restaurant_id)` → `carts(id, restaurant_id)` and
+  `cart_items(menu_item_id, restaurant_id)` → `menu_items(id, restaurant_id)`
+  — a cross-restaurant line cannot be stored, not merely rejected in code.
+- **`POST /api/v1/cart/validate`** (`apps/api/src/modules/cart/`): JWT-derived
+  identity only, zero writes, checks restaurant `ACTIVE` status, menu item
+  `archived_at`/`is_available`, both upward and downward price drift, returns
+  `PRICE_CHANGED` / `ITEM_UNAVAILABLE` / `MIXED_RESTAURANT` as named 409s.
+- **Checkout revalidation.** Runs on "place order" press, not on mount; fails
+  closed (navigation only follows a successful validation); conflicts render
+  the UX-SPEC diffs; acknowledging a price change re-runs validation rather
+  than bypassing it.
+- **No invented money (DEC-D-01).** The cart computes a subtotal only —
+  delivery fee, service fee and discount stay `OPEN` numbers and are not
+  guessed anywhere in this path.
+- Tests: cart-specific 7 suites / 104 tests (customer 5/76, API 2/28); see §10
+  for full-suite figures.
 
-> **Provenance of the deployment claim.** That the 16 migrations are *applied to
-> the live project* is recorded per the approved V1.1 §0 and the Product Owner's
-> Phase A brief (16/16 applied, 0 pending, live security verification 38/38
-> executable checks passed). It was **not** re-verified against the live project
-> by the A-1 task, which is read-only with respect to the database.
->
-> This **supersedes, on that point only**, the preamble of
-> [`DATABASE_MIGRATION_V1_REPORT.md`](DATABASE_MIGRATION_V1_REPORT.md), which
-> states the live project was never touched. That statement was accurate for the
-> migration-authoring task it documents; the application step happened
-> afterwards. The report's verification content remains valid and unchanged.
->
-> **Independent read-only verification.** A subsequent task ran `supabase
-> projects list` (confirming the linked project is `banhao-dev`,
-> `yssnwnboiwldogmlvvlw`) and `supabase migration list` (a read-only
-> local-vs-remote comparison — no apply, no repair, no mutation) directly
-> against the live project. Result: all 16 local migration versions
-> (`20260809000001` … `20260811000013`) matched an identical remote entry —
-> **16/16 applied, 0 pending, 0 remote-only, 0 mismatches, correct order.** No
-> schema or data was modified by this check. The 16/16 claim above is no
-> longer solely the Product Owner's brief — it is now independently confirmed.
+## 9. Known Documentation / Decision Gap — ⚠️ DECISION REQUIRED
 
-DEC-033 replaced the proposed generic `user_roles` table with **domain
-membership** — Customer implicit, Merchant via `restaurant_members`, Rider via
-`riders`, Operator/Admin via `platform_staff` — implemented with **zero
-`profiles.role` references in any deployed RLS policy**. DEC-034 removed the
-proposed zero-sum trigger; CON-003 stands, enforced by transaction-level
-assertion plus mandatory reconciliation.
+The R2 storage foundation (§4) and M-11/M-12 (§5) were implemented ahead of
+V1.1's own stated plan — the architecture doc's cost table (§17) says images
+start on "Supabase Storage free tier... move to Cloudflare R2 at Stage 2," not
+immediately. No `DEC-APP` or `DEC-D` entry in `docs/DECISIONS.md` records this
+as a deliberate deviation, even though CLAUDE.md's own working rule is
+explicit: *"Any deviation from V1.1 requires a new Architecture Decision, not
+an improvisation."* The implementation itself is sound (§4–§5); what is
+missing is the paper trail. **Not fixed by this documentation pass** — flagged
+for the Product Owner to either backfill a decision record or confirm the
+deviation was intentional and low-risk enough not to need one.
 
-Six tables deferred, each justified, none removed from the design: `settlements`,
-`settlement_items`, `delivery_fee_bands`, `zones`, `service_areas`,
-`delivery_attempts`. Settlement is therefore **not buildable in V1** —
-reconciliation via `reconciliation_cases` satisfies DEC-034 instead.
+## 10. Test / Quality Status
 
-**Do not run `supabase db push` or `supabase link`, and do not add a migration,
-table, view, policy or RPC, without an explicit instruction.**
+As last run in full during this Phase D closure audit (2026-08-19, non-cached):
 
-## API Status
+| Check | Result |
+|---|---|
+| `pnpm lint` | ✅ PASS — 11/11 packages |
+| `pnpm typecheck` | ✅ PASS — 16/16 tasks |
+| `pnpm build` | ✅ PASS — 11/11 packages |
+| `pnpm test` (API) | ✅ 480/480 passed, 29 suites |
+| `pnpm test` (Customer) | ✅ 260/260 passed, 16 suites |
+| `pnpm test` (`packages/validation`) | ✅ 29/29 passed, 4 suites |
+| `git diff --check` | ✅ PASS |
 
-Foundation only — `/health` and `/api/v1/me`, with auth and role guards, response
-envelope and OpenAPI. No domain endpoints.
+"Passing tests" here means **passing against fixtures and, for RLS, a
+Docker-based Postgres shim** — not the same claim as "verified against live
+production infrastructure." The Phone OTP / `profiles` RLS path (§6) is the
+one piece independently verified against the live `banhao-dev` project by
+execution; R2/M-11/M-12 and cart RLS are unit/integration-tested but not
+separately re-verified against the live project by this audit.
 
-The Customer App does not call it yet; it talks to Supabase directly for auth and
-`profiles`, and to mock repositories for everything else. Under DEC-APP-008 that
-direct-read path is **correct and stays** — reads go client → Supabase under RLS,
-writes go client → API → Supabase.
+## 11. Deployment Status
 
-## Frontend Status
+**Not deployed.** Workflows exist and validate (`ci.yml`, `deploy-api.yml`,
+`deploy-web.yml`, `deploy-worker.yml`) but have never executed against real
+infrastructure. See [`INFRASTRUCTURE-READINESS-V1.md`](INFRASTRUCTURE-READINESS-V1.md)
+for the pre-provisioning checklist (written 2026-08-16, still nothing
+executed). Approved targets (V1.1 §12): Cloud Run `asia-southeast3`
+(Bangkok), Cloudflare Pages, Cloudflare Worker cron for the tick.
 
-**Customer App implemented** — 31/31 design states in code, 31/31 verified by
-screenshot on iPhone 16 Pro. Merchant, Driver and Admin are shells with no
-screens. Merchant's approved target is Next.js web (DEC-APP-003), not Expo.
+## 12. Database Status
 
-## Admin / Merchant / Rider Status
+**Live and LOCKED at checkpoint `e471ec1d`** (16 migrations), **plus one
+additive policy-only migration since** —
+`20260817000001_catalog_availability_visibility.sql` (Product Owner decision,
+PC-Q-001 Option A: unavailable menu items/options stay visible to customers
+so the app can render `วันนี้หมด`, per UX-SPEC § 5.3). It replaces two RLS
+policies without editing the locked migration that created them, changes no
+grant, table, column or index, and reproduces every other security predicate
+verbatim. **17 migration files on disk as of this audit** — `docs/CURRENT_STATUS.md`
+previously said 16; that count is now stale and corrected here.
 
-Shells only. Design has not advanced beyond the wireframe-level screens in the
-Product Architecture canvas (3 admin, 1 merchant, 4 driver). Admin operations are
-Phase I; rider and delivery are Phase G.
+Six tables remain deferred (`settlements`, `settlement_items`,
+`delivery_fee_bands`, `zones`, `service_areas`, `delivery_attempts`), each
+justified in `docs/DATABASE_DESIGN.md`, none removed from the design.
+Settlement is not buildable in V1.
 
-## Customer Status
+**Do not run `supabase db push` or `supabase link`, and do not add a
+migration, table, view, policy or RPC, without an explicit instruction.**
 
-**Implemented and QA'd.** 31/31 states verified by screenshot; authentication
-verified end-to-end against the live project; money arithmetic checked. Five
-defects found and fixed. Android remains **UNVERIFIED**.
+## 13. Known Remaining Work
 
-## Explicitly UNVERIFIED
+- **Order (Phase E)** — not started. Schema already supports it: `orders`,
+  `order_items`, `order_item_options`, `order_status_history` all exist in
+  the locked schema. Architecture (V1.1 §19) specifies `POST /orders` with
+  full snapshotting, the nine `ACCEPTED` transitions plus `CANCELLED`
+  (DEC-APP-006) as commands — never `PATCH state` — done when an order runs
+  `CREATED → DELIVERED` end to end against a null payment provider.
+- **`apps/customer/src/mocks/types.ts` still encodes the superseded 12-state
+  order machine** (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`,
+  `COMPLETED`, `NO_DRIVER`) alongside the new nine-state constant. V1.1 §19
+  assigns reconciling this to Phase E, not before.
+- **CheckoutScreen (screen 10) still offers a cash payment option** — DEC-016
+  disables Cash on Delivery for Phase 1. This is explicitly Phase E/F scope
+  per the prior audit, not a Phase D regression; still present, still
+  correctly deferred.
+- Merchant, Driver and Admin apps remain shells (Phases G/I and DEC-APP-003
+  respectively).
+- Android verification, a physical iOS device, real SMS delivery, and the
+  search results list remain **UNVERIFIED** (unchanged from prior status).
 
-Do not read the above as full verification. These have not been tested:
+## 14. Newly Discovered — Not Fixed By This Pass
 
-- **Android** — no SDK or emulator on this machine, and it is the platform most
-  likely to differ on per-weight Thai font families. Raised in priority by V1.1
-  §20; a Phase A manual checklist item.
-- **A physical iOS device**
-- **Real SMS delivery** — no provider configured (Q-019, ~2 week lead time)
-- **Keyboard avoidance**
-- State variants: empty cart, loading, network error, no driver
-- The search **results** list — the simulator cannot type Thai
+- **Flaky test**: `apps/api/src/supabase/supabase.service.spec.ts`, the case
+  `"rejects a token whose signature has been tampered with"`, fails
+  intermittently (observed ~40–60% failure rate across 5 reruns). Root cause:
+  the test corrupts the signature by flipping one base64url character in the
+  final position, which occasionally lands on a "don't-care" bit that decodes
+  to the same underlying signature bytes — the tamper sometimes doesn't
+  change what actually gets verified. This is a **test-construction issue**,
+  not a defect in `SupabaseService.verifyAccessToken` (which does correct
+  byte-level ES256 verification) and not caused by Phase D or storage work —
+  it pre-dates this audit and was not previously caught because the passing
+  outcome is also common. Reported here per instruction; not modified.
 
-## Business Rules Status
+## 15. Current Blockers
 
-**Documented, and the P0 decisions are approved** — DEC-016…DEC-032, merged.
-Seven documents describe how BANHAO works as a business:
-[`BUSINESS_RULES.md`](BUSINESS_RULES.md), [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md),
-[`ORDER_LIFECYCLE.md`](ORDER_LIFECYCLE.md),
-[`RIDER_LIFECYCLE.md`](RIDER_LIFECYCLE.md),
-[`PAYMENT_LIFECYCLE.md`](PAYMENT_LIFECYCLE.md),
-[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md),
+Product-level, not technical — unchanged from the prior status. **8 P0
+business decisions remain**: payment provider (Q-001), legal/settlement model
+(Q-002), commission rate (Q-010/BQ-028), PromptPay refund mechanism (Q-020),
+cost of wasted food (BQ-015), delivery and service fee numbers (BQ-026,
+BQ-027), promotion funding (BQ-030). See
 [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md).
 
-Every rule is tagged `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`,
-with `ACCEPTED — MODEL · OPEN — NUMBERS` in the money sections. **Only `ACCEPTED`
-may be implemented.**
+**None of these block Phase E.** DEC-APP-007 is explicit: build the whole
+order → delivery flow against `NullPaymentProvider`; gate only real money on
+F′. Do not invent a default for any of the above anywhere in the application.
 
-Two decisions change Phase 1 materially: **DEC-016** disables Cash on Delivery
-(online payment only, cash model retained and extensible), and **DEC-019**
-replaces the 2026-08-09 Order state machine.
+## 16. Immediate Next Milestone
 
-## Technical Architecture Status
+**Phase E — Order**, per V1.1 §19: `POST /orders` with full snapshotting from
+a validated cart, the nine `ACCEPTED` transitions plus `CANCELLED` as guarded
+conditional `UPDATE`s (never `SELECT`-then-`UPDATE`), `order_status_history`
+as the append-only audit trail the customer timeline derives from,
+`apps/customer/src/mocks/types.ts` reconciled to the nine-state machine. Done
+when an order runs `CREATED → DELIVERED` end to end with a null payment
+provider.
 
-**Approved and ratified.** [`TECHNICAL_ARCHITECTURE.md`](TECHNICAL_ARCHITECTURE.md)
-and [`ARCHITECTURE_DECISIONS.md`](ARCHITECTURE_DECISIONS.md) — **ADR-001…ADR-012
-are `ACCEPTED`**, ratified unchanged by V1.1 §16. The application-level decisions
-that build on them are the 12 `DEC-APP` entries in V1.1.
+Exception-path states (`PAYMENT_FAILED`, `PAYMENT_EXPIRED`,
+`MERCHANT_REJECTED`, `DELIVERY_FAILED`) stay unimplemented until their
+policies are approved (BQ-013/015/016/017 are `OPEN`) — see `docs/DECISIONS.md`
+on this exact point.
 
-Open technical questions: [`OPEN_TECHNICAL_QUESTIONS.md`](OPEN_TECHNICAL_QUESTIONS.md).
-TQ-005 (hosting) and TQ-009 (secrets) are answered by DEC-APP-009/010 and the
-Cloud Run secret store. TQ-008 remains gated on Q-001/Q-020.
-
-## Current Blockers
-
-Product-level, not technical. **8 P0 business decisions remain** — see
-`docs/TODO.md` P0 and [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md):
-payment provider (Q-001), legal/settlement model (Q-002), commission **rate**
-(Q-010/BQ-028), PromptPay refund mechanism (Q-020), cost of wasted food (BQ-015),
-delivery and service fee **numbers** (BQ-026, BQ-027), promotion funding (BQ-030).
-The Thai legal/compliance review has external lead time and gates payment work.
-
-⚠️ **DEC-016 made Q-001 and Q-020 more blocking, not less.** With cash removed,
-100% of Phase 1 revenue and 100% of refunds depend on an unselected provider and
-a PromptPay refund mechanism research says does not exist natively.
-
-**None of these block Phases A through E, G, H or I.** DEC-APP-007 is explicit:
-build the whole order → delivery flow against `NullPaymentProvider`, and gate only
-real money on F′. The open numbers are safe to defer because the schema stores
-**amounts, never rates** — they can be set without a migration. Do not invent a
-default anywhere in the application.
-
-## Immediate Next Step
-
-**Phase A, in V1.1 §19's order:** (1) this documentation reconciliation — done;
-(2) the error envelope, correlation id, and webhook raw-body handling;
-(3) `worker.ts` + `/internal/tick` + the Cloudflare Worker cron; (4) deploy
-workflows, after the local validation gate passes.
-
-Then **Phase B**, because DEC-APP-004 blocks every merchant and rider endpoint.
-
-Do not start Phase F′ or any settlement work. Do not touch the database.
+Do not start Phase F′ or any settlement work. Do not touch the database
+beyond an explicitly-instructed, additive, PC-Q-001-style migration.
