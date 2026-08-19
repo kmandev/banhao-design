@@ -47,6 +47,11 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
+| **DEC-E-01** | **No production order may be created while BQ-026/BQ-027 fee amounts are OPEN** | **ACCEPTED** | **2026-08-19** | `supabase/migrations/20260811000005_order_domain.sql` |
+| **DEC-E-02** | **Order creation is atomic, via an additive `SECURITY INVOKER` Postgres function** | **ACCEPTED — MECHANISM · NOT IMPLEMENTED** | **2026-08-19** | `supabase/migrations/20260811000013_rider_reassignment_atomicity.sql` |
+| **DEC-E-03** | **`order_number` is `BH-YYYYMMDD-NNNN`, generated server-side on the Asia/Bangkok business day** | **ACCEPTED** | **2026-08-19** | `docs/OPEN_DATABASE_QUESTIONS.md` DBQ-011 |
+| **DEC-E-04** | **Order address snapshots come from the authenticated customer's server-validated address; zone checks stay OPEN** | **ACCEPTED** | **2026-08-19** | `apps/api/src/modules/users/addresses.controller.ts` |
+| **DEC-E-05** | **Phase E implementation boundary — what the order phase may and may not build** | **ACCEPTED** | **2026-08-19** | `docs/BANHAO-APP-ARCHITECTURE-V1.md` §19 |
 
 DEC-016 through DEC-032 were approved by the Product Owner in the Business
 Decision Workshop and locked on 2026-08-10 — see `ai/KNOWLEDGE/EVENTS.md`
@@ -1938,3 +1943,363 @@ one.
 
 DEC-D-02, DEC-APP-004, DEC-APP-008 ·
 `supabase/migrations/20260811000011_rls_policies.sql`
+
+
+---
+
+## DEC-E-01 — No production order while the fee amounts are OPEN
+
+**Status:** ACCEPTED · **Date:** 2026-08-19 · **Owner:** Product Owner
+
+### Decision
+
+Phase E may build and test the order path, but **no order may be created
+against production data until BQ-026 (delivery fee) and BQ-027 (service fee)
+have approved amounts**. No interim, placeholder, or zero value is authorised
+for `orders.delivery_fee_satang` or `orders.service_fee_satang`.
+
+### Why
+
+The schema forces a number and then makes it permanent. In
+`supabase/migrations/20260811000005_order_domain.sql`:
+
+- `delivery_fee_satang` and `service_fee_satang` are both `bigint not null`.
+- `orders_total_check` requires
+  `grand_total_satang = subtotal + delivery_fee + service_fee − discount`,
+  so the fees are load-bearing arithmetic, not decoration.
+- `orders_enforce_immutable_columns()` rejects any later change to every money
+  column **for every role including `service_role`**, and refuses `DELETE`
+  outright.
+
+So a fee written today cannot be corrected tomorrow — not by a migration, not
+by an operator, not by the service role. There is no repair path.
+
+**Zero is not a neutral placeholder.** `0` is a claim: free delivery and no
+service fee. It contradicts DEC-023 (the delivery fee funds rider
+compensation) and DEC-024 (the service fee is BANHAO revenue), and in Phase F
+it flows into `ledger_entries`, where CON-003 requires every order's ledger to
+balance to exactly zero. A wrong amount there is not a display bug; it is a
+permanently wrong financial record.
+
+V1.1 §20 risk 13 states the rule this decision applies: *"The schema stores
+amounts, never rates, so these can be set without a migration. **Do not invent
+a default anywhere in the application.**"* DEC-D-01 already established the
+same discipline one phase earlier for the cart.
+
+### Alternatives considered
+
+- **Write `0` until the numbers arrive.** Rejected — see above; immutability
+  makes it unrecoverable and the ledger inherits the error.
+- **Make the columns nullable by migration.** Rejected — the schema is LOCKED
+  at `e471ec1d`, and the constraint is correct: an order without a total is
+  not an order.
+- **Delay all of Phase E until pricing is decided.** Rejected — the structure
+  (snapshotting, state machine, authorization, atomicity) is independent of
+  the amounts and can be built and tested now against fixtures.
+
+### Consequences
+
+- Phase E is implementable and testable; it is **not releasable to production
+  order creation**. That boundary is DEC-E-05.
+- The first real order is gated on a Product Owner pricing decision, not on
+  engineering.
+- BQ-026 and BQ-027 **remain OPEN**. This decision does not answer them; it
+  records what may not happen while they are open.
+
+### Related
+
+DEC-023, DEC-024, DEC-D-01, DEC-E-05, CON-003, BQ-026, BQ-027 ·
+V1.1 §20 risk 13 · `supabase/migrations/20260811000005_order_domain.sql`
+
+---
+
+## DEC-E-02 — Order creation is atomic, via an additive Postgres function
+
+**Status:** ACCEPTED — MECHANISM · NOT IMPLEMENTED · **Date:** 2026-08-19 ·
+**Owner:** ARCHITECTURE_REVIEW
+
+### Decision
+
+Creating an order writes `orders`, `order_items`, `order_item_options` and
+`order_status_history` **in one database transaction**. Non-atomic creation is
+not an acceptable implementation, and a compensating-cleanup scheme is not an
+acceptable substitute.
+
+The sanctioned mechanism is a **single additive PostgreSQL function**
+(working name `create_order`), following the `release_rider_assignment`
+precedent exactly:
+
+- **`SECURITY INVOKER`**, not `SECURITY DEFINER`.
+- `revoke execute ... from public, anon, authenticated` and
+  `grant execute ... to service_role` — the EXECUTE grant is the primary
+  protection.
+- An in-body role check as a second layer.
+- All trusted values derived server-side inside the function or by the calling
+  service; nothing price-bearing accepted from the client.
+
+**The function is not written by this task, and no migration is created here.**
+Its SQL, signature and security review belong to the Phase E implementation
+task.
+
+### Why
+
+ADR-001 already requires every domain mutation to run *"inside a database
+transaction"*, and V1.1 §6 spells it out for this endpoint: *"insert `orders`
+(`CREATED`) + `order_items` + `order_item_options` + `order_status_history`;
+**one transaction**."* That requirement is already accepted. What was missing
+was a mechanism, because the API cannot currently satisfy it:
+
+`apps/api` reaches the database only through `@supabase/supabase-js`
+(PostgREST). It has no `pg` dependency, there is no `.rpc(` call anywhere in
+`apps/api/src`, and no order-creation function exists in the schema. PostgREST
+issues one statement per request, so the four inserts would be four
+independent commits — a mid-sequence failure would leave an order with no
+items, or items with no history.
+
+`SECURITY INVOKER` is not a stylistic preference: the repository already
+considered and **rejected** `DEFINER` for exactly this shape.
+`20260811000013_rider_reassignment_atomicity.sql` records two reasons —
+`service_role` already reaches every statement on its own privileges so no
+owner substitution is needed, and under `DEFINER` the in-body `current_user`
+guard becomes meaningless. CLAUDE.md lists that function's
+`SECURITY INVOKER` + `service_role`-only EXECUTE as a structural safeguard
+that must not be weakened; a new function in the same role should not adopt
+the mode that one deliberately avoided.
+
+### Alternatives considered
+
+- **Direct `pg` connection with an explicit transaction.** Rejected — adds a
+  dependency and a second database access path, and CLAUDE.md notes the
+  database password *"is not stored in the repo at all."* Not chosen unless
+  the RPC route is proven impossible, which it is not: a working precedent
+  already ships.
+- **Four PostgREST calls plus compensating deletes on failure.** Rejected —
+  `order_items`, `order_item_options` and `order_status_history` all carry
+  `reject_mutation()`, and `orders` refuses `DELETE`. The compensation is not
+  merely inelegant; the schema forbids it.
+- **`SECURITY DEFINER`.** Rejected for the reasons the rider migration already
+  documents.
+
+### Consequences
+
+- Phase E's first implementation step is an **additive** migration adding one
+  function. It adds no table, column, view or policy, and edits no existing
+  migration.
+- `OrdersService` becomes a caller of that function rather than an
+  orchestrator of four writes.
+- The function requires its own security review at implementation time,
+  including a concurrency test in the style of
+  `supabase/tests/rider_reassignment_atomicity_test.sql`.
+
+### Related
+
+ADR-001, ADR-003, DEC-APP-008, DEC-E-05 · V1.1 §6 ·
+`supabase/migrations/20260811000013_rider_reassignment_atomicity.sql`
+
+---
+
+## DEC-E-03 — `order_number` is `BH-YYYYMMDD-NNNN`
+
+**Status:** ACCEPTED · **Date:** 2026-08-19 · **Owner:** Product Owner
+
+### Decision
+
+The customer-visible `orders.order_number` is
+**`BH-YYYYMMDD-NNNN`** — a fixed `BH-` prefix, the calendar date of the
+**Asia/Bangkok business day**, and a sequence that **resets each business
+day**, zero-padded to at least four digits.
+
+- Generated **server-side only**. A client may never supply, suggest or
+  influence it.
+- Uniqueness is enforced by the database (`orders_order_number_key`), not by
+  application checks.
+- The format is fixed **before the first order exists**.
+
+### Why
+
+This ratifies DBQ-011's own recommendation, which weighed the alternatives and
+concluded: *"date-prefixed daily sequence… Decide before the first order
+exists — changing the format later means two formats in support forever."*
+
+A plain global sequence leaks total order volume to anyone who orders twice —
+at ~50 restaurants a competitor could measure BANHAO's throughput from two
+orders a week apart. Random base32 avoids the leak but is hard to read aloud
+in Thai phone support. The date-prefixed daily sequence leaks only that day's
+volume, stays short and speakable, and sorts naturally.
+
+Asia/Bangkok is the business-day boundary because `BUSINESS_RULES.md` states
+it as a standing convention — *"Money is always integer satang (CON-003).
+Times are **Asia/Bangkok**"* — and the same timezone already governs opening
+hours (§3.2).
+
+`order_number` is `not null unique` and is listed in
+`orders_enforce_immutable_columns()`, so it can never be rewritten after
+creation. That is precisely why the format has to be settled first.
+
+### Alternatives considered
+
+- **Global sequence + prefix (`BH000125`).** Rejected — volume leak.
+- **Random base32.** Rejected — poor read-aloud usability for Thai support.
+
+### Consequences
+
+- DBQ-011 is **ANSWERED**; `docs/OPEN_DATABASE_QUESTIONS.md` records it closed
+  by this decision.
+- Generation is an implementation task, not part of this decision. Whether it
+  is a Postgres sequence, a counter table, or derived inside `create_order`
+  (DEC-E-02) is left to Phase E, with the **uniqueness guarantee owned by the
+  database** in every case.
+- **TQ-013 (clock authority and timer reliability) remains OPEN.** It concerns
+  which clock drives timers and what happens when the worker is down — not the
+  identity of the business timezone, which this decision relies on and which
+  `BUSINESS_RULES.md` already fixes.
+
+### Related
+
+DBQ-011, TQ-013, DEC-E-02, DEC-E-05, CON-003 ·
+`docs/BUSINESS_RULES.md` (preamble, §3.2) ·
+`supabase/migrations/20260811000005_order_domain.sql`
+
+---
+
+## DEC-E-04 — Order addresses come from the authenticated customer's real address
+
+**Status:** ACCEPTED · **Date:** 2026-08-19 · **Owner:** Product Owner
+
+### Decision
+
+`orders.delivery_address_snapshot`, `recipient_name_snapshot` and
+`recipient_phone_snapshot` are captured from a **server-validated address row
+owned by the authenticated customer**, resolved through the Phase B addresses
+API (`/api/v1/me/addresses`). Mock address fixtures are never the source for a
+real order.
+
+`orders.address_id` references the source row, but **the snapshot is the
+truth**: editing or archiving the address later must not change any existing
+order.
+
+**`ADDRESS_OUT_OF_ZONE` remains OPEN and unimplemented** while BQ-008 is
+unresolved. No radius, polygon, coordinate list, distance threshold or zone
+set may be invented to close it.
+
+### Why
+
+The addresses table already carries exactly the fields the order snapshots
+need — `recipient_name`, `recipient_phone`, `address_line`, `landmark`,
+`lat`/`lng` — and its own comment states the intent: *"an order snapshots the
+address text at creation time regardless… so editing or archiving an address
+never rewrites order history."*
+
+The Phase B API exists (`GET/POST/PATCH/DELETE /api/v1/me/addresses`) and is
+already scoped to the authenticated user. The customer app, however, still
+binds `addresses` to `mockAddressRepository` — Phase C and D deliberately did
+not rewire it. An order built from that fixture would snapshot a fabricated
+recipient and address into an immutable financial record, which is the same
+class of error DEC-E-01 prevents for money.
+
+BQ-008 is `OPEN` and `P1`, and explicitly *"blocks: Checkout validation,
+ServiceArea configuration."* Two separate limits exist in the design — a
+per-shop delivery radius and admin-level service zones — *"with no documented
+precedence,"* and no rejection state is designed. Guessing either would invent
+a business rule and a customer-facing failure mode at once.
+
+### Alternatives considered
+
+- **Snapshot from whatever the client posts.** Rejected — the client is not
+  the authority for a recipient identity written into an immutable order, and
+  it would let a caller address an order to arbitrary text.
+- **Ship a provisional zone check (fixed radius).** Rejected — that is
+  inventing BQ-008's answer, and a wrongly-rejected order is invisible to
+  everyone except the customer who gave up.
+
+### Consequences
+
+- Phase E must rewire the customer app's address repository from mock to the
+  real API for the order path. That is in scope (DEC-E-05); rewiring unrelated
+  mock screens is not.
+- Until BQ-008 is answered, the order path performs **no zone validation at
+  all** rather than a guessed one. This is a documented gap, not an oversight.
+- `ADDRESS_OUT_OF_ZONE` is **not** added to the error catalogue until it has a
+  defined behaviour.
+
+### Related
+
+BQ-008, BQ-001, DEC-E-01, DEC-E-05 ·
+`supabase/migrations/20260811000001_identity_domain.sql` ·
+`apps/api/src/modules/users/addresses.controller.ts`
+
+---
+
+## DEC-E-05 — Phase E implementation boundary
+
+**Status:** ACCEPTED · **Date:** 2026-08-19 · **Owner:** ARCHITECTURE_REVIEW
+
+### Decision
+
+Phase E builds the order **foundation** and stops there.
+
+**In scope.** `POST /api/v1/orders`, authenticated customer only, identity
+from the verified JWT; snapshotting of restaurant, items, options, quantities,
+unit prices and address; initial `CREATED` state; the first
+`order_status_history` row; the atomic mechanism of DEC-E-02; the nine
+`ACCEPTED` transitions plus `CANCELLED` as commands, never `PATCH { state }`;
+guarded conditional `UPDATE` per ADR-003; reconciling
+`apps/customer/src/mocks/types.ts` to DEC-019; wiring the customer order path
+to the real API while retaining Phase D's checkout revalidation.
+
+**Out of scope.** Any payment work (Phase F), any delivery or rider work
+(Phase G), settlement, refunds, and every exception state.
+
+**State machine — already locked, not re-decided here.** DEC-019 fixes the
+nine core states: `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED →
+PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`.
+DEC-APP-006 adds `CANCELLED` and **excludes** `PAYMENT_FAILED`,
+`PAYMENT_EXPIRED`, `MERCHANT_REJECTED` and `DELIVERY_FAILED` until their names
+and policies are approved. Phase E implements exactly that set and invents no
+state. There is **no `CONFIRMED` state** in this system; `MERCHANT_ACCEPTED`
+is the merchant's acceptance.
+
+**Cancellation — locked shape, open consequences.** `ORDER_LIFECYCLE.md` §5's
+matrix is tagged `PROPOSED` except where a DEC is cited, and the money
+consequences from `PREPARING` onward are `OPEN` (BQ-015, BQ-016). Phase E may
+implement `CANCELLED` only where no open business question governs the
+outcome; the refund and cost-allocation consequences are Phase F work and are
+not to be guessed. DEC-021 stands: a rider cancellation never cancels the
+order.
+
+**Release gate.** DEC-E-01 stands above all of the above: the phase may be
+built, tested and reviewed, but **must not create production orders** until
+BQ-026 and BQ-027 are answered.
+
+### Why
+
+V1.1 §19 already defines Phase E's scope and its done-when (*"an order runs
+`CREATED → DELIVERED` end to end with a null provider"*). What the repository
+lacked was an explicit statement of the four preconditions discovered during
+Phase E reconnaissance — fees, atomicity, order number, address source — and a
+clear line between what is architecturally locked and what is still a business
+question. Without that line the next task has to re-derive it, and the
+temptation at each gap is to invent an answer.
+
+### Alternatives considered
+
+- **Start implementation and resolve gaps as they appear.** Rejected — three
+  of the four gaps write permanent, immutable data. They must be settled
+  before the first write, not during it.
+- **Defer Phase E entirely until every question closes.** Rejected — only the
+  fee amounts gate production, and they gate nothing structural.
+
+### Consequences
+
+- The next Phase E task starts from a settled boundary: DEC-E-02 names the
+  mechanism, DEC-E-03 the order number, DEC-E-04 the address source, DEC-E-01
+  the release gate.
+- Three open business questions (BQ-026, BQ-027, BQ-008) and one open
+  technical question (TQ-013) are explicitly *not* answered by this set and
+  remain owned by the Product Owner.
+
+### Related
+
+DEC-019, DEC-APP-006, DEC-021, ADR-001, ADR-003,
+DEC-E-01, DEC-E-02, DEC-E-03, DEC-E-04 ·
+BQ-015, BQ-016, BQ-026, BQ-027, BQ-008 · V1.1 §6, §19

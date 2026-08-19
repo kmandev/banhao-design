@@ -54,7 +54,7 @@ not propose a business answer.
 | DBQ-008 | Retention windows and purge jobs | D1 | **Q-012** |
 | DBQ-009 | Audit `before`/`after` PII redaction | D1 | Q-012 |
 | ~~DBQ-010~~ | ~~Zero-sum enforcement~~ — **ANSWERED by DEC-034** | — | closed 2026-08-11 |
-| DBQ-011 | Order number generation | D1 | — |
+| ~~DBQ-011~~ | ~~Order number generation~~ — **ANSWERED by DEC-E-03** | — | closed 2026-08-19 |
 | DBQ-012 | Connection pooling and the service-role connection | D1 | TQ-005 |
 | DBQ-013 | Naming: `DRIVER` role vs `rider_*` tables | D2 | — |
 | DBQ-014 | Where do notification preferences live? | D2 | BQ-035 |
@@ -325,7 +325,22 @@ the error surfaces with domain context rather than as a commit-time exception.
 
 ## DBQ-011 — Order number generation
 
-**Priority:** D1 · **Status:** OPEN
+**Priority:** ~~D1~~ · **Status: ✅ ANSWERED — DEC-E-03, 2026-08-19**
+
+> **Answer: the recommendation below, ratified.** The format is
+> **`BH-YYYYMMDD-NNNN`** — `BH-` prefix, the Asia/Bangkok business date, and a
+> sequence that resets each business day, zero-padded to at least four digits.
+> Generated **server-side only**; a client may never supply or influence it;
+> uniqueness is owned by the database (`orders_order_number_key`), not by
+> application checks.
+>
+> Settled before the first order exists, exactly as the recommendation
+> required — `order_number` is `not null unique` and is listed in
+> `orders_enforce_immutable_columns()`, so it can never be rewritten.
+>
+> The *generation mechanism* (Postgres sequence, counter table, or derivation
+> inside the `create_order` function of DEC-E-02) is an implementation choice
+> left to Phase E; the database owns the uniqueness guarantee in every case.
 
 **Question:** How is the customer-visible `order_number` (e.g. `BH000125`)
 generated?
