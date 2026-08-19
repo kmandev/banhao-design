@@ -27,12 +27,13 @@ function stub() {
 }
 
 const mockGoBack = jest.fn();
+const mockNavigate = jest.fn();
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack, setOptions: jest.fn() }),
+    useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack, setOptions: jest.fn() }),
     useRoute: () => ({ params: { orderId: 'order-1' } }),
   };
 });
@@ -55,9 +56,12 @@ const ORDER: OrderDetail = {
   serviceFeeSatang: 500,
   discountSatang: 0,
   grandTotalSatang: 14000,
+  restaurantNameSnapshot: 'ก๋วยเตี๋ยวลุงหนวด',
   recipientNameSnapshot: 'สมชาย ใจดี',
   recipientPhoneSnapshot: '0812345678',
   deliveryAddressSnapshot: '123 หมู่ 4 ต.บุณฑริก',
+  deliveryLandmark: 'ใกล้ตลาดสดบุณฑริก',
+  // 05:00Z = 12:00 Bangkok, 19 Aug 2026 = 19 ส.ค. 2569.
   placedAt: '2026-08-19T05:00:00Z',
   items: [
     {
@@ -83,6 +87,7 @@ const ORDER: OrderDetail = {
 beforeEach(() => {
   mockGetOrder.mockReset();
   mockGoBack.mockReset();
+  mockNavigate.mockReset();
   stub();
 });
 
@@ -93,37 +98,106 @@ it('uses orderId from the route, not any client-held customer id', async () => {
   await waitFor(() => expect(mockGetOrder).toHaveBeenCalledWith('order-1'));
 });
 
-it('renders order number, current state and money snapshot on success', async () => {
+it('renders the summary card as screen 19 specifies — state badge, order number, shop, placed-at', async () => {
   mockGetOrder.mockResolvedValue(ORDER);
   renderScreen();
 
   await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
 
-  expect(screen.getByText('ออเดอร์ #BH-20260819-0001')).toBeTruthy();
-  // PREPARING, from the approved UX-SPEC copy — appears in both the summary
-  // card and the timeline's active step, so at least one match is enough.
-  expect(screen.getAllByText('ร้านกำลังทำอาหาร').length).toBeGreaterThan(0);
-  expect(screen.getByText('฿140')).toBeTruthy(); // grand total, emphasis row
+  // PREPARING, from the approved UX-SPEC §10 copy.
+  expect(screen.getByText('ร้านกำลังทำอาหาร')).toBeTruthy();
+  // The design shows the bare `#…`, not the E-3B.1 heading `ออเดอร์ #…`.
+  expect(screen.getByText('#BH-20260819-0001')).toBeTruthy();
+  expect(screen.queryByText('ออเดอร์ #BH-20260819-0001')).toBeNull();
+  expect(screen.getByText('ก๋วยเตี๋ยวลุงหนวด')).toBeTruthy();
+  expect(screen.getByText('19 ส.ค. 2569 · 12:00 น.')).toBeTruthy();
 });
 
-it('renders each item from its snapshot, including its option snapshot', async () => {
+it('renders each item from its snapshot in the design’s `name ×qty` form', async () => {
   mockGetOrder.mockResolvedValue(ORDER);
   renderScreen();
 
   await waitFor(() => expect(screen.getByTestId('order-item-item-1')).toBeTruthy());
-  expect(screen.getByText('ส้มตำไทย × 2')).toBeTruthy();
+  expect(screen.getByText('ส้มตำไทย ×2')).toBeTruthy();
   expect(screen.getByText('เผ็ดมาก')).toBeTruthy();
+  expect(screen.getByText('รายการอาหาร')).toBeTruthy();
 });
 
-it('renders the status timeline from order_status_history, not a fabricated step list', async () => {
+it('renders the money card with screen 19’s labels, including ชำระโดย', async () => {
   mockGetOrder.mockResolvedValue(ORDER);
   renderScreen();
 
   await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
 
-  // Only states that actually occurred appear — MERCHANT_ACCEPTED never
-  // happened in this fixture, so its label must not render either.
-  expect(screen.queryByText('ร้านรับออเดอร์แล้ว')).toBeNull();
+  expect(screen.getByText('ค่าอาหาร')).toBeTruthy();
+  expect(screen.getByText('ค่าส่ง')).toBeTruthy();
+  expect(screen.getByText('ค่าบริการ')).toBeTruthy();
+  expect(screen.getByText('ยอดรวม')).toBeTruthy();
+  expect(screen.getByText('฿140')).toBeTruthy();
+  expect(screen.getByText('ชำระโดย')).toBeTruthy();
+  // C-19 spells the method out; the C-16 card's shorter `พร้อมเพย์` is a
+  // different string in the design and must not be substituted here.
+  expect(screen.getByText('พร้อมเพย์ QR')).toBeTruthy();
+  // Labels the design does not use on this screen.
+  expect(screen.queryByText('ราคาอาหาร')).toBeNull();
+  expect(screen.queryByText('รวมทั้งหมด')).toBeNull();
+});
+
+it('renders the delivery address and its landmark', async () => {
+  mockGetOrder.mockResolvedValue(ORDER);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+
+  expect(screen.getByText('ที่อยู่จัดส่ง')).toBeTruthy();
+  expect(screen.getByText('123 หมู่ 4 ต.บุณฑริก')).toBeTruthy();
+  expect(screen.getByText('จุดสังเกต: ใกล้ตลาดสดบุณฑริก')).toBeTruthy();
+});
+
+it('omits the landmark line when the address recorded none', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, deliveryLandmark: null });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+  expect(screen.queryByText(/จุดสังเกต/)).toBeNull();
+});
+
+it('renders no status timeline — UX-SPEC §9.3 puts the Timeline on C-14, not C-19', async () => {
+  mockGetOrder.mockResolvedValue(ORDER);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+
+  expect(screen.queryByText('สถานะออเดอร์')).toBeNull();
+  // `PAID` is in this order's history; if a timeline were rendering, its
+  // §10 label would appear.
+  expect(screen.queryByText('ส่งให้ร้านแล้ว · รอร้านรับออเดอร์')).toBeNull();
+});
+
+it('shows the ให้คะแนนร้านนี้ action on a delivered order', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('button-rate-shop')).toBeTruthy());
+  fireEvent.press(screen.getByTestId('button-rate-shop'));
+
+  expect(mockNavigate).toHaveBeenCalledWith('Rating', { orderId: 'order-1' });
+});
+
+it('withholds the rating action while the order is still in flight', async () => {
+  mockGetOrder.mockResolvedValue(ORDER); // PREPARING
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+  expect(screen.queryByTestId('button-rate-shop')).toBeNull();
+});
+
+it('never renders a raw state identifier', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'PAYMENT_FAILED' });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+  expect(screen.queryByText('PAYMENT_FAILED')).toBeNull();
 });
 
 it('shows a safe not-found state for a nonexistent or non-owned order, and lets the customer go back', async () => {
@@ -144,14 +218,31 @@ it('shows the existing safe system-error state on a repository failure, not a ra
   expect(screen.queryByText('internal error')).toBeNull();
 });
 
-it('refresh re-fetches from the repository rather than reusing the first response', async () => {
+/**
+ * The E-3B.1 screen carried a `โหลดสถานะล่าสุด` refresh button. Screen 19 has
+ * no such control — C-19 is order detail *from history*, and live progress is
+ * C-14's job — so it is gone, replaced by the design's rating action. Retrying
+ * a *failed* read is unaffected: that action belongs to the error state, and
+ * the test below still exercises it.
+ */
+it('retries the read from the error state, which is where the design puts a retry', async () => {
+  mockGetOrder.mockRejectedValueOnce(new Error('Network request failed'));
+  mockGetOrder.mockResolvedValue(ORDER);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-detail-error')).toBeTruthy());
+  expect(mockGetOrder).toHaveBeenCalledTimes(1);
+
+  fireEvent.press(screen.getByText('ลองอีกครั้ง'));
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+  expect(mockGetOrder).toHaveBeenCalledTimes(2);
+});
+
+it('no longer renders the undesigned refresh control', async () => {
   mockGetOrder.mockResolvedValue(ORDER);
   renderScreen();
 
   await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
-  expect(mockGetOrder).toHaveBeenCalledTimes(1);
-
-  fireEvent.press(screen.getByTestId('button-refresh-order'));
-
-  await waitFor(() => expect(mockGetOrder).toHaveBeenCalledTimes(2));
+  expect(screen.queryByTestId('button-refresh-order')).toBeNull();
 });

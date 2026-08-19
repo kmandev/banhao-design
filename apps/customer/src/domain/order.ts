@@ -112,10 +112,20 @@ export interface OrderDetail {
   serviceFeeSatang: Satang;
   discountSatang: Satang;
   grandTotalSatang: Satang;
+  restaurantNameSnapshot: string;
   recipientNameSnapshot: string;
   recipientPhoneSnapshot: string;
   deliveryAddressSnapshot: string;
+  /** `orders.delivery_landmark` — nullable; not every address has one. */
+  deliveryLandmark: string | null;
   placedAt: string;
   items: OrderLineItem[];
+  /**
+   * The append-only audit trail. Fetched and modelled here because it is part
+   * of what an order *is*, but **not rendered by C-19** — the design canvas's
+   * screen 19 has no timeline, and UX-SPEC §9.3 assigns the Timeline component
+   * to "Customer tracking, admin order detail". C-14 is its customer-facing
+   * home and will consume this field when it is converted off its mock states.
+   */
   statusHistory: OrderStatusEvent[];
 }

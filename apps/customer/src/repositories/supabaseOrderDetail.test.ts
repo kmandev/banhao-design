@@ -69,9 +69,11 @@ const ORDER_ROW = {
   service_fee_satang: 500,
   discount_satang: 0,
   grand_total_satang: 14000,
+  restaurant_name_snapshot: 'ก๋วยเตี๋ยวลุงหนวด',
   recipient_name_snapshot: 'สมชาย ใจดี',
   recipient_phone_snapshot: '0812345678',
   delivery_address_snapshot: '123 หมู่ 4 ต.บุณฑริก',
+  delivery_landmark: 'ใกล้ตลาดสดบุณฑริก',
   placed_at: '2026-08-19T05:00:00Z',
 };
 
@@ -122,9 +124,11 @@ describe('getOrder — owner reads own order', () => {
       serviceFeeSatang: 500,
       discountSatang: 0,
       grandTotalSatang: 14000,
+      restaurantNameSnapshot: 'ก๋วยเตี๋ยวลุงหนวด',
       recipientNameSnapshot: 'สมชาย ใจดี',
       recipientPhoneSnapshot: '0812345678',
       deliveryAddressSnapshot: '123 หมู่ 4 ต.บุณฑริก',
+      deliveryLandmark: 'ใกล้ตลาดสดบุณฑริก',
       placedAt: '2026-08-19T05:00:00Z',
       items: [
         {

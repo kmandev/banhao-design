@@ -1,8 +1,10 @@
 import type { OrderState } from '../domain/order';
 import {
   formatOrderPlacedAt,
+  formatOrderPlacedAtLong,
   orderStateLabel,
   orderStateTone,
+  paymentMethodDetailLabel,
   paymentMethodLabel,
   summariseItems,
 } from './orderDisplay';
@@ -91,6 +93,41 @@ describe('paymentMethodLabel — schema vocabulary, not the mock', () => {
 
   it('renders CASH as เงินสด — DEC-016 disables it but keeps it representable', () => {
     expect(paymentMethodLabel('CASH')).toBe('เงินสด');
+  });
+});
+
+describe('paymentMethodDetailLabel — screen 19’s ชำระโดย row', () => {
+  it('spells ONLINE out as พร้อมเพย์ QR, the string screen 19 uses', () => {
+    expect(paymentMethodDetailLabel('ONLINE')).toBe('พร้อมเพย์ QR');
+  });
+
+  it('differs from the C-16 card label, because the design uses two strings', () => {
+    expect(paymentMethodDetailLabel('ONLINE')).not.toBe(paymentMethodLabel('ONLINE'));
+  });
+
+  it('renders CASH as เงินสด, with no QR suffix', () => {
+    expect(paymentMethodDetailLabel('CASH')).toBe('เงินสด');
+  });
+});
+
+describe('formatOrderPlacedAtLong — screen 19’s date line', () => {
+  it('renders the Buddhist-era year and the · separator', () => {
+    // 05:00Z = 12:14-ish Bangkok; 2026 CE = 2569 BE, as the design canvas
+    // dates its own sample order.
+    expect(formatOrderPlacedAtLong('2026-08-05T05:14:00Z')).toBe('5 ส.ค. 2569 · 12:14 น.');
+  });
+
+  it('carries the year across a Bangkok-side new year', () => {
+    // 2026-12-31T18:00Z is already 01:00 on 1 Jan 2027 (2570 BE) in Bangkok.
+    expect(formatOrderPlacedAtLong('2026-12-31T18:00:00Z')).toBe('1 ม.ค. 2570 · 01:00 น.');
+  });
+
+  it('returns null for an unparseable timestamp', () => {
+    expect(formatOrderPlacedAtLong('not-a-timestamp')).toBeNull();
+  });
+
+  it('is the long sibling of the C-16 form, which carries no year', () => {
+    expect(formatOrderPlacedAt('2026-08-05T05:14:00Z')).toBe('5 ส.ค. 12:14 น.');
   });
 });
 

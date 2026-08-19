@@ -30,7 +30,7 @@ import type {
 } from './orderMappers';
 
 const ORDER_COLUMNS =
-  'id, order_number, state, payment_method, subtotal_satang, delivery_fee_satang, service_fee_satang, discount_satang, grand_total_satang, recipient_name_snapshot, recipient_phone_snapshot, delivery_address_snapshot, placed_at';
+  'id, order_number, state, payment_method, subtotal_satang, delivery_fee_satang, service_fee_satang, discount_satang, grand_total_satang, restaurant_name_snapshot, recipient_name_snapshot, recipient_phone_snapshot, delivery_address_snapshot, delivery_landmark, placed_at';
 
 const ORDER_ITEM_COLUMNS =
   'id, order_id, menu_item_id, item_name_snapshot, unit_price_satang, quantity, line_total_satang, note';

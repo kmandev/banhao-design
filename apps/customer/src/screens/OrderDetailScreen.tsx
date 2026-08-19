@@ -3,17 +3,17 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import {
+  Badge,
   BottomBar,
   Button,
   Card,
   ListRow,
   PriceRow,
-  SectionHeader,
   StateView,
-  StatusTimeline,
   colors,
   fontFamily,
   fontSize,
+  radius,
   spacing,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
@@ -21,34 +21,44 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
 import { formatBaht } from '../lib/money';
 import { presentLoadError } from '../lib/loadError';
-import { orderStateLabel } from '../lib/orderDisplay';
+import { SHOP_PLACEHOLDER_GLYPH } from '../lib/catalogDisplay';
+import {
+  formatOrderPlacedAtLong,
+  orderStateLabel,
+  orderStateTone,
+  paymentMethodDetailLabel,
+} from '../lib/orderDisplay';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 type DetailRoute = RouteProp<CustomerStackParamList, 'OrderDetail'>;
 
 /**
- * Real order detail (Phase E-3B.1) — a new screen, not a rewiring of the
- * design's screen 14 (`OrderTrackingScreen`).
+ * C-19 รายละเอียดออเดอร์ — screen 19 of the design canvas
+ * (`docs/design/BANHAO Customer App.dc.html`), reconciled against it in Phase
+ * E-3B.4. Reached from C-16, which is the path every history card in that
+ * canvas already specified (`go: go('orderDetail')`).
  *
- * `OrderTrackingScreen` is built entirely around the design's mock 12-state
- * machine (`NEW`/`ACCEPTED`/`READY`/`DRIVER_ASSIGNED`/`COMPLETED`/
- * `NO_DRIVER`) and a hand-authored ETA string — CLAUDE.md forbids those state
- * names in new work, and it carries none of the items/options/money data this
- * task requires (docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md lists no design
- * screen for an itemised historical order). Rewriting it to serve both the
- * old mock flow and this one would be exactly the "broadly rewritten
- * architecture" the brief says to stop for; adding a screen composed only of
- * already-approved primitives (`Card`, `SectionHeader`, `StatusTimeline`,
- * `PriceRow`, `ListRow`, `StateView`) is the smaller, safer change.
+ * Four cards, in the design's own order:
+ *   1. state badge + `#orderNumber`, then shop glyph, name and placed-at
+ *   2. `รายการอาหาร` — one row per line, `name ×qty` against its line total
+ *   3. money — `ค่าอาหาร` / `ค่าส่ง` / `ค่าบริการ` / `ยอดรวม` / `ชำระโดย`
+ *   4. `ที่อยู่จัดส่ง` — address, then `จุดสังเกต:` when one was recorded
+ * and a `ให้คะแนนร้านนี้` primary action.
  *
- * State labels come from `lib/orderDisplay.ts`, which transcribes the approved
- * customer copy in `docs/design/BANHAO-UX-SPEC-V1.md` §10 ("One state value,
- * four vocabularies").
+ * Every Thai string here is transcribed from that canvas or from
+ * `docs/design/BANHAO-UX-SPEC-V1.md` §10 (state copy, via `orderDisplay.ts`).
+ * None is authored.
  *
- * **Reached from C-16** (`OrdersScreen`) as of Phase E-3B.3 — the path the
- * design canvas always specified (`go: go('orderDetail')` on every history
- * card). It could not be wired until order history returned real order ids.
+ * ## No status timeline, deliberately
+ *
+ * The E-3B.1 version of this screen rendered `order_status_history` as a
+ * `StatusTimeline`. Screen 19 has no timeline, and UX-SPEC §9.3's component
+ * inventory assigns the Timeline to *"Customer tracking, admin order detail"* —
+ * C-14 and A-04, not C-19. Two approved sources agree, so it is gone from
+ * here. The data is still fetched and modelled (`OrderDetail.statusHistory`)
+ * because C-14 needs exactly it once that screen is converted off its mock
+ * states; that conversion is not this task.
  */
 
 export function OrderDetailScreen() {
@@ -100,57 +110,58 @@ export function OrderDetailScreen() {
 
   const order = state.data;
   const stateLabel = orderStateLabel(order.state);
-
-  // Events whose state has no approved customer wording are omitted rather
-  // than rendered as their English identifier — UX-SPEC §10: "No state name,
-  // cause code, or error code is ever rendered to a user." In V1 this only
-  // ever drops `CREATED` (§10 lists it as transient, with no screen) and the
-  // four exception states DEC-APP-006 leaves unimplemented.
-  const labelled = order.statusHistory
-    .map((event) => ({ label: orderStateLabel(event.toState), reason: event.reason }))
-    .filter((event): event is { label: string; reason: string | null } => event.label !== null);
-
-  const timelineSteps = labelled.map((event, i) => ({
-    label: event.label,
-    caption: event.reason ?? undefined,
-    done: i < labelled.length - 1,
-    active: i === labelled.length - 1,
-  }));
+  const placedAt = formatOrderPlacedAtLong(order.placedAt);
 
   return (
     <Screen
       scroll
       testID="screen-order-detail"
       footer={
-        <BottomBar>
-          <Button label="โหลดสถานะล่าสุด" variant="ghost" onPress={state.reload} testID="button-refresh-order" />
-        </BottomBar>
+        // The design's primary action. Shown for a delivered order only: its
+        // sample is a delivered one, and `OrderTrackingScreen` already
+        // withholds its own rating action from cancelled orders, so this
+        // follows shipped precedent rather than inventing a rule. No
+        // substitute action is invented for the other states — the design
+        // specifies none.
+        order.state === 'DELIVERED' ? (
+          <BottomBar>
+            <Button
+              label="ให้คะแนนร้านนี้"
+              onPress={() => navigation.navigate('Rating', { orderId: order.orderId })}
+              testID="button-rate-shop"
+            />
+          </BottomBar>
+        ) : undefined
       }
     >
       <Card style={styles.summary}>
-        <Text style={styles.orderNumber}>ออเดอร์ #{order.orderNumber}</Text>
-        {stateLabel ? <Text style={styles.stateLabel}>{stateLabel}</Text> : null}
+        <View style={styles.summaryTop}>
+          {stateLabel ? <Badge label={stateLabel} tone={orderStateTone(order.state)} /> : null}
+          <Text style={styles.orderNumber}>#{order.orderNumber}</Text>
+        </View>
+        <View style={styles.shopRow}>
+          <View style={styles.thumb}>
+            <Text style={styles.glyph}>{SHOP_PLACEHOLDER_GLYPH}</Text>
+          </View>
+          <View style={styles.shopBody}>
+            <Text style={styles.shopName} numberOfLines={1}>
+              {order.restaurantNameSnapshot}
+            </Text>
+            {placedAt ? <Text style={styles.placedAt}>{placedAt}</Text> : null}
+          </View>
+        </View>
       </Card>
 
-      <SectionHeader title="สถานะออเดอร์" />
-      <Card>
-        {timelineSteps.length > 0 ? (
-          <StatusTimeline steps={timelineSteps} />
-        ) : (
-          <Text style={styles.empty}>ยังไม่มีประวัติสถานะ</Text>
-        )}
-      </Card>
-
-      <SectionHeader title="รายการอาหาร" />
       <Card style={styles.items}>
+        <Text style={styles.cardLabel}>รายการอาหาร</Text>
         {order.items.map((item) => (
           <ListRow
             key={item.id}
             testID={`order-item-${item.id}`}
-            title={`${item.nameSnapshot} × ${item.quantity}`}
+            title={`${item.nameSnapshot} ×${item.quantity}`}
             subtitle={
               item.options.length > 0
-                ? item.options.map((o) => o.optionNameSnapshot).join(', ')
+                ? item.options.map((option) => option.optionNameSnapshot).join(', ')
                 : undefined
             }
             trailing={formatBaht(item.lineTotalSatang)}
@@ -158,37 +169,71 @@ export function OrderDetailScreen() {
         ))}
       </Card>
 
-      <SectionHeader title="ที่อยู่จัดส่ง" />
-      <Card style={styles.address}>
-        <Text style={styles.recipient}>{order.recipientNameSnapshot}</Text>
-        <Text style={styles.phone}>{order.recipientPhoneSnapshot}</Text>
-        <Text style={styles.addressLine}>{order.deliveryAddressSnapshot}</Text>
-      </Card>
-
-      <SectionHeader title="สรุปยอด" />
       <Card>
-        <PriceRow label="ราคาอาหาร" amount={formatBaht(order.subtotalSatang)} />
+        <PriceRow label="ค่าอาหาร" amount={formatBaht(order.subtotalSatang)} />
         <PriceRow label="ค่าส่ง" amount={formatBaht(order.deliveryFeeSatang)} />
         <PriceRow label="ค่าบริการ" amount={formatBaht(order.serviceFeeSatang)} />
         {order.discountSatang > 0 ? (
           <PriceRow label="ส่วนลด" amount={`-${formatBaht(order.discountSatang)}`} discount />
         ) : null}
         <View style={styles.divider} />
-        <PriceRow label="รวมทั้งหมด" amount={formatBaht(order.grandTotalSatang)} emphasis />
+        <PriceRow label="ยอดรวม" amount={formatBaht(order.grandTotalSatang)} emphasis />
+        <View style={styles.paidWith}>
+          <Text style={styles.paidWithLabel}>ชำระโดย</Text>
+          <Text style={styles.paidWithValue}>{paymentMethodDetailLabel(order.paymentMethod)}</Text>
+        </View>
+      </Card>
+
+      <Card style={styles.address}>
+        <Text style={styles.cardLabel}>ที่อยู่จัดส่ง</Text>
+        <Text style={styles.addressLine}>{order.deliveryAddressSnapshot}</Text>
+        {order.deliveryLandmark ? (
+          <Text style={styles.landmark}>จุดสังเกต: {order.deliveryLandmark}</Text>
+        ) : null}
       </Card>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  summary: { gap: spacing.xs },
-  orderNumber: { fontSize: fontSize.xl, fontFamily: fontFamily.semibold, color: colors.textPrimary },
-  stateLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
-  empty: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
+  summary: { gap: spacing.md },
+  summaryTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  orderNumber: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSubtle },
+  shopRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  thumb: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glyph: { fontFamily: fontFamily.regular, fontSize: 20 },
+  shopBody: { flex: 1, gap: 2 },
+  shopName: { fontSize: fontSize.lg, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  placedAt: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
+  /** The design's in-card section label — small, muted, letter-spaced. */
+  cardLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+  },
   items: { gap: spacing.sm },
-  address: { gap: 2 },
-  recipient: { fontFamily: fontFamily.semibold, fontSize: fontSize.md, color: colors.textPrimary },
-  phone: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
-  addressLine: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },
+  paidWith: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  paidWithLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
+  paidWithValue: {
+    fontFamily: fontFamily.semibold,
+    fontSize: fontSize.sm,
+    color: colors.textPrimary,
+  },
+  address: { gap: spacing.xs },
+  addressLine: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textPrimary },
+  landmark: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
 });

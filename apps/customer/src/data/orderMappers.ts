@@ -33,9 +33,11 @@ export interface OrderRow {
   service_fee_satang: number;
   discount_satang: number;
   grand_total_satang: number;
+  restaurant_name_snapshot: string;
   recipient_name_snapshot: string;
   recipient_phone_snapshot: string;
   delivery_address_snapshot: string;
+  delivery_landmark: string | null;
   placed_at: string;
 }
 
@@ -139,9 +141,11 @@ export function toOrderDetail(
     serviceFeeSatang: order.service_fee_satang,
     discountSatang: order.discount_satang,
     grandTotalSatang: order.grand_total_satang,
+    restaurantNameSnapshot: order.restaurant_name_snapshot,
     recipientNameSnapshot: order.recipient_name_snapshot,
     recipientPhoneSnapshot: order.recipient_phone_snapshot,
     deliveryAddressSnapshot: order.delivery_address_snapshot,
+    deliveryLandmark: order.delivery_landmark,
     placedAt: order.placed_at,
     items,
     statusHistory,

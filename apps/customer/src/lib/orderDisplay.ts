@@ -106,6 +106,23 @@ export function paymentMethodLabel(method: OrderPaymentMethod): string {
 }
 
 /**
+ * The value of screen 19's `ชำระโดย` row — `พร้อมเพย์ QR`, not `พร้อมเพย์`.
+ *
+ * The design canvas genuinely uses two different strings for the same fact:
+ * the C-16 history card badges the method as `พร้อมเพย์`, while C-19's
+ * `ชำระโดย` row spells out `พร้อมเพย์ QR`
+ * (`docs/design/BANHAO Customer App.dc.html`). Both are transcribed rather
+ * than normalised to one — picking a "consistent" wording would be overriding
+ * the design, not following it.
+ *
+ * `CASH` keeps `เงินสด` with no suffix: `QR` is PromptPay's mechanism, and the
+ * design shows no cash variant of this row to copy.
+ */
+export function paymentMethodDetailLabel(method: OrderPaymentMethod): string {
+  return method === 'CASH' ? 'เงินสด' : 'พร้อมเพย์ QR';
+}
+
+/**
  * `ก๋วยเตี๋ยวเรือน้ำตก ×2, เกี๊ยวทอด ×1` — the history card's item line.
  *
  * Format transcribed from the `history` fixture in the design canvas
@@ -158,12 +175,23 @@ const THAI_MONTH_ABBREVIATIONS = [
  * Returns `null` for an unparseable timestamp, so a caller omits the line
  * rather than printing `Invalid Date`.
  */
-export function formatOrderPlacedAt(isoTimestamp: string): string | null {
+interface BangkokDateParts {
+  day: number;
+  monthLabel: string;
+  /** Buddhist-era year, as the design renders it. */
+  buddhistYear: number;
+  hour: string;
+  minute: string;
+}
+
+/** The Bangkok wall-clock pieces both formats below are assembled from. */
+function bangkokDateParts(isoTimestamp: string): BangkokDateParts | null {
   const placedAt = new Date(isoTimestamp);
   if (Number.isNaN(placedAt.getTime())) return null;
 
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: BANGKOK_TIME_ZONE,
+    year: 'numeric',
     day: 'numeric',
     month: 'numeric',
     hour: '2-digit',
@@ -176,13 +204,43 @@ export function formatOrderPlacedAt(isoTimestamp: string): string | null {
 
   const day = Number.parseInt(lookup('day'), 10);
   const month = Number.parseInt(lookup('month'), 10);
-  const minute = lookup('minute');
-  // `hour12: false` renders midnight as "24" in some ICU versions — the same
-  // quirk `toBangkokMoment` documents and normalises.
-  const hour = String(Number.parseInt(lookup('hour'), 10) % 24).padStart(2, '0');
-
+  const year = Number.parseInt(lookup('year'), 10);
   const monthLabel = THAI_MONTH_ABBREVIATIONS[month - 1];
-  if (!monthLabel || Number.isNaN(day)) return null;
 
-  return `${day} ${monthLabel} ${hour}:${minute} น.`;
+  if (!monthLabel || Number.isNaN(day) || Number.isNaN(year)) return null;
+
+  return {
+    day,
+    monthLabel,
+    // The design canvas dates a 2026 order `2569` — the Thai civil calendar's
+    // Buddhist era, which is the Gregorian year plus 543.
+    buddhistYear: year + 543,
+    // `hour12: false` renders midnight as "24" in some ICU versions — the same
+    // quirk `toBangkokMoment` documents and normalises.
+    hour: String(Number.parseInt(lookup('hour'), 10) % 24).padStart(2, '0'),
+    minute: lookup('minute'),
+  };
+}
+
+export function formatOrderPlacedAt(isoTimestamp: string): string | null {
+  const parts = bangkokDateParts(isoTimestamp);
+  if (!parts) return null;
+
+  return `${parts.day} ${parts.monthLabel} ${parts.hour}:${parts.minute} น.`;
+}
+
+/**
+ * `5 ส.ค. 2569 · 12:14 น.` — screen 19's date line.
+ *
+ * The longer sibling of `formatOrderPlacedAt`: C-19 shows the Buddhist-era
+ * year and separates date from time with `·`, where the C-16 card shows
+ * neither. Both forms are transcribed from the design canvas rather than
+ * unified — a history card and a detail header legitimately carry different
+ * amounts of date.
+ */
+export function formatOrderPlacedAtLong(isoTimestamp: string): string | null {
+  const parts = bangkokDateParts(isoTimestamp);
+  if (!parts) return null;
+
+  return `${parts.day} ${parts.monthLabel} ${parts.buddhistYear} · ${parts.hour}:${parts.minute} น.`;
 }
