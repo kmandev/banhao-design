@@ -20,7 +20,7 @@ import {
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { useCart } from '../hooks/useCart';
-import { repositories } from '../repositories';
+import { repositories, MixedRestaurantError } from '../repositories';
 import { formatBaht } from '../lib/money';
 import { ITEM_PLACEHOLDER_GLYPH } from '../lib/catalogDisplay';
 import { presentLoadError } from '../lib/loadError';
@@ -54,11 +54,12 @@ type ItemRoute = RouteProp<CustomerStackParamList, 'ItemOptions'>;
 export function ItemOptionsScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<ItemRoute>();
-  const { addLine } = useCart();
+  const { addItem, canModify } = useCart();
 
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
 
   const load = useCallback(
     () => repositories.catalog.getMenuItem(params.shopId, params.itemId),
@@ -68,10 +69,10 @@ export function ItemOptionsScreen() {
   const state = useAsyncData(load, [params.shopId, params.itemId]);
   const item = state.status === 'success' ? state.data : null;
 
-  const { optionLabels, optionsDelta } = useMemo(() => {
-    if (!item?.optionGroups) return { optionLabels: [] as string[], optionsDelta: 0 };
+  const { chosenOptionIds, optionsDelta } = useMemo(() => {
+    if (!item?.optionGroups) return { chosenOptionIds: [] as string[], optionsDelta: 0 };
 
-    const labels: string[] = [];
+    const ids: string[] = [];
     let delta = 0;
 
     for (const group of item.optionGroups) {
@@ -80,15 +81,11 @@ export function ItemOptionsScreen() {
       // An unavailable option contributes nothing to the line total, even if a
       // stale selection somehow names one (PC-Q-001).
       if (!chosen || !chosen.isAvailable) continue;
-      labels.push(
-        chosen.priceDeltaSatang > 0
-          ? `${chosen.label} +${chosen.priceDeltaSatang / 100}`
-          : chosen.label,
-      );
+      ids.push(chosen.id);
       delta += chosen.priceDeltaSatang;
     }
 
-    return { optionLabels: labels, optionsDelta: delta };
+    return { chosenOptionIds: ids, optionsDelta: delta };
   }, [item, selections]);
 
   if (state.status === 'loading') {
@@ -130,19 +127,36 @@ export function ItemOptionsScreen() {
 
   const lineTotalSatang = (item.priceSatang + optionsDelta) * quantity;
 
-  function onAddToCart() {
+  /**
+   * Saves the configured line to the persisted cart (Phase D / D-5).
+   *
+   * Only identities are sent — `menuItemId` and the chosen `menu_options.id`
+   * values. The name, price and option labels are deliberately not passed:
+   * `cart_items` has no columns for them, and the cart re-reads all three from
+   * the live catalog so it can never show a price it captured earlier.
+   */
+  async function onAddToCart() {
     if (!item || !item.isAvailable) return;
-    addLine({
-      menuItemId: item.id,
-      shopId: item.shopId,
-      name: item.name,
-      basePriceSatang: item.priceSatang,
-      optionLabels,
-      optionsDeltaSatang: optionsDelta,
-      note: note.trim(),
-      quantity,
-    });
-    navigation.navigate('Cart');
+
+    try {
+      await addItem({
+        shopId: item.shopId,
+        menuItemId: item.id,
+        quantity,
+        note: note.trim(),
+        menuOptionIds: chosenOptionIds,
+      });
+      navigation.navigate('Cart');
+    } catch (cause) {
+      // DEC-017 — the C-09 "start a new cart?" dialog is D-8 work. Until it
+      // exists this must not navigate to a cart that did not receive the item,
+      // so the failure is surfaced inline rather than silently swallowed.
+      setAddError(
+        cause instanceof MixedRestaurantError
+          ? 'ตะกร้ามีอาหารจากร้านอื่นอยู่'
+          : 'เพิ่มลงตะกร้าไม่สำเร็จ ลองอีกครั้ง',
+      );
+    }
   }
 
   return (
@@ -158,10 +172,20 @@ export function ItemOptionsScreen() {
             // SearchScreen already keep an unavailable item from being
             // navigated to at all, but this is the one place that holds
             // regardless of how the screen was reached.
-            label={item.isAvailable ? 'เพิ่มลงตะกร้า' : UNAVAILABLE_LABEL}
+            //
+            // DEC-D-03: a signed-out customer has no cart to add to — every
+            // cart policy keys on `auth.uid()` — so the action names what is
+            // actually missing instead of failing on tap.
+            label={
+              !item.isAvailable
+                ? UNAVAILABLE_LABEL
+                : canModify
+                  ? 'เพิ่มลงตะกร้า'
+                  : 'เข้าสู่ระบบเพื่อสั่ง'
+            }
             trailing={item.isAvailable ? formatBaht(lineTotalSatang) : undefined}
-            disabled={!item.isAvailable}
-            onPress={onAddToCart}
+            disabled={!item.isAvailable || !canModify}
+            onPress={() => void onAddToCart()}
             testID="button-add-to-cart"
           />
         </BottomBar>
@@ -234,6 +258,12 @@ export function ItemOptionsScreen() {
         />
       </View>
 
+      {addError ? (
+        <Text style={styles.addError} testID="item-add-error">
+          {addError}
+        </Text>
+      ) : null}
+
       <View style={styles.quantityRow}>
         <Text style={styles.quantityLabel}>จำนวน</Text>
         <Stepper
@@ -287,4 +317,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
   },
   quantityLabel: { fontSize: fontSize.xxl, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  addError: {
+    fontFamily: fontFamily.regular,
+    fontSize: fontSize.md,
+    color: colors.danger,
+    paddingTop: spacing.lg,
+  },
 });

@@ -46,7 +46,7 @@ const WEEKDAY_LABELS = ['อาทิตย์', 'จันทร์', 'อั�
 export function ShopScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<ShopRoute>();
-  const { itemCount, totals } = useCart();
+  const { itemCount } = useCart();
   const [section, setSection] = useState<string | null>(null);
   const [showAllHours, setShowAllHours] = useState(false);
 
@@ -112,7 +112,9 @@ export function ShopScreen() {
           <BottomBar>
             <Button
               label={`ดูตะกร้า (${itemCount})`}
-              trailing={formatBaht(totals.totalSatang)}
+              // No amount: the order total is not knowable until the server
+              // prices the fees (DEC-D-01), and a subtotal on a button reads
+              // as the amount payable.
               onPress={() => navigation.navigate('Cart')}
               testID="button-view-cart"
             />

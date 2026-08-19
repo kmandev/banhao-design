@@ -201,16 +201,18 @@ describe('ShopScreen — unavailable items (C-8)', () => {
 
   it('does not change cart state when the unavailable item is pressed', async () => {
     // The only add-to-cart path from the menu is ItemOptions, and a sold-out
-    // row cannot reach it — so the cart is left exactly as it was. (The cart
-    // bar itself may already be showing from pre-existing cart contents; what
-    // matters is that pressing this row moves nothing.)
+    // row cannot reach it — so the cart is left exactly as it was.
+    //
+    // From Phase D the cart is persisted and starts empty rather than carrying
+    // two seeded lines, so "unchanged" is observed as the cart bar never
+    // appearing: it renders only when `itemCount > 0`.
     await renderShop();
-    const before = screen.getByTestId('button-view-cart').props.children;
+    expect(screen.queryByTestId('button-view-cart')).toBeNull();
 
     fireEvent.press(screen.getByTestId('menu-row-item-soldout'));
 
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(screen.getByTestId('button-view-cart').props.children).toEqual(before);
+    expect(screen.queryByTestId('button-view-cart')).toBeNull();
   });
 });
 

@@ -43,6 +43,22 @@ export const ERROR_CODES = [
   'RESTAURANT_CLOSED',
   'ITEM_UNAVAILABLE',
   'ACCEPT_WINDOW_EXPIRED',
+  // Cart revalidation (Phase D). Both are raised by `POST /cart/validate`,
+  // which lands at D-6; the codes are added here first because this union is
+  // what the status map and both clients are typed against.
+  //
+  // `PRICE_CHANGED` — a cart line's live catalog price no longer matches what
+  // the customer was shown. UX-SPEC § 13 renders it as a per-line old → new
+  // diff (`ราคามีการเปลี่ยนแปลง`), never a silent re-price: the customer
+  // acknowledges the new number before it can become an order.
+  //
+  // `MIXED_RESTAURANT` — DEC-017, one cart = one restaurant. The composite
+  // foreign keys on `cart_items` already make a mixed cart impossible to
+  // *store*; this code exists so the customer gets the C-09 dialog
+  // (`ตะกร้ามีอาหารจากร้านอื่นอยู่`) instead of a raw constraint violation.
+  // The database is the enforcement; this code is the explanation.
+  'PRICE_CHANGED',
+  'MIXED_RESTAURANT',
 
   // --- Concurrency · 409 ----------------------------------------------------
   // Client behaviour: refresh and re-render. A normal outcome of a race, not an

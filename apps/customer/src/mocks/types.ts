@@ -133,16 +133,9 @@ export interface AppNotification {
   read: boolean;
 }
 
-/** A line in the local cart. Options are resolved to labels for display. */
-export interface CartLine {
-  /** Stable key for this configured line, not the menu item id. */
-  lineId: string;
-  menuItemId: string;
-  shopId: string;
-  name: string;
-  basePriceSatang: Satang;
-  optionLabels: string[];
-  optionsDeltaSatang: Satang;
-  note: string;
-  quantity: number;
-}
+/*
+ * `CartLine` used to live here. It moved to `src/domain/cart.ts` in Phase D /
+ * D-2 and is not re-exported: the production cart is the persisted `cart_items`
+ * row, and a fixture shape standing in for it is exactly the confusion the move
+ * was meant to end.
+ */

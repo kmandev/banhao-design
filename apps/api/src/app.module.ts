@@ -3,6 +3,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { CorrelationModule } from './common/correlation/correlation.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { UsersModule } from './modules/users/users.module';
+import { CartModule } from './modules/cart/cart.module';
 import { MerchantModule } from './modules/merchant/merchant.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -37,6 +38,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
     CorrelationModule,
     SupabaseModule,
     UsersModule,
+    CartModule,
     MerchantModule,
     HealthModule,
     AuthModule,

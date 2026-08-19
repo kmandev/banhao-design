@@ -20,6 +20,31 @@
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "no-console": ["warn", { "allow": ["warn", "error"] }]
   },
+  "overrides": [
+    {
+      "files": [
+        "apps/customer/src/domain/cart.ts",
+        "apps/customer/src/data/cart*.ts",
+        "apps/customer/src/hooks/useCart.tsx",
+        "apps/customer/src/repositories/supabaseCart.ts",
+        "apps/customer/src/repositories/mockCart.ts",
+        "apps/customer/src/screens/CartScreen.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/mocks/*", "**/mocks"],
+                "message": "Phase D: the cart path is production code. Prices come from the live catalog (DEC-D-02) and no fee is computed client-side (DEC-D-01), so importing the design's sample pricing here would reintroduce exactly the invented money those decisions removed. Checkout, payment, orders and tracking are deliberately NOT covered by this rule — they are Phase E/F screens whose sample figures are explicit."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
   "ignorePatterns": [
     "dist",
     "node_modules",

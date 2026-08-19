@@ -12,6 +12,8 @@
  */
 
 import type { MenuItem, Shop } from '../domain/catalog';
+import type { Cart } from '../domain/cart';
+import type { CartValidation, ExpectedLine } from '../domain/cartValidation';
 import type { Category } from '../domain/categoryTaxonomy';
 import type { OrderSummary, AppNotification, Address } from '../mocks/types';
 
@@ -22,6 +24,57 @@ export interface CatalogRepository {
   listMenu(shopId: string): Promise<MenuItem[]>;
   getMenuItem(shopId: string, itemId: string): Promise<MenuItem | null>;
   search(query: string): Promise<{ shops: Shop[]; items: MenuItem[] }>;
+}
+
+/** One configured line, as the item screen produces it. */
+export interface AddCartItemInput {
+  shopId: string;
+  menuItemId: string;
+  quantity: number;
+  /** Empty string means no note; the query layer stores that as NULL. */
+  note: string;
+  /**
+   * The chosen `menu_options.id` values — identities, not labels.
+   *
+   * Labels and price deltas are deliberately absent: they are read live from
+   * the catalog when the cart loads, so a cart never carries a stale price it
+   * captured at add time. `cart_item_options` has no price column for the same
+   * reason.
+   */
+  menuOptionIds: string[];
+}
+
+/**
+ * Cart persistence (Phase D).
+ *
+ * The only repository whose operations **write**. Every other client write in
+ * the app goes through the API; the cart is one of the two documented
+ * exceptions in DEC-APP-008, because a cart is not financial data.
+ *
+ * Mutations return the reloaded cart rather than void so a caller never has to
+ * reconstruct server state locally — the database stays the source of truth
+ * (DEC-D-02) even for the shape of the screen immediately after a tap.
+ * `null` means the customer has no open cart at all.
+ */
+export interface CartRepository {
+  getCart(): Promise<Cart | null>;
+  addItem(input: AddCartItemInput): Promise<Cart>;
+  setQuantity(cartItemId: string, quantity: number): Promise<Cart | null>;
+  removeItem(cartItemId: string): Promise<Cart | null>;
+  clear(): Promise<void>;
+}
+
+/**
+ * Server-authoritative cart revalidation (`POST /api/v1/cart/validate`).
+ *
+ * Separate from `CartRepository` because the two speak to different systems:
+ * cart CRUD writes to Supabase directly (DEC-APP-008's documented exception),
+ * while validation must come from the trusted writer. Resolves with the
+ * re-priced cart, or rejects — with `CartConflictError` for the two conflicts
+ * the customer can act on, and with the underlying failure for everything else.
+ */
+export interface CartValidationRepository {
+  validate(expectedLines: ExpectedLine[]): Promise<CartValidation>;
 }
 
 export interface OrderRepository {
@@ -39,6 +92,8 @@ export interface AddressRepository {
 
 export interface Repositories {
   catalog: CatalogRepository;
+  cart: CartRepository;
+  cartValidation: CartValidationRepository;
   orders: OrderRepository;
   notifications: NotificationRepository;
   addresses: AddressRepository;

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { CartProvider } from '../hooks/useCart';
+import type { Cart } from '../domain/cart';
 import { AuthProvider } from '../hooks/useAuth';
 
 import { SplashScreen } from '../screens/auth/SplashScreen';
@@ -39,6 +40,30 @@ import {
  */
 
 const mockRouteParams: Record<string, unknown> = {};
+
+/**
+ * A cart with one line, for the screens that need a non-empty one.
+ *
+ * The cart is persisted from Phase D on, so nothing arrives pre-filled any
+ * more — a test that wants lines supplies them.
+ */
+const SEEDED_CART: Cart = {
+  id: 'cart-1',
+  shopId: 'shop-somtam-pathongdee',
+  lines: [
+    {
+      id: 'line-1',
+      menuItemId: 'menu-pad-kaprao-moo',
+      name: 'ผัดกะเพราหมูสับ',
+      basePriceSatang: 5000,
+      isAvailable: true,
+      quantity: 1,
+      note: '',
+      options: [],
+    },
+  ],
+  unresolvedLineIds: [],
+};
 
 /**
  * Catalog reads are Supabase-backed in production (Phase C / C-7). Screen tests
@@ -142,18 +167,23 @@ describe('Screen smoke tests', () => {
   });
 
   it('09 Cart renders with items', () => {
-    renderScreen(<CartScreen />);
+    render(
+      <NavigationContainer>
+        <AuthProvider>
+          <CartProvider seed={SEEDED_CART}>
+            <CartScreen />
+          </CartProvider>
+        </AuthProvider>
+      </NavigationContainer>,
+    );
     expect(screen.getByTestId('screen-cart')).toBeTruthy();
+    expect(screen.getByTestId('cart-line-line-1')).toBeTruthy();
   });
 
   it('09 Cart renders the empty state', () => {
-    render(
-      <NavigationContainer>
-        <CartProvider seed={[]}>
-          <CartScreen />
-        </CartProvider>
-      </NavigationContainer>,
-    );
+    // No seed at all — the cart is now persisted, so "empty" is the honest
+    // default rather than something a test has to ask for.
+    renderScreen(<CartScreen />);
     expect(screen.getByTestId('state-cart-empty')).toBeTruthy();
   });
 

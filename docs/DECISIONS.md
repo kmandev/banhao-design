@@ -44,6 +44,9 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-032** | **Operator fallback for exceptional situations (capability, not an app)** | **ACCEPTED — REQUIREMENT · NOT IMPLEMENTED** | **2026-08-10** | `docs/BUSINESS_RULES.md` |
 | **DEC-033** | **Multi-role identity: domain membership, not a single `profiles.role`** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
 | **DEC-034** | **Phase 1 financial integrity without a zero-sum database trigger** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
+| **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
+| **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
+| **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
 
 DEC-016 through DEC-032 were approved by the Product Owner in the Business
 Decision Workshop and locked on 2026-08-10 — see `ai/KNOWLEDGE/EVENTS.md`
@@ -1795,3 +1798,143 @@ DEC-028
 
 Supersedes the zero-sum trigger recommendation in `docs/DATABASE_DESIGN.md`
 § 10. / None. Explicitly revisitable in a later phase.
+
+
+---
+
+## DEC-D-01 — Cart validation returns a subtotal only
+
+**Status:** ACCEPTED · **Date:** 2026-08-18 · **Owner:** Product Owner
+
+### Decision
+
+`POST /api/v1/cart/validate` returns the **server-authoritative food subtotal
+and nothing else**. Delivery fee, service fee and discount are not calculated in
+Phase D. Where the cart UI has a row for a fee it cannot yet know, that row
+renders the literal string `คำนวณเมื่อยืนยัน`.
+
+### Why
+
+The **models** for these amounts are accepted (DEC-023, DEC-024, DEC-025) but
+every **number** is still OPEN — BQ-026 (delivery fee), BQ-027 (service fee),
+BQ-030 (who funds discounts), Q-010 (commission rate). The subtotal is the only
+total derivable from data the customer app can actually read, because item and
+option prices are real columns while no fee is.
+
+This is not a new position. UX-SPEC § C-09 already required it: *"Fee lines
+appear here as server-provided amounts; if any fee is not yet knowable, the row
+shows `คำนวณเมื่อยืนยัน` rather than a number the app invented."* The decision
+ratifies that line and makes it binding on the API as well as the UI.
+
+### Alternatives considered
+
+- **Wait for BQ-026/BQ-027 before building the cart.** Rejected — it would stall
+  the whole order path behind a pricing question that gates only real money
+  (DEC-APP-007).
+- **Keep the design's sample figures (฿15 / ฿5 / ฿10 `BANHAO7`).** Rejected, and
+  this is the decision's real purpose. Those numbers were illustrative from the
+  start; shipping them makes a fabricated total indistinguishable from an agreed
+  one, which CLAUDE.md forbids outright ("do not invent a default anywhere in
+  the application").
+
+### Consequences
+
+- `apps/customer/src/mocks/pricing.ts` is no longer reachable from the cart.
+- The cart shows no grand total, and the `ดูตะกร้า` / `ยืนยันการสั่ง` buttons
+  carry no amount — a subtotal on a CTA reads as the amount payable.
+- The `BANHAO7` discount row is removed rather than blanked; no promotion
+  mechanism exists to replace it.
+- When BQ-026/BQ-027 are answered, the fee rows gain server-supplied numbers
+  with no change to the domain — the schema stores amounts, never rates.
+
+### Related
+
+DEC-023, DEC-024, DEC-025, BQ-026, BQ-027, BQ-030, Q-010, CON-003 ·
+UX-SPEC § C-09, § 13
+
+---
+
+## DEC-D-02 — The persisted Supabase cart is the source of truth
+
+**Status:** ACCEPTED · **Date:** 2026-08-18 · **Owner:** Product Owner
+
+### Decision
+
+The row in `carts` **is** the cart. The client holds a cached copy for
+rendering only. A customer's cart survives logout, reinstall and a change of
+device, and is restored after authentication.
+
+### Why
+
+The schema was already built for it: `carts_user_id_key` is UNIQUE on
+`user_id`, so "the cart" is unambiguous per customer, and DEC-APP-008 names the
+cart as one of exactly two domains a client may write directly — precisely
+because a cart is not financial data. Holding the cart in React state instead
+would mean the one thing the customer assembled by hand is the one thing the
+system forgets.
+
+### Alternatives considered
+
+- **Client-only cart, uploaded at checkout.** Rejected — it loses the cart on
+  reinstall, cannot be resumed on another device, and makes the first write a
+  large one at the least forgiving moment.
+- **Server-owned cart written through the API.** Rejected — DEC-APP-008 already
+  settled this: routing non-financial writes through the container adds a cold
+  start and buys no safety RLS is not already providing.
+
+### Consequences
+
+- Every cart mutation returns the reloaded server cart, so local and remote
+  cannot drift.
+- Prices are re-read from the live catalog on every load: a cart shows today's
+  price, which is what makes staleness visible instead of plausible.
+- A line whose menu item is no longer readable (archived, or its restaurant left
+  `ACTIVE`) cannot be named or priced. It is surfaced as `unresolvedLineIds`
+  rather than silently dropped.
+
+### Related
+
+DEC-APP-008, DEC-017, DEC-014 · `supabase/migrations/20260811000004_cart_domain.sql`
+
+---
+
+## DEC-D-03 — No guest cart
+
+**Status:** ACCEPTED · **Date:** 2026-08-18 · **Owner:** Product Owner
+
+### Decision
+
+An unauthenticated user cannot add to a cart. No local guest-cart architecture
+is created as a stand-in.
+
+### Why
+
+Every cart policy — `carts_insert_own`, `cart_items_insert_own`,
+`cart_item_options_insert_own` and their select/update/delete counterparts —
+keys on `auth.uid()`. A signed-out client has no cart it is permitted to write,
+so a guest cart would be a parallel, client-only store that must later be
+merged: a second source of truth, in direct tension with DEC-D-02.
+
+Browsing stays fully anonymous. The catalog's `*_select_active` policies are
+public, so the entire menu is readable without a session; only the cart requires
+one.
+
+### Alternatives considered
+
+- **Local guest cart, uploaded on sign-in.** Rejected — merge conflicts (guest
+  cart from restaurant A, saved cart from restaurant B) collide with DEC-017,
+  and the merge rule would itself need a decision.
+- **Anonymous Supabase sessions.** Rejected — it creates a real `auth.users` row
+  per browsing device with no way to reclaim or garbage-collect it.
+
+### Consequences
+
+- The add-to-cart action names what is missing (`เข้าสู่ระบบเพื่อสั่ง`) instead
+  of failing on tap.
+- The repository raises `NotAuthenticatedError` before any round trip; RLS
+  remains the actual boundary.
+
+### Related
+
+DEC-D-02, DEC-APP-004, DEC-APP-008 ·
+`supabase/migrations/20260811000011_rls_policies.sql`

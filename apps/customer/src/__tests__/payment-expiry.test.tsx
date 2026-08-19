@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { CartProvider } from '../hooks/useCart';
+import { AuthProvider } from '../hooks/useAuth';
 import { PromptPayQrScreen } from '../screens/payment';
 
 /**
@@ -35,9 +36,13 @@ const QR_TTL_SECONDS = 600;
 function renderQr() {
   return render(
     <NavigationContainer>
-      <CartProvider>
-        <PromptPayQrScreen />
-      </CartProvider>
+      {/* The cart reads identity from Phase D on (DEC-D-03), so it needs the
+          auth provider even on a payment screen that only shows a total. */}
+      <AuthProvider>
+        <CartProvider>
+          <PromptPayQrScreen />
+        </CartProvider>
+      </AuthProvider>
     </NavigationContainer>,
   );
 }

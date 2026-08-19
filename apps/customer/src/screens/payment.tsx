@@ -18,6 +18,11 @@ import {
 import { Screen } from '../components/Screen';
 import { useCart } from '../hooks/useCart';
 import { formatBaht } from '../lib/money';
+// Phase F screens, still on sample fee numbers. The cart stopped computing
+// these at D-5 (DEC-D-01 — the app must not invent money), so the dependency on
+// the design's illustrative figures is explicit here rather than hidden inside
+// the cart hook. Real amounts arrive with the payment domain.
+import { calculateTotals } from '../mocks/pricing';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
@@ -40,7 +45,8 @@ const QR_TTL_SECONDS = 600; // 10 minutes — the EXPIRED timeout in docs/ARCHIT
 /** 12 พร้อมเพย์ QR. */
 export function PromptPayQrScreen() {
   const navigation = useNavigation<Nav>();
-  const { totals } = useCart();
+  const { subtotalSatang } = useCart();
+  const totals = calculateTotals(subtotalSatang);
   const [secondsLeft, setSecondsLeft] = useState(QR_TTL_SECONDS);
 
   useEffect(() => {
@@ -272,7 +278,8 @@ export function PayDuplicateScreen() {
 /** 12g รายละเอียดการจ่าย. */
 export function PayDetailScreen() {
   const navigation = useNavigation<Nav>();
-  const { totals } = useCart();
+  const { subtotalSatang } = useCart();
+  const totals = calculateTotals(subtotalSatang);
 
   return (
     <Screen
@@ -320,7 +327,8 @@ export function PayDetailScreen() {
  */
 export function RefundScreen() {
   const navigation = useNavigation<Nav>();
-  const { totals } = useCart();
+  const { subtotalSatang } = useCart();
+  const totals = calculateTotals(subtotalSatang);
 
   return (
     <Screen

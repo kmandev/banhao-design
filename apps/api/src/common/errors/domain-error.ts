@@ -30,6 +30,11 @@ const STATUS_BY_CODE: Record<ErrorCode, HttpStatus> = {
   RESTAURANT_CLOSED: HttpStatus.CONFLICT,
   ITEM_UNAVAILABLE: HttpStatus.CONFLICT,
   ACCEPT_WINDOW_EXPIRED: HttpStatus.CONFLICT,
+  // Cart revalidation (Phase D). Both are business-rule conflicts, not
+  // validation failures: the request was well-formed and the customer did
+  // nothing wrong — the world moved underneath the cart.
+  PRICE_CHANGED: HttpStatus.CONFLICT,
+  MIXED_RESTAURANT: HttpStatus.CONFLICT,
 
   // Concurrency — also 409, and the reason status alone cannot carry meaning.
   OFFER_TAKEN: HttpStatus.CONFLICT,
