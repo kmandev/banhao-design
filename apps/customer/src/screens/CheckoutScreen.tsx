@@ -38,8 +38,11 @@ type Nav = NativeStackNavigationProp<CustomerStackParamList>;
  * The cash destination is DQ-01 in the implementation map — the design does not
  * show a cash-specific screen, so it goes straight to confirmation.
  *
- * NOTE: no order is created and no payment is taken. Q-001 is OPEN and
- * DEC-015 forbids provider integration here.
+ * NOTE: no payment is taken — Q-001 is OPEN and DEC-015 forbids provider
+ * integration here. An order **is** created for the PromptPay path
+ * (Phase E-3A, `POST /api/v1/orders`); the cash path is unchanged Phase D
+ * behaviour, because the API's payment method contract accepts `ONLINE`
+ * only today (DEC-016) — see `onPlaceOrder`'s own comment.
  */
 export function CheckoutScreen() {
   const navigation = useNavigation<Nav>();
@@ -59,18 +62,28 @@ export function CheckoutScreen() {
   const nameByCartItemId = new Map(lines.map((line) => [line.id, line.name]));
 
   /**
-   * Revalidates the cart server-side, then proceeds only if it passed.
+   * Revalidates the cart server-side, creates the order, then proceeds only
+   * if both passed.
    *
    * UX-SPEC § C-10: *"Server-side revalidation runs on press."* On press
    * specifically, not on mount — the customer can change the cart in another
    * tab, and the world can change underneath a checkout screen left open, so
    * validating at entry would prove nothing about the moment that matters.
    *
-   * **Fails closed.** Only an accepted validation navigates onward. A conflict
-   * renders its diff; a transport or system failure renders the shared error
-   * state. Neither falls through to payment — an unreachable API must never
-   * read as an accepted cart (V1.1 §15: *"a stale cart cannot become an
-   * order"*).
+   * **Fails closed.** Only an accepted validation *and* a successful
+   * `POST /orders` navigate onward. A conflict from either call renders the
+   * same diff — `OrdersService` re-prices the cart the same way
+   * `CartService.validate` does, so `PRICE_CHANGED`/`ITEM_UNAVAILABLE` mean
+   * the same thing from both. A transport or system failure renders the
+   * shared error state. Nothing falls through to payment — an unreachable
+   * API, or a rejected order, must never read as an accepted cart (V1.1
+   * §15: *"a stale cart cannot become an order"*).
+   *
+   * **Cash (Phase E-3A scope note).** The API's payment method contract
+   * accepts `ONLINE` only (DEC-016) — real order creation is therefore only
+   * wired for the PromptPay path. Cash keeps its pre-existing Phase D
+   * behaviour (navigates straight to `OrderConfirmed`) until Phase F/E-3B
+   * decides how Cash on Delivery re-enters the order flow.
    */
   async function onPlaceOrder() {
     if (validating) return;
@@ -83,15 +96,35 @@ export function CheckoutScreen() {
       // The expectation is what the customer was actually shown: `cart.lines`
       // holds prices captured when the cart last loaded, not re-read now.
       // Re-deriving them at press time would compare the server against
-      // itself and could never detect drift.
-      await repositories.cartValidation.validate(
-        lines.map((line) => ({
-          cartItemId: line.id,
-          expectedUnitPriceSatang: line.basePriceSatang + optionsDeltaSatang(line),
-        })),
-      );
+      // itself and could never detect drift. Computed once and reused for
+      // both calls below — POST /orders must see the same expectation
+      // /cart/validate did, not a freshly re-derived one.
+      const expectedLines = lines.map((line) => ({
+        cartItemId: line.id,
+        expectedUnitPriceSatang: line.basePriceSatang + optionsDeltaSatang(line),
+      }));
 
-      navigation.navigate(method === 'PROMPTPAY' ? 'PromptPayQr' : 'OrderConfirmed');
+      await repositories.cartValidation.validate(expectedLines);
+
+      if (method === 'CASH') {
+        navigation.navigate('OrderConfirmed');
+        return;
+      }
+
+      if (!defaultAddress) {
+        // No usable address to snapshot the order against (DEC-E-04) — fails
+        // closed through the same system-error card a transport failure
+        // uses, rather than guessing an address or inventing new UI.
+        setSystemError('No delivery address selected');
+        return;
+      }
+
+      const order = await repositories.orderCreation.create({
+        addressId: defaultAddress.id,
+        expectedLines,
+      });
+
+      navigation.navigate('PromptPayQr', { orderId: order.orderId, orderNumber: order.orderNumber });
     } catch (cause) {
       if (cause instanceof CartConflictError) {
         setConflict(cause.conflict);

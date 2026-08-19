@@ -34,7 +34,14 @@ export type CustomerStackParamList = {
 
   // Payment screens. No provider is integrated (Q-001 OPEN, DEC-015) — these
   // render payment states from local state only.
-  PromptPayQr: undefined;
+  //
+  // orderId/orderNumber are optional (Phase E-3A): CheckoutScreen passes them
+  // after a real POST /orders success, so the response is representable
+  // without requiring every existing navigate('PromptPayQr') call site
+  // (payment.tsx's own retry buttons) to start supplying them. Nothing reads
+  // them yet — rendering an order reference is payment/tracking work
+  // (Phase F / E-3B), out of scope here.
+  PromptPayQr: { orderId?: string; orderNumber?: string } | undefined;
   PayChecking: undefined;
   PaySuccess: undefined;
   PayFailed: undefined;

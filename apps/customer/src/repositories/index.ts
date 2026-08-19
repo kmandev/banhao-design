@@ -19,10 +19,13 @@ import { mockCatalogRepository } from './mockCatalog';
 import { supabaseCartRepository } from './supabaseCart';
 import { createMockCartRepository } from './mockCart';
 import { apiCartValidationRepository } from './apiCartValidation';
+import { apiOrderCreationRepository } from './apiOrderCreation';
+import { apiAddressRepository } from './apiAddresses';
 import type {
   AddressRepository,
   CartValidationRepository,
   NotificationRepository,
+  OrderCreationRepository,
   OrderRepository,
   Repositories,
 } from './types';
@@ -41,6 +44,11 @@ export {
   apiCartValidationRepository,
   createApiCartValidationRepository,
 } from './apiCartValidation';
+export {
+  apiOrderCreationRepository,
+  createApiOrderCreationRepository,
+} from './apiOrderCreation';
+export { apiAddressRepository, createApiAddressRepository } from './apiAddresses';
 
 /**
  * Simulated latency, so loading states are actually exercised in development
@@ -75,6 +83,11 @@ export const mockCartValidationRepository: CartValidationRepository = {
     delay({ cartId: 'mock-cart', restaurantId: 'mock-shop', subtotalSatang: 0, lines: [] }),
 };
 
+/** Fixture order-creation, for screen tests that are not about checkout. */
+export const mockOrderCreationRepository: OrderCreationRepository = {
+  create: () => delay({ orderId: 'mock-order', orderNumber: 'BH-00000000-0000', state: 'CREATED' }),
+};
+
 /**
  * The active repositories.
  *
@@ -82,35 +95,47 @@ export const mockCartValidationRepository: CartValidationRepository = {
  * PostgREST under RLS with the anon key (DEC-APP-008).
  *
  * **Cart is live** — Supabase-backed as of Phase D / D-4. It is the only
- * repository that writes, which DEC-APP-008 permits for the cart specifically.
+ * direct-write repository, which DEC-APP-008 permits for the cart specifically.
  *
- * **Cart validation is live** — the one repository that talks to the NestJS
- * API, because a cart's re-pricing must come from the trusted writer rather
- * than from anything the device computed.
+ * **Cart validation is live** — talks to the NestJS API, because a cart's
+ * re-pricing must come from the trusted writer rather than from anything the
+ * device computed.
  *
- * Orders, notifications and addresses remain mock-backed: they belong to later
- * phases and Phase D deliberately does not touch them. (An addresses API now
- * exists from Phase B, but wiring the customer app to it is not Phase D work.)
+ * **Order creation is live** — Phase E-3A. `POST /api/v1/orders`, the one
+ * write that is both financial and API-routed.
+ *
+ * **Addresses are live** — Phase E-3A. The Phase B API existed since Phase B;
+ * wiring the customer app to it became necessary here because DEC-E-04
+ * forbids an order snapshotting a mock address. `AddressScreen` and
+ * `CheckoutScreen` are unchanged — `apiAddressRepository` maps the real rows
+ * into the same shape the mock always returned.
+ *
+ * Orders (list/detail) and notifications remain mock-backed: order history
+ * and notifications are later-phase work this task does not touch.
  */
 export const repositories: Repositories = {
   catalog: supabaseCatalogRepository,
   cart: supabaseCartRepository,
   cartValidation: apiCartValidationRepository,
+  orderCreation: apiOrderCreationRepository,
   orders: mockOrderRepository,
   notifications: mockNotificationRepository,
-  addresses: mockAddressRepository,
+  addresses: apiAddressRepository,
 };
 
 /**
  * Fixture bindings, for tests and offline UI work.
  *
  * `cart` is constructed per-object rather than shared, so a suite that fills a
- * cart cannot leak lines into the next one.
+ * cart cannot leak lines into the next one. `addresses` stays the mock here
+ * deliberately — screen tests render `CheckoutScreen`/`AddressScreen` without
+ * a network, and their fixture shape is what mock/data.ts already provides.
  */
 export const mockRepositories: Repositories = {
   catalog: mockCatalogRepository,
   cart: createMockCartRepository(),
   cartValidation: mockCartValidationRepository,
+  orderCreation: mockOrderCreationRepository,
   orders: mockOrderRepository,
   notifications: mockNotificationRepository,
   addresses: mockAddressRepository,

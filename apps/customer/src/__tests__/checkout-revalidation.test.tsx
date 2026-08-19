@@ -6,7 +6,12 @@ import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { repositories } from '../repositories';
 import { CartConflictError } from '../domain/cartValidation';
 import type { Cart } from '../domain/cart';
-import type { CartRepository, CartValidationRepository } from '../repositories/types';
+import type {
+  AddressRepository,
+  CartRepository,
+  CartValidationRepository,
+  OrderCreationRepository,
+} from '../repositories/types';
 
 /**
  * Phase D · checkout revalidation.
@@ -70,10 +75,22 @@ function cartWith(lines: Cart['lines']): Cart {
   return { id: 'cart-1', shopId: 'shop-1', lines, unresolvedLineIds: [] };
 }
 
+const DEFAULT_ADDRESS = {
+  id: 'address-1',
+  label: 'บ้าน',
+  glyph: '📍',
+  line: 'ที่อยู่ทดสอบ',
+  isDefault: true,
+};
+
+const CREATED_ORDER = { orderId: 'order-1', orderNumber: 'BH-20260819-0001', state: 'CREATED' };
+
 function stub(options: {
   lines?: Cart['lines'];
   validate?: jest.Mock;
   removeItem?: jest.Mock;
+  createOrder?: jest.Mock;
+  listAddresses?: jest.Mock;
 }) {
   const cart = cartWith(options.lines ?? [LINE_A]);
 
@@ -96,11 +113,22 @@ function stub(options: {
       }),
   };
 
+  const orderCreationRepo: OrderCreationRepository = {
+    create: options.createOrder ?? jest.fn().mockResolvedValue(CREATED_ORDER),
+  };
+
+  const addressRepo: AddressRepository = {
+    listAddresses: options.listAddresses ?? jest.fn().mockResolvedValue([DEFAULT_ADDRESS]),
+  };
+
   (repositories as unknown as { cart: CartRepository }).cart = cartRepo;
   (repositories as unknown as { cartValidation: CartValidationRepository }).cartValidation =
     validationRepo;
+  (repositories as unknown as { orderCreation: OrderCreationRepository }).orderCreation =
+    orderCreationRepo;
+  (repositories as unknown as { addresses: AddressRepository }).addresses = addressRepo;
 
-  return { cartRepo, validationRepo };
+  return { cartRepo, validationRepo, orderCreationRepo, addressRepo };
 }
 
 function renderCheckout() {
@@ -120,6 +148,10 @@ async function pressPlaceOrder() {
   renderCheckout();
   await waitFor(() => expect(screen.getByTestId('screen-checkout')).toBeTruthy());
   await waitFor(() => expect(screen.getByText('ส้มตำไทย')).toBeTruthy());
+  // Also wait for the address fetch to resolve — onPlaceOrder needs
+  // defaultAddress to be populated (Phase E-3A), and pressing before it
+  // loads would make every test racily depend on microtask ordering.
+  await waitFor(() => expect(screen.getByText(DEFAULT_ADDRESS.label)).toBeTruthy());
   // Wrapped so the validation promise settling is flushed inside act(), rather
   // than resolving after the test body and warning about an unwrapped update.
   await act(async () => {
@@ -133,13 +165,28 @@ beforeEach(() => {
 });
 
 describe('successful validation', () => {
-  it('validates before navigating, and navigates exactly once', async () => {
-    const { validationRepo } = stub({});
+  it('validates, creates the order, then navigates exactly once with the order reference', async () => {
+    const { validationRepo, orderCreationRepo } = stub({});
     await pressPlaceOrder();
 
     await waitFor(() => expect(validationRepo.validate).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(orderCreationRepo.create).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledTimes(1));
-    expect(mockNavigate).toHaveBeenCalledWith('PromptPayQr');
+    expect(mockNavigate).toHaveBeenCalledWith('PromptPayQr', {
+      orderId: CREATED_ORDER.orderId,
+      orderNumber: CREATED_ORDER.orderNumber,
+    });
+  });
+
+  it('creates the order against the resolved default address, never a client-invented id', async () => {
+    const { orderCreationRepo } = stub({});
+    await pressPlaceOrder();
+
+    await waitFor(() =>
+      expect(orderCreationRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ addressId: DEFAULT_ADDRESS.id }),
+      ),
+    );
   });
 
   it('sends the prices the customer was shown, so drift is detectable', async () => {
@@ -323,7 +370,12 @@ describe('transport / system failure — fails closed', () => {
     await waitFor(() => expect(screen.getByTestId('button-retry-validation')).toBeTruthy());
     fireEvent.press(screen.getByTestId('button-retry-validation'));
 
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('PromptPayQr'));
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('PromptPayQr', {
+        orderId: CREATED_ORDER.orderId,
+        orderNumber: CREATED_ORDER.orderNumber,
+      }),
+    );
     expect(validate).toHaveBeenCalledTimes(2);
   });
 });

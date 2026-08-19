@@ -82,6 +82,49 @@ export interface OrderRepository {
   getOrder(orderId: string): Promise<OrderSummary | null>;
 }
 
+/**
+ * `POST /api/v1/orders` (Phase E-3A).
+ *
+ * `paymentMethod` is deliberately absent from this input — the API's own
+ * contract (`packages/validation/src/order.ts`) accepts only `'ONLINE'`
+ * (DEC-016), so the repository sends that literal itself rather than taking
+ * it as a parameter this screen could vary. There is no `customerId` or
+ * `restaurantId` field for the same reason `CartValidationRepository` has
+ * none: identity comes from the verified session on every request, and the
+ * restaurant is derived server-side from the caller's own cart.
+ */
+export interface CreateOrderInput {
+  /** Must belong to the caller — checked server-side (DEC-E-04). */
+  addressId: string;
+  /**
+   * What the customer was actually shown for each line, so the server can
+   * detect drift (V1.1 §6 lists `PRICE_CHANGED` as a `POST /orders` failure
+   * case). Same shape and same values as `CartValidationRepository.validate`
+   * receives — read live from the cart when it last rendered, never
+   * re-derived at submit time.
+   */
+  expectedLines: ExpectedLine[];
+}
+
+/** What `POST /api/v1/orders` returns on success. */
+export interface CreatedOrder {
+  orderId: string;
+  orderNumber: string;
+  state: string;
+}
+
+/**
+ * Creates an order from the caller's own persisted cart (Phase E-3A).
+ *
+ * The only repository whose single operation both writes and is financial —
+ * unlike `CartRepository` (DEC-APP-008's documented direct-write exception),
+ * this goes through the NestJS API, because an order is exactly the kind of
+ * write DEC-APP-008 reserves for the trusted writer.
+ */
+export interface OrderCreationRepository {
+  create(input: CreateOrderInput): Promise<CreatedOrder>;
+}
+
 export interface NotificationRepository {
   listNotifications(): Promise<AppNotification[]>;
 }
@@ -94,6 +137,7 @@ export interface Repositories {
   catalog: CatalogRepository;
   cart: CartRepository;
   cartValidation: CartValidationRepository;
+  orderCreation: OrderCreationRepository;
   orders: OrderRepository;
   notifications: NotificationRepository;
   addresses: AddressRepository;
