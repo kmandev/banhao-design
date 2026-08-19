@@ -53,6 +53,13 @@ export type CustomerStackParamList = {
   OrderConfirmed: undefined;
   /** `state` drives the 🛵 ไม่มีไรเดอร์ and 🚫 ยกเลิก variants. */
   OrderTracking: { orderId?: string; state?: OrderState };
+  /**
+   * Real order detail (Phase E-3B.1) — items, options, money and status
+   * history read live from Supabase. Separate from `OrderTracking`, which
+   * stays the design's mock-driven screen 14: not reachable from it in this
+   * task (see the module doc in `screens/OrderDetailScreen.tsx`).
+   */
+  OrderDetail: { orderId: string };
   Rating: { orderId?: string };
 };
 

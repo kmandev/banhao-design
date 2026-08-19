@@ -15,6 +15,7 @@ import type { MenuItem, Shop } from '../domain/catalog';
 import type { Cart } from '../domain/cart';
 import type { CartValidation, ExpectedLine } from '../domain/cartValidation';
 import type { Category } from '../domain/categoryTaxonomy';
+import type { OrderDetail } from '../domain/order';
 import type { OrderSummary, AppNotification, Address } from '../mocks/types';
 
 export interface CatalogRepository {
@@ -125,6 +126,26 @@ export interface OrderCreationRepository {
   create(input: CreateOrderInput): Promise<CreatedOrder>;
 }
 
+/**
+ * Real order detail — a single order the caller owns, with its line items,
+ * option snapshots and status history (Phase E-3B.1).
+ *
+ * A read, not a write, so it goes client → Supabase directly under RLS
+ * (DEC-APP-008) rather than through the API — `orders_select_customer` and
+ * its three sibling policies exist precisely for this. Deliberately its own
+ * interface rather than an addition to `OrderRepository`: that one's
+ * `OrderSummary` type carries the superseded 12-state mock vocabulary
+ * (`src/mocks/types.ts`), and `OrdersScreen`/`OrderTrackingScreen` still
+ * depend on it unchanged — this is the same "old and new contract coexist"
+ * shape `CatalogRepository` went through in Phase C.
+ *
+ * `null` means the order does not exist or is not the caller's own — RLS
+ * makes the two indistinguishable, which is the safe behaviour to expose.
+ */
+export interface OrderDetailRepository {
+  getOrder(orderId: string): Promise<OrderDetail | null>;
+}
+
 export interface NotificationRepository {
   listNotifications(): Promise<AppNotification[]>;
 }
@@ -139,6 +160,7 @@ export interface Repositories {
   cartValidation: CartValidationRepository;
   orderCreation: OrderCreationRepository;
   orders: OrderRepository;
+  orderDetail: OrderDetailRepository;
   notifications: NotificationRepository;
   addresses: AddressRepository;
 }

@@ -28,6 +28,7 @@ import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { OrderConfirmedScreen } from '../screens/OrderConfirmedScreen';
 import { OrderTrackingScreen } from '../screens/OrderTrackingScreen';
+import { OrderDetailScreen } from '../screens/OrderDetailScreen';
 import { RatingScreen } from '../screens/RatingScreen';
 import {
   PromptPayQrScreen,
@@ -179,6 +180,11 @@ function CustomerNavigator() {
         name="OrderTracking"
         component={OrderTrackingScreen}
         options={{ title: 'ติดตามออเดอร์' }}
+      />
+      <CustomerStack.Screen
+        name="OrderDetail"
+        component={OrderDetailScreen}
+        options={{ title: 'รายละเอียดออเดอร์' }}
       />
       <CustomerStack.Screen name="Rating" component={RatingScreen} options={{ title: 'ให้คะแนน' }} />
     </CustomerStack.Navigator>

@@ -21,11 +21,13 @@ import { createMockCartRepository } from './mockCart';
 import { apiCartValidationRepository } from './apiCartValidation';
 import { apiOrderCreationRepository } from './apiOrderCreation';
 import { apiAddressRepository } from './apiAddresses';
+import { supabaseOrderDetailRepository } from './supabaseOrderDetail';
 import type {
   AddressRepository,
   CartValidationRepository,
   NotificationRepository,
   OrderCreationRepository,
+  OrderDetailRepository,
   OrderRepository,
   Repositories,
 } from './types';
@@ -49,6 +51,10 @@ export {
   createApiOrderCreationRepository,
 } from './apiOrderCreation';
 export { apiAddressRepository, createApiAddressRepository } from './apiAddresses';
+export {
+  supabaseOrderDetailRepository,
+  createSupabaseOrderDetailRepository,
+} from './supabaseOrderDetail';
 
 /**
  * Simulated latency, so loading states are actually exercised in development
@@ -88,6 +94,11 @@ export const mockOrderCreationRepository: OrderCreationRepository = {
   create: () => delay({ orderId: 'mock-order', orderNumber: 'BH-00000000-0000', state: 'CREATED' }),
 };
 
+/** Fixture order-detail, for screen tests that are not about order tracking. */
+export const mockOrderDetailRepository: OrderDetailRepository = {
+  getOrder: () => delay(null),
+};
+
 /**
  * The active repositories.
  *
@@ -110,8 +121,13 @@ export const mockOrderCreationRepository: OrderCreationRepository = {
  * `CheckoutScreen` are unchanged — `apiAddressRepository` maps the real rows
  * into the same shape the mock always returned.
  *
- * Orders (list/detail) and notifications remain mock-backed: order history
- * and notifications are later-phase work this task does not touch.
+ * **Order detail is live** — Phase E-3B.1. A single order the caller owns,
+ * with its item/option snapshots and status history, read directly from
+ * Supabase under RLS (DEC-APP-008) — `orderDetail` is additive, alongside
+ * `orders` rather than replacing it.
+ *
+ * Order history (the `orders` list) and notifications remain mock-backed:
+ * they are later-phase work this task does not touch.
  */
 export const repositories: Repositories = {
   catalog: supabaseCatalogRepository,
@@ -119,6 +135,7 @@ export const repositories: Repositories = {
   cartValidation: apiCartValidationRepository,
   orderCreation: apiOrderCreationRepository,
   orders: mockOrderRepository,
+  orderDetail: supabaseOrderDetailRepository,
   notifications: mockNotificationRepository,
   addresses: apiAddressRepository,
 };
@@ -137,6 +154,7 @@ export const mockRepositories: Repositories = {
   cartValidation: mockCartValidationRepository,
   orderCreation: mockOrderCreationRepository,
   orders: mockOrderRepository,
+  orderDetail: mockOrderDetailRepository,
   notifications: mockNotificationRepository,
   addresses: mockAddressRepository,
 };
