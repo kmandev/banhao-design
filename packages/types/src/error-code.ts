@@ -59,6 +59,11 @@ export const ERROR_CODES = [
   // The database is the enforcement; this code is the explanation.
   'PRICE_CHANGED',
   'MIXED_RESTAURANT',
+  // Order creation (Phase E-2). `POST /orders`' own failure list (V1.1 §6):
+  // the caller has no cart, or the cart resolves to zero lines. Distinct from
+  // `ITEM_UNAVAILABLE` — this is "there is nothing to order", not "something
+  // in the order can't be had".
+  'CART_EMPTY',
 
   // --- Concurrency · 409 ----------------------------------------------------
   // Client behaviour: refresh and re-render. A normal outcome of a race, not an

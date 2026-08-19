@@ -76,6 +76,34 @@ export class AddressesService {
     return (data ?? []).map(toAddress);
   }
 
+  /**
+   * One address, scoped to its owner — for a caller (Phase E-2's
+   * `OrdersService`) that needs to confirm a specific id is genuinely usable
+   * before snapshotting it, not to render a list.
+   *
+   * Same ownership-as-a-query-filter shape as every other method here:
+   * `user_id` and `archived_at is null` are in the `WHERE`, so a foreign or
+   * archived id is never selected, not merely rejected after the fact.
+   * Returns `null` for "does not exist" and "belongs to someone else" alike —
+   * the caller cannot distinguish them, matching `update`/`archive`'s own
+   * `NOT_FOUND` precedent.
+   */
+  async getOwned(userId: string, addressId: string): Promise<Address | null> {
+    const { data, error } = await this.supabase.admin
+      .from('addresses')
+      .select(ADDRESS_COLUMNS)
+      .eq('id', addressId)
+      .eq('user_id', userId)
+      .is('archived_at', null)
+      .maybeSingle<AddressRow>();
+
+    if (error) {
+      this.fail('getOwned', userId, error.message);
+    }
+
+    return data ? toAddress(data) : null;
+  }
+
   async create(userId: string, input: CreateAddressInput): Promise<Address> {
     // Clear first, then insert. The reverse order would momentarily hold two
     // default rows and be refused by `addresses_one_default_idx`. Doing it this

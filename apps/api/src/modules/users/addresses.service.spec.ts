@@ -179,6 +179,41 @@ describe('AddressesService — ownership scoping', () => {
   });
 });
 
+describe('AddressesService.getOwned — Phase E-2', () => {
+  it('scopes the lookup by BOTH address id and user id, and excludes archived rows', async () => {
+    const { subject, calls } = serviceWith([{ data: ROW, error: null }]);
+
+    await subject.getOwned('user-42', 'a1');
+
+    expect(calls[0]?.eq.id).toBe('a1');
+    expect(calls[0]?.eq.user_id).toBe('user-42');
+    expect(calls[0]?.isNull).toContain('archived_at');
+  });
+
+  it('returns the mapped address when it belongs to the caller', async () => {
+    const { subject } = serviceWith([{ data: ROW, error: null }]);
+    const address = await subject.getOwned('user-42', 'a1');
+    expect(address?.id).toBe('a1');
+  });
+
+  it('returns null — not an error — for a foreign address', async () => {
+    const { subject } = serviceWith([{ data: null, error: null }]);
+    const address = await subject.getOwned('attacker', 'victim-address');
+    expect(address).toBeNull();
+  });
+
+  it('returns null for an archived address (excluded by the query, not filtered after)', async () => {
+    const { subject } = serviceWith([{ data: null, error: null }]);
+    const address = await subject.getOwned('user-42', 'archived-address');
+    expect(address).toBeNull();
+  });
+
+  it('throws rather than reporting success when the lookup fails', async () => {
+    const { subject } = serviceWith([{ data: null, error: { message: 'connection reset' } }]);
+    await expect(subject.getOwned('u1', 'a1')).rejects.toBeInstanceOf(DomainError);
+  });
+});
+
 describe('AddressesService — deletion is an archive', () => {
   it('sets archived_at rather than issuing a delete', async () => {
     const { subject, calls } = serviceWith([{ data: { id: 'a1' }, error: null }]);

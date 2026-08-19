@@ -180,4 +180,37 @@ if grep -q "FAIL" /tmp/banhao-reassign-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY VERIFICATION PASSED"
+echo "==> Seeding Phase E-1 order-creation fixtures"
+run_sql "$REPO_ROOT/supabase/tests/order_creation_setup.sql"
+
+echo "==> Launching TWO CONCURRENT create_order() calls (DEC-E-03 order_number race proof)"
+echo "    (CUST_C1 and CUST_C2 both create an order on the same business day at once)"
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc \
+  "select set_config('role','service_role',true); select order_number from public.create_order('a9000000-0000-0000-0000-000000000010'::uuid, 'a9500000-0000-0000-0000-000000000010'::uuid, 'ONLINE', 1500::bigint, 500::bigint)" \
+  > /tmp/banhao-order-conc-1.out 2>&1 &
+ORDER_CONC1_PID=$!
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc \
+  "select set_config('role','service_role',true); select order_number from public.create_order('a9000000-0000-0000-0000-000000000011'::uuid, 'a9500000-0000-0000-0000-000000000011'::uuid, 'ONLINE', 1500::bigint, 500::bigint)" \
+  > /tmp/banhao-order-conc-2.out 2>&1 &
+ORDER_CONC2_PID=$!
+wait "$ORDER_CONC1_PID" "$ORDER_CONC2_PID"
+
+echo "    CUST_C1 result: $(cat /tmp/banhao-order-conc-1.out | tr -d '[:space:]')"
+echo "    CUST_C2 result: $(cat /tmp/banhao-order-conc-2.out | tr -d '[:space:]')"
+
+echo ""
+echo "==> Running Phase E-1 order-creation assertions (DEC-E-01..05, create_order())"
+docker cp "$REPO_ROOT/supabase/tests/order_creation_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/order_creation_test.sql 2>&1 | tee /tmp/banhao-order-creation-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> Phase E-1 order-creation verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-order-creation-out.log; then
+  echo "==> Phase E-1 order-creation verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION VERIFICATION PASSED"
