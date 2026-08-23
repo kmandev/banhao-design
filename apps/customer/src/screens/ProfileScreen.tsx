@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import {
   Avatar,
@@ -15,6 +17,9 @@ import {
 import { Screen } from '../components/Screen';
 import { useAuth } from '../hooks/useAuth';
 import { formatThaiPhone } from '../lib/phone';
+import type { CustomerStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 
 /**
  * 18 บัญชีของฉัน.
@@ -26,6 +31,7 @@ import { formatThaiPhone } from '../lib/phone';
  * does not offer them.
  */
 export function ProfileScreen() {
+  const navigation = useNavigation<Nav>();
   const { profile, profileError, session, updateDisplayName, signOut } = useAuth();
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -101,7 +107,13 @@ export function ProfileScreen() {
         />
       )}
 
-      <ListRow leading="📍" title="ที่อยู่จัดส่ง" subtitle="จัดการที่อยู่ของคุณ" />
+      <ListRow
+        leading="📍"
+        title="ที่อยู่จัดส่ง"
+        subtitle="จัดการที่อยู่ของคุณ"
+        onPress={() => navigation.navigate('Address')}
+        testID="row-profile-address"
+      />
       <ListRow leading="🧾" title="ประวัติการสั่ง" />
       <ListRow leading="❓" title="ศูนย์ช่วยเหลือ" />
 

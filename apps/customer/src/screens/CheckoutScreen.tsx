@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import {
@@ -158,6 +158,23 @@ export function CheckoutScreen() {
   }
 
   const addressState = useAsyncData(() => repositories.addresses.listAddresses());
+
+  // Refetch on every return to this screen — a default created or changed on
+  // AddressScreen/AddressFormScreen (DQ-04) must be visible here without a
+  // remount. Skips the very first focus, which `useAsyncData`'s own mount
+  // effect already covers, so entering Checkout does not fetch twice. Same
+  // pattern as `AddressScreen`'s own focus refetch.
+  const isFirstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      addressState.reload();
+    }, []),
+  );
+
   const defaultAddress =
     addressState.status === 'success'
       ? (addressState.data.find((a) => a.isDefault) ?? addressState.data[0])
