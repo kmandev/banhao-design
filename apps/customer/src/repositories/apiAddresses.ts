@@ -11,15 +11,15 @@
  * created against, is now genuinely the caller's own database row rather
  * than a fixture.
  *
- * Only `listAddresses` exists here — create/update/archive are the
- * existing address-management screens' concern (not yet wired to this
- * app), and out of scope for order creation.
+ * `createAddress`/`updateAddress`/`archiveAddress` (Phase DQ-04) call the
+ * same three endpoints `AddressesController` already exposed — no backend,
+ * validation, or RLS change accompanies this file.
  */
 
 import type { ApiClient } from '@banhao/api-client';
 import { apiClient as defaultClient } from '../lib/apiClient';
 import type { Address } from '../mocks/types';
-import type { AddressRepository } from './types';
+import type { AddressPatchInput, AddressRepository, AddressWriteInput } from './types';
 
 /** Wire shape of one row from `GET /api/v1/me/addresses` (`AddressesService`'s own `Address`). */
 interface AddressApiResponse {
@@ -54,7 +54,23 @@ function toAddress(row: AddressApiResponse): Address {
     glyph: ADDRESS_GLYPH,
     line: row.landmark ? `${row.addressLine} · ${row.landmark}` : row.addressLine,
     isDefault: row.isDefault,
+    // Raw fields (DQ-04) — needed to prefill AddressFormScreen's edit mode.
+    // `label` here is the unfallen-back value, so the form can tell "no
+    // custom label" apart from "customer typed their own name as one".
+    rawLabel: row.label,
+    recipientName: row.recipientName,
+    recipientPhone: row.recipientPhone,
+    addressLine: row.addressLine,
+    landmark: row.landmark,
+    instructions: row.instructions,
+    lat: row.lat,
+    lng: row.lng,
   };
+}
+
+/** camelCase `AddressWriteInput`/`AddressPatchInput` already match the API's own body shape 1:1. */
+function toRequestBody(input: AddressWriteInput | AddressPatchInput): Record<string, unknown> {
+  return { ...input };
 }
 
 export function createApiAddressRepository(client: ApiClient = defaultClient): AddressRepository {
@@ -62,6 +78,26 @@ export function createApiAddressRepository(client: ApiClient = defaultClient): A
     async listAddresses(): Promise<Address[]> {
       const rows = await client.request<AddressApiResponse[]>('/api/v1/me/addresses');
       return rows.map(toAddress);
+    },
+
+    async createAddress(input: AddressWriteInput): Promise<Address> {
+      const row = await client.request<AddressApiResponse>('/api/v1/me/addresses', {
+        method: 'POST',
+        body: JSON.stringify(toRequestBody(input)),
+      });
+      return toAddress(row);
+    },
+
+    async updateAddress(addressId: string, input: AddressPatchInput): Promise<Address> {
+      const row = await client.request<AddressApiResponse>(
+        `/api/v1/me/addresses/${addressId}`,
+        { method: 'PATCH', body: JSON.stringify(toRequestBody(input)) },
+      );
+      return toAddress(row);
+    },
+
+    async archiveAddress(addressId: string): Promise<void> {
+      await client.request<void>(`/api/v1/me/addresses/${addressId}`, { method: 'DELETE' });
     },
   };
 }

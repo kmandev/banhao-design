@@ -23,6 +23,7 @@ import { ItemOptionsScreen } from '../screens/ItemOptionsScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { AddressScreen } from '../screens/AddressScreen';
+import { AddressFormScreen } from '../screens/AddressFormScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
@@ -132,6 +133,11 @@ function CustomerNavigator() {
         name="Address"
         component={AddressScreen}
         options={{ title: 'ที่อยู่จัดส่ง' }}
+      />
+      <CustomerStack.Screen
+        name="AddressForm"
+        component={AddressFormScreen}
+        options={{ title: 'เพิ่มที่อยู่ใหม่' }}
       />
 
       <CustomerStack.Screen

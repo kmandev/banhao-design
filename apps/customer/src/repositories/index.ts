@@ -8,8 +8,8 @@
  * screens.
  */
 
-import type { AppNotification, Address } from '../mocks/types';
-import { notifications as mockNotifications, addresses as mockAddresses } from '../mocks/data';
+import type { AppNotification } from '../mocks/types';
+import { notifications as mockNotifications } from '../mocks/data';
 import { supabaseCatalogRepository } from './supabaseCatalog';
 import { mockCatalogRepository } from './mockCatalog';
 import { supabaseCartRepository } from './supabaseCart';
@@ -17,10 +17,10 @@ import { createMockCartRepository } from './mockCart';
 import { apiCartValidationRepository } from './apiCartValidation';
 import { apiOrderCreationRepository } from './apiOrderCreation';
 import { apiAddressRepository } from './apiAddresses';
+import { mockAddressRepository } from './mockAddresses';
 import { supabaseOrderDetailRepository } from './supabaseOrderDetail';
 import { supabaseOrderHistoryRepository } from './supabaseOrderHistory';
 import type {
-  AddressRepository,
   CartValidationRepository,
   NotificationRepository,
   OrderCreationRepository,
@@ -48,6 +48,7 @@ export {
   createApiOrderCreationRepository,
 } from './apiOrderCreation';
 export { apiAddressRepository, createApiAddressRepository } from './apiAddresses';
+export { mockAddressRepository, createMockAddressRepository } from './mockAddresses';
 export {
   supabaseOrderDetailRepository,
   createSupabaseOrderDetailRepository,
@@ -82,10 +83,6 @@ export const mockOrderRepository: OrderRepository = {
 
 export const mockNotificationRepository: NotificationRepository = {
   listNotifications: (): Promise<AppNotification[]> => delay(mockNotifications),
-};
-
-export const mockAddressRepository: AddressRepository = {
-  listAddresses: (): Promise<Address[]> => delay(mockAddresses),
 };
 
 /**

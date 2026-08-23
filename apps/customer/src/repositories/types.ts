@@ -162,8 +162,33 @@ export interface NotificationRepository {
   listNotifications(): Promise<AppNotification[]>;
 }
 
+/**
+ * `POST /api/v1/me/addresses` body (Phase DQ-04), field-for-field the same
+ * required/optional split as `createAddressSchema`
+ * (`packages/validation/src/address.ts`) — the repository does not loosen or
+ * tighten what the server already enforces.
+ */
+export interface AddressWriteInput {
+  label?: string | null;
+  recipientName: string;
+  recipientPhone: string;
+  addressLine: string;
+  landmark?: string | null;
+  instructions?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  isDefault?: boolean;
+}
+
+/** `PATCH /api/v1/me/addresses/:id` — changed fields only. */
+export type AddressPatchInput = Partial<AddressWriteInput>;
+
 export interface AddressRepository {
   listAddresses(): Promise<Address[]>;
+  createAddress(input: AddressWriteInput): Promise<Address>;
+  updateAddress(addressId: string, input: AddressPatchInput): Promise<Address>;
+  /** `DELETE /me/addresses/:id` — archives server-side; never a hard delete. */
+  archiveAddress(addressId: string): Promise<void>;
 }
 
 export interface Repositories {

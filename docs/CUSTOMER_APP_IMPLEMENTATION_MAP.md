@@ -194,8 +194,14 @@ only, as a demonstrable state. Real trigger depends on webhook idempotency
 the design. Reachable from `PayDetail`. Note this interacts with **Q-020** —
 no provider supports native PromptPay refunds, so the real flow is undecided.
 
-**DQ-04 — Address editing.** `11 ที่อยู่จัดส่ง` shows selectable addresses but
-no add/edit form. Implemented as selection only.
+**DQ-04 — Address editing.** `11 ที่อยู่จัดส่ง` originally showed selectable
+addresses but no add/edit form. Resolved by the approved
+[`BANHAO DQ-04 Address UX.dc.html`](design/BANHAO%20DQ-04%20Address%20UX.dc.html)
+design: `AddressFormScreen` (`AddressForm` route, `mode: 'create' | 'edit'`)
+adds create/edit/archive against the address endpoints that already existed
+(`GET/POST/PATCH/DELETE /api/v1/me/addresses`) — no backend, database, or RLS
+change. Unblocks the ONLINE checkout path, which requires a default address
+before `POST /orders`.
 
 **DQ-05 — Search scope.** `06 ค้นหา` returns both shops and menu items in one
 list. Ranking/ordering rules are not specified; implemented as shops first,

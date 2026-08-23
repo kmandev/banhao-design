@@ -67,12 +67,26 @@ export interface MenuItem {
   optionGroups?: MenuOptionGroup[];
 }
 
+/**
+ * `label`/`line` stay display-only (DQ-01-era shape: `label` falls back to
+ * `recipientName`, `line` folds `landmark` into `addressLine`) — everything
+ * from `rawLabel` down is the raw row, added in DQ-04 so `AddressFormScreen`
+ * can prefill an edit without a second endpoint.
+ */
 export interface Address {
   id: string;
   label: string;
   glyph: string;
   line: string;
   isDefault: boolean;
+  rawLabel: string | null;
+  recipientName: string;
+  recipientPhone: string;
+  addressLine: string;
+  landmark: string | null;
+  instructions: string | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 /**

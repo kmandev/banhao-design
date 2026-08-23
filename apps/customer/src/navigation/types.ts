@@ -28,7 +28,21 @@ export type CustomerStackParamList = {
   ItemOptions: { shopId: string; itemId: string };
   Cart: undefined;
   Checkout: undefined;
-  Address: undefined;
+  /**
+   * `selectedId`/`toast` are set by `AddressFormScreen` on its way back
+   * (Phase DQ-04) — `navigate('Address', {...})` pops to this already-mounted
+   * route and merges params, which is what makes "pop, refetch, reselect,
+   * toast" (the approved design's own return behaviour) a plain navigation
+   * call rather than a second mechanism.
+   */
+  Address: { selectedId?: string; toast?: string } | undefined;
+  /**
+   * C-11a — one screen for both create and edit (DQ-04-05). `addressId` is
+   * the only thing edit mode receives; the screen resolves the record itself
+   * via `listAddresses()` rather than a dedicated single-address endpoint
+   * (see `AddressFormScreen`'s own comment for why).
+   */
+  AddressForm: { mode: 'create' } | { mode: 'edit'; addressId: string };
 
   // Payment screens. No provider is integrated (Q-001 OPEN, DEC-015) — these
   // render payment states from local state only.

@@ -66,6 +66,14 @@ const DEFAULT_ADDRESS = {
   glyph: '📍',
   line: 'ที่อยู่ทดสอบ',
   isDefault: true,
+  rawLabel: 'บ้าน',
+  recipientName: 'ลูกค้า ทดสอบ',
+  recipientPhone: '+66811111111',
+  addressLine: 'ที่อยู่ทดสอบ',
+  landmark: null,
+  instructions: null,
+  lat: null,
+  lng: null,
 };
 
 function cartWith(lines: Cart['lines']): Cart {
@@ -106,6 +114,9 @@ function stub(options: {
 
   const addressRepo: AddressRepository = {
     listAddresses: jest.fn().mockResolvedValue([DEFAULT_ADDRESS]),
+    createAddress: jest.fn(),
+    updateAddress: jest.fn(),
+    archiveAddress: jest.fn(),
   };
 
   (repositories as unknown as { cart: CartRepository }).cart = cartRepo;

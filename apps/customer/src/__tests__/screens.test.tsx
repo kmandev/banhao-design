@@ -15,6 +15,7 @@ import { ItemOptionsScreen } from '../screens/ItemOptionsScreen';
 import { CartScreen } from '../screens/CartScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { AddressScreen } from '../screens/AddressScreen';
+import { AddressFormScreen } from '../screens/AddressFormScreen';
 import { OrdersScreen } from '../screens/OrdersScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
@@ -195,6 +196,12 @@ describe('Screen smoke tests', () => {
   it('11 Address renders', async () => {
     renderScreen(<AddressScreen />);
     await waitFor(() => expect(screen.getByTestId('screen-address')).toBeTruthy());
+  });
+
+  it('11a AddressForm (create) renders', async () => {
+    mockRouteParams.mode = 'create';
+    renderScreen(<AddressFormScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-address-form')).toBeTruthy());
   });
 
   it('12 PromptPay QR renders', () => {
