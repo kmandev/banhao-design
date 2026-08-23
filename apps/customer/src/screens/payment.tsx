@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import {
@@ -28,6 +28,32 @@ import type { CustomerStackParamList } from '../navigation/types';
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 
 /**
+ * The order reference the ONLINE chain carries (Phase E-3E).
+ *
+ * `CheckoutScreen` puts a real `orderId`/`orderNumber` on `PromptPayQr` after
+ * `POST /orders` succeeds; every screen below forwards the pair unchanged onto
+ * the navigation edges that already existed, so C-13 can finally offer the
+ * design's `ติดตามออเดอร์` action against the real order instead of a
+ * fabricated state. Nothing here reads the id for anything else — these
+ * screens still decide nothing about money (CON-002).
+ *
+ * Both fields stay optional the whole way: a retry re-enters `PromptPayQr`
+ * with no params, and the CASH path never had an order at all. `undefined`
+ * simply propagates, and the screen that would show a reference shows none.
+ */
+type OrderReference = { orderId?: string; orderNumber?: string };
+
+/** The `{ orderId, orderNumber }` this screen was given, or an empty reference. */
+function useOrderReference(
+  route: RouteProp<
+    CustomerStackParamList,
+    'PromptPayQr' | 'PayChecking' | 'PaySuccess' | 'PayDuplicate'
+  >,
+): OrderReference {
+  return { orderId: route.params?.orderId, orderNumber: route.params?.orderNumber };
+}
+
+/**
  * Payment screens — design group `การชำระเงิน` (12, 12b–12h).
  *
  * ⚠️ NO PAYMENT PROVIDER IS INTEGRATED. Q-001 is OPEN and DEC-015 restricts
@@ -45,6 +71,7 @@ const QR_TTL_SECONDS = 600; // 10 minutes — the EXPIRED timeout in docs/ARCHIT
 /** 12 พร้อมเพย์ QR. */
 export function PromptPayQrScreen() {
   const navigation = useNavigation<Nav>();
+  const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PromptPayQr'>>());
   const { subtotalSatang } = useCart();
   const totals = calculateTotals(subtotalSatang);
   const [secondsLeft, setSecondsLeft] = useState(QR_TTL_SECONDS);
@@ -74,7 +101,7 @@ export function PromptPayQrScreen() {
         <BottomBar>
           <Button
             label="ฉันชำระเงินแล้ว"
-            onPress={() => navigation.navigate('PayChecking')}
+            onPress={() => navigation.navigate('PayChecking', orderRef)}
             testID="button-paid"
           />
           <Button
@@ -123,6 +150,7 @@ export function PromptPayQrScreen() {
 /** 12b กำลังตรวจสอบ — Payment state PROCESSING. */
 export function PayCheckingScreen() {
   const navigation = useNavigation<Nav>();
+  const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PayChecking'>>());
 
   return (
     <Screen
@@ -134,16 +162,22 @@ export function PayCheckingScreen() {
             In production the transition comes from a backend webhook (CON-002),
             never from a customer tapping a button.
           */}
-          <Button label="จำลอง: สำเร็จ" onPress={() => navigation.navigate('PaySuccess')} />
+          <Button label="จำลอง: สำเร็จ" onPress={() => navigation.navigate('PaySuccess', orderRef)} />
           <Button
             label="จำลอง: ยืนยันไม่ได้"
             variant="secondary"
+            // Not given the reference: `PayFailed` leads only back into a
+            // retry, and REQ-003 has not decided whether a retry reuses this
+            // order or creates a new one. Out of scope for E-3E.
             onPress={() => navigation.navigate('PayFailed')}
           />
           <Button
             label="จำลอง: จ่ายซ้ำ"
             variant="ghost"
-            onPress={() => navigation.navigate('PayDuplicate')}
+            // Same reference as the success branch, deliberately: a duplicate
+            // payment is the *same* order (REQ-003), so C-13 must be able to
+            // track it exactly as it would after a first-time success.
+            onPress={() => navigation.navigate('PayDuplicate', orderRef)}
           />
         </BottomBar>
       }
@@ -161,13 +195,17 @@ export function PayCheckingScreen() {
 /** 12c ชำระสำเร็จ — Payment state SUCCESS. */
 export function PaySuccessScreen() {
   const navigation = useNavigation<Nav>();
+  const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PaySuccess'>>());
 
   return (
     <Screen
       testID="screen-pay-success"
       footer={
         <BottomBar>
-          <Button label="ดูออเดอร์" onPress={() => navigation.navigate('OrderConfirmed')} />
+          <Button
+            label="ดูออเดอร์"
+            onPress={() => navigation.navigate('OrderConfirmed', orderRef)}
+          />
           <Button
             label="รายละเอียดการจ่าย"
             variant="ghost"
@@ -249,13 +287,17 @@ export function PayExpiredScreen() {
  */
 export function PayDuplicateScreen() {
   const navigation = useNavigation<Nav>();
+  const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PayDuplicate'>>());
 
   return (
     <Screen
       testID="screen-pay-duplicate"
       footer={
         <BottomBar>
-          <Button label="ดูออเดอร์" onPress={() => navigation.navigate('OrderConfirmed')} />
+          <Button
+            label="ดูออเดอร์"
+            onPress={() => navigation.navigate('OrderConfirmed', orderRef)}
+          />
           <Button
             label="รายละเอียดการจ่าย"
             variant="ghost"
