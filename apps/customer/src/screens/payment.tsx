@@ -235,8 +235,20 @@ export function PayFailedScreen() {
       footer={
         <BottomBar>
           <Button label="ลองจ่ายอีกครั้ง" onPress={() => navigation.navigate('PromptPayQr')} />
+          {/*
+            Was `เปลี่ยนเป็นเงินสด`. DEC-016 disables Cash on Delivery in
+            Phase 1, so a failed online payment must not offer cash as an
+            alternative.
+
+            The design canvas's own copy for this slot — `เปลี่ยนวิธีชำระเงิน`
+            — cannot be used either: after DEC-016 there is no second payment
+            method to change to. The Product Owner resolved that gap and
+            approved `กลับไปแก้ออเดอร์` as the replacement copy for the
+            unchanged `goCheckout` action, keeping the canvas's bordered
+            secondary treatment for the slot.
+          */}
           <Button
-            label="เปลี่ยนเป็นเงินสด"
+            label="กลับไปแก้ออเดอร์"
             variant="secondary"
             onPress={() => navigation.navigate('Checkout')}
           />

@@ -64,9 +64,12 @@ not less. In Phase 1, 100% of revenue and 100% of refunds run through a rail
 whose provider is unchosen and whose native refund capability research says does
 not exist. There is no cash fallback for either.
 
-⚠️ The Customer App still renders a cash option at checkout and a
-cash-prepared-amount selector. **That UI contradicts DEC-016 and must be
-disabled** — follow-up work, not done in this documentation step.
+✅ **Resolved.** The Customer App's cash option at checkout, its cash CTA
+variant and the `เปลี่ยนเป็นเงินสด` fallback on payment failure have been
+removed — the customer-facing surface is now online-only, matching this
+section. The cash-prepared-amount selector no longer exists either. CASH
+remains in the database CHECK constraint, in `create_order()`'s argument and
+in the app's historical order rendering, exactly as this section requires.
 
 ---
 

@@ -202,10 +202,12 @@ migration, table, view, policy or RPC, without an explicit instruction.**
   order machine** (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`,
   `COMPLETED`, `NO_DRIVER`) alongside the new nine-state constant. V1.1 §19
   assigns reconciling this to Phase E, not before.
-- **CheckoutScreen (screen 10) still offers a cash payment option** — DEC-016
-  disables Cash on Delivery for Phase 1. This is explicitly Phase E/F scope
-  per the prior audit, not a Phase D regression; still present, still
-  correctly deferred.
+- ~~**CheckoutScreen (screen 10) still offers a cash payment option**~~ —
+  **resolved.** The cash option, its CTA variant, the branch that reached
+  `OrderConfirmed` without creating an order, and the `เปลี่ยนเป็นเงินสด`
+  fallback on payment failure are all removed; checkout is online-only per
+  DEC-016. CASH is retained in the database, in `create_order()` and in
+  historical order rendering, as DEC-016 separately requires.
 - Merchant, Driver and Admin apps remain shells (Phases G/I and DEC-APP-003
   respectively).
 - Android verification, a physical iOS device, real SMS delivery, and the

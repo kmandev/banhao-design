@@ -151,9 +151,21 @@ it('OrderConfirmed shows ติดตามออเดอร์ and opens C-14 
   expect(mockNavigate).not.toHaveBeenCalledWith('OrderTracking', { state: 'PREPARING' });
 });
 
-// --- Test 3: CASH regression ---------------------------------------------
+// --- Test 3: no id, no tracking action -----------------------------------
 
-it('OrderConfirmed shows no tracking action on the CASH path, which has no order', () => {
+/**
+ * The invariant, stated without a CASH checkout path.
+ *
+ * This originally read as "the CASH path, which has no order" — the only way
+ * to reach C-13 without an id was the cash branch, which DEC-016 disabled and
+ * which is now removed from `CheckoutScreen`. The assertion it made is still
+ * the one that matters and is unchanged: C-13 must never offer tracking it
+ * cannot honour, because `OrderTracking` requires a real UUID and a fabricated
+ * one is a guaranteed not-found. C-13 remains reachable param-less (it is
+ * navigated to from `payment.tsx`), so this stays live coverage, not a
+ * leftover.
+ */
+it('OrderConfirmed shows no tracking action when it has no real orderId', () => {
   mockRouteParams = undefined;
   renderPlain(<OrderConfirmedScreen />);
 

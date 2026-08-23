@@ -23,7 +23,6 @@ import { presentLoadError } from '../lib/loadError';
 import { optionsDeltaSatang } from '../domain/cart';
 import { CartConflictError, type CartConflict } from '../domain/cartValidation';
 import { SAMPLE_DISCOUNT_CODE, calculateTotals } from '../mocks/pricing';
-import type { PaymentMethod } from '../mocks/types';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
@@ -31,18 +30,21 @@ type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 /**
  * 10 ยืนยันการสั่ง — summary, address, and payment method.
  *
- * The CTA follows the design's own `payCta`:
- *   PromptPay → "ไปสแกนจ่าย ฿N"  → 12 QR
- *   Cash      → "ยืนยันสั่ง ฿N (เงินสด)" → 13 สั่งสำเร็จ
+ * **Online only — DEC-016.** Cash on Delivery is disabled in Phase 1, so
+ * PromptPay is the single checkout path and the CTA is the design's own
+ * `payCta` for it: "ไปสแกนจ่าย ฿N" → 12 QR. The cash option this screen used
+ * to offer was the divergence DEC-016 recorded against the Customer App
+ * ("that UI must be disabled"); it is gone, along with the branch that
+ * reached `OrderConfirmed` without ever creating an order.
  *
- * The cash destination is DQ-01 in the implementation map — the design does not
- * show a cash-specific screen, so it goes straight to confirmation.
+ * CASH is removed from this screen only, not from the system: the column, the
+ * `create_order()` argument and the historical rendering in
+ * `lib/orderDisplay.ts` all keep it, because DEC-016 equally requires that COD
+ * stay reintroducible without redesigning Order, Payment or Settlement.
  *
  * NOTE: no payment is taken — Q-001 is OPEN and DEC-015 forbids provider
- * integration here. An order **is** created for the PromptPay path
- * (Phase E-3A, `POST /api/v1/orders`); the cash path is unchanged Phase D
- * behaviour, because the API's payment method contract accepts `ONLINE`
- * only today (DEC-016) — see `onPlaceOrder`'s own comment.
+ * integration here. An order **is** created (Phase E-3A,
+ * `POST /api/v1/orders`), whose contract accepts `ONLINE` only (DEC-016).
  */
 export function CheckoutScreen() {
   const navigation = useNavigation<Nav>();
@@ -53,7 +55,6 @@ export function CheckoutScreen() {
   // design's illustrative figures is now explicit here rather than hidden
   // inside the cart hook. Checkout's real totals arrive with the order.
   const totals = calculateTotals(subtotalSatang);
-  const [method, setMethod] = useState<PaymentMethod>('PROMPTPAY');
   const [validating, setValidating] = useState(false);
   const [conflict, setConflict] = useState<CartConflict | null>(null);
   const [systemError, setSystemError] = useState<string | null>(null);
@@ -105,11 +106,6 @@ export function CheckoutScreen() {
       }));
 
       await repositories.cartValidation.validate(expectedLines);
-
-      if (method === 'CASH') {
-        navigation.navigate('OrderConfirmed');
-        return;
-      }
 
       if (!defaultAddress) {
         // No usable address to snapshot the order against (DEC-E-04) — fails
@@ -180,10 +176,7 @@ export function CheckoutScreen() {
       ? (addressState.data.find((a) => a.isDefault) ?? addressState.data[0])
       : undefined;
 
-  const cta =
-    method === 'PROMPTPAY'
-      ? `ไปสแกนจ่าย ${formatBaht(totals.totalSatang)}`
-      : `ยืนยันสั่ง ${formatBaht(totals.totalSatang)} (เงินสด)`;
+  const cta = `ไปสแกนจ่าย ${formatBaht(totals.totalSatang)}`;
 
   return (
     <Screen
@@ -300,21 +293,17 @@ export function CheckoutScreen() {
 
       <SectionHeader title="วิธีชำระเงิน" />
       <View style={styles.methods}>
+        {/*
+          The only Phase 1 method (DEC-016). Rendered without `onPress`
+          because there is nothing to switch to — it states what will be
+          used rather than offering a choice that has one answer.
+        */}
         <ListRow
           leading="📱"
           title="พร้อมเพย์ QR"
           subtitle="สแกนจ่ายผ่านแอปธนาคาร"
-          selected={method === 'PROMPTPAY'}
-          onPress={() => setMethod('PROMPTPAY')}
+          selected
           testID="method-promptpay"
-        />
-        <ListRow
-          leading="💵"
-          title="เงินสดปลายทาง"
-          subtitle="จ่ายกับไรเดอร์เมื่อได้รับอาหาร"
-          selected={method === 'CASH'}
-          onPress={() => setMethod('CASH')}
-          testID="method-cash"
         />
       </View>
 

@@ -37,7 +37,7 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 - [ ] Reconcile the Customer App with DEC-016 and DEC-019
   - Priority: P1
   - Source: EVENT-014
-  - Notes: two divergences the decision lock created, deliberately left in code. (a) `apps/customer/src/mocks/types.ts` encodes the superseded 12 order states — DEC-019 replaces them. (b) Checkout still offers a cash option and a cash-prepared-amount selector — DEC-016 disables COD. Needs the exception **state names** settled first (still `PROPOSED`).
+  - Notes: two divergences the decision lock created. **(b) is now done** — the checkout cash option, its CTA variant, the order-less `OrderConfirmed` branch and the `เปลี่ยนเป็นเงินสด` payment-failure fallback are removed; checkout is online-only per DEC-016, while CASH stays in the database, in `create_order()` and in historical order rendering as DEC-016 separately requires. The cash-prepared-amount selector no longer existed. **(a) remains open**: `apps/customer/src/mocks/types.ts` still encodes the superseded 12 order states — DEC-019 replaces them, and this half still needs the exception **state names** settled first (still `PROPOSED`).
 
 - [ ] Design the full Driver App UI (currently 4 wireframe-level screens only: D-03, D-05, D-07, D-13)
   - Priority: P1
