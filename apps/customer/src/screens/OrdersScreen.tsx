@@ -25,20 +25,39 @@ import {
   paymentMethodLabel,
   summariseItems,
 } from '../lib/orderDisplay';
+import type { OrderState } from '../domain/order';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 
 /**
+ * C-16's design has an active-order card that opens C-14, while completed
+ * order-history cards open C-19. Keep that distinction at the boundary where
+ * the real state is already available, without adding a new flow to C-19.
+ */
+function isInFlightOrder(state: OrderState): boolean {
+  return [
+    'CREATED',
+    'PENDING_PAYMENT',
+    'PAID',
+    'MERCHANT_ACCEPTED',
+    'PREPARING',
+    'READY_FOR_PICKUP',
+    'PICKED_UP',
+    'DELIVERING',
+  ].includes(state);
+}
+
+/**
  * 16 ออเดอร์ของฉัน — C-16, real Supabase order history as of Phase E-3B.3.
  *
  * The card structure is unchanged from the mock-backed version; only its data
- * source and its destination moved. The destination change restores design
- * intent rather than inventing it: every history card in the design canvas
- * carries `go: go('orderDetail')` (`docs/design/BANHAO Customer App.dc.html`),
- * so C-16 → C-19 is what the design always specified. It could not be
- * implemented until now because the previous fixture ids (`BH000125`) were
- * order *numbers*, and C-19 reads by order id.
+ * source and destinations moved. The design's active card carries `goTrack`,
+ * and its historical cards carry `go: go('orderDetail')`
+ * (`docs/design/BANHAO Customer App.dc.html`), so C-16 opens C-14 for an
+ * in-flight row and preserves C-16 → C-19 for history. This became possible
+ * only once the screen carried genuine UUIDs rather than fixture order
+ * numbers.
  *
  * State copy and badge tones come from `lib/orderDisplay.ts`, which transcribes
  * UX-SPEC §10 — the superseded 12-state map that used to live in this file is
@@ -84,7 +103,12 @@ export function OrdersScreen() {
           return (
             <Card
               key={order.orderId}
-              onPress={() => navigation.navigate('OrderDetail', { orderId: order.orderId })}
+              onPress={() =>
+                navigation.navigate(
+                  isInFlightOrder(order.state) ? 'OrderTracking' : 'OrderDetail',
+                  { orderId: order.orderId },
+                )
+              }
               testID={`order-card-${order.orderId}`}
               style={styles.card}
             >

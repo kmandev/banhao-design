@@ -109,6 +109,17 @@ it('opens C-19 with the real order UUID — not the order number, not an index',
   expect(mockNavigate).not.toHaveBeenCalledWith('OrderTracking', expect.anything());
 });
 
+it('opens C-14 with the real order UUID for an in-flight order', async () => {
+  mockListOrders.mockResolvedValue([{ ...DELIVERED_ORDER, state: 'PREPARING' }]);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId(`order-card-${ORDER_ID}`)).toBeTruthy());
+  fireEvent.press(screen.getByTestId(`order-card-${ORDER_ID}`));
+
+  expect(mockNavigate).toHaveBeenCalledWith('OrderTracking', { orderId: ORDER_ID });
+  expect(mockNavigate).not.toHaveBeenCalledWith('OrderDetail', { orderId: ORDER_ID });
+});
+
 it('renders the loading state while history is in flight', () => {
   mockListOrders.mockReturnValue(new Promise(() => {}));
   renderScreen();

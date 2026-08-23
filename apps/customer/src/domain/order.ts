@@ -6,10 +6,10 @@
  * `OrderSummary`/`OrderState` in `src/mocks/types.ts` — that pair carries the
  * superseded 12-state machine (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`,
  * `COMPLETED`, `NO_DRIVER`) and CLAUDE.md forbids using those names in new
- * work. `OrdersScreen`/`OrderTrackingScreen` keep using the mock pair
- * unchanged — this file exists alongside it for the real order-detail read
- * path, the same way `domain/catalog.ts` sits alongside the old catalog mock
- * types without replacing them in one sweep.
+ * work. This file is the source for the real order-history, detail, and
+ * tracking reads; it exists alongside the mock pair in the same way
+ * `domain/catalog.ts` sits alongside the old catalog mock types without
+ * replacing unrelated work in one sweep.
  *
  * Money is integer satang throughout (CON-003) — never a float, never Baht.
  *

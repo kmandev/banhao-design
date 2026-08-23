@@ -1,9 +1,8 @@
+import { useCallback } from 'react';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import {
-  BottomBar,
-  Button,
   Card,
   SectionHeader,
   StateView,
@@ -11,148 +10,155 @@ import {
   colors,
   fontFamily,
   fontSize,
-  radius,
   spacing,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
-import type { OrderState } from '../mocks/types';
+import { useAsyncData } from '../hooks/useAsyncData';
+import { presentLoadError } from '../lib/loadError';
+import { formatBaht } from '../lib/money';
+import { formatOrderPlacedAt, orderStateLabel } from '../lib/orderDisplay';
 import type { CustomerStackParamList } from '../navigation/types';
+import { repositories } from '../repositories';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 type TrackRoute = RouteProp<CustomerStackParamList, 'OrderTracking'>;
 
 /**
- * The happy-path order states in order, with the customer-facing wording from
- * the Order State Machine table in docs/ARCHITECTURE.md.
- */
-const TRACKING_STEPS: { state: OrderState; label: string; caption?: string }[] = [
-  { state: 'NEW', label: 'ส่งออเดอร์ให้ร้านแล้ว' },
-  { state: 'ACCEPTED', label: 'ร้านรับออเดอร์แล้ว' },
-  { state: 'PREPARING', label: 'ร้านกำลังเตรียมอาหาร' },
-  { state: 'READY', label: 'อาหารพร้อมแล้ว' },
-  { state: 'DRIVER_ASSIGNED', label: 'ไรเดอร์กำลังไปรับอาหาร' },
-  { state: 'DELIVERING', label: 'อาหารกำลังเดินทางมาหาคุณ' },
-  { state: 'COMPLETED', label: 'ส่งสำเร็จ' },
-];
-
-/**
- * 14 ติดตามออเดอร์, plus two state variants from the design:
- *   🛵 ไม่มีไรเดอร์  → NO_DRIVER
- *   🚫 ออเดอร์ถูกยกเลิก → CANCELLED
+ * C-14 ติดตามออเดอร์ — a direct, RLS-scoped Supabase read.
+ *
+ * The order row is the source of the current state; the timeline contains
+ * only rows already recorded in `order_status_history`. There is deliberately
+ * no local state machine, ETA, rider data, map, transition, subscription, or
+ * polling loop here. The database may currently have only `CREATED`; its
+ * approved customer label is intentionally absent (UX-SPEC §10), so the
+ * screen omits that unsupported label rather than leaking the identifier or
+ * inventing copy.
  */
 export function OrderTrackingScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<TrackRoute>();
-  const state: OrderState = params?.state ?? 'DELIVERING';
+  const load = useCallback(
+    () => repositories.orderDetail.getOrder(params.orderId),
+    [params.orderId],
+  );
+  const state = useAsyncData(load, [params.orderId]);
 
-  if (state === 'NO_DRIVER') {
+  if (state.status === 'loading') {
     return (
-      <Screen
-        testID="screen-tracking-no-driver"
-        footer={
-          <BottomBar>
-            <Button label="รอต่ออีกสักครู่" onPress={() => navigation.goBack()} />
-            <Button label="ยกเลิกออเดอร์" variant="ghost" onPress={() => navigation.goBack()} />
-          </BottomBar>
-        }
-      >
+      <Screen testID="screen-order-tracking-loading">
+        <StateView kind="loading" title="กำลังโหลด…" />
+      </Screen>
+    );
+  }
+
+  if (state.status === 'error') {
+    const presentation = presentLoadError(state.message);
+    return (
+      <Screen testID="screen-order-tracking-error">
         <StateView
-          kind="info"
-          glyph="🛵"
-          title="ยังหาไรเดอร์ไม่ได้"
-          message="ตอนนี้ไรเดอร์ในพื้นที่ไม่ว่าง เรากำลังหาให้อยู่ ถ้ายกเลิกจะคืนเงินเต็มจำนวน"
-          testID="state-no-driver"
+          kind="error"
+          glyph={presentation.glyph}
+          title={presentation.title}
+          actionLabel={presentation.actionLabel}
+          onAction={state.reload}
         />
       </Screen>
     );
   }
 
-  if (state === 'CANCELLED') {
+  if (!state.data) {
     return (
-      <Screen
-        testID="screen-tracking-cancelled"
-        footer={
-          <BottomBar>
-            <Button label="สั่งใหม่อีกครั้ง" onPress={() => navigation.navigate('Tabs')} />
-            <Button
-              label="ดูการคืนเงิน"
-              variant="ghost"
-              onPress={() => navigation.navigate('Refund')}
-            />
-          </BottomBar>
-        }
-      >
+      <Screen testID="screen-order-tracking-not-found">
         <StateView
-          kind="info"
-          glyph="🚫"
-          title="ออเดอร์ถูกยกเลิก"
-          message="ออเดอร์นี้ถูกยกเลิกแล้ว หากชำระเงินไว้ ระบบจะดำเนินการคืนเงินให้"
-          testID="state-cancelled"
+          kind="empty"
+          glyph="🧾"
+          title="ไม่พบออเดอร์นี้"
+          actionLabel="กลับ"
+          onAction={() => navigation.goBack()}
         />
       </Screen>
     );
   }
 
-  const currentIndex = TRACKING_STEPS.findIndex((s) => s.state === state);
-  const steps = TRACKING_STEPS.map((step, i) => ({
-    label: step.label,
-    caption: step.caption,
-    done: i < currentIndex,
-    active: i === currentIndex,
-  }));
+  const order = state.data;
+  const currentStateLabel = orderStateLabel(order.state);
+  const timelineSteps = order.statusHistory.flatMap((event) => {
+    const label = orderStateLabel(event.toState);
+    if (!label) return [];
+
+    return [{
+      label,
+      caption: formatOrderPlacedAt(event.occurredAt) ?? undefined,
+      // A timeline row is only rendered when it was actually recorded. The
+      // current-state highlight compares server facts; it does not infer a
+      // missing transition or manufacture future steps.
+      done: event.toState !== order.state,
+      active: event.toState === order.state,
+    }];
+  });
 
   return (
-    <Screen
-      scroll
-      testID="screen-order-tracking"
-      footer={
-        <BottomBar>
-          <Button
-            label="ให้คะแนนออเดอร์นี้"
-            variant="secondary"
-            onPress={() => navigation.navigate('Rating', { orderId: params?.orderId })}
-            testID="button-rate-order"
-          />
-        </BottomBar>
-      }
-    >
-      {/*
-        Map placeholder. The tracking map prototype in design/tracking/ uses
-        Leaflet with mock coordinates; a real map needs a provider decision
-        (Q-018 — rural Buntharik coverage is unverified). See
-        docs/CUSTOMER_APP_ASSETS.md.
-      */}
-      <View style={styles.map} accessibilityLabel="แผนที่ติดตามออเดอร์ (ตัวอย่าง)">
-        <Text style={styles.mapGlyph}>🗺️</Text>
-        <Text style={styles.mapNote}>แผนที่ตัวอย่าง — ยังไม่ได้เชื่อมผู้ให้บริการแผนที่</Text>
-      </View>
-
+    <Screen scroll testID="screen-order-tracking">
       <Card style={styles.summary}>
-        <Text style={styles.orderId}>ออเดอร์ #{params?.orderId ?? 'BH000125'}</Text>
-        <Text style={styles.eta}>ถึงประมาณ 19:05 น.</Text>
+        {/*
+          UX-SPEC §5: on C-14 the current state is "in plain Thai as the
+          largest text on screen" — so it is a headline here, not the small
+          `Badge` C-16/C-19 use. Omitted entirely when §10 gives the state no
+          approved wording; nothing substitutes for it.
+        */}
+        {currentStateLabel ? (
+          <Text style={styles.stateHeadline} testID="tracking-state">
+            {currentStateLabel}
+          </Text>
+        ) : null}
+        <Text style={styles.orderId} testID="tracking-order-id">
+          #{order.orderNumber}
+        </Text>
+        <View style={styles.summaryFooter}>
+          <Text style={styles.shopName} numberOfLines={1}>
+            {order.restaurantNameSnapshot}
+          </Text>
+          <Text style={styles.total}>{formatBaht(order.grandTotalSatang)}</Text>
+        </View>
       </Card>
 
-      <SectionHeader title="สถานะออเดอร์" />
-      <Card>
-        <StatusTimeline steps={steps} />
-      </Card>
+      {/*
+        The section is omitted entirely when nothing in the recorded history
+        has approved customer copy — today that is every order, because
+        `create_order()` writes only `CREATED` and UX-SPEC §10 gives `CREATED`
+        no wording ("transient — no screen"). Omitting follows the precedent
+        `OrdersScreen` sets for the state badge and `OrderDetailScreen` sets
+        for the landmark line: the design supplies no empty-history copy for
+        C-14, and §10 forbids inventing one or leaking the identifier.
+      */}
+      {timelineSteps.length > 0 ? (
+        <>
+          <SectionHeader title="สถานะออเดอร์" />
+          <Card testID="tracking-status-timeline">
+            <StatusTimeline steps={timelineSteps} />
+          </Card>
+        </>
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  map: {
-    height: 180,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surfaceSunken,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  mapGlyph: { fontFamily: fontFamily.regular, fontSize: 48 },
-  mapNote: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
   summary: { gap: spacing.xs },
-  orderId: { fontSize: fontSize.xl, fontFamily: fontFamily.semibold, color: colors.textPrimary },
-  eta: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
+  /** The design's tracking headline is 25px; `h1` (26) is the nearest token. */
+  stateHeadline: {
+    fontSize: fontSize.h1,
+    fontFamily: fontFamily.bold,
+    color: colors.textPrimary,
+  },
+  orderId: { fontSize: fontSize.sm, fontFamily: fontFamily.regular, color: colors.textSubtle },
+  summaryFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
+  shopName: { flex: 1, fontSize: fontSize.lg, fontFamily: fontFamily.semibold, color: colors.textPrimary },
+  total: { fontSize: fontSize.lg, fontFamily: fontFamily.bold, color: colors.textPrimary },
 });

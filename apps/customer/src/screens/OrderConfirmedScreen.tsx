@@ -6,7 +6,13 @@ import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 
-/** 13 สั่งสำเร็จ. */
+/**
+ * 13 สั่งสำเร็จ.
+ *
+ * This legacy confirmation route receives no real order UUID from the payment
+ * flow. Its former tracking CTA sent a mock state to C-14, which cannot meet
+ * the tracking read contract; C-16 now provides the real UUID path instead.
+ */
 export function OrderConfirmedScreen() {
   const navigation = useNavigation<Nav>();
 
@@ -15,11 +21,6 @@ export function OrderConfirmedScreen() {
       testID="screen-order-confirmed"
       footer={
         <BottomBar>
-          <Button
-            label="ติดตามออเดอร์"
-            onPress={() => navigation.navigate('OrderTracking', { state: 'PREPARING' })}
-            testID="button-track-order"
-          />
           <Button label="กลับหน้าแรก" variant="ghost" onPress={() => navigation.navigate('Tabs')} />
         </BottomBar>
       }

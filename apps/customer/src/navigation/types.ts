@@ -1,5 +1,3 @@
-import type { OrderState } from '../mocks/types';
-
 /**
  * Route map for the Customer App.
  *
@@ -51,13 +49,16 @@ export type CustomerStackParamList = {
   Refund: undefined;
 
   OrderConfirmed: undefined;
-  /** `state` drives the 🛵 ไม่มีไรเดอร์ and 🚫 ยกเลิก variants. */
-  OrderTracking: { orderId?: string; state?: OrderState };
+  /**
+   * C-14 reads a single order directly from Supabase under customer RLS.
+   * This UUID drives the read; the screen gets its state and history from the
+   * RLS-scoped response rather than route parameters.
+   */
+  OrderTracking: { orderId: string };
   /**
    * Real order detail (Phase E-3B.1) — items, options, money and status
-   * history read live from Supabase. Separate from `OrderTracking`, which
-   * stays the design's mock-driven screen 14: not reachable from it in this
-   * task (see the module doc in `screens/OrderDetailScreen.tsx`).
+   * history read live from Supabase. C-16 opens C-14 for an in-flight order
+   * and retains this C-19 route for delivered/history orders.
    */
   OrderDetail: { orderId: string };
   Rating: { orderId?: string };

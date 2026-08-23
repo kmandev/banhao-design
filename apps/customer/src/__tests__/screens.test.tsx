@@ -242,22 +242,10 @@ describe('Screen smoke tests', () => {
     expect(screen.getByTestId('state-order-confirmed')).toBeTruthy();
   });
 
-  it('14 OrderTracking renders', () => {
-    mockRouteParams.state = 'DELIVERING';
+  it('14 OrderTracking renders its real-read loading state', () => {
+    mockRouteParams.orderId = '11111111-1111-4111-8111-111111111111';
     renderScreen(<OrderTrackingScreen />);
-    expect(screen.getByTestId('screen-order-tracking')).toBeTruthy();
-  });
-
-  it('14 OrderTracking renders the no-driver state', () => {
-    mockRouteParams.state = 'NO_DRIVER';
-    renderScreen(<OrderTrackingScreen />);
-    expect(screen.getByTestId('state-no-driver')).toBeTruthy();
-  });
-
-  it('14 OrderTracking renders the cancelled state', () => {
-    mockRouteParams.state = 'CANCELLED';
-    renderScreen(<OrderTrackingScreen />);
-    expect(screen.getByTestId('state-cancelled')).toBeTruthy();
+    expect(screen.getByTestId('screen-order-tracking-loading')).toBeTruthy();
   });
 
   it('15 Rating renders', () => {
