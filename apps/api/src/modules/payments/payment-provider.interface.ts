@@ -58,7 +58,15 @@ export interface RefundResult {
  * request must be rejected without touching any payment or ledger state.
  */
 export type WebhookVerification =
-  | { verified: true; providerPaymentId: string; providerEvent: string; rawPayload: unknown }
+  | {
+      verified: true;
+      providerPaymentId: string;
+      /** The provider's own identifier for this specific event — the idempotency anchor (`payment_events.provider_event_id`, DEC-028). */
+      providerEventId: string;
+      /** The kind of event, e.g. `payment.succeeded` — `payment_events.event_type`. */
+      providerEvent: string;
+      rawPayload: unknown;
+    }
   | { verified: false; reason: string };
 
 export interface PaymentProvider {

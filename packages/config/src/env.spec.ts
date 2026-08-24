@@ -56,6 +56,26 @@ describe('loadServerEnv', () => {
     );
   });
 
+  describe('PAYMENT_WEBHOOK_DEV_SECRET (optional — dev-only null-provider webhook simulator, DEC-APP-007)', () => {
+    it('loads as undefined when absent', () => {
+      const env = loadServerEnv(validEnv);
+
+      expect(env.paymentWebhookDevSecret).toBeUndefined();
+    });
+
+    it('loads the value when present', () => {
+      const env = loadServerEnv({ ...validEnv, PAYMENT_WEBHOOK_DEV_SECRET: 'dev-secret' });
+
+      expect(env.paymentWebhookDevSecret).toBe('dev-secret');
+    });
+
+    it('throws when present but empty', () => {
+      expect(() =>
+        loadServerEnv({ ...validEnv, PAYMENT_WEBHOOK_DEV_SECRET: '' }),
+      ).toThrow(EnvValidationError);
+    });
+  });
+
   describe('R2 (optional — no live caller yet)', () => {
     it('loads successfully with no R2 variables at all, as undefined', () => {
       const env = loadServerEnv(validEnv);

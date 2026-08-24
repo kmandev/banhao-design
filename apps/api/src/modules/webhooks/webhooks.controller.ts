@@ -2,6 +2,8 @@ import {
   Controller,
   HttpCode,
   Inject,
+  InternalServerErrorException,
+  Logger,
   Param,
   Post,
   Req,
@@ -11,17 +13,29 @@ import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { RawResponse } from '../../common/decorators/raw-response.decorator';
-import { PAYMENT_PROVIDER, type PaymentProvider } from '../payments/payment-provider.interface';
+import { SupabaseService } from '../../supabase/supabase.service';
+import {
+  PAYMENT_PROVIDER,
+  type PaymentProvider,
+  type WebhookVerification,
+} from '../payments/payment-provider.interface';
+
+/** The `verified: true` branch of {@link WebhookVerification} — what `persistEvent` needs. */
+type VerifiedWebhookEvent = Extract<WebhookVerification, { verified: true }>;
 
 /**
- * `POST /webhooks/payments/:provider` — DEC-APP-005, transport only.
+ * `POST /webhooks/payments/:provider` — DEC-APP-005, Phase 1 ingest only
+ * (ADR-008).
  *
- * This controller's entire job is getting the exact bytes a provider signed to
- * `PaymentProvider.verifyWebhookSignature` and reporting the outcome. It does
- * not write `payment_events`, does not touch `payments`/`orders`/ledger state,
- * and does not run outbox processing — that is Phase 2 processing (V1.1 §6),
- * gated on Q-001 (which provider) being resolved. Until then, the only bound
- * provider is `NullPaymentProvider`, which fails every signature closed.
+ * This controller's job is: get the exact bytes a provider signed to
+ * `PaymentProvider.verifyWebhookSignature`, and — once verified — persist
+ * exactly one `payment_events` row as evidence the event arrived. It does
+ * **not** touch `payments`, `payment_attempts`, `orders`, `payment_transactions`,
+ * any ledger table, or `reconciliation_cases`, and it does not process the
+ * event — that is Phase 2, tick-driven (V1.1 §8), a later session's work.
+ * The reason for the split: a crash after this request commits cannot erase
+ * the evidence that a verified event arrived, even if Phase 2 processing
+ * never runs.
  *
  * `:provider` selects nothing today — there is exactly one bound
  * `PaymentProvider`, matching `PaymentsModule`'s single-binding shape. The
@@ -30,14 +44,19 @@ import { PAYMENT_PROVIDER, type PaymentProvider } from '../payments/payment-prov
  */
 @Controller('webhooks/payments')
 export class WebhooksController {
-  constructor(@Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider) {}
+  private readonly logger = new Logger(WebhooksController.name);
+
+  constructor(
+    @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+    private readonly supabase: SupabaseService,
+  ) {}
 
   @Public()
   @RawResponse()
   @Post(':provider')
   @HttpCode(200)
   @ApiExcludeEndpoint() // Not a client-facing operation; excluded from the OpenAPI doc.
-  handle(@Param('provider') _provider: string, @Req() req: Request): { received: true } {
+  async handle(@Param('provider') provider: string, @Req() req: Request): Promise<{ received: true }> {
     // rawBody is a Buffer (main.ts enables { rawBody: true }). Decoding to a
     // UTF-8 string is a byte-preserving transcode, never a JSON parse —
     // verification must see exactly what the provider signed, not a
@@ -51,13 +70,61 @@ export class WebhooksController {
 
     if (!result.verified) {
       // Fails closed (CON-002): an unverified request is rejected before any
-      // field of the body or any header is trusted for anything else.
+      // field of the body or any header is trusted for anything else, and
+      // nothing is persisted for it.
       throw new UnauthorizedException('Webhook signature verification failed');
     }
 
-    // Verified. Phase 2 (persist payment_events, advance payment/order state,
-    // enqueue outbox) is explicitly out of scope for A-5 — see the class doc.
+    await this.persistEvent(provider, result);
+
     return { received: true };
+  }
+
+  /**
+   * Records that a *verified* event arrived. DEC-028's idempotency guarantee
+   * lives entirely in `payment_events`' own `(provider, provider_event_id)`
+   * unique constraint — this method attempts the `INSERT` directly and lets
+   * that constraint be the concurrency authority, never a prior `SELECT` to
+   * decide whether one is needed (the same "guarded write, not
+   * check-then-act" discipline `OrdersService`'s transitions already follow).
+   * A duplicate delivery reads the existing row back for the caller's log,
+   * but the response is 200 either way — a provider must see success or it
+   * retries forever.
+   */
+  private async persistEvent(provider: string, result: VerifiedWebhookEvent): Promise<void> {
+    const { error } = await this.supabase.admin.from('payment_events').insert({
+      provider,
+      provider_event_id: result.providerEventId,
+      event_type: result.providerEvent,
+      signature_verified: true,
+      raw_payload: result.rawPayload,
+    });
+
+    if (!error) {
+      return;
+    }
+
+    if (isUniqueViolation(error)) {
+      const { error: readError } = await this.supabase.admin
+        .from('payment_events')
+        .select('id')
+        .eq('provider', provider)
+        .eq('provider_event_id', result.providerEventId)
+        .maybeSingle();
+
+      if (readError) {
+        this.logger.error(
+          `payment_events read-back failed after a duplicate ${provider}/${result.providerEventId}: ${readError.message}`,
+        );
+      }
+      return;
+    }
+
+    this.logger.error(`payment_events insert failed for ${provider}/${result.providerEventId}: ${error.message}`);
+    // 500, not 401: the signature was genuinely valid — this is our own
+    // persistence failing, and a 5xx is what makes a real provider retry,
+    // which is the correct recovery for a transient write failure.
+    throw new InternalServerErrorException('Webhook could not be recorded');
   }
 
   private headersAsRecord(headers: Request['headers']): Record<string, string> {
@@ -71,4 +138,8 @@ export class WebhooksController {
     }
     return record;
   }
+}
+
+function isUniqueViolation(error: { code?: string; message: string }): boolean {
+  return error.code === '23505' || error.message.includes('duplicate key');
 }

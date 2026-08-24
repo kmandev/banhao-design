@@ -23,6 +23,15 @@ const serverEnvSchema = z.object({
   // sent to any client bundle; only apps/api reads it.
   INTERNAL_TICK_SECRET: z.string().min(1),
 
+  // DEC-APP-007: the dev-only signing key for NullPaymentProvider's webhook
+  // simulator (HMAC-SHA256 over the raw webhook body — same pattern as
+  // INTERNAL_TICK_SECRET above). Optional at this schema's level so
+  // production never needs it defined; NullPaymentProvider's own constructor
+  // refuses to start if this happens to be set while NODE_ENV=production —
+  // the startup assertion DEC-APP-007 requires. Never sent to any client
+  // bundle; only apps/api reads it, and only in development.
+  PAYMENT_WEBHOOK_DEV_SECRET: z.string().min(1).optional(),
+
   // Cloudflare R2 (object storage) — optional at this schema's level
   // deliberately. Nothing in the API calls StorageService yet (no
   // merchant/restaurant upload endpoint exists to authorize a caller before
@@ -48,6 +57,7 @@ export type ServerEnv = {
   supabaseServiceRoleKey: string;
   supabaseJwtSecret: string;
   internalTickSecret: string;
+  paymentWebhookDevSecret: string | undefined;
   r2AccountId: string | undefined;
   r2AccessKeyId: string | undefined;
   r2SecretAccessKey: string | undefined;
@@ -86,6 +96,7 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEn
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseJwtSecret: env.SUPABASE_JWT_SECRET,
     internalTickSecret: env.INTERNAL_TICK_SECRET,
+    paymentWebhookDevSecret: env.PAYMENT_WEBHOOK_DEV_SECRET,
     r2AccountId: env.R2_ACCOUNT_ID,
     r2AccessKeyId: env.R2_ACCESS_KEY_ID,
     r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY,
