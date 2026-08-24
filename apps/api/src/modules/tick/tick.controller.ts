@@ -3,16 +3,20 @@ import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { TickHmacGuard } from '../../common/guards/tick-hmac.guard';
 import { PaymentEventProcessingService } from '../payments/payment-event-processing.service';
+import { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 
 export interface TickAcceptedResponse {
   accepted: true;
   /** F-2b — how many `payment_events` rows this tick claimed and processed. */
   paymentEvents: { processed: number; skipped: number };
+  /** How many timed-out `payment_attempts` rows this tick expired. */
+  paymentAttemptExpiry: { expired: number; skipped: number };
 }
 
 /**
  * `POST /internal/tick` — DEC-APP-010, transport + security boundary, now
- * also the Phase 2 payment-event processing entry point (F-2b, ADR-008).
+ * also the Phase 2 payment-event processing entry point (F-2b, ADR-008) and
+ * the payment-attempt (QR) expiry entry point (DEC-029).
  *
  * `@Public()` opts this route out of `SupabaseAuthGuard` (there is no
  * Supabase user behind a scheduler call); `TickHmacGuard` is what actually
@@ -21,15 +25,18 @@ export interface TickAcceptedResponse {
  * unauthenticated (`@Public()` alone grants nothing). Neither is touched by
  * this session.
  *
- * `paymentEvents` is additive to the response shape A-6 originally shipped
- * (`{ accepted: true }`) — a caller checking only `.accepted === true` sees
- * no change. Every other later phase's tick work (`outbox`, `jobs`, QR
- * expiry, ledger reconciliation) still does not run here — those attach
- * behind this same guard as their own domains land.
+ * `paymentEvents` and `paymentAttemptExpiry` are both additive to the
+ * response shape A-6 originally shipped (`{ accepted: true }`) — a caller
+ * checking only `.accepted === true` sees no change. Every other later
+ * phase's tick work (`outbox`, `jobs`, ledger reconciliation) still does not
+ * run here — those attach behind this same guard as their own domains land.
  */
 @Controller('internal/tick')
 export class TickController {
-  constructor(private readonly paymentEvents: PaymentEventProcessingService) {}
+  constructor(
+    private readonly paymentEvents: PaymentEventProcessingService,
+    private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
+  ) {}
 
   @Public()
   @UseGuards(TickHmacGuard)
@@ -38,6 +45,7 @@ export class TickController {
   @ApiExcludeEndpoint() // Internal-only; not part of the public OpenAPI surface.
   async handle(): Promise<TickAcceptedResponse> {
     const paymentEvents = await this.paymentEvents.processPendingEvents();
-    return { accepted: true, paymentEvents };
+    const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
+    return { accepted: true, paymentEvents, paymentAttemptExpiry };
   }
 }
