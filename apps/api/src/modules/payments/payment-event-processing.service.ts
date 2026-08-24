@@ -334,13 +334,51 @@ export class PaymentEventProcessingService {
         throw new Error(`payment_transactions insert failed: ${txError.message}`);
       }
 
-      // This exact event's transaction was already recorded — a genuine
-      // retry of this same event (self-heal: run whatever downstream step
-      // did not yet complete; every step below is independently guarded, so
-      // this is safe to attempt again unconditionally) or a concurrent
-      // claim that already finished. Never re-classified as surplus: a
-      // conflict on THIS event's own transaction id can only mean THIS
-      // event, not a distinct one.
+      // This exact event's transaction was already recorded — DEC-030's own
+      // anchor: a conflict on THIS event's own provider_transaction_id can
+      // only mean THIS event, not a distinct one. Two different reasons land
+      // here, and they must be told apart, not both funneled into
+      // `completeSuccessSideEffects`:
+      //
+      //  (a) A genuine retry of this same event whose earlier run recorded
+      //      the transaction but did not finish every downstream step
+      //      (self-heal — every step in `completeSuccessSideEffects` is
+      //      independently guarded, so calling it again is safe).
+      //  (b) This event was already correctly classified `SURPLUS_PAYMENT`
+      //      by an earlier run whose `reconciliation_cases` insert then
+      //      failed — the case must be recreated, and
+      //      `completeSuccessSideEffects` must NOT run: a surplus payment
+      //      touches no attempt/order state, exactly as the fresh-insert
+      //      branch above already decided before its own INSERT stopped
+      //      being "fresh" on this retry.
+      //
+      // Told apart by asking which transaction was recorded FIRST for this
+      // payment: if it is this event's own, (a); if it belongs to a
+      // different event, (b). This is a read for classification only — it
+      // does not replace the INSERT-conflict as DEC-030's uniqueness
+      // authority (that remains exactly the check above), the same way the
+      // "order already PAID" branch below already reads `orders` to
+      // classify self-heal vs. late payment without becoming the
+      // concurrency authority for the order transition itself.
+      if (payment.state === 'SUCCESS') {
+        const { data: earliestTransaction } = await this.supabase.admin
+          .from('payment_transactions')
+          .select('provider_transaction_id')
+          .eq('payment_id', payment.id)
+          .order('occurred_at', { ascending: true })
+          .limit(1)
+          .maybeSingle<{ provider_transaction_id: string }>();
+
+        if (earliestTransaction && earliestTransaction.provider_transaction_id !== providerTransactionId) {
+          await this.openCase('SURPLUS_PAYMENT', {
+            paymentEventId: event.id,
+            paymentId: payment.id,
+            orderId: payment.order_id,
+          });
+          return;
+        }
+      }
+
       await this.completeSuccessSideEffects(event.id, payment, attempt);
       return;
     }
@@ -427,6 +465,14 @@ export class PaymentEventProcessingService {
       .maybeSingle<{ id: string; state: string }>();
 
     if (currentOrder?.state === 'PAID') {
+      // Correctly PAID — but was it THIS transition's own history row that
+      // put it there, or did the process crash between the orders UPDATE
+      // committing and the order_status_history INSERT committing (the
+      // known F-2b crash window)? `writeOrderHistory` is not itself
+      // idempotent (no unique constraint models "one row per transition" —
+      // deliberately not added here, no migration), so existence is
+      // checked first, narrowly, only on this already-rare self-heal path.
+      await this.ensureOrderHistoryRecorded(payment.order_id);
       return;
     }
 
@@ -454,6 +500,37 @@ export class PaymentEventProcessingService {
     if (error) {
       throw new Error(`order_status_history insert failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Self-heals the `order_status_history` crash window (F-2b): only called
+   * from the "order already correctly PAID" branch of
+   * `completeSuccessSideEffects`, after the guarded `orders` UPDATE has
+   * already matched 0 rows for THIS event's own attempt — i.e. exactly the
+   * narrow, already-rare retry path where the crash window matters. Checks
+   * for the specific `PENDING_PAYMENT → PAID` row before writing, so a
+   * retry that finds the row already present (the normal case: this
+   * event's own earlier run wrote it, or a different event already did)
+   * writes nothing.
+   */
+  private async ensureOrderHistoryRecorded(orderId: string): Promise<void> {
+    const { data: existing, error } = await this.supabase.admin
+      .from('order_status_history')
+      .select('id')
+      .eq('order_id', orderId)
+      .eq('from_state', 'PENDING_PAYMENT')
+      .eq('to_state', 'PAID')
+      .maybeSingle<{ id: string }>();
+
+    if (error) {
+      throw new Error(`order_status_history existence check failed: ${error.message}`);
+    }
+
+    if (existing) {
+      return;
+    }
+
+    await this.writeOrderHistory(orderId);
   }
 
   private async openCase(

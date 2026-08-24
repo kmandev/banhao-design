@@ -465,7 +465,7 @@ describe('PaymentEventProcessingService.processOne — late payment (DEC-029)', 
     expect(orderUpdates).toHaveLength(1);
   });
 
-  it('an order already correctly PAID (self-heal, no genuine late payment) opens no case at all', async () => {
+  it('an order already correctly PAID (self-heal, no genuine late payment) opens no case at all, and recreates the missing history row (crash-window self-heal)', async () => {
     const { supabase, calls } = supabaseStub([
       { data: claimedEvent(), error: null },
       { data: paymentRow(), error: null },
@@ -476,6 +476,8 @@ describe('PaymentEventProcessingService.processOne — late payment (DEC-029)', 
       { data: null, error: null },
       { data: null, error: null }, // orders guarded update: 0 rows
       { data: { id: ORDER_ID, state: 'PAID' }, error: null }, // but it's already correctly PAID
+      { data: null, error: null }, // order_status_history existence check: missing (the crash window)
+      { data: null, error: null }, // order_status_history insert (recreated)
     ]);
     const service = new PaymentEventProcessingService(supabase);
 
@@ -483,6 +485,15 @@ describe('PaymentEventProcessingService.processOne — late payment (DEC-029)', 
 
     expect(result).toBe('processed');
     expect(calls.find((c) => c.table === 'reconciliation_cases')).toBeUndefined();
+
+    const historyInserts = calls.filter((c) => c.table === 'order_status_history' && c.op === 'insert');
+    expect(historyInserts).toHaveLength(1);
+    expect(historyInserts[0]?.payload).toMatchObject({
+      order_id: ORDER_ID,
+      from_state: 'PENDING_PAYMENT',
+      to_state: 'PAID',
+      actor_type: 'WEBHOOK',
+    });
   });
 });
 
@@ -538,6 +549,98 @@ describe('PaymentEventProcessingService.processOne — surplus payment (DEC-030)
   });
 });
 
+/**
+ * Hardening: the SURPLUS_PAYMENT self-heal loss (the case-insert throws
+ * after a genuinely fresh, distinct transaction was already recorded, then
+ * the retry lands on the unique-violation path — which previously always
+ * fell through to `completeSuccessSideEffects` without re-deriving that
+ * this event was surplus, silently losing the reconciliation signal).
+ */
+describe('PaymentEventProcessingService.processOne — SURPLUS_PAYMENT self-heal recovery', () => {
+  it('1. a retry through the unique-violation path recreates SURPLUS_PAYMENT when the earliest recorded transaction belongs to a DIFFERENT event', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent(), error: null }, // provider_event_id = PROVIDER_EVENT_ID
+      { data: paymentRow({ state: 'SUCCESS' }), error: null }, // already SUCCESS — from a different, earlier event
+      { data: null, error: null }, // payment_id backfill
+      { data: ATTEMPT_ROW, error: null },
+      // this event's own transaction already exists (recorded on a prior attempt, before the case-insert threw)
+      { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
+      // the EARLIEST transaction for this payment belongs to a different provider_event_id — proof of genuine surplus
+      { data: { provider_transaction_id: 'NULL-EVT-0' }, error: null },
+      { data: null, error: null }, // reconciliation_cases insert — recreated
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('processed');
+    const caseInsert = calls.find((c) => c.table === 'reconciliation_cases');
+    expect(caseInsert?.payload).toEqual({
+      kind: 'SURPLUS_PAYMENT',
+      payment_event_id: EVENT_ID,
+      payment_id: PAYMENT_ID,
+      order_id: ORDER_ID,
+    });
+    // Never runs the money-moving side effects for a surplus — no attempt/order write.
+    expect(calls.find((c) => c.table === 'payments' && c.op === 'update')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'payment_attempts' && c.op === 'update')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'orders')).toBeUndefined();
+    // Exactly one attempted transaction insert — never retried as a second insert.
+    const txInserts = calls.filter((c) => c.table === 'payment_transactions' && c.op === 'insert');
+    expect(txInserts).toHaveLength(1);
+  });
+
+  it('2. a successfully-opened SURPLUS_PAYMENT case is never duplicated — the payment_events claim guard alone prevents reprocessing', async () => {
+    const { supabase, calls } = supabaseStub([
+      // first call: claims and successfully recreates SURPLUS_PAYMENT
+      { data: claimedEvent(), error: null },
+      { data: paymentRow({ state: 'SUCCESS' }), error: null },
+      { data: null, error: null },
+      { data: ATTEMPT_ROW, error: null },
+      { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
+      { data: { provider_transaction_id: 'NULL-EVT-0' }, error: null },
+      { data: null, error: null }, // reconciliation_cases insert succeeds
+      // second call (a duplicate delivery / a second tick re-listing the same id): claim finds it already processed
+      { data: null, error: null },
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const first = await service.processOne(EVENT_ID);
+    const second = await service.processOne(EVENT_ID);
+
+    expect(first).toBe('processed');
+    expect(second).toBe('skipped');
+    const caseInserts = calls.filter((c) => c.table === 'reconciliation_cases' && c.op === 'insert');
+    expect(caseInserts).toHaveLength(1);
+  });
+
+  it('does not misclassify a legitimate self-heal as surplus: when the earliest recorded transaction IS this event\'s own, side effects still finish', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent(), error: null }, // provider_event_id = PROVIDER_EVENT_ID
+      { data: paymentRow({ state: 'SUCCESS' }), error: null }, // SUCCESS — but from THIS event's own earlier partial run
+      { data: null, error: null },
+      { data: ATTEMPT_ROW, error: null },
+      { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
+      // the EARLIEST transaction for this payment IS this event's own — not a surplus
+      { data: { provider_transaction_id: PROVIDER_EVENT_ID }, error: null },
+      { data: null, error: null }, // payments update -> 0 rows (already SUCCESS from the partial run)
+      { data: null, error: null }, // payment_attempts update -> 0 rows (already SUCCESS)
+      { data: { id: ORDER_ID }, error: null }, // orders -> PAID — finishing the incomplete step
+      { data: null, error: null }, // order_status_history insert
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('processed');
+    expect(calls.find((c) => c.table === 'reconciliation_cases')).toBeUndefined();
+    const orderUpdate = calls.find((c) => c.table === 'orders' && c.op === 'update');
+    expect(orderUpdate?.payload).toMatchObject({ state: 'PAID' });
+    const historyInsert = calls.find((c) => c.table === 'order_status_history');
+    expect(historyInsert).toBeDefined();
+  });
+});
+
 describe('PaymentEventProcessingService.processOne — duplicate transaction / self-heal', () => {
   it('a provider_transaction_id conflict is handled safely, completing any remaining side effects without duplicating money', async () => {
     const { supabase, calls } = supabaseStub([
@@ -560,7 +663,7 @@ describe('PaymentEventProcessingService.processOne — duplicate transaction / s
     expect(txInserts).toHaveLength(1); // the one attempt, which conflicted — never retried as a second insert
   });
 
-  it('self-heal that is already fully complete (payment SUCCESS, order PAID) is a safe no-op', async () => {
+  it('self-heal that is already fully complete (payment SUCCESS, order PAID, history already recorded) is a safe no-op', async () => {
     const { supabase, calls } = supabaseStub([
       { data: claimedEvent(), error: null },
       { data: paymentRow(), error: null },
@@ -571,6 +674,7 @@ describe('PaymentEventProcessingService.processOne — duplicate transaction / s
       { data: null, error: null }, // payment_attempts update -> 0 rows (already SUCCESS)
       { data: null, error: null }, // orders guarded update -> 0 rows (already PAID)
       { data: { id: ORDER_ID, state: 'PAID' }, error: null }, // current-state read confirms it
+      { data: { id: 'history-1' }, error: null }, // order_status_history existence check: already recorded
     ]);
     const service = new PaymentEventProcessingService(supabase);
 
@@ -578,7 +682,7 @@ describe('PaymentEventProcessingService.processOne — duplicate transaction / s
 
     expect(result).toBe('processed');
     expect(calls.find((c) => c.table === 'reconciliation_cases')).toBeUndefined();
-    expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'order_status_history' && c.op === 'insert')).toBeUndefined();
   });
 });
 
