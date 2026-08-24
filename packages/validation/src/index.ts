@@ -4,5 +4,6 @@ export * from './address';
 export * from './cart';
 export * from './order';
 export * from './payment';
+export * from './rider';
 export * from './restaurant-cover';
 export * from './menu-item-image';

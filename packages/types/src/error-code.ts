@@ -75,6 +75,19 @@ export const ERROR_CODES = [
   // error state to alarm anyone with.
   'OFFER_TAKEN',
   'NOT_RELEASABLE',
+  // Rider dispatch (Phase G-2). Both are named by V1.1 §6's own failure list
+  // for `POST /rider/offers/:id/accept`, and both are ordinary outcomes of a
+  // broadcast under DEC-020 rather than faults:
+  //
+  // `OFFER_EXPIRED` — the offer's 60-second accept window (DEC-037, BQ-020)
+  // closed before this rider tapped. The delivery is still searching; the
+  // next round will offer it again.
+  //
+  // `RIDER_HAS_ACTIVE_DELIVERY` — DEC-037 (BQ-021) limits a rider to one
+  // active delivery in Phase 1. Raised only by the guarded write that
+  // enforces it, never by a pre-check that could be raced past.
+  'OFFER_EXPIRED',
+  'RIDER_HAS_ACTIVE_DELIVERY',
 
   // --- Payment · 402 / 409 --------------------------------------------------
   // Client behaviour: retry or escalate. Never assume success.

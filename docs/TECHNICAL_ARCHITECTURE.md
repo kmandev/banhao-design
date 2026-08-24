@@ -395,9 +395,12 @@ question will be asked about specific orders by name.
 wins**. Search starts when the order reaches `MERCHANT_ACCEPTED`, in parallel
 with `PREPARING` (DEC-019). No scoring, no optimisation.
 
-Eligibility is a simple filter: rider is `APPROVED`, `ONLINE_IDLE`, within the
-service area, under the concurrent-job limit (BQ-021 — recommended 1). The
-cash-limit block is **dormant** (DEC-016).
+Eligibility is a simple filter, fixed by **DEC-037**: rider is `APPROVED`,
+online, has a valid recorded location, and holds **no active delivery** (BQ-021
+— one at a time). **There is no service-area, radius, distance or zone filter in
+Phase 1**, and no ranking or fairness score — the whole district is one pool.
+The offer window and round interval are both **60 s**. The cash-limit block is
+**dormant** (DEC-016).
 
 ### 8.3 Preventing two riders from claiming one order
 

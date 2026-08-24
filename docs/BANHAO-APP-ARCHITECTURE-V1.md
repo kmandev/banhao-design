@@ -652,8 +652,14 @@ Constrained by the H-1 and M-1 fixes, which are load-bearing.
 
 ### How a rider receives work
 
-Broadcast dispatch (DEC-020). `DispatchService` selects candidates from
-`rider_availability` (online + PostGIS proximity) and inserts
+Broadcast dispatch (DEC-020), with its parameters fixed by **DEC-037**:
+candidates are `APPROVED` + online + a valid recorded location and hold no
+active delivery, the offer window is **60 s**, and rounds re-broadcast every
+**60 s** on the existing tick. ⚠️ **No proximity, radius or zone filter is
+approved for Phase 1** — the PostGIS index stays available for a later decision,
+but a distance threshold must not be invented (DEC-037, and DEC-E-04 for the
+same reason on the customer side). `DispatchService` selects candidates from
+`rider_availability` and inserts
 `rider_assignment_attempts` rows (`round_no`, `expires_at`, `outcome =
 PENDING`). The rider app reads its own pending offers via
 `rider_assignment_attempts_select_own` — **this is the rider's only read path to

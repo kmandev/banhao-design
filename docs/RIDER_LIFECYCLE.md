@@ -96,8 +96,12 @@ stateDiagram-v2
     BLOCKED_CASH_LIMIT --> ONLINE_IDLE : cash remitted
 ```
 
-`OPEN`: whether a rider has a `working_area`/zone (BQ-022), and whether they may
-hold more than one job (BQ-021 — recommended **one at a time** for launch).
+`ACCEPTED` — **DEC-037**: no rider has a per-rider `working_area`/zone in
+Phase 1 (the working-area half of BQ-022), and a rider holds **one active
+delivery at a time** (BQ-021). Eligibility for a broadcast is `APPROVED` +
+online + a valid recorded location — **no radius, no zone, no score**.
+`OPEN`: the rest of BQ-022 — onboarding artefacts, who approves them, and
+contractor status — remains undecided and `LEGAL_REVIEW_REQUIRED`.
 
 ---
 
@@ -211,14 +215,16 @@ decision.
 
 ## 6. Offers and the retry cascade
 
-Search **starts at `MERCHANT_ACCEPTED`** — `ACCEPTED`, DEC-020. Everything below
-that is a number remains `OPEN`.
+Search **starts at `MERCHANT_ACCEPTED`** — `ACCEPTED`, DEC-020. The numbers
+below it were all `OPEN` until **DEC-037** fixed the accept window, the round
+interval and the eligibility rule on 2026-08-24.
 
 | Parameter | Status |
 |---|---|
 | Search start | **`ACCEPTED`** — at `MERCHANT_ACCEPTED`, parallel with `PREPARING` (DEC-019, DEC-020) |
-| Accept window | **`OPEN` — BQ-020.** The design contradicts itself: wireframe title `นับถอยหลัง 20 วิ`, button `รับงาน · 12 วิ`. `ai/RESEARCH/THAILAND_COMPLIANCE.md` cites "12 seconds" having read the button — **do not treat 12 s as established** |
-| Round interval | `OPEN` — proposal: re-broadcast every 30 s |
+| Accept window | **`ACCEPTED` — 60 s per offer (DEC-037, resolves BQ-020).** The design contradicted itself — wireframe title `นับถอยหลัง 20 วิ`, button `รับงาน · 12 วิ` — and `ai/RESEARCH/THAILAND_COMPLIANCE.md` cites "12 seconds" having read the button. **Neither 12 s nor 20 s is the answer.** Still a configuration value, not a constant (DEC-031) |
+| Round interval | **`ACCEPTED` — re-broadcast every 60 s (DEC-037)**, aligned to the existing one-minute tick (DEC-APP-010). The earlier "every 30 s" was a proposal and is **not** approved; it would need a second scheduler, which DEC-APP-010 forbids |
+| Eligibility for a round | **`ACCEPTED` — `APPROVED` + online + a valid recorded location (DEC-037).** **No radius, distance threshold, zone, ranking or fairness score.** One active delivery per rider (BQ-021) |
 | Escalation when food is ready | `PROPOSED` — priority flag at `READY_FOR_PICKUP` |
 | Customer notification | **`ACCEPTED`** — 5 minutes, then a 3-minute extension offer |
 | Operator alert | **`ACCEPTED` in shape** (DEC-022); timing `OPEN` |
@@ -383,11 +389,16 @@ policy shape — DEC-022) · the rider-cancellation policy (DEC-021).
 **Deferred by DEC-016 (COD disabled), not answered:** BQ-023 (rider cash float)
 · Q-004 (cash remittance limit) · the cash half of BQ-034.
 
-**Still `OPEN`:** BQ-020 (accept window — the design contradicts itself) ·
-BQ-021 (batching) · BQ-022 (onboarding, working area, contractor status —
-`LEGAL_REVIEW_REQUIRED`) · BQ-024 (cancellation compensation) · BQ-026 / BQ-029
-(**all rider and delivery numbers**) · BQ-018 (proof of delivery) ·
-BQ-015 (who bears the cost of wasted food — P0).
+**Resolved 2026-08-24 — DEC-037:** BQ-020 (accept window — **60 s**) · BQ-021
+(batching — **one active delivery per rider**) · the round interval (**60 s**) ·
+the **working-area half** of BQ-022 (eligibility is `APPROVED` + online + valid
+location, **no radius**).
 
-Dispatch **structure** may now be designed (DEC-020). Dispatch **economics** may
-not — every number is still open.
+**Still `OPEN`:** BQ-022's remainder (onboarding artefacts, who approves them,
+contractor status — `LEGAL_REVIEW_REQUIRED`) · BQ-024 (cancellation
+compensation) · BQ-026 / BQ-029 (**all rider and delivery numbers**) · BQ-018
+(proof of delivery) · BQ-015 (who bears the cost of wasted food — P0).
+
+Dispatch **structure** may now be designed (DEC-020) and its **parameters** are
+fixed (DEC-037). Dispatch **economics** may not be built — every rider *money*
+number is still open (BQ-029).

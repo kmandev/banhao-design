@@ -46,6 +46,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-034** | **Phase 1 financial integrity without a zero-sum database trigger** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
 | **DEC-035** | **Phase 1 delivery fee is flat ฿10 (1000 satang), no distance component** | **ACCEPTED** | **2026-08-24** | `docs/BUSINESS_RULES.md` § 5.2, BQ-026 |
 | **DEC-036** | **Phase 1 service fee is a fixed ฿5 (500 satang)** | **ACCEPTED** | **2026-08-24** | `docs/BUSINESS_RULES.md` § 5.3, BQ-027 |
+| **DEC-037** | **Phase 1 dispatch parameters: 60 s accept window, one active delivery per rider, no eligibility radius** | **ACCEPTED** | **2026-08-24** | `docs/RIDER_LIFECYCLE.md` § 6, BQ-020, BQ-021, BQ-022 (part) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -1948,6 +1949,146 @@ BQ-027 (amount resolved; refundability still `OPEN`, Phase F)
 
 Resolves the `OPEN — NUMERIC PRICING` half of DEC-024, which otherwise stands
 unchanged. / None.
+
+---
+
+## DEC-037 — Phase 1 broadcast dispatch parameters: 60 s accept window, one active delivery per rider, no radius
+
+**Status:** ACCEPTED · **Date:** 2026-08-24 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+The four dispatch parameters DEC-020 deliberately left open are now fixed for
+Phase 1:
+
+| Parameter | Phase 1 value | Resolves |
+|---|---|---|
+| Rider accept window per offer | **60 seconds** | **BQ-020** |
+| Concurrent deliveries per rider | **1 active delivery** | **BQ-021** |
+| Dispatch eligibility | **`APPROVED` + online + a valid recorded location** — **no numeric radius, no distance threshold, no zone, no ranking, no fairness or proximity score** | **BQ-022, working-area half only** |
+| Dispatch round interval | **60 seconds**, aligned to the existing one-minute tick (DEC-APP-010) | the `OPEN` round interval in `RIDER_LIFECYCLE.md` § 6 |
+
+**DEC-020 is unchanged and remains authoritative**: broadcast to eligible online
+riders, first valid acceptance wins, no scoring or route optimisation, with
+operator manual dispatch (DEC-032) as an always-available override. This
+decision supplies DEC-020's missing numbers; it does not revisit the model.
+
+⚠️ **BQ-022 is only partly resolved.** What a rider submits, who approves it,
+and the contractual relationship remain **`OPEN` and `LEGAL_REVIEW_REQUIRED`**.
+This decision fixes the *dispatch eligibility filter* and nothing else — see
+"Consequences" below.
+
+### Why
+
+Product Owner decision, 2026-08-24.
+
+- **60 s accept window.** No document ever established a value: the design
+  contradicts itself (wireframe title `นับถอยหลัง 20 วิ`, button
+  `รับงาน · 12 วิ`), and `ai/RESEARCH/THAILAND_COMPLIANCE.md` §5's "12 seconds"
+  was read off the button, which `BQ-020` records explicitly as *not*
+  established. 60 s is longer than every figure the design suggested, which
+  reduces — rather than increases — the time pressure on a rider.
+- **One active delivery.** The Driver App is designed as a one-button-per-state
+  single-job flow; batching needs a UI that does not exist. It is also the
+  option the approved application architecture already assumes: V1.1 § 6 lists
+  `RIDER_HAS_ACTIVE_DELIVERY` as an error of
+  `POST /rider/offers/:id/accept`, which is meaningful only under this rule.
+- **No radius.** The inputs a distance filter needs are not there, for the same
+  reason DEC-035 rejected distance-based pricing: customer coordinates are null
+  (DQ-04-07), no geocoding or routing provider is selected (TQ-004 `OPEN`), and
+  BQ-008 / BQ-003 leave service area and radius undecided. DEC-E-04 already
+  refused to invent exactly this number for `ADDRESS_OUT_OF_ZONE`. DEC-020's own
+  rationale — *"with 8–12 riders the whole district is one pool"* — is the
+  argument for not filtering the pool at all in Phase 1.
+- **60 s rounds.** DEC-APP-010 fixes one Cloudflare Worker cron POSTing
+  `/internal/tick` every 60 seconds and forbids a second scheduler. A 30-second
+  round (the `RIDER_LIFECYCLE.md` § 6 *proposal*) could not be delivered by that
+  tick without new infrastructure, which DEC-APP-010 rules out.
+
+### Alternatives
+
+- **20 s / 12 s accept window** (BQ-020 options A and B). Rejected: both derive
+  from a self-contradictory wireframe, and a short timer is the working
+  condition `THAILAND_COMPLIANCE.md` §5 flags as a reclassification factor.
+- **No timer at all** (BQ-020 option C). Rejected — an offer that never expires
+  cannot be re-broadcast, and `rider_assignment_attempts.expires_at` exists
+  precisely to bound it.
+- **Batching two orders** (BQ-021 options B and C). Rejected for Phase 1; a
+  capacity lever to pull after measuring, not before.
+- **A provisional eligibility radius** (1 / 3 / 5 / 10 km, or a district
+  polygon). Rejected — that is inventing BQ-008's answer, and a rider wrongly
+  excluded from a broadcast is invisible to everyone.
+
+### Consequences
+
+- **No schema change, no migration, no new table, no new index.** The locked
+  schema already carries everything: `rider_assignment_attempts.expires_at` is
+  nullable with no default, so a 60 s window is `offered_at + interval
+  '60 seconds'` written by the dispatcher; `riders.status`,
+  `rider_availability.is_online` and `rider_availability.location` supply the
+  whole eligibility filter.
+- ⚠️ **`DBQ-007` becomes answerable but is NOT answered here.** One active
+  delivery per rider is enforced **in the service layer**, as
+  `docs/DATABASE_DESIGN.md` § 11 already specifies. A partial unique index on
+  `deliveries (rider_id)` would need a migration and the schema is LOCKED —
+  this decision authorises neither.
+- ⚠️ **The residual same-rider race is real and unresolved.**
+  `rider_assignments_one_active` is unique on `delivery_id`, so it guarantees
+  *one rider per delivery* — it does **not** guarantee *one delivery per rider*.
+  Two offers accepted by the same rider in the same instant touch different
+  `deliveries` rows and do not block each other under `READ COMMITTED`. The G2
+  implementation must put the check inside the guarded `UPDATE`'s `WHERE`
+  clause (ADR-003 — never `SELECT`-then-check-then-`UPDATE`) and treat the
+  remaining window as a known limitation recoverable by
+  `release_rider_assignment()` plus operator action (DEC-031, DEC-032). Closing
+  it atomically would require a database constraint, therefore a new decision.
+- **Timer shape is unchanged.** `ORDER_LIFECYCLE.md` § 4 and DEC-031 still
+  require timers to be configuration rather than constants. This decision fixes
+  the *value*, not where it is stored.
+- ⚠️ **A 60 s window on a 60 s tick means an offer is observed as expired at the
+  following tick.** The dispatcher must therefore treat `expires_at` as the
+  authority at read time, not the moment the sweeper happens to run.
+- ⚠️ **No rider location write path exists.**
+  `supabase/migrations/20260811000011_rls_policies.sql` grants a rider
+  `update (is_online)` and nothing else, and no location endpoint is defined in
+  V1.1. Until an API-side write path exists, `rider_availability.location` is
+  null for every rider and the "valid location" clause excludes everyone. That
+  path is ordinary Phase G work — the *current position* column is already
+  sanctioned; only **location history** is gated (Q-012, DBQ-005) — but it must
+  land before broadcast dispatch can select a candidate in production.
+- ⚠️ **This decision concludes nothing about lawfulness.** BQ-022's contractual
+  half and Q-002 remain `LEGAL_REVIEW_REQUIRED`, and
+  `THAILAND_COMPLIANCE.md` §5 names algorithmic dispatch and accept timers as
+  factors a worker-reclassification argument turns on. Counsel may require this
+  window to change; that would be a new decision, not a bug.
+- Rider economics stay `OPEN`. **`deliveries.rider_earning_satang` remains
+  `NULL`** — BQ-029 is untouched and no default may be invented.
+- G2 is money-neutral: no payment, refund, reconciliation, ledger, commission or
+  settlement behaviour is created, changed, or implied.
+
+### Evidence
+
+Product Owner instruction, 2026-08-24 ("BANHAO — G2 DISPATCH POLICY LOCK").
+
+### Related Requirements
+
+BQ-020 (resolved) · BQ-021 (resolved) · BQ-022 (working-area half only; the rest
+`OPEN` + `LEGAL_REVIEW_REQUIRED`) · BQ-029 (rider earnings, still `OPEN`) ·
+DBQ-007 (unblocked as a question; not answered) · Q-012, Q-002
+(`LEGAL_REVIEW_REQUIRED`, untouched)
+
+### Related Architecture
+
+`docs/RIDER_LIFECYCLE.md` § 3, § 6 · `docs/ORDER_LIFECYCLE.md` § 4 ·
+`docs/TECHNICAL_ARCHITECTURE.md` § 8.2 ·
+`docs/BANHAO-APP-ARCHITECTURE-V1.md` § 9, DEC-APP-010 ·
+`supabase/migrations/20260811000008_rider_domain.sql` ·
+`supabase/migrations/20260811000009_delivery_domain.sql`
+
+### Supersedes / Superseded By
+
+Supplies the parameters DEC-020 left `OPEN`; DEC-020 itself stands unchanged. /
+None.
 
 ---
 

@@ -45,6 +45,10 @@ const STATUS_BY_CODE: Record<ErrorCode, HttpStatus> = {
   // Concurrency — also 409, and the reason status alone cannot carry meaning.
   OFFER_TAKEN: HttpStatus.CONFLICT,
   NOT_RELEASABLE: HttpStatus.CONFLICT,
+  // Rider dispatch (Phase G-2, DEC-037). Both are 409: the request was
+  // well-formed and the rider did nothing wrong — the world moved first.
+  OFFER_EXPIRED: HttpStatus.CONFLICT,
+  RIDER_HAS_ACTIVE_DELIVERY: HttpStatus.CONFLICT,
 
   // Payment
   PAYMENT_ALREADY_SUCCEEDED: HttpStatus.CONFLICT,

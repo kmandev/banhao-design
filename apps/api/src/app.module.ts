@@ -10,6 +10,7 @@ import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { RiderModule } from './modules/rider/rider.module';
 import { TickModule } from './modules/tick/tick.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -46,6 +47,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
     AuthModule,
     PaymentsModule,
     WebhooksModule,
+    RiderModule,
     TickModule,
   ],
   providers: [

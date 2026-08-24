@@ -203,8 +203,9 @@ The customer must still be told rather than left in silence; the existing
 | Webhook wait before reconciliation | 10 minutes | `ACCEPTED` |
 | Customer no-rider notification | 5 minutes | `ACCEPTED` |
 | Customer "keep waiting" extension | 3 minutes | `ACCEPTED` |
-| Rider accept window per offer | 20 s (title) vs 12 s (button) — contradictory | **`OPEN` — BQ-020** |
-| Rider search retry interval / escalation | — | **`OPEN`** — DEC-022 sets the shape, not the timings |
+| Rider accept window per offer | **60 s** | **`ACCEPTED`** — DEC-037 (resolves BQ-020; the design's 20 s / 12 s were contradictory and neither is the answer) |
+| Rider broadcast round interval | **60 s** | **`ACCEPTED`** — DEC-037, aligned to the one-minute tick (DEC-APP-010) |
+| Rider search escalation timings | — | **`OPEN`** — DEC-022 sets the shape, not the timings; DEC-037 fixes the round interval only |
 | Rider wait at customer before failing | — | **`OPEN` — BQ-017** |
 
 All timers must be **configuration**, not constants (DEC-031).

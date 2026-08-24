@@ -448,9 +448,14 @@ Other rules:
   value still `OPEN` (Q-004).
 - `ACCEPTED` — riders pay a platform fee out of their earnings
   (`ค่าธรรมเนียมแพลตฟอร์ม −฿38` in `D-13`). The rate is `OPEN` (BQ-029).
-- `OPEN` — accept-window duration (BQ-020, the design contradicts itself),
-  batching (BQ-021), cancellation compensation (BQ-024), and **all rider
-  numbers**.
+- `ACCEPTED` **DEC-037** — the Phase 1 dispatch parameters: a **60-second**
+  rider accept window, **60-second** broadcast rounds on the existing tick, and
+  **one active delivery per rider**. Eligibility is `APPROVED` + online + a
+  valid recorded location — **no radius, zone or ranking**. Resolves BQ-020 and
+  BQ-021, and the working-area half of BQ-022.
+- `OPEN` — cancellation compensation (BQ-024) and **all rider money numbers**
+  (BQ-029); the rest of BQ-022 (onboarding, approval, contractor status) is
+  `OPEN` and `LEGAL_REVIEW_REQUIRED`.
 - **Deferred with COD** — BQ-023, whether the rider fronts cash to the merchant
   at pickup. Unanswered; it returns the day COD does.
 

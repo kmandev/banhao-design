@@ -96,8 +96,13 @@ is Phase F scope rather than an order-creation blocker.
 
 Q-003, Q-009, Q-011, Q-012, Q-015, Q-016, Q-018, Q-019 ·
 BQ-001, BQ-002, BQ-003, BQ-005, BQ-006, BQ-007, BQ-008, BQ-011, BQ-013,
-BQ-016, BQ-017, BQ-018, BQ-020, BQ-021, BQ-022, BQ-024, BQ-029, BQ-031,
+BQ-016, BQ-017, BQ-018, BQ-022 (**onboarding, approval and contractor status
+only** — the working-area half is resolved by DEC-037), BQ-024, BQ-029, BQ-031,
 BQ-032, BQ-034, BQ-035
+
+**BQ-020 and BQ-021 left this list on 2026-08-24 — DEC-037.** The rider accept
+window is 60 s, dispatch rounds are 60 s, and a rider holds one active delivery
+at a time.
 
 ### P2 — refinement
 
@@ -824,10 +829,22 @@ cancellation target missed.
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER
-status: OPEN
-blocks: Dispatch engine, Driver App
-related: BQ-019
+status: RESOLVED (DEC-037)
+decision: DEC-037
+blocks: nothing further
+related: BQ-019, BQ-021, BQ-022
 ```
+
+> **DECIDED 2026-08-24 — DEC-037.** The rider accept window is **60 seconds**;
+> an offer that is not accepted becomes `EXPIRED` and the delivery enters the
+> next round. Rounds re-broadcast every **60 seconds**, aligned to the existing
+> one-minute tick (DEC-APP-010) — the "every 30 s" figure in
+> `RIDER_LIFECYCLE.md` § 6 was a proposal and is **not** approved. Neither 12 s
+> nor 20 s is the answer; both came from a self-contradictory wireframe. The
+> discussion below is retained as the record of how the decision was reached —
+> read it as history, not as an open question. ⚠️ Timers remain **configuration,
+> not constants** (DEC-031, `ORDER_LIFECYCLE.md` § 4): the value is decided,
+> where it is stored is not changed by this.
 
 **Question:** How long does a rider have to accept, and what happens when
 everyone declines?
@@ -861,9 +878,21 @@ orders sit unassigned.
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER
-status: OPEN
-blocks: Dispatch engine, earnings model
+status: RESOLVED (DEC-037)
+decision: DEC-037
+blocks: nothing further — rider earnings remain BQ-029
+related: BQ-020, DBQ-007
 ```
+
+> **DECIDED 2026-08-24 — DEC-037.** Option **A — one active delivery per
+> rider**. A rider holding an active delivery is not eligible for a Phase 1
+> dispatch offer. No batching, no multi-order capacity, no route optimisation.
+> This is enforced **in the service layer**, not by a database constraint:
+> **DBQ-007 is unblocked as a question but deliberately not answered**, because
+> the schema is LOCKED and a partial unique index would need a migration.
+> ⚠️ `rider_assignments_one_active` guarantees one *rider per delivery*, not one
+> *delivery per rider* — see DEC-037's Consequences for the residual race. The
+> discussion below is retained as history.
 
 **Question:** May a rider hold more than one active order at a time?
 
@@ -891,10 +920,25 @@ before.
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER + LEGAL_REVIEW_REQUIRED
-status: OPEN
-blocks: Driver App, admin approval, rider agreement
-related: Q-002, THAILAND_COMPLIANCE §5
+status: PARTLY RESOLVED — WORKING AREA (DEC-037) · OPEN — ONBOARDING, APPROVAL, CONTRACTOR STATUS · LEGAL_REVIEW_REQUIRED
+decision: DEC-037 (dispatch eligibility only)
+blocks: Driver App, admin approval, rider agreement — no longer the dispatch engine
+related: Q-002, Q-012, THAILAND_COMPLIANCE §5
 ```
+
+> **PARTLY DECIDED 2026-08-24 — DEC-037, working area only.** Phase 1 dispatch
+> eligibility is **`APPROVED` + online + a valid recorded location**, with **no
+> numeric radius, no distance threshold, no zone, and no ranking or fairness
+> score**. No rider has a per-rider working area at launch; the whole district
+> is one pool, which is DEC-020's own rationale.
+>
+> ⚠️ **Everything else in this question is still `OPEN` and
+> `LEGAL_REVIEW_REQUIRED`**: what a rider submits, who approves it, and the
+> contractual relationship. DEC-037 consumes the existing `riders.status`
+> flag — it does not define how a rider comes to hold it, and it concludes
+> nothing about lawfulness. `THAILAND_COMPLIANCE.md` §5 names algorithmic
+> dispatch and accept timers among the factors a reclassification argument turns
+> on; counsel may require the 60 s window to change.
 
 **Question:** What does a rider submit, who approves it, is there a defined
 working area per rider, and what is the contractual relationship?

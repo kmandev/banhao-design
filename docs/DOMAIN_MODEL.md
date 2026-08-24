@@ -376,8 +376,9 @@ migrations (§2 of the Step 4 brief).
   Under **DEC-020** a round is a **broadcast**: one round produces one offer per
   eligible online rider, and the first acceptance wins atomically.
 - **Security** — rider sees their own offers; operator sees all.
-- **Status** — the dispatch model is `ACCEPTED` (DEC-020); the entity shape is
-  `PROPOSED` and the accept-window duration is `OPEN` (BQ-020).
+- **Status** — the dispatch model is `ACCEPTED` (DEC-020) and the accept-window
+  duration is `ACCEPTED` at **60 s** (DEC-037, resolving BQ-020); the entity
+  shape is still `PROPOSED`.
 
 #### `Rider`
 - **Purpose** — a delivery partner.
