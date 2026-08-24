@@ -51,3 +51,29 @@ export interface RiderOfferAcceptResponse {
   state: string;
   riderId: string;
 }
+
+/**
+ * `POST /api/v1/rider/deliveries/:id/cancel` — DEC-021's rider-cancel/release
+ * slice (Phase G-3). Same shape as `cancelOrderRequestSchema`: a short,
+ * optional free-text reason, `.strict()` so no other field — in particular no
+ * rider id — can be smuggled into a body whose identity is otherwise always
+ * resolved server-side from the verified JWT and database membership.
+ */
+export const riderCancelDeliveryRequestSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export type RiderCancelDeliveryRequest = z.infer<typeof riderCancelDeliveryRequestSchema>;
+
+/**
+ * `POST /api/v1/rider/deliveries/:id/cancel` — the delivery, released back to
+ * search. Carries no money field, same reasoning as `RiderOfferAcceptResponse`.
+ */
+export interface RiderCancelDeliveryResponse {
+  deliveryId: string;
+  /** Always `RIDER_SEARCHING` on success — `release_rider_assignment`'s only outcome (DEC-021). */
+  state: string;
+  riderId: string;
+}

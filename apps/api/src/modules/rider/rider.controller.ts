@@ -9,7 +9,9 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import {
+  riderCancelDeliveryRequestSchema,
   riderLocationRequestSchema,
+  type RiderCancelDeliveryResponse,
   type RiderLocationResponse,
   type RiderOfferAcceptResponse,
 } from '@banhao/validation';
@@ -18,18 +20,20 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { parseOrThrow } from '../../common/validation/parse';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
+import { DeliveryReleaseService } from './delivery-release.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
 import { RiderLocationService } from './rider-location.service';
 
 /**
  * The rider surface — Phase G-2 (DEC-020 broadcast dispatch, DEC-037's
- * parameters). Two routes, both commands rather than `PATCH { … }` (ADR-009),
- * both under the `/api/v1` base V1.1 §6 fixes.
+ * parameters) plus Phase G-3 (DEC-021 rider cancel/release). Three routes, all
+ * commands rather than `PATCH { … }` (ADR-009), all under the `/api/v1` base
+ * V1.1 §6 fixes.
  *
  * `@Roles('RIDER')` is the approval gate: `CapabilitiesService` resolves
  * `capabilities.rider` only for `riders.status = 'APPROVED'`, so a pending,
  * suspended or deactivated rider is refused here with `403 FORBIDDEN` before
- * any service runs — which is why neither service re-checks approval and why
+ * any service runs — which is why no service re-checks approval and why
  * V1.1 §6's `RIDER_NOT_APPROVED` needs no catalogue code of its own.
  *
  * There is deliberately **no** route to read offers: DEC-APP-008 has the driver
@@ -44,6 +48,7 @@ export class RiderController {
   constructor(
     private readonly location: RiderLocationService,
     private readonly offers: OfferAcceptanceService,
+    private readonly releases: DeliveryReleaseService,
   ) {}
 
   /**
@@ -81,6 +86,28 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderOfferAcceptResponse> {
     return this.offers.acceptOffer(requireUser(user), id);
+  }
+
+  /**
+   * A rider releases the delivery currently assigned to them — DEC-021. The
+   * order is never touched (DEC-018); the delivery goes back to
+   * `RIDER_SEARCHING` so the existing dispatch tick can offer it again.
+   */
+  @Post('deliveries/:id/cancel')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The delivery, released back to RIDER_SEARCHING' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiNotFoundResponse({ description: 'Delivery not found' })
+  @ApiConflictResponse({ description: 'NOT_RELEASABLE' })
+  async cancelDelivery(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<RiderCancelDeliveryResponse> {
+    const input = parseOrThrow(riderCancelDeliveryRequestSchema, body ?? {});
+    return this.releases.cancelDelivery(requireUser(user), id, input.reason);
   }
 }
 

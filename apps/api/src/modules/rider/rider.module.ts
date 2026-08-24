@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { RiderController } from './rider.controller';
 import { RiderLocationService } from './rider-location.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
+import { DeliveryReleaseService } from './delivery-release.service';
 import { DispatchService } from './dispatch.service';
 import { DISPATCH_STRATEGY } from './dispatch-strategy.interface';
 import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
@@ -28,6 +29,7 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
     { provide: DISPATCH_STRATEGY, useClass: BroadcastDispatchStrategy },
     RiderLocationService,
     OfferAcceptanceService,
+    DeliveryReleaseService,
     DispatchService,
   ],
   exports: [DispatchService],

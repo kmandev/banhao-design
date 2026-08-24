@@ -2,6 +2,7 @@ import { RiderLocationService } from './rider-location.service';
 import { RiderController } from './rider.controller';
 import { DomainError } from '../../common/errors/domain-error';
 import type { OfferAcceptanceService } from './offer-acceptance.service';
+import type { DeliveryReleaseService } from './delivery-release.service';
 import type { AuthenticatedUser } from '../../common/types';
 import type { SupabaseService } from '../../supabase/supabase.service';
 
@@ -179,13 +180,14 @@ describe('RiderLocationService.updateLocation', () => {
 
 describe('RiderController — the location route accepts no rider identity from the caller', () => {
   const offers = {} as OfferAcceptanceService;
+  const releases = {} as DeliveryReleaseService;
 
   it('passes the JWT-resolved rider id to the service, ignoring anything the body might claim', async () => {
     const updateLocation = jest.fn().mockResolvedValue({
       riderId: RIDER_ID,
       locationUpdatedAt: '2026-08-24T10:00:00.000Z',
     });
-    const controller = new RiderController({ updateLocation } as unknown as RiderLocationService, offers);
+    const controller = new RiderController({ updateLocation } as unknown as RiderLocationService, offers, releases);
 
     await controller.updateLocation(riderUser(RIDER_ID), BUNTHARIK);
 
@@ -194,7 +196,7 @@ describe('RiderController — the location route accepts no rider identity from 
 
   it('rejects a body that tries to name a rider — the schema is strict, so it never reaches the service', async () => {
     const updateLocation = jest.fn();
-    const controller = new RiderController({ updateLocation } as unknown as RiderLocationService, offers);
+    const controller = new RiderController({ updateLocation } as unknown as RiderLocationService, offers, releases);
 
     await expect(
       controller.updateLocation(riderUser(RIDER_ID), { ...BUNTHARIK, riderId: OTHER_RIDER_ID }),
@@ -204,7 +206,7 @@ describe('RiderController — the location route accepts no rider identity from 
 
   it('rejects a half coordinate pair, which would leave the rider undispatchable', async () => {
     const updateLocation = jest.fn();
-    const controller = new RiderController({ updateLocation } as unknown as RiderLocationService, offers);
+    const controller = new RiderController({ updateLocation } as unknown as RiderLocationService, offers, releases);
 
     await expect(
       controller.updateLocation(riderUser(RIDER_ID), { lat: BUNTHARIK.lat }),
