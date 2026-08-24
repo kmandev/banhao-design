@@ -116,6 +116,58 @@ describe('NullPaymentWebhookSimulator', () => {
     });
   });
 
+  describe('signPaymentFailed — round trip against the real verifier', () => {
+    it('produces a signature NullPaymentProvider.verifyWebhookSignature accepts', () => {
+      const simulator = new NullPaymentWebhookSimulator();
+      const provider = new NullPaymentProvider();
+
+      const { rawBody, headers } = simulator.signPaymentFailed({ providerPaymentId: 'NULL-payment-1' });
+      const result = provider.verifyWebhookSignature(rawBody, headers);
+
+      expect(result).toMatchObject({ verified: true, providerPaymentId: 'NULL-payment-1', providerEvent: 'payment.failed' });
+    });
+
+    it('does not require amountSatang — a failure moves no money', () => {
+      const simulator = new NullPaymentWebhookSimulator();
+      const { rawBody } = simulator.signPaymentFailed({ providerPaymentId: 'p-1' });
+      const payload = JSON.parse(rawBody);
+
+      expect(payload.amountSatang).toBeUndefined();
+    });
+
+    it('carries an optional reason through to the payload, or null when omitted', () => {
+      const simulator = new NullPaymentWebhookSimulator();
+
+      const withReason = JSON.parse(simulator.signPaymentFailed({ providerPaymentId: 'p-1', reason: 'insufficient_funds' }).rawBody);
+      const withoutReason = JSON.parse(simulator.signPaymentFailed({ providerPaymentId: 'p-1' }).rawBody);
+
+      expect(withReason.reason).toBe('insufficient_funds');
+      expect(withoutReason.reason).toBeNull();
+    });
+
+    it('generates a fresh providerEventId per call by default, reuses an explicit one when given', () => {
+      const simulator = new NullPaymentWebhookSimulator();
+
+      const first = JSON.parse(simulator.signPaymentFailed({ providerPaymentId: 'p-1' }).rawBody);
+      const second = JSON.parse(simulator.signPaymentFailed({ providerPaymentId: 'p-1' }).rawBody);
+      expect(first.providerEventId).not.toBe(second.providerEventId);
+
+      const fixed1 = JSON.parse(simulator.signPaymentFailed({ providerPaymentId: 'p-1', providerEventId: 'fixed-id' }).rawBody);
+      const fixed2 = JSON.parse(simulator.signPaymentFailed({ providerPaymentId: 'p-1', providerEventId: 'fixed-id' }).rawBody);
+      expect(fixed1.providerEventId).toBe('fixed-id');
+      expect(fixed2.providerEventId).toBe('fixed-id');
+    });
+
+    it('the synthetic event is unambiguously distinguishable from real provider data', () => {
+      const simulator = new NullPaymentWebhookSimulator();
+      const { rawBody } = simulator.signPaymentFailed({ providerPaymentId: 'p-1' });
+      const payload = JSON.parse(rawBody);
+
+      expect(payload.simulated).toBe(true);
+      expect(payload.source).toBe('NullPaymentWebhookSimulator');
+    });
+  });
+
   describe('cross-secret isolation', () => {
     it('a simulator signed under one secret is rejected by a verifier configured with a different one', () => {
       env({ paymentWebhookDevSecret: 'secret-a' });

@@ -280,6 +280,7 @@ describe('Compatibility with PaymentEventProcessingService.processOne — late p
       id: EVENT_ID,
       provider: PROVIDER,
       provider_event_id: PROVIDER_EVENT_ID,
+      event_type: 'payment.succeeded',
       raw_payload: {
         providerPaymentId: PROVIDER_PAYMENT_ID,
         amountSatang: AMOUNT,

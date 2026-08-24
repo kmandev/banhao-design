@@ -77,11 +77,12 @@ const ATTEMPT_ID = 'attempt-1';
 const ORDER_ID = 'order-1';
 const AMOUNT = 7500;
 
-function claimedEvent(overrides: { raw_payload?: unknown } = {}) {
+function claimedEvent(overrides: { raw_payload?: unknown; event_type?: string } = {}) {
   return {
     id: EVENT_ID,
     provider: PROVIDER,
     provider_event_id: PROVIDER_EVENT_ID,
+    event_type: overrides.event_type ?? 'payment.succeeded',
     raw_payload: overrides.raw_payload ?? {
       simulated: true,
       eventType: 'payment.succeeded',
@@ -271,6 +272,146 @@ describe('PaymentEventProcessingService.processOne — amount validation', () =>
 
     const caseInsert = calls.find((c) => c.table === 'reconciliation_cases');
     expect(caseInsert?.payload).toMatchObject({ kind: 'AMOUNT_MISMATCH' });
+  });
+});
+
+describe('PaymentEventProcessingService.processOne — payment.failed (PROCESSING --> FAILED)', () => {
+  it('a normal failure event transitions payments and the current attempt to FAILED, moves no money, touches no order', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.failed', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID, reason: 'insufficient_funds' } }), error: null }, // claim
+      { data: paymentRow(), error: null }, // payments select
+      { data: null, error: null }, // payment_events.payment_id backfill
+      { data: null, error: null }, // payments -> FAILED
+      { data: ATTEMPT_ROW, error: null }, // payment_attempts select (current attempt)
+      { data: null, error: null }, // payment_attempts -> FAILED
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('processed');
+
+    const paymentUpdate = calls.find((c) => c.table === 'payments' && c.op === 'update');
+    expect(paymentUpdate?.payload).toMatchObject({ state: 'FAILED', failure_reason: 'insufficient_funds' });
+    expect(paymentUpdate?.eq).toMatchObject({ id: PAYMENT_ID });
+    expect(paymentUpdate?.in).toMatchObject({ state: ['PENDING', 'PROCESSING'] });
+
+    const attemptUpdate = calls.find((c) => c.table === 'payment_attempts' && c.op === 'update');
+    expect(attemptUpdate?.payload).toMatchObject({ state: 'FAILED', failure_reason: 'insufficient_funds' });
+    expect(attemptUpdate?.eq).toMatchObject({ id: ATTEMPT_ID, state: 'PENDING' });
+
+    expect(calls.find((c) => c.table === 'payment_transactions')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'orders')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'reconciliation_cases')).toBeUndefined();
+  });
+
+  it('a failure event with no reason leaves failure_reason null, never undefined-coerced', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.failed', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: null },
+      { data: ATTEMPT_ROW, error: null },
+      { data: null, error: null },
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    await service.processOne(EVENT_ID);
+
+    const paymentUpdate = calls.find((c) => c.table === 'payments' && c.op === 'update');
+    expect(paymentUpdate?.payload).toMatchObject({ failure_reason: null });
+  });
+
+  it('an unresolvable providerPaymentId on a failure event still opens UNMATCHED_EVENT, same as success', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.failed', raw_payload: {} }), error: null },
+      { data: null, error: null }, // reconciliation_cases insert
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('processed');
+    expect(calls.find((c) => c.table === 'payments')).toBeUndefined();
+    const caseInsert = calls.find((c) => c.table === 'reconciliation_cases');
+    expect(caseInsert?.payload).toMatchObject({ kind: 'UNMATCHED_EVENT' });
+  });
+
+  it('idempotent retry: a payment already FAILED matches 0 rows on both guarded updates and is silently skipped, no error', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.failed', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
+      { data: paymentRow({ state: 'FAILED' }), error: null },
+      { data: null, error: null },
+      { data: null, error: null }, // payments update -> 0 rows, already FAILED
+      { data: { id: ATTEMPT_ID, state: 'FAILED' }, error: null },
+      { data: null, error: null }, // attempt update -> 0 rows, already FAILED
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('processed');
+    expect(calls.find((c) => c.table === 'reconciliation_cases')).toBeUndefined();
+  });
+
+  it('race lost to the success path: a failure event arriving after SUCCESS never overwrites it (guarded UPDATE matches 0 rows)', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.failed', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
+      { data: paymentRow({ state: 'SUCCESS' }), error: null },
+      { data: null, error: null },
+      { data: null, error: null }, // payments update -> 0 rows, IN (PENDING, PROCESSING) excludes SUCCESS
+      { data: { id: ATTEMPT_ID, state: 'SUCCESS' }, error: null },
+      { data: null, error: null }, // attempt update -> 0 rows, already SUCCESS not PENDING
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('processed');
+    const paymentUpdate = calls.find((c) => c.table === 'payments' && c.op === 'update');
+    // The guard itself is what protects SUCCESS — proven by asserting the
+    // exact WHERE clause never includes SUCCESS as a matchable state.
+    expect(paymentUpdate?.in.state).toEqual(['PENDING', 'PROCESSING']);
+    expect(calls.find((c) => c.table === 'reconciliation_cases')).toBeUndefined();
+  });
+
+  it('a payment with no attempts yet still transitions payments -> FAILED without erroring', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.failed', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: null }, // payments -> FAILED
+      { data: null, error: null }, // payment_attempts select -> none found
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('processed');
+    expect(calls.find((c) => c.table === 'payment_attempts' && c.op === 'update')).toBeUndefined();
+  });
+});
+
+describe('PaymentEventProcessingService.processOne — unrecognized event type (fail closed)', () => {
+  it('an event type that is neither payment.succeeded nor payment.failed releases the claim for retry, never recorded as either', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.refunded', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null }, // payment_events.payment_id backfill
+      { data: null, error: null }, // release update
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    const result = await service.processOne(EVENT_ID);
+
+    expect(result).toBe('skipped');
+    expect(calls.find((c) => c.table === 'payments' && c.op === 'update')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'payment_transactions')).toBeUndefined();
+    const releaseCall = calls[calls.length - 1];
+    expect(releaseCall?.table).toBe('payment_events');
+    expect(releaseCall?.payload).toMatchObject({ processed_at: null });
+    expect(releaseCall?.payload?.processing_error).toContain('Unrecognized');
   });
 });
 

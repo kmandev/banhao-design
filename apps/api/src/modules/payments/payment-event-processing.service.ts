@@ -11,8 +11,15 @@ interface ClaimedEventRow {
   id: string;
   provider: string;
   provider_event_id: string;
+  event_type: string;
   raw_payload: unknown;
 }
+
+/** The one event type this service has ever recognized — the existing, unchanged success path. */
+const SUCCEEDED_EVENT_TYPE = 'payment.succeeded';
+
+/** `PROCESSING --> FAILED : provider reports failure` — `PAYMENT_LIFECYCLE.md` § 3. */
+const FAILED_EVENT_TYPE = 'payment.failed';
 
 /** `payments`, the columns processing needs. */
 interface PaymentRow {
@@ -63,6 +70,21 @@ interface PaymentAttemptRow {
  * yet run) or, when the payment was already `SUCCESS` from a *different*
  * event, a real DEC-030 surplus.
  *
+ * ## Event type — `payment.succeeded` vs `payment.failed`
+ *
+ * `event_type` (persisted verbatim from `WebhooksController`'s own
+ * `providerEvent`, F-2a) decides the branch: `payment.succeeded` runs the
+ * original F-2b money path unchanged; `payment.failed` runs
+ * `handleFailureEvent` — `PAYMENT_LIFECYCLE.md` § 3's
+ * `PROCESSING --> FAILED : provider reports failure` edge, closing the one
+ * state-machine transition F-2b never handled (every claimed event was
+ * previously treated as a success regardless of its actual type — a
+ * correctness gap, not a deliberate simplification). Any other event type is
+ * genuinely unrecognized: this throws rather than guessing, so the claim is
+ * released for retry/investigation (see `processOne`) instead of either
+ * silently recording money that may not exist or silently discarding a
+ * signal that might.
+ *
  * ## What this service deliberately does NOT do
  *
  * No `ledger_entry_groups`, no `ledger_entries`, no commission, no
@@ -72,7 +94,12 @@ interface PaymentAttemptRow {
  * `LATE_PAYMENT` and `SURPLUS_PAYMENT`, this service **only detects and
  * records** a `reconciliation_cases` row — DEC-029 and DEC-030 both leave
  * the business resolution `OPEN`; inventing one here would be exactly the
- * kind of undocumented decision this codebase's own conventions forbid.
+ * kind of undocumented decision this codebase's own conventions forbid. A
+ * `payment.failed` event opens no reconciliation case either — a failed
+ * payment attempt is an ordinary, expected outcome the state machine already
+ * models (`PAYMENT_LIFECYCLE.md`'s own `FAILED --> PENDING : retry` edge,
+ * already reachable via `PaymentsService.regenerateAttempt`), not an anomaly
+ * requiring operator review.
  */
 @Injectable()
 export class PaymentEventProcessingService {
@@ -122,7 +149,7 @@ export class PaymentEventProcessingService {
       .update({ processed_at: new Date().toISOString() })
       .eq('id', eventId)
       .is('processed_at', null)
-      .select('id, provider, provider_event_id, raw_payload')
+      .select('id, provider, provider_event_id, event_type, raw_payload')
       .maybeSingle<ClaimedEventRow>();
 
     if (claimError) {
@@ -192,6 +219,15 @@ export class PaymentEventProcessingService {
       this.logger.error(`payment_events.payment_id backfill failed for ${event.id}: ${linkError.message}`);
     }
 
+    if (event.event_type === FAILED_EVENT_TYPE) {
+      await this.handleFailureEvent(event, payment);
+      return;
+    }
+
+    if (event.event_type !== SUCCEEDED_EVENT_TYPE) {
+      throw new Error(`Unrecognized payment_events.event_type "${event.event_type}" for event ${event.id}`);
+    }
+
     const eventAmountSatang = readAmount(event.raw_payload, 'amountSatang');
     if (eventAmountSatang === undefined || eventAmountSatang !== payment.amount_satang) {
       await this.openCase('AMOUNT_MISMATCH', {
@@ -211,6 +247,56 @@ export class PaymentEventProcessingService {
       .maybeSingle<PaymentAttemptRow>();
 
     await this.recordTransactionAndComplete(event, payment, attempt ?? null);
+  }
+
+  /**
+   * `payment.failed` — `payments PENDING/PROCESSING → FAILED`,
+   * `payment_attempts PENDING → FAILED` (the current/latest attempt only).
+   * No money moved (no `payment_transactions` row — there is nothing to
+   * record), no `orders` mutation (`FAILED` pairs with `PENDING_PAYMENT`
+   * unchanged, `PAYMENT_LIFECYCLE.md` § 3's state table), no ledger, no
+   * reconciliation case. Both writes are individually guarded
+   * (state-in-`WHERE`), so a duplicate delivery of the same failure event —
+   * or a retry after this method's own release-on-error path — never
+   * double-applies anything; an already-`FAILED` payment/attempt simply
+   * matches 0 rows and is silently skipped, the same idempotent-retry
+   * discipline `completeSuccessSideEffects` already follows for the success
+   * path.
+   */
+  private async handleFailureEvent(event: ClaimedEventRow, payment: PaymentRow): Promise<void> {
+    const failureReason = readString(event.raw_payload, 'reason');
+
+    const { error: paymentError } = await this.supabase.admin
+      .from('payments')
+      .update({ state: 'FAILED', failed_at: new Date().toISOString(), failure_reason: failureReason ?? null })
+      .eq('id', payment.id)
+      .in('state', ['PENDING', 'PROCESSING']);
+
+    if (paymentError) {
+      throw new Error(`payments FAILED transition failed: ${paymentError.message}`);
+    }
+
+    const { data: attempt } = await this.supabase.admin
+      .from('payment_attempts')
+      .select('id')
+      .eq('payment_id', payment.id)
+      .order('attempt_no', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+
+    if (!attempt) {
+      return;
+    }
+
+    const { error: attemptError } = await this.supabase.admin
+      .from('payment_attempts')
+      .update({ state: 'FAILED', failure_reason: failureReason ?? null })
+      .eq('id', attempt.id)
+      .eq('state', 'PENDING');
+
+    if (attemptError) {
+      throw new Error(`payment_attempts FAILED transition failed: ${attemptError.message}`);
+    }
   }
 
   /**

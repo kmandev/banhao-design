@@ -67,14 +67,37 @@ export class NullPaymentWebhookSimulator {
     amountSatang: number;
     providerEventId?: string;
   }): SignedSimulatedEvent {
-    const payload = {
-      simulated: true as const,
-      source: 'NullPaymentWebhookSimulator',
+    return this.sign({
       eventType: 'payment.succeeded',
       providerEventId: input.providerEventId ?? `NULL-EVT-${randomUUID()}`,
       providerPaymentId: input.providerPaymentId,
       amountSatang: input.amountSatang,
+    });
+  }
+
+  /**
+   * Signs a synthetic "payment failed" event — `PAYMENT_LIFECYCLE.md` § 3's
+   * `PROCESSING --> FAILED : provider reports failure` edge. Unlike
+   * {@link signPaymentSucceeded}, no `amountSatang` is required: a failure
+   * moves no money, so `PaymentEventProcessingService` never validates an
+   * amount for this event type — nothing reads it. `reason`, when given,
+   * flows to `payments.failure_reason`.
+   */
+  signPaymentFailed(input: { providerPaymentId: string; providerEventId?: string; reason?: string }): SignedSimulatedEvent {
+    return this.sign({
+      eventType: 'payment.failed',
+      providerEventId: input.providerEventId ?? `NULL-EVT-${randomUUID()}`,
+      providerPaymentId: input.providerPaymentId,
+      reason: input.reason ?? null,
+    });
+  }
+
+  private sign(fields: Record<string, unknown>): SignedSimulatedEvent {
+    const payload = {
+      simulated: true as const,
+      source: 'NullPaymentWebhookSimulator',
       occurredAt: new Date().toISOString(),
+      ...fields,
     };
 
     const rawBody = JSON.stringify(payload);
