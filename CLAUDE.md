@@ -121,8 +121,9 @@ or settlement. That is intentional, not an omission.
 (EVENT-014, **DEC-016…DEC-032**). The seven business documents tag every rule
 `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with
 `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections.
-**Build only on `ACCEPTED`.** 8 P0 business questions remain, down from 15 —
-and every one of them is a number, a provider, or a legal question.
+**Build only on `ACCEPTED`.** 7 P0 business questions remain, down from 15 —
+and every one of them is a number, a provider, or a legal question. The delivery
+and service fee amounts left that list on 2026-08-24 (DEC-035, DEC-036).
 
 Decisions that change how anything gets built:
 
@@ -133,7 +134,8 @@ Decisions that change how anything gets built:
 | **DEC-018** | **Order, Payment, Delivery, Settlement are four separate state domains.** No mega-enum |
 | **DEC-019** | New Order lifecycle: `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with `PREPARING` ∥ `RIDER_SEARCHING`. **Supersedes the design canvas's 12 states** |
 | **DEC-020/021/022** | Broadcast → first accept from `MERCHANT_ACCEPTED`; rider cancellation reassigns and never cancels the order; no-rider escalates to an operator and never auto-cancels |
-| **DEC-023/024/025** | Delivery fee, service fee and commission — **models accepted, every number still OPEN** |
+| **DEC-023/024/025** | Delivery fee, service fee and commission — models accepted. **Delivery and service fee amounts are now approved (DEC-035, DEC-036); the commission rate is still OPEN** |
+| **DEC-035/036** | **Phase 1 fees: delivery flat ฿10 (1000 satang), service fixed ฿5 (500 satang).** No distance, bands or zones in Phase 1 |
 | **DEC-026…030** | Settlement is its own domain; refund lives in payment; idempotency, late payment and duplicate-payment protection required |
 | **DEC-031/032** | Manual operations and operator fallback are intentional Phase 1 capabilities. **No Admin App yet** |
 
@@ -309,11 +311,11 @@ API integration tests → **only then** Cloud Run.
 
 Running alongside, not blocking:
 
-1. **Answer the remaining 8 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
-   Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-026, BQ-027, BQ-030. Every
-   structural question is answered; what is left is numbers, the provider, and
-   legal. **These block F′ only** — DEC-APP-007 keeps them off the critical path
-   for the other eight phases.
+1. **Answer the remaining 7 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
+   Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-027 (**refundability only** —
+   the amount is decided), BQ-030. Every structural question is answered; what
+   is left is numbers, the provider, and legal. **These block F′ only** —
+   DEC-APP-007 keeps them off the critical path for the other eight phases.
 2. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
    external lead time, gates real-money work.
 3. Verify on an Android emulator — per-weight Thai font families are untested and
@@ -352,9 +354,13 @@ tables and a Product Owner decision). **Do not touch the database.**
 - Do not add a text style, dependency, or migration without a stated reason.
 - **Implement only rules tagged `ACCEPTED`.** `PROPOSED` is analysis awaiting
   approval; `OPEN` means it is undecided and guessing is forbidden.
-- Sample figures are not rules: 10% commission, ฿15 delivery, ฿5 service and the
-  ฿10 `BANHAO7` coupon are all illustrative. **DEC-025 says so explicitly of the
-  10%.**
+- Sample figures are not rules: the 10% commission and the ฿10 `BANHAO7` coupon
+  are illustrative. **DEC-025 says so explicitly of the 10%.** The **fee**
+  figures are no longer samples — delivery is a flat **฿10 / 1000 satang**
+  (DEC-035) and service a fixed **฿5 / 500 satang** (DEC-036). Note the
+  divergence: `apps/customer/src/mocks/pricing.ts` still holds
+  `SAMPLE_DELIVERY_FEE_SATANG = 1500`, which is **not** the approved amount and
+  must never be copied into backend code.
 - Do not enable cash payment (DEC-016) — and do not delete the cash model either.
 - Do not use the superseded order state names (`NEW`, `ACCEPTED`, `READY`,
   `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work.

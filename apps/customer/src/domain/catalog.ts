@@ -17,8 +17,9 @@
  * - `distanceKm` — the geo domain (`zones`, `service_areas`) is deferred. PostGIS
  *   could compute a distance, but no approved decision authorises putting one in
  *   the catalog contract.
- * - `deliveryFeeSatang` — `delivery_fee_bands` is deferred and BQ-026 (the fee
- *   itself) is OPEN. V1.1 rule #10: money is never invented by the client.
+ * - `deliveryFeeSatang` — flat and resolved server-side (DEC-035), not a
+ *   per-catalog-item or per-restaurant value; `delivery_fee_bands` remains
+ *   deferred. V1.1 rule #10: money is never invented by the client.
  * - `etaMinutes` — `restaurants.avg_prep_minutes` exists, but preparation time is
  *   not a delivery ETA and mapping one to the other would be a fabrication.
  * - `badge` — no promotion source exists; promotions are deferred.

@@ -11,10 +11,10 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## P0 — Critical
 
-- [ ] Answer the remaining **8** P0 business questions in [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
+- [ ] Answer the remaining **7** P0 business questions in [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
   - Priority: P0
   - Source: EVENT-013, narrowed by EVENT-014
-  - Notes: Q-001 (provider), Q-002 (legal), Q-010/BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-026 and BQ-027 (fee **numbers**), BQ-030 (promotion funding). **Every structural question is now answered** by DEC-016…DEC-032; what remains is numbers, the provider, and legal. BQ-023, BQ-033 and Q-004 are **deferred with COD** (DEC-016), not answered.
+  - Notes: Q-001 (provider), Q-002 (legal), Q-010/BQ-028 (commission **rate**), Q-020 (PromptPay refund mechanism), BQ-015 (who bears the cost of wasted food), BQ-027 (**refundability only** — Phase F), BQ-030 (promotion funding). **The fee numbers are now answered**: DEC-035 sets a flat ฿10 (1000 satang) delivery fee and DEC-036 a fixed ฿5 (500 satang) service fee, both approved 2026-08-24 — so BQ-026 is closed and BQ-027 retains only its refundability half. **Every structural question is answered** by DEC-016…DEC-032; what remains is the provider, legal, the commission rate and two funding questions. BQ-023, BQ-033 and Q-004 are **deferred with COD** (DEC-016), not answered.
 
 - [ ] Decide payment provider(s) and the marketplace/settlement model for Phase 1 PromptPay QR payments
   - Priority: P0

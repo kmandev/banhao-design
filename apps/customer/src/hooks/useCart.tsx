@@ -30,7 +30,9 @@ import { useAuth } from './useAuth';
  *
  * The only total exposed here is `subtotalSatang`, computed from live catalog
  * prices in integer satang. Delivery fee, service fee and discount are **not**
- * here, because their numbers are still OPEN (BQ-026, BQ-027, BQ-030) and
+ * here: the fee amounts are now resolved (DEC-035, DEC-036), but resolution
+ * happens server-side at order creation (`OrderPricingService`, Phase E), not
+ * in this Phase D cart path — and discount (BQ-030) is still OPEN regardless.
  * UX-SPEC § C-09 requires an unknowable fee to render as `คำนวณเมื่อยืนยัน`
  * rather than a number the app made up. The grand total arrives with the server
  * at `POST /cart/validate` (D-6) and freezes at the order snapshot (Phase E).

@@ -24,11 +24,13 @@
  * ## Fields deliberately ABSENT — DEC-D-01
  *
  * There is no delivery fee, service fee, discount, or grand total in this
- * module, and no function that computes one. Their **models** are accepted
- * (DEC-023/024/025) but every **number** is still OPEN (BQ-026, BQ-027,
- * BQ-030, Q-010). UX-SPEC § C-09 is explicit that a fee whose amount is not
- * yet knowable renders as `คำนวณเมื่อยืนยัน` — "calculated at confirmation" —
- * *"rather than a number the app invented"*.
+ * module, and no function that computes one. Delivery and service fee are now
+ * resolved amounts (DEC-035, DEC-036), but resolution is `OrderPricingService`'s
+ * job at order creation (Phase E), not this Phase D cart module's — discount
+ * (BQ-030) and commission (Q-010) remain OPEN regardless. UX-SPEC § C-09 is
+ * explicit that a fee whose amount is not knowable *here* renders as
+ * `คำนวณเมื่อยืนยัน` — "calculated at confirmation" — *"rather than a number
+ * the app invented"*.
  *
  * `subtotalSatang` is the one total that exists here, because it is the only
  * one derivable from data the customer app can actually read.

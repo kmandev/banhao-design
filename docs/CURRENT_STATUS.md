@@ -229,11 +229,12 @@ migration, table, view, policy or RPC, without an explicit instruction.**
 
 ## 15. Current Blockers
 
-Product-level, not technical — unchanged from the prior status. **8 P0
-business decisions remain**: payment provider (Q-001), legal/settlement model
-(Q-002), commission rate (Q-010/BQ-028), PromptPay refund mechanism (Q-020),
-cost of wasted food (BQ-015), delivery and service fee numbers (BQ-026,
-BQ-027), promotion funding (BQ-030). See
+Product-level, not technical. **7 P0 business decisions remain**: payment
+provider (Q-001), legal/settlement model (Q-002), commission rate
+(Q-010/BQ-028), PromptPay refund mechanism (Q-020), cost of wasted food
+(BQ-015), service fee **refundability** (BQ-027 — Phase F; the amount is
+decided), promotion funding (BQ-030). The delivery and service fee **amounts**
+were approved on 2026-08-24 (**DEC-035** flat ฿10, **DEC-036** fixed ฿5). See
 [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md).
 
 **None of these block Phase E.** DEC-APP-007 is explicit: build the whole

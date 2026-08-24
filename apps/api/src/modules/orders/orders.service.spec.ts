@@ -175,7 +175,7 @@ describe('OrdersService.create — address', () => {
 });
 
 describe('OrdersService.create — fees (DEC-E-01)', () => {
-  it('propagates OrderPricingService.resolveOrderFees NOT_IMPLEMENTED unchanged', async () => {
+  it('propagates a DomainError from OrderPricingService.resolveOrderFees unchanged, whatever it throws', async () => {
     const { subject, rpc } = buildService({
       fees: () => {
         throw new DomainError('NOT_IMPLEMENTED');

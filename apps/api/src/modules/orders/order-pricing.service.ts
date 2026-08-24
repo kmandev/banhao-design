@@ -1,46 +1,70 @@
 import { Injectable } from '@nestjs/common';
-import { DomainError } from '../../common/errors/domain-error';
 
-/** The two fee amounts `create_order()` requires and this codebase does not yet have. */
+/** The two fee amounts `create_order()` requires, in integer satang (CON-003). */
 export interface OrderFees {
   deliveryFeeSatang: number;
   serviceFeeSatang: number;
 }
 
 /**
- * The single, explicit gate DEC-E-01 requires (Phase E-2).
+ * DEC-035 — the Phase 1 delivery fee. A flat ฿10 per order, charged
+ * identically for every order regardless of distance, address, restaurant or
+ * basket size. Deliberately not exported: nothing outside this file may reuse
+ * it, because the server is the only pricing authority (DEC-E-01) and a
+ * constant that can be imported is a constant that can end up in a client
+ * bundle or a second, divergent calculation.
+ */
+const DELIVERY_FEE_SATANG = 1000;
+
+/**
+ * DEC-036 — the Phase 1 service fee. A fixed ฿5 per order: not a percentage,
+ * not a percentage with a cap or a minimum, not tiered, not restaurant-
+ * specific. Private for the same reason as `DELIVERY_FEE_SATANG`.
+ */
+const SERVICE_FEE_SATANG = 500;
+
+/**
+ * Order pricing — the single server-side authority for what an order costs
+ * beyond its subtotal.
  *
- * `POST /api/v1/orders` cannot create a real order without a delivery fee and
- * a service fee — `orders.delivery_fee_satang` and `orders.service_fee_satang`
- * are `not null`, and `public.create_order()` (DEC-E-02) has no default for
- * either, on purpose. BQ-026 (delivery fee) and BQ-027 (service fee) are
- * still `OPEN` — DEC-023/DEC-024 accept the *model* only, not a number — so
- * there is no authoritative amount anywhere in this repository to read.
+ * This class exists so the two fee amounts have exactly one home. It resolves
+ * them; it does not accept, merge or reconcile any amount supplied by a
+ * client. `OrdersService` calls it after the cart and address are settled and
+ * passes the result straight to `create_order()`, which stores the amounts —
+ * never rates — on the order row. `orders_enforce_immutable_columns()` then
+ * makes those columns unchangeable for every role, so a fee resolved here is
+ * final for the life of the order.
  *
- * This class exists so that fact has exactly one place to live. It does not
- * compute a fee, approximate one, or fall back to zero — DEC-E-01 forbids
- * all three. `resolveOrderFees` always throws today. When the Product Owner
- * approves BQ-026/BQ-027, this method's body is the only thing that changes;
- * `OrdersService` and everything it calls stay exactly as they are.
+ * ## Why the arguments are unused
  *
- * `OrdersService` depends on this through the constructor rather than calling
- * a bare function, so a test can substitute a synthetic fixture value to
- * exercise the rest of the order-creation flow — see
- * `orders.service.spec.ts`. A test double is not a production default: it
- * never runs outside a test process, and this class's real implementation
- * still refuses every real request.
+ * `restaurantId` and `subtotalSatang` stay in the signature because both
+ * decisions are explicit that the *model*, not just the number, is flat and
+ * fixed: the answer must not vary with the restaurant or the basket. Keeping
+ * the inputs and ignoring them states that deliberately, and keeps the
+ * call site stable for whatever a future, separately approved pricing model
+ * needs.
+ *
+ * ## What this deliberately does not do
+ *
+ * No distance, coordinates, routing, geocoding, zones or restaurant location
+ * (DEC-035 rules all of them out for Phase 1 — and customer addresses carry
+ * null lat/lng anyway, per DQ-04-07). No percentage of the subtotal
+ * (DEC-036). No environment variable, no configuration table, no request
+ * field: DEC-035 and DEC-036 require no schema change, and reading a fee from
+ * anywhere a deployment or a caller could influence would move the pricing
+ * authority off the server. Distance-banded delivery pricing is **not**
+ * approved and must not be added here without a new Product Owner decision.
+ *
+ * @see docs/DECISIONS.md — DEC-035, DEC-036, DEC-E-01
  */
 @Injectable()
 export class OrderPricingService {
-  // Unused today — every real implementation of this method will need both,
-  // and the `^_` prefix is this repo's convention for "unused for now, not
-  // unused by mistake" (see .eslintrc.json's argsIgnorePattern).
   resolveOrderFees(_restaurantId: string, _subtotalSatang: number): OrderFees {
-    throw new DomainError('NOT_IMPLEMENTED', {
-      message:
-        'Delivery and service fee pricing is not yet approved (BQ-026, BQ-027 are OPEN; ' +
-        'DEC-023/DEC-024 accept the model only). DEC-E-01 blocks order creation until the ' +
-        'Product Owner approves both amounts — see docs/OPEN_BUSINESS_QUESTIONS.md.',
-    });
+    // A fresh object per call: the caller receives a value it cannot use to
+    // mutate this service's answer for the next order.
+    return {
+      deliveryFeeSatang: DELIVERY_FEE_SATANG,
+      serviceFeeSatang: SERVICE_FEE_SATANG,
+    };
   }
 }

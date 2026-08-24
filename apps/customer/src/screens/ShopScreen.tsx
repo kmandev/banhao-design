@@ -134,11 +134,12 @@ export function ShopScreen() {
         <Text style={styles.meta}>{formatShopMeta(shop)}</Text>
         {/*
           PC-Q-002 — the ระยะทาง / เวลาส่ง / ค่าส่ง stat row is intentionally not
-          rendered. Distance needs the deferred geo domain, delivery fee needs
-          `delivery_fee_bands` (deferred, BQ-026 OPEN), and prep time is not a
-          delivery ETA. Restore this row once those sources exist; do not fill
-          it with placeholders (V1.1 rule #10 — money is never invented by the
-          client).
+          rendered. Distance needs the deferred geo domain; delivery fee is now
+          a resolved flat amount (DEC-035) but is resolved server-side at order
+          creation (Phase E), not per-shop here, and `delivery_fee_bands`
+          remains deferred; prep time is not a delivery ETA. Restore this row
+          once those sources exist; do not fill it with placeholders (V1.1
+          rule #10 — money is never invented by the client).
         */}
         {shop.todayHours ? <Text style={styles.hours}>🕐 {shop.todayHours}</Text> : null}
         {shop.addressLine ? <Text style={styles.address}>📍 {shop.addressLine}</Text> : null}

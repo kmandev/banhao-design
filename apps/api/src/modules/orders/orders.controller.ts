@@ -4,7 +4,6 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
-  ApiNotImplementedResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -34,9 +33,6 @@ export class OrdersController {
   @ApiNotFoundResponse({ description: 'addressId does not belong to the caller' })
   @ApiConflictResponse({
     description: 'CART_EMPTY, ITEM_UNAVAILABLE, PRICE_CHANGED, MIXED_RESTAURANT, or RESTAURANT_CLOSED',
-  })
-  @ApiNotImplementedResponse({
-    description: 'Delivery/service fee pricing is not yet approved (DEC-E-01) — see OrderPricingService',
   })
   async create(
     @CurrentUser() user: AuthenticatedUser | undefined,

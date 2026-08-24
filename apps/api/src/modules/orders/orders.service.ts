@@ -37,12 +37,13 @@ interface CreateOrderRow {
  * ownership reuses `AddressesService.getOwned`, the same "ownership is a
  * query filter" discipline every other address operation already follows.
  *
- * ## What is deliberately NOT here yet — DEC-E-01
+ * ## Pricing — DEC-E-01
  *
- * `OrderPricingService.resolveOrderFees` always throws today (BQ-026/BQ-027
- * are OPEN). This service calls it anyway, in its normal position in the
- * flow, so the day those numbers are approved only `OrderPricingService`
- * changes — nothing here does.
+ * `OrderPricingService.resolveOrderFees` is the sole authority for the
+ * delivery and service fee amounts (DEC-035, DEC-036) and is called here in
+ * its normal position in the flow. DEC-E-01 still governs: no fee value ever
+ * comes from `request`, and a future change to either amount is a change to
+ * `OrderPricingService` alone — nothing here does.
  */
 @Injectable()
 export class OrdersService {
@@ -90,7 +91,7 @@ export class OrdersService {
     }
 
     // ---------------------------------------------------------------------
-    // Fees — DEC-E-01's gate. Throws today; see OrderPricingService.
+    // Fees — server-derived, per DEC-E-01. See OrderPricingService.
     // ---------------------------------------------------------------------
 
     const fees = this.pricing.resolveOrderFees(restaurantId, validation.subtotalSatang);

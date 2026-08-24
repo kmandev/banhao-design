@@ -50,8 +50,8 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-014 — `NO_DRIVER` / "food not cooked" contradiction | **ACCEPTED** — search starts at `MERCHANT_ACCEPTED`; no-rider is not an order state | DEC-019, DEC-022 |
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
-| BQ-026 — delivery fee | **ACCEPTED (model)** — funds rider compensation. **Numbers `OPEN`** | DEC-023 |
-| BQ-027 — service fee | **ACCEPTED (model)** — BANHAO revenue. **Amount `OPEN`** | DEC-024 |
+| BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
+| BQ-027 — service fee | **RESOLVED (amount)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**. **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036 |
 | BQ-028 — merchant commission | **ACCEPTED (model)** — BANHAO revenue. **Rate `OPEN`** | DEC-025 |
 
 Also decided, and not previously tracked as a `BQ`: online-payment-only with
@@ -83,12 +83,14 @@ on. **Decide them before then, not during.**
 | Q-010 / BQ-028 | Commission **rate** (model accepted, DEC-025) | Ledger, settlement |
 | Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
 | BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms. Sharpened by DEC-022: an operator cancelling a no-rider order needs this answer |
-| BQ-026 | Delivery fee **numbers** (model accepted, DEC-023) | Pricing, checkout, ledger |
-| BQ-027 | Service fee **amount** and refundability (model accepted, DEC-024) | Pricing, ledger |
+| BQ-027 | Service fee **refundability** only — the amount is decided (DEC-036). Phase F scope; does **not** block order creation | Refund flow, ledger |
 | BQ-030 | Who funds promotions and discounts | Ledger, settlement |
 
-**Eight remain, down from fifteen.** The seven cleared are BQ-010, BQ-012,
-BQ-014, BQ-019, BQ-023 (deferred), BQ-025 and the model halves of BQ-026/027/028.
+**Seven remain, down from fifteen.** The eight cleared are BQ-010, BQ-012,
+BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
+and — as of 2026-08-24 — the **numeric** halves of BQ-026 (DEC-035) and BQ-027
+(DEC-036). Only BQ-027's refundability question is still carried above, and it
+is Phase F scope rather than an order-creation blocker.
 
 ### P1 — blocks a feature or launch readiness
 
@@ -1054,15 +1056,23 @@ ordering within 14 days).
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: ACCEPTED — MODEL · OPEN — NUMERIC PRICING
-decision: DEC-023 (model only)
-blocks: Pricing, checkout, ledger, rider earnings
+status: RESOLVED — MODEL (DEC-023) · NUMERIC PRICING (DEC-035)
+decision: DEC-023 (model) + DEC-035 (Phase 1 model and amount)
+blocks: nothing further — rider earnings remain BQ-029
 related: Q-018, BQ-001, BQ-029
 ```
 
 > **PARTLY DECIDED 2026-08-10 — DEC-023.** The model is accepted:
-> `Customer → delivery fee → rider earning`. **The numbers are explicitly not
-> approved** — no agent may invent a price or a band (§22 of the decision lock).
+> `Customer → delivery fee → rider earning`.
+>
+> **RESOLVED 2026-08-24 — DEC-035.** Phase 1 uses a **flat delivery fee of
+> 1000 satang (฿10) per order**, with no distance component, no bands and no
+> zones. Distance-banded pricing (the option this entry recommends below) is
+> **explicitly not approved for Phase 1**; adopting it later needs a new
+> Product Owner decision plus the coordinate/geocoding infrastructure it
+> depends on. No schema or configuration table is required for the flat fee.
+> The discussion below is retained as the record of how the decision was
+> reached — read it as history, not as an open question.
 
 **Question:** How is the delivery fee computed, and what are the actual numbers?
 
@@ -1097,15 +1107,23 @@ rider economics (BQ-029) are built on the wrong base.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: ACCEPTED — MODEL · OPEN — NUMERIC PRICING
-decision: DEC-024 (model only)
-blocks: Pricing, ledger, refunds
+status: RESOLVED — MODEL (DEC-024) · AMOUNT (DEC-036) · OPEN — REFUNDABILITY
+decision: DEC-024 (model) + DEC-036 (Phase 1 shape and amount)
+blocks: Refunds only (Phase F). Does not block order creation
 related: BQ-028, BQ-031
 ```
 
 > **PARTLY DECIDED 2026-08-10 — DEC-024.** The model is accepted:
-> `Customer → service fee → BANHAO`. **The amount is not approved**, and
-> whether it survives a refund is still open.
+> `Customer → service fee → BANHAO`.
+>
+> **AMOUNT RESOLVED 2026-08-24 — DEC-036.** Phase 1 uses a **fixed service fee
+> of 500 satang (฿5) per order**. No percentage, cap, minimum, tier or
+> restaurant-specific variant is approved.
+>
+> ⚠️ **Still open: refundability.** Whether the service fee survives a refund is
+> **not** decided by DEC-036 and must not be inferred from it. It is Phase F
+> scope and does not block `POST /orders`, which reads only the amount. The
+> options and recommendation below remain live for that question alone.
 
 **Question:** What is the ฿5 `ค่าบริการ` for, is it platform revenue, and is it
 refunded on cancellation?

@@ -78,8 +78,8 @@ amount, rate or band is approved.**
 
 | Flow | Decision | Model | Numbers |
 |---|---|---|---|
-| `Customer → delivery fee → rider earning` | **DEC-023** | `ACCEPTED` | **`OPEN`** — BQ-026, BQ-029 |
-| `Customer → service fee → BANHAO` | **DEC-024** | `ACCEPTED` | **`OPEN`** — BQ-027 |
+| `Customer → delivery fee → rider earning` | **DEC-023** | `ACCEPTED` | Customer side **`ACCEPTED`** — flat ฿10 / 1000 satang (**DEC-035**). Rider side **`OPEN`** — BQ-029 |
+| `Customer → service fee → BANHAO` | **DEC-024** | `ACCEPTED` | **`ACCEPTED`** — fixed ฿5 / 500 satang (**DEC-036**) |
 | `Merchant → commission → BANHAO` | **DEC-025** | `ACCEPTED` | **`OPEN`** — Q-010, BQ-028 |
 
 > **No agent may invent a price.** The design's `฿15` delivery, `฿5` service,
@@ -163,7 +163,10 @@ decisions. **None is settled by this lock:**
    full ฿120 menu price, not the discounted total → **BQ-030, `OPEN`**.
 2. **Delivery does not pay for itself.** ฿10 of net delivery-side revenue
    against ฿12 paid to the rider; commission covers the gap. DEC-023 fixes the
-   *direction* of the money, not that it balances → **BQ-026, BQ-029, `OPEN`**.
+   *direction* of the money, not that it balances. **DEC-035 has since set the
+   Phase 1 delivery fee at exactly this ฿10**, so the gap this worked example
+   describes is now the approved position rather than a sample — whether it is
+   sustainable depends on the rider rate, still → **BQ-029, `OPEN`**.
 3. **10% is internally consistent** across every sample (120→12, 180→18,
    260→26, 95→10, 75→8) and stated outright as `10% ของยอดอาหาร`. **DEC-025
    explicitly refuses to let that become the rate by default** → Q-010, BQ-028.
@@ -412,9 +415,10 @@ duplicate payment (DEC-030).
 Q-004 (cash limit) · the cash half of BQ-034.
 
 **Still `OPEN` — P0:** Q-002 (legal settlement model) · Q-010 / BQ-028
-(commission **rate**) · BQ-026 (delivery fee **numbers**) · BQ-027 (service fee
-**amount**) · BQ-030 (promotion funding) · BQ-015 (who bears the cost of wasted
-food).
+(commission **rate**) · BQ-027 (service fee **refundability** only — the amount
+is set by DEC-036) · BQ-030 (promotion funding) · BQ-015 (who bears the cost of
+wasted food). **Resolved 2026-08-24:** BQ-026 (DEC-035, flat ฿10) and the
+amount half of BQ-027 (DEC-036, fixed ฿5).
 **Still `OPEN` — P1:** BQ-029 (rider earnings formula) · BQ-031 (partial refund
 composition) · BQ-032 (settlement cycle) · BQ-034 (negative balances) · Q-011
 (chargebacks).

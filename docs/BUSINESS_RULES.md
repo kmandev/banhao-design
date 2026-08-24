@@ -90,8 +90,10 @@ default and role changes restricted to a service-role-only function
 
 The stated competitive position is *accuracy of delivery fee and time*, not
 feature count — "ความแม่นของค่าส่งและเวลา ไม่ใช่จำนวนฟีเจอร์". This is why
-BQ-026 (delivery fee model) is a strategic decision rather than a pricing
-detail.
+BQ-026 (delivery fee model) was therefore a strategic decision rather than a
+pricing detail. It is now decided: **DEC-035** sets a flat ฿10 for Phase 1,
+accepting that fee *accuracy* through distance pricing waits until the
+coordinate infrastructure exists.
 
 ### The scope rule that overrides feature requests
 
@@ -301,29 +303,48 @@ line items with options, notes and quantity steppers, a remove action, an
 
 ### 5.1 The documented formula
 
-`ACCEPTED` as a design **sample**, `OPEN` as business rule.
+`ACCEPTED` — the formula, and (as of 2026-08-24) the delivery and service fee
+amounts. The discount term is still `OPEN` (BQ-030).
 
 ```
 total = subtotal + delivery_fee + service_fee − discount        (never below 0)
 ```
 
-Sample values carried through the design and the implemented app:
-`delivery ฿15` (sample) · `service ฿5` (sample) · `BANHAO7 −฿10` (sample) ·
-`฿170 + ฿15 + ฿5 − ฿10 = ฿180`, verified by QA without drift.
+**Approved Phase 1 fees:** `delivery ฿10` (1000 satang, **DEC-035**) ·
+`service ฿5` (500 satang, **DEC-036**). Money is integer satang throughout
+(CON-003).
 
-**Inconsistency to resolve (BQ-026):** onboarding and the shop cards say
-`ค่าส่งเริ่มต้น 10 บาท` / `ค่าส่ง ฿10`, while the shop page and checkout say
-`ค่าส่ง ฿15` and label it `ค่าส่ง (1.2 กม.)`. Base-plus-distance would reconcile
-them, but no rule is stated.
+**Still a sample:** the `BANHAO7 −฿10` discount, and every fee figure inside
+`apps/customer/src/mocks/pricing.ts` — including its
+`SAMPLE_DELIVERY_FEE_SATANG = 1500`, which does **not** match the approved
+฿10 and must not be used as the source of truth. The client is not the pricing
+authority; the server prices every order.
 
-### 5.2 Delivery fee — model accepted, numbers open
+**Inconsistency resolved (BQ-026 → DEC-035):** onboarding and the shop cards
+said `ค่าส่งเริ่มต้น 10 บาท` / `ค่าส่ง ฿10`, while the shop page and checkout
+said `ค่าส่ง ฿15` labelled `ค่าส่ง (1.2 กม.)`. The approved Phase 1 fee is a
+**flat ฿10 with no distance component**, so the `฿15` and the `(1.2 กม.)`
+distance label are both superseded — the distance label describes a model that
+Phase 1 does not use.
+
+### 5.2 Delivery fee — model and amount accepted
 
 `ACCEPTED — MODEL` — **DEC-023**: `Customer → delivery fee → rider earning`.
 The delivery fee is conceptually associated with delivery compensation.
-**`OPEN — NUMERIC PRICING`** — BQ-026. **No agent may invent a price or a
-band.**
 
-The models below are decision support for the pricing decision, not a decision:
+`ACCEPTED — PHASE 1 PRICING` — **DEC-035**: a **flat 1000 satang (฿10) per
+order**, regardless of distance. Phase 1 has no distance calculation, no bands,
+no zones and no routing/geocoding dependency in the fee.
+
+⚠️ **Distance-banded pricing is not approved.** The table below recommended it,
+and it remains the likely future direction — but it is **not** Phase 1
+behaviour, and adopting it requires a new Product Owner decision plus the
+coordinate and geocoding infrastructure it depends on (customer addresses carry
+no `lat`/`lng` today; TQ-004 and Q-018 are `OPEN`). Do not implement or
+pre-build for it.
+
+The models below are retained as the record of how DEC-035 was reached — they
+are history, not a live decision:
 
 | Model | Complexity | Fairness | Needs good geodata? | Fit for Buntharik |
 |---|---|---|---|---|
@@ -332,16 +353,26 @@ The models below are decision support for the pricing decision, not a decision:
 | Base + per-km | Medium | Best in theory | **Sensitive** — 200 m of error moves the price | Risky while Q-018 is open |
 | Zone-to-zone matrix | High | Good | Needs zones defined | Stage 2 |
 
-Bands and prices belong in `ServiceArea` configuration, never hard-coded (§32 of
-the task brief).
+That guidance — bands and prices belong in `ServiceArea` configuration, never
+hard-coded (§32 of the task brief) — was written for a **banded** model. Phase 1
+is flat, so no `ServiceArea`, `zones` or `delivery_fee_bands` table is required
+and none exists; the schema lock is untouched. The guidance returns if and when
+banded pricing is approved.
 
-### 5.3 Service fee — model accepted, amount open
+### 5.3 Service fee — model and amount accepted; refundability still open
 
 `ACCEPTED — MODEL` — **DEC-024**: `Customer → service fee → BANHAO`. It is
 platform revenue, distinct from commission and from the delivery fee.
-**`OPEN — NUMERIC PRICING`** — BQ-027, which also covers whether it survives a
-refund. The `฿5` in the design and in `apps/customer/src/mocks/pricing.ts` is a
-sample.
+
+`ACCEPTED — PHASE 1 PRICING` — **DEC-036**: a **fixed 500 satang (฿5) per
+order**. Not a percentage, not a percentage with a cap or minimum, not tiered,
+not restaurant-specific.
+
+**`OPEN`** — BQ-027's remaining half: whether the service fee survives a refund.
+That is **Phase F** scope, must not be inferred from DEC-036, and does not block
+order creation. The `฿5` in `apps/customer/src/mocks/pricing.ts` numerically
+matches the approved amount but remains a **sample** — the authority is DEC-036,
+and that constant must not be imported into backend code.
 
 ### 5.4 Merchant commission — model accepted, rate open
 
@@ -407,8 +438,9 @@ decides whether the product works at all.
 
 Other rules:
 
-- `ACCEPTED` **DEC-023** — the delivery fee funds rider compensation. The
-  amounts are `OPEN` (BQ-026, BQ-029).
+- `ACCEPTED` **DEC-023** — the delivery fee funds rider compensation.
+  **DEC-035** sets the Phase 1 fee at a flat ฿10 (1000 satang). The rider side
+  of the flow is still `OPEN` (BQ-029).
 - `ACCEPTED` **DEC-004 / REQ-001**, **dormant in Phase 1** — cash a rider
   collects is a platform liability, never income, displayed separately. No rider
   handles cash while COD is disabled (DEC-016), but the rule is not repealed.
@@ -468,9 +500,10 @@ Full treatment: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md).
 - **Simplified by DEC-016** — the cash-order rule (cash orders skip the transfer
   round, commission netted from the next one) does not apply in Phase 1, so
   BQ-033 is deferred with COD.
-- `OPEN` — commission rate (Q-010/BQ-028), delivery and service fee amounts
-  (BQ-026, BQ-027), promotion funding (BQ-030), cycle specifics (BQ-032),
-  negative balances (BQ-034).
+- `OPEN` — commission rate (Q-010/BQ-028), service fee **refundability**
+  (BQ-027 — the amount is decided by DEC-036), promotion funding (BQ-030),
+  cycle specifics (BQ-032), negative balances (BQ-034). The delivery and
+  service fee **amounts** are decided (DEC-035, DEC-036).
 - ⚖️ `LEGAL_REVIEW_REQUIRED` — Q-002: merchant of record, settlement legal
   structure, tax structure, regulatory classification, and whether BANHAO's own
   split/transfer-round design is regulated payment facilitation.
@@ -668,7 +701,9 @@ as sufficient for Phase 1.
 ## 16. Service area and geography
 
 `ACCEPTED` — **DEC-031**: the launch district must be **configuration, not
-code**. `OPEN` — the values: BQ-003, BQ-026, Q-018.
+code**. `OPEN` — the values: BQ-003, Q-018. BQ-026 no longer belongs here:
+**DEC-035** made the Phase 1 delivery fee flat, so it needs no service-area or
+zone configuration at all.
 
 `PROPOSED` model — **nothing about Buntharik may be hard-coded**:
 
@@ -763,8 +798,10 @@ Consequences that show up repeatedly in these documents:
   no zone maintenance, better fit for 8–12 riders.
 - **Operator resolution instead of automated edge cases** — `ACCEPTED`
   (DEC-031, DEC-032).
-- **Banded delivery fees over per-kilometre** — tolerates bad geodata, easier to
-  explain, no routing service required (BQ-026).
+- ~~**Banded delivery fees over per-kilometre**~~ — **superseded for Phase 1 by
+  DEC-035**, which is flat, not banded. The reasoning (tolerates bad geodata,
+  easier to explain, no routing service required) is why banding remains the
+  likely *future* direction — but it is not approved and not Phase 1.
 - **Weekly settlement over daily** — fewer transfers, fewer fees, one
   reconciliation session a week (BQ-032).
 - **No wallet** — already the documented launch decision, and it avoids the

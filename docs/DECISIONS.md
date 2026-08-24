@@ -32,8 +32,8 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-020** | **Rider search starts at MERCHANT_ACCEPTED; dispatch is broadcast → first accept** | **ACCEPTED** | **2026-08-10** | `docs/RIDER_LIFECYCLE.md` |
 | **DEC-021** | **Rider cancellation reassigns; it never cancels the order** | **ACCEPTED** | **2026-08-10** | `docs/RIDER_LIFECYCLE.md` |
 | **DEC-022** | **No-rider escalates to operator decision; never auto-cancels** | **ACCEPTED** | **2026-08-10** | `docs/RIDER_LIFECYCLE.md` |
-| **DEC-023** | **Delivery fee funds rider compensation (model only)** | **ACCEPTED — MODEL · OPEN — PRICING** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
-| **DEC-024** | **Service fee is BANHAO revenue (model only)** | **ACCEPTED — MODEL · OPEN — PRICING** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
+| **DEC-023** | **Delivery fee funds rider compensation (model only)** | **ACCEPTED — MODEL** · pricing resolved by DEC-035 | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
+| **DEC-024** | **Service fee is BANHAO revenue (model only)** | **ACCEPTED — MODEL** · amount resolved by DEC-036 | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
 | **DEC-025** | **Merchant commission is BANHAO revenue (model only)** | **ACCEPTED — MODEL · OPEN — RATE** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
 | **DEC-026** | **Settlement is a separate financial domain** | **ACCEPTED — DOMAIN · NOT IMPLEMENTED** | **2026-08-10** | `docs/SETTLEMENT_MODEL.md` |
 | **DEC-027** | **Refund belongs to the payment domain, not order cancellation** | **ACCEPTED** | **2026-08-10** | `docs/PAYMENT_LIFECYCLE.md` |
@@ -44,6 +44,8 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-032** | **Operator fallback for exceptional situations (capability, not an app)** | **ACCEPTED — REQUIREMENT · NOT IMPLEMENTED** | **2026-08-10** | `docs/BUSINESS_RULES.md` |
 | **DEC-033** | **Multi-role identity: domain membership, not a single `profiles.role`** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
 | **DEC-034** | **Phase 1 financial integrity without a zero-sum database trigger** | **ACCEPTED** | **2026-08-11** | `docs/DATABASE_DESIGN.md` |
+| **DEC-035** | **Phase 1 delivery fee is flat ฿10 (1000 satang), no distance component** | **ACCEPTED** | **2026-08-24** | `docs/BUSINESS_RULES.md` § 5.2, BQ-026 |
+| **DEC-036** | **Phase 1 service fee is a fixed ฿5 (500 satang)** | **ACCEPTED** | **2026-08-24** | `docs/BUSINESS_RULES.md` § 5.3, BQ-027 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -1136,7 +1138,7 @@ None / None.
 
 ## DEC-023 — Delivery fee funds rider compensation (model only)
 
-**Status:** ACCEPTED — MODEL · OPEN — NUMERIC PRICING
+**Status:** ACCEPTED — MODEL · **numeric pricing resolved 2026-08-24 by DEC-035**
 **Date:** 2026-08-10
 **Owner:** PRODUCT_OWNER
 
@@ -1180,13 +1182,14 @@ CON-003
 
 ### Supersedes / Superseded By
 
-None / None.
+None / The `OPEN — NUMERIC PRICING` half is resolved by **DEC-035** (flat ฿10,
+1000 satang). The money-flow model recorded here is unchanged and still stands.
 
 ---
 
 ## DEC-024 — Service fee is BANHAO revenue (model only)
 
-**Status:** ACCEPTED — MODEL · OPEN — NUMERIC PRICING
+**Status:** ACCEPTED — MODEL · **amount resolved 2026-08-24 by DEC-036** · refundability still `OPEN`
 **Date:** 2026-08-10
 **Owner:** PRODUCT_OWNER
 
@@ -1225,7 +1228,8 @@ CON-003
 
 ### Supersedes / Superseded By
 
-None / None.
+None / The `OPEN — NUMERIC PRICING` half is resolved by **DEC-036** (fixed ฿5,
+500 satang). Refundability remains `OPEN` under BQ-027 and is Phase F scope.
 
 ---
 
@@ -1807,6 +1811,146 @@ Supersedes the zero-sum trigger recommendation in `docs/DATABASE_DESIGN.md`
 
 ---
 
+## DEC-035 — Phase 1 delivery fee is a flat ฿10, with no distance component
+
+**Status:** ACCEPTED · **Date:** 2026-08-24 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+The Phase 1 delivery fee is **flat: 1000 satang (฿10) per order**, charged
+regardless of distance.
+
+Phase 1 has **no** distance calculation, **no** distance bands, **no** zones and
+**no** routing or geocoding dependency in the fee. One order, one delivery fee.
+
+This resolves the numeric half of **BQ-026**, which DEC-023 left `OPEN`.
+
+### Why
+
+Product Owner decision, 2026-08-24. Buntharik is a single district, and the
+inputs a distance-based fee would need do not exist: customer addresses carry no
+coordinates (DQ-04-07 sends `lat`/`lng` as `null`, and there is no map picker),
+no geocoding or routing provider has been selected (TQ-004, `OPEN`), and Q-018
+records that no provider publishes district-level accuracy for Thailand. A flat
+fee is the only model whose inputs are all present today, and it removes the
+last product blocker on `POST /api/v1/orders`.
+
+### Alternatives
+
+- **Distance-banded** (0–2 / 2–5 / 5–10 km) — the model `BUSINESS_RULES.md` § 5.2
+  and BQ-026 both flagged as the eventual preference. Rejected **for Phase 1
+  only**: it cannot be computed without customer coordinates, and it would
+  require `delivery_fee_bands` / `service_areas` / `zones`, none of which exist
+  in the locked schema.
+- **Base + per-km** — rejected; most sensitive of all to geocoding error while
+  Q-018 is open.
+- **Zone-to-zone matrix** — rejected for Phase 1; a later-stage answer.
+
+### Consequences
+
+- `OrderPricingService.resolveOrderFees()` may now return a delivery fee. That
+  implementation is **a separate task** — this decision records the number, it
+  does not write code, and the service still throws until that task runs.
+- **No schema change, no migration and no new table are required.** `orders`
+  already stores amounts rather than rates, and `create_order()` already accepts
+  `p_delivery_fee_satang`. The database schema lock is untouched.
+- ⚠️ **Distance-based pricing is NOT approved and must not be treated as
+  Phase 1 behaviour.** Moving to it later requires a new Product Owner decision
+  *and* the coordinate/geocoding infrastructure that decision depends on. Do not
+  pre-build for it.
+- The design's `฿10` / `฿15` samples remain samples. `฿10` now coincides with the
+  approved figure, but the authority is this decision — not the design canvas and
+  not `apps/customer/src/mocks/pricing.ts`, whose `SAMPLE_DELIVERY_FEE_SATANG`
+  is `1500` and remains an **unapproved sample**.
+- ⚠️ Unit economics remain unresolved: **BQ-029 (rider earnings) is still
+  `OPEN`**, so whether a flat ฿10 covers rider compensation is not settled by
+  this decision. DEC-023's note — that the design's sampled ฿10 against a ฿12
+  rider payment does not cover itself — still stands as an open question for
+  BQ-029, not an objection answered here.
+
+### Evidence
+
+Product Owner instruction, 2026-08-24 ("LOCK BQ-026 / BQ-027 PHASE 1 PRICING
+DECISION").
+
+### Related Requirements
+
+BQ-026 (numeric half resolved) · BQ-029 (rider earnings, still `OPEN`)
+
+### Related Architecture
+
+`docs/BUSINESS_RULES.md` § 5.2 · `docs/SETTLEMENT_MODEL.md` ·
+`apps/api/src/modules/orders/order-pricing.service.ts` (not yet implemented) ·
+CON-003 (integer satang)
+
+### Supersedes / Superseded By
+
+Resolves the `OPEN — NUMERIC PRICING` half of DEC-023, which otherwise stands
+unchanged. / None.
+
+---
+
+## DEC-036 — Phase 1 service fee is a fixed ฿5
+
+**Status:** ACCEPTED · **Date:** 2026-08-24 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+The Phase 1 service fee is **fixed: 500 satang (฿5) per order**.
+
+It is a flat amount. It is **not** a percentage, **not** a percentage with a cap
+or a minimum, **not** tiered, and **not** restaurant-specific.
+
+This resolves the amount half of **BQ-027**, which DEC-024 left `OPEN`.
+
+### Why
+
+Product Owner decision, 2026-08-24. A flat amount is what the design has always
+shown, it needs no subtotal-dependent arithmetic, and it removes the second
+product blocker on `POST /api/v1/orders`.
+
+### Alternatives
+
+Percentage of subtotal, percentage with cap, percentage with minimum, tiered,
+and restaurant-specific fees were all considered and **rejected for Phase 1**.
+
+### Consequences
+
+- `OrderPricingService.resolveOrderFees()` may now return a service fee. As with
+  DEC-035, the implementation is **a separate task**.
+- **No schema change and no migration are required** — `create_order()` already
+  accepts `p_service_fee_satang`, and the schema stores amounts, never rates.
+- ⚠️ **Refundability is NOT decided by this decision.** Whether the service fee
+  survives a refund remains the open half of BQ-027 and is **Phase F scope**. It
+  must not be inferred from this pricing decision in either direction. It does
+  not block `POST /orders`: order creation reads only the amount.
+- `SAMPLE_SERVICE_FEE_SATANG = 500` in `apps/customer/src/mocks/pricing.ts`
+  numerically matches the approved figure. It remains an **unapproved sample**
+  and must not be imported into backend code or relabelled as the source of
+  truth — the authority is this decision. The client is still not the pricing
+  authority; the server prices every order.
+
+### Evidence
+
+Product Owner instruction, 2026-08-24 ("LOCK BQ-026 / BQ-027 PHASE 1 PRICING
+DECISION").
+
+### Related Requirements
+
+BQ-027 (amount resolved; refundability still `OPEN`, Phase F)
+
+### Related Architecture
+
+`docs/BUSINESS_RULES.md` § 5.3 · `docs/SETTLEMENT_MODEL.md` ·
+`docs/PAYMENT_LIFECYCLE.md` (refund scope) · CON-003 (integer satang)
+
+### Supersedes / Superseded By
+
+Resolves the `OPEN — NUMERIC PRICING` half of DEC-024, which otherwise stands
+unchanged. / None.
+
+---
+
 ## DEC-D-01 — Cart validation returns a subtotal only
 
 **Status:** ACCEPTED · **Date:** 2026-08-18 · **Owner:** Product Owner
@@ -1949,7 +2093,17 @@ DEC-D-02, DEC-APP-004, DEC-APP-008 ·
 
 ## DEC-E-01 — No production order while the fee amounts are OPEN
 
-**Status:** ACCEPTED · **Date:** 2026-08-19 · **Owner:** Product Owner
+**Status:** ACCEPTED · **condition satisfied 2026-08-24** · **Date:** 2026-08-19 · **Owner:** Product Owner
+
+> **✅ Gate condition met, 2026-08-24.** Both amounts this decision waited on are
+> now approved: **DEC-035** (delivery, flat 1000 satang) and **DEC-036**
+> (service, fixed 500 satang). DEC-E-01 is **not** repealed — its prohibition on
+> interim, placeholder or zero values stands permanently, and its reasoning
+> (money columns are immutable for every role, so a wrong fee has no repair
+> path) is unchanged. What has changed is that real approved values now exist to
+> supply. `OrderPricingService` still throws until a **separate implementation
+> task** wires those values in; this note records the product gate opening, not
+> the code changing.
 
 ### Decision
 

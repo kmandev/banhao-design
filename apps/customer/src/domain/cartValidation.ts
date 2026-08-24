@@ -13,9 +13,11 @@
  *
  * ## No fee, no total — DEC-D-01
  *
- * The server deliberately returns a **subtotal only**; delivery fee, service
- * fee and discount are still OPEN (BQ-026, BQ-027, BQ-030) and are not computed
- * anywhere. Nothing here reintroduces them.
+ * The server deliberately returns a **subtotal only**; `POST /cart/validate`
+ * (Phase D) does not compute delivery fee, service fee or discount. The fee
+ * amounts are resolved elsewhere — `OrderPricingService` at order creation
+ * (Phase E, DEC-035/DEC-036) — and discount (BQ-030) is still OPEN regardless.
+ * Nothing here reintroduces any of them.
  */
 
 import type { Satang } from '@banhao/types';

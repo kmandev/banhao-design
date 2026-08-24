@@ -154,7 +154,7 @@ describe('POST /api/v1/orders', () => {
     expect(response.body).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
   });
 
-  it('renders NOT_IMPLEMENTED (DEC-E-01 fee gate) as 501', async () => {
+  it('renders NOT_IMPLEMENTED as 501 through the real error envelope — generic catalogue mapping, not currently reachable via the fee gate', async () => {
     const create = jest.fn().mockRejectedValue(new DomainError('NOT_IMPLEMENTED'));
     app = await buildApp({ user: AUTHENTICATED_USER, create });
 

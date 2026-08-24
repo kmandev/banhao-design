@@ -77,8 +77,9 @@ export interface CartValidationLine {
  * The validated result.
  *
  * Deliberately carries no `deliveryFeeSatang`, `serviceFeeSatang`,
- * `discountSatang` or grand total (DEC-D-01) — those numbers are still OPEN
- * (BQ-026, BQ-027, BQ-030) and Phase D does not compute them.
+ * `discountSatang` or grand total (DEC-D-01) — pricing is `OrderPricingService`'s
+ * job (DEC-035, DEC-036), not this Phase D cart path's, and discount (BQ-030)
+ * is still OPEN regardless.
  */
 export interface CartValidationResult {
   /** Null when the caller has no open cart at all — a valid, empty result. */

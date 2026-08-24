@@ -35,12 +35,14 @@ const PENDING_FEE_LABEL = 'คำนวณเมื่อยืนยัน';
  * ## Fee rows — DEC-D-01
  *
  * `ค่าส่ง` and `ค่าบริการ` render the literal string `คำนวณเมื่อยืนยัน`, and
- * there is no total row, because no total is knowable here. UX-SPEC § C-09:
- * *"Fee lines appear here as server-provided amounts; if any fee is not yet
- * knowable, the row shows `คำนวณเมื่อยืนยัน` rather than a number the app
- * invented."* The delivery fee (BQ-026), service fee (BQ-027) and any discount
- * (BQ-030) are all still OPEN, and `POST /cart/validate` — which will supply
- * the server-side numbers that exist — lands at D-6.
+ * there is no total row, because no total is knowable *at the cart screen*.
+ * UX-SPEC § C-09: *"Fee lines appear here as server-provided amounts; if any
+ * fee is not yet knowable, the row shows `คำนวณเมื่อยืนยัน` rather than a
+ * number the app invented."* The delivery fee (DEC-035) and service fee
+ * (DEC-036) are now resolved amounts, but resolution happens server-side at
+ * order creation (Phase E), not here — this screen still has nothing to show.
+ * Discount (BQ-030) remains OPEN regardless. `POST /cart/validate` — which
+ * will supply the server-side subtotal — lands at D-6.
  *
  * The discount row is gone rather than blanked: `BANHAO7` was a design sample,
  * and no promotion mechanism exists to replace it with.
