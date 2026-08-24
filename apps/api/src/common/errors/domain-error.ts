@@ -38,6 +38,9 @@ const STATUS_BY_CODE: Record<ErrorCode, HttpStatus> = {
   // Order creation (Phase E-2) — same reasoning as the cart pair above: a
   // well-formed request from a customer who did nothing wrong.
   CART_EMPTY: HttpStatus.CONFLICT,
+  // Payment creation (Phase F-1) — the order exists and is the caller's own,
+  // but its current state cannot start (or resume) a payment.
+  ORDER_NOT_PAYABLE: HttpStatus.CONFLICT,
 
   // Concurrency — also 409, and the reason status alone cannot carry meaning.
   OFFER_TAKEN: HttpStatus.CONFLICT,

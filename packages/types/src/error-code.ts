@@ -64,6 +64,11 @@ export const ERROR_CODES = [
   // `ITEM_UNAVAILABLE` — this is "there is nothing to order", not "something
   // in the order can't be had".
   'CART_EMPTY',
+  // Payment creation (Phase F-1). `POST /orders/:id/payment`'s own failure
+  // list (V1.1 §6): the order is not in a state that can start a payment —
+  // any state other than `CREATED` (starting one) or `PENDING_PAYMENT` (an
+  // idempotent retry of one already started, DEC-028).
+  'ORDER_NOT_PAYABLE',
 
   // --- Concurrency · 409 ----------------------------------------------------
   // Client behaviour: refresh and re-render. A normal outcome of a race, not an
