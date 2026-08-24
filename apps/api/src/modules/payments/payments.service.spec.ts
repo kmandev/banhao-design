@@ -18,6 +18,7 @@ interface Recorded {
   table: string;
   op: 'select' | 'insert' | 'update';
   eq: Record<string, unknown>;
+  in: Record<string, unknown[]>;
   payload?: Record<string, unknown>;
 }
 
@@ -29,7 +30,7 @@ function supabaseStub(results: Result[]) {
 
   const admin = {
     from(table: string) {
-      const call: Recorded = { table, op: 'select', eq: {} };
+      const call: Recorded = { table, op: 'select', eq: {}, in: {} };
       calls.push(call);
 
       const builder: Record<string, unknown> = {
@@ -46,6 +47,10 @@ function supabaseStub(results: Result[]) {
         },
         eq(column: string, value: unknown) {
           call.eq[column] = value;
+          return builder;
+        },
+        in(column: string, values: unknown[]) {
+          call.in[column] = values;
           return builder;
         },
         order: () => builder,
@@ -359,5 +364,289 @@ describe('PaymentsService.createPayment — failure surfaces', () => {
     await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
       code: 'INTERNAL_ERROR',
     });
+  });
+});
+
+/**
+ * Payment QR regeneration + PAYMENT_ALREADY_SUCCEEDED guard — completes the
+ * contract `docs/BANHAO-APP-ARCHITECTURE-V1.md` § 6 already documents for a
+ * repeat call to this same endpoint. `createPayment`'s first guarded UPDATE
+ * always matches 0 rows in every scenario below (the order is already
+ * PENDING_PAYMENT from a prior call), so every sequence starts with that
+ * `null`, then the diagnostic `orders` select, then `fetchPaymentWithAttempt`'s
+ * two selects (`payments`, `payment_attempts`) — exactly the call order
+ * `recoverOrRejectInitiation` / `resumePayment` produce.
+ */
+
+const PENDING_PAYMENT_ORDER = { ...TRANSITIONED_ORDER, customer_id: CUSTOMER_ID, state: 'PENDING_PAYMENT' };
+
+const REGENERATED_PROVIDER_RESULT: CreatePaymentResult = {
+  providerPaymentId: 'NULL-regenerated-id',
+  presentation: {
+    type: 'QR_STRING',
+    value: 'NULL-QR:order-1:NULL-regenerated-id',
+    expiresAt: '2026-08-24T05:20:00.000Z',
+  },
+};
+
+function attemptRow(overrides: { attempt_no?: number; state?: string } = {}) {
+  return {
+    id: 'attempt-1',
+    attempt_no: overrides.attempt_no ?? 1,
+    state: overrides.state ?? 'PENDING',
+    qr_payload: PROVIDER_RESULT.presentation!.value,
+    expires_at: PROVIDER_RESULT.presentation!.expiresAt,
+  };
+}
+
+function paymentRowWithState(state: string) {
+  return { ...INSERTED_PAYMENT, state };
+}
+
+function buildRegenServiceForNoRewrite(
+  paymentState: string,
+  attemptState: string,
+  results?: Result[],
+): { subject: PaymentsService; calls: Recorded[]; createPayment: jest.Mock } {
+  const { subject, calls, createPayment } = buildService(
+    results ?? [
+      { data: null, error: null }, // orders guarded UPDATE -> 0 rows
+      { data: PENDING_PAYMENT_ORDER, error: null }, // orders diagnostic select
+      { data: paymentRowWithState(paymentState), error: null }, // payments select
+      { data: attemptRow({ state: attemptState }), error: null }, // payment_attempts select
+    ],
+  );
+  return { subject, calls, createPayment };
+}
+
+describe('PaymentsService.createPayment — resumption: live attempt (A)', () => {
+  it('1. PENDING payment with a live attempt returns the same attempt/QR, creates nothing, never calls the provider', async () => {
+    const { subject, calls, createPayment } = buildRegenServiceForNoRewrite('PENDING', 'PENDING');
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(result).toEqual({
+      paymentId: INSERTED_PAYMENT.id,
+      paymentReference: INSERTED_PAYMENT.payment_reference,
+      state: 'PENDING',
+      amountSatang: INSERTED_PAYMENT.amount_satang,
+      currency: 'THB',
+      qr: { value: PROVIDER_RESULT.presentation!.value, expiresAt: PROVIDER_RESULT.presentation!.expiresAt },
+    });
+    expect(createPayment).not.toHaveBeenCalled();
+    expect(calls.filter((c) => c.table !== 'orders' && (c.op === 'insert' || c.op === 'update'))).toHaveLength(0);
+  });
+
+  it('2. PROCESSING payment with a live attempt returns the same attempt, no regeneration', async () => {
+    const { subject, calls, createPayment } = buildRegenServiceForNoRewrite('PROCESSING', 'PENDING');
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(result.state).toBe('PROCESSING');
+    expect(result.qr).toEqual({
+      value: PROVIDER_RESULT.presentation!.value,
+      expiresAt: PROVIDER_RESULT.presentation!.expiresAt,
+    });
+    expect(createPayment).not.toHaveBeenCalled();
+    expect(calls.filter((c) => c.table !== 'orders' && (c.op === 'insert' || c.op === 'update'))).toHaveLength(0);
+  });
+});
+
+describe('PaymentsService.createPayment — resumption: regeneration (B, C)', () => {
+  it('3. an EXPIRED payment regenerates: provider called, new attempt attempt_no = max+1, payment -> PENDING, new QR returned', async () => {
+    const regeneratedCreatePayment = jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT);
+    const { subject, calls } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('EXPIRED'), error: null },
+        { data: attemptRow({ attempt_no: 1, state: 'EXPIRED' }), error: null },
+        {
+          data: {
+            id: 'attempt-2',
+            attempt_no: 2,
+            state: 'PENDING',
+            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
+            expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+          },
+          error: null,
+        }, // payment_attempts insert
+        { data: paymentRowWithState('PENDING'), error: null }, // payments guarded UPDATE
+      ],
+      { provider: { createPayment: regeneratedCreatePayment } },
+    );
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(regeneratedCreatePayment).toHaveBeenCalledTimes(1);
+
+    const attemptInsert = calls.find((c) => c.table === 'payment_attempts' && c.op === 'insert');
+    expect(attemptInsert?.payload).toMatchObject({
+      payment_id: INSERTED_PAYMENT.id,
+      attempt_no: 2,
+      state: 'PENDING',
+      qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
+      expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+    });
+
+    const paymentUpdate = calls.find((c) => c.table === 'payments' && c.op === 'update');
+    expect(paymentUpdate?.payload).toEqual({
+      state: 'PENDING',
+      provider_payment_id: REGENERATED_PROVIDER_RESULT.providerPaymentId,
+    });
+    expect(paymentUpdate?.eq).toMatchObject({ id: INSERTED_PAYMENT.id });
+    expect(paymentUpdate?.in).toEqual({ state: ['EXPIRED', 'FAILED'] });
+
+    expect(result.state).toBe('PENDING');
+    expect(result.qr).toEqual({
+      value: REGENERATED_PROVIDER_RESULT.presentation!.value,
+      expiresAt: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+    });
+  });
+
+  it('4. a FAILED payment regenerates identically to EXPIRED', async () => {
+    const regeneratedCreatePayment = jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT);
+    const { subject, calls } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('FAILED'), error: null },
+        { data: attemptRow({ attempt_no: 1, state: 'FAILED' }), error: null },
+        {
+          data: {
+            id: 'attempt-2',
+            attempt_no: 2,
+            state: 'PENDING',
+            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
+            expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+          },
+          error: null,
+        },
+        { data: paymentRowWithState('PENDING'), error: null },
+      ],
+      { provider: { createPayment: regeneratedCreatePayment } },
+    );
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(regeneratedCreatePayment).toHaveBeenCalledTimes(1);
+    const attemptInsert = calls.find((c) => c.table === 'payment_attempts' && c.op === 'insert');
+    expect(attemptInsert?.payload).toMatchObject({ attempt_no: 2 });
+    const paymentUpdate = calls.find((c) => c.table === 'payments' && c.op === 'update');
+    expect(paymentUpdate?.in).toEqual({ state: ['EXPIRED', 'FAILED'] });
+    expect(result.state).toBe('PENDING');
+  });
+
+  it('11. regeneration never writes orders or order_status_history — only the initial no-op guarded UPDATE touches orders', async () => {
+    const { subject, calls } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('EXPIRED'), error: null },
+        { data: attemptRow({ attempt_no: 1, state: 'EXPIRED' }), error: null },
+        { data: { id: 'attempt-2', attempt_no: 2, state: 'PENDING', qr_payload: 'q', expires_at: 'e' }, error: null },
+        { data: paymentRowWithState('PENDING'), error: null },
+      ],
+      { provider: { createPayment: jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT) } },
+    );
+
+    await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(calls.filter((c) => c.table === 'orders' && c.op === 'update')).toHaveLength(1);
+    expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+  });
+
+  it('10b. regeneration self-heals when the payment guarded UPDATE affects 0 rows (a concurrent transition already happened), without discarding the new attempt', async () => {
+    const { subject, calls } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('EXPIRED'), error: null },
+        { data: attemptRow({ attempt_no: 1, state: 'EXPIRED' }), error: null },
+        {
+          data: { id: 'attempt-2', attempt_no: 2, state: 'PENDING', qr_payload: 'q', expires_at: 'e' },
+          error: null,
+        }, // attempt insert succeeds — we won the attempt_no race
+        { data: null, error: null }, // payments guarded UPDATE -> 0 rows
+        { data: paymentRowWithState('PENDING'), error: null }, // self-heal re-read
+      ],
+      { provider: { createPayment: jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT) } },
+    );
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(result.state).toBe('PENDING');
+    expect(result.qr).toEqual({ value: 'q', expiresAt: 'e' });
+    const attemptInserts = calls.filter((c) => c.table === 'payment_attempts' && c.op === 'insert');
+    expect(attemptInserts).toHaveLength(1); // never retried, never discarded
+  });
+});
+
+describe('PaymentsService.createPayment — PAYMENT_ALREADY_SUCCEEDED guard (D)', () => {
+  it.each(['SUCCESS', 'REFUND_PENDING', 'REFUND_PROCESSING', 'REFUNDED'])(
+    '5-8. a %s payment rejects with PAYMENT_ALREADY_SUCCEEDED, no provider call, no insert, no update',
+    async (state) => {
+      const { subject, calls, createPayment } = buildRegenServiceForNoRewrite(state, 'SUCCESS');
+
+      await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
+        code: 'PAYMENT_ALREADY_SUCCEEDED',
+        details: { currentState: state },
+      });
+      expect(createPayment).not.toHaveBeenCalled();
+      expect(calls.filter((c) => c.table !== 'orders' && (c.op === 'insert' || c.op === 'update'))).toHaveLength(0);
+    },
+  );
+});
+
+describe('PaymentsService.createPayment — concurrent regeneration (9)', () => {
+  it('9. two regenerations racing on attempt_no: the loser reads back the winner\'s attempt, never inserts twice, never overwrites', async () => {
+    const regeneratedCreatePayment = jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT);
+    const { subject, calls } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('EXPIRED'), error: null },
+        { data: attemptRow({ attempt_no: 1, state: 'EXPIRED' }), error: null },
+        // this caller's insert loses the attempt_no unique-constraint race
+        { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
+        // read-back: the winner's payment (now PENDING) and its attempt (attempt_no 2)
+        { data: paymentRowWithState('PENDING'), error: null },
+        {
+          data: {
+            id: 'attempt-2',
+            attempt_no: 2,
+            state: 'PENDING',
+            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
+            expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+          },
+          error: null,
+        },
+      ],
+      { provider: { createPayment: regeneratedCreatePayment } },
+    );
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(regeneratedCreatePayment).toHaveBeenCalledTimes(1); // this caller's own (wasted) provider call
+    expect(result.state).toBe('PENDING');
+    expect(result.qr).toEqual({
+      value: REGENERATED_PROVIDER_RESULT.presentation!.value,
+      expiresAt: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+    });
+    const attemptInserts = calls.filter((c) => c.table === 'payment_attempts' && c.op === 'insert');
+    expect(attemptInserts).toHaveLength(1); // the one attempt, which conflicted — never retried
+    expect(calls.find((c) => c.table === 'payments' && c.op === 'update')).toBeUndefined(); // the loser never writes payments
+  });
+});
+
+describe('PaymentsService.createPayment — unmodeled payment state (defensive)', () => {
+  it('a payment in a state resumePayment does not recognize (e.g. CANCELLED) fails closed with INTERNAL_ERROR, no writes', async () => {
+    const { subject, calls, createPayment } = buildRegenServiceForNoRewrite('CANCELLED', 'CANCELLED');
+
+    await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
+      code: 'INTERNAL_ERROR',
+    });
+    expect(createPayment).not.toHaveBeenCalled();
+    expect(calls.filter((c) => c.table !== 'orders' && (c.op === 'insert' || c.op === 'update'))).toHaveLength(0);
   });
 });
