@@ -294,7 +294,7 @@ describe('OrdersService.create — create_order failure mapping', () => {
 // State transitions — Phase E-4.1
 // ===========================================================================
 
-type Result = { data: unknown; error: { message: string } | null };
+type Result = { data: unknown; error: { message: string; code?: string } | null };
 
 interface Recorded {
   table: string;
@@ -679,6 +679,289 @@ describe('OrdersService.cancelOrder — operator', () => {
     ]);
 
     await expect(subject.cancelOrder(operatorUser(), ORDER_ID, 'x')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+/**
+ * Phase G foundation — `acceptOrder` also creates the order's `deliveries`
+ * row (`RIDER_SEARCHING`), and repairs a missing one on retry.
+ *
+ * Call order for a successful accept: guarded `orders` UPDATE → history
+ * insert → `orders` read → `restaurants` read → `deliveries` insert.
+ */
+const RESTAURANT_LAT = 15.123456;
+const RESTAURANT_LNG = 105.123456;
+const DELIVERY_LAT = 15.222222;
+const DELIVERY_LNG = 105.222222;
+
+/** The `orders` row `ensureDeliveryForAcceptedOrder` reads back. */
+function deliverySnapshot(state = 'MERCHANT_ACCEPTED', restaurantId = RESTAURANT_A) {
+  return {
+    data: {
+      id: ORDER_ID,
+      restaurant_id: restaurantId,
+      state,
+      delivery_lat: DELIVERY_LAT,
+      delivery_lng: DELIVERY_LNG,
+    },
+    error: null,
+  };
+}
+
+const RESTAURANT_PICKUP = { data: { lat: RESTAURANT_LAT, lng: RESTAURANT_LNG }, error: null };
+const NO_ERROR = { data: null, error: null };
+
+/** Every column the created delivery must carry — asserted whole, not field by field. */
+const EXPECTED_DELIVERY = {
+  order_id: ORDER_ID,
+  state: 'RIDER_SEARCHING',
+  pickup_lat: RESTAURANT_LAT,
+  pickup_lng: RESTAURANT_LNG,
+  dropoff_lat: DELIVERY_LAT,
+  dropoff_lng: DELIVERY_LNG,
+  rider_earning_satang: null,
+};
+
+describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => {
+  it('1. creates exactly one RIDER_SEARCHING delivery with restaurant pickup and order-snapshot dropoff', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('MERCHANT_ACCEPTED'),
+      NO_ERROR, // order_status_history
+      deliverySnapshot(),
+      RESTAURANT_PICKUP,
+      NO_ERROR, // deliveries insert
+    ]);
+
+    const result = await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    expect(result).toEqual({ orderId: ORDER_ID, state: 'MERCHANT_ACCEPTED' });
+
+    const deliveryInserts = calls.filter((c) => c.table === 'deliveries' && c.op === 'insert');
+    expect(deliveryInserts).toHaveLength(1);
+    expect(deliveryInserts[0]?.payload).toEqual(EXPECTED_DELIVERY);
+  });
+
+  it('5. never invents a rider earning — rider_earning_satang is explicitly null (BQ-029/DEC-023 still OPEN)', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('MERCHANT_ACCEPTED'),
+      NO_ERROR,
+      deliverySnapshot(),
+      RESTAURANT_PICKUP,
+      NO_ERROR,
+    ]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    const payload = calls.find((c) => c.table === 'deliveries')?.payload;
+    expect(payload).toHaveProperty('rider_earning_satang');
+    expect(payload?.rider_earning_satang).toBeNull();
+  });
+
+  it('reads dropoff from the order snapshot, never from the addresses table', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('MERCHANT_ACCEPTED'),
+      NO_ERROR,
+      deliverySnapshot(),
+      RESTAURANT_PICKUP,
+      NO_ERROR,
+    ]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    expect(calls.find((c) => c.table === 'addresses')).toBeUndefined();
+    expect(calls.find((c) => c.table === 'deliveries')?.payload).toMatchObject({
+      dropoff_lat: DELIVERY_LAT,
+      dropoff_lng: DELIVERY_LNG,
+    });
+  });
+
+  it('carries null coordinates through rather than inventing them when the restaurant has none', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('MERCHANT_ACCEPTED'),
+      NO_ERROR,
+      deliverySnapshot(),
+      { data: { lat: null, lng: null }, error: null },
+      NO_ERROR,
+    ]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    expect(calls.find((c) => c.table === 'deliveries')?.payload).toMatchObject({
+      pickup_lat: null,
+      pickup_lng: null,
+    });
+  });
+
+  it('6. writes to no payment, ledger, settlement or reconciliation table', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('MERCHANT_ACCEPTED'),
+      NO_ERROR,
+      deliverySnapshot(),
+      RESTAURANT_PICKUP,
+      NO_ERROR,
+    ]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    for (const table of [
+      'payments',
+      'payment_attempts',
+      'payment_events',
+      'payment_transactions',
+      'reconciliation_cases',
+      'refunds',
+      'ledger_entries',
+      'ledger_entry_groups',
+      'settlements',
+    ]) {
+      expect(calls.find((c) => c.table === table)).toBeUndefined();
+    }
+    // Only these four tables are touched at all.
+    expect([...new Set(calls.map((c) => c.table))].sort()).toEqual([
+      'deliveries',
+      'order_status_history',
+      'orders',
+      'restaurants',
+    ]);
+  });
+
+  it('surfaces a delivery insert failure as INTERNAL_ERROR rather than reporting a success that lost the row', async () => {
+    const { subject } = buildTransitionService([
+      updatedRow('MERCHANT_ACCEPTED'),
+      NO_ERROR,
+      deliverySnapshot(),
+      RESTAURANT_PICKUP,
+      { data: null, error: { message: 'connection reset' } },
+    ]);
+
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+      code: 'INTERNAL_ERROR',
+    });
+  });
+});
+
+describe('OrdersService.acceptOrder — crash-window self-heal', () => {
+  it('3. recreates a missing delivery when the order is already MERCHANT_ACCEPTED, while still reporting INVALID_TRANSITION', async () => {
+    const { subject, calls } = buildTransitionService([
+      NO_ERROR, // guarded UPDATE: 0 rows — the order is no longer PAID
+      deliverySnapshot(), // diagnostic read -> MERCHANT_ACCEPTED
+      deliverySnapshot(), // self-heal read
+      RESTAURANT_PICKUP,
+      NO_ERROR, // deliveries insert — the repair
+    ]);
+
+    // The transition genuinely did not happen on this call, so the caller is
+    // told so — the established stale-state contract is unchanged.
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+      details: { currentState: 'MERCHANT_ACCEPTED' },
+    });
+
+    // ...but the lost delivery row is repaired regardless.
+    const deliveryInserts = calls.filter((c) => c.table === 'deliveries' && c.op === 'insert');
+    expect(deliveryInserts).toHaveLength(1);
+    expect(deliveryInserts[0]?.payload).toEqual(EXPECTED_DELIVERY);
+  });
+
+  it('2. does not create a second delivery when one already exists — the unique constraint decides, not a prior read', async () => {
+    const { subject, calls } = buildTransitionService([
+      NO_ERROR,
+      deliverySnapshot(),
+      deliverySnapshot(),
+      RESTAURANT_PICKUP,
+      { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
+    ]);
+
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+    });
+
+    // Exactly one INSERT was attempted, and its conflict was absorbed — never
+    // a SELECT-before-INSERT, and never a retry that could write a second row.
+    const deliveryCalls = calls.filter((c) => c.table === 'deliveries');
+    expect(deliveryCalls).toHaveLength(1);
+    expect(deliveryCalls[0]?.op).toBe('insert');
+  });
+
+  it('4. a concurrent accept losing the unique-constraint race still returns the winning transition, not an error', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('MERCHANT_ACCEPTED'), // this caller won the orders transition
+      NO_ERROR,
+      deliverySnapshot(),
+      RESTAURANT_PICKUP,
+      // ...but lost the deliveries race to a concurrent healer.
+      { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
+    ]);
+
+    const result = await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    expect(result).toEqual({ orderId: ORDER_ID, state: 'MERCHANT_ACCEPTED' });
+    expect(calls.filter((c) => c.table === 'deliveries')).toHaveLength(1);
+  });
+
+  it('heals only MERCHANT_ACCEPTED — an order further along is left to Phase G, not resurrected at RIDER_SEARCHING', async () => {
+    const { subject, calls } = buildTransitionService([
+      NO_ERROR,
+      deliverySnapshot('PREPARING'), // diagnostic read
+      deliverySnapshot('PREPARING'), // self-heal read
+    ]);
+
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+      details: { currentState: 'PREPARING' },
+    });
+
+    expect(calls.find((c) => c.table === 'deliveries')).toBeUndefined();
+  });
+
+  it('never heals an order belonging to a restaurant the caller is not a member of', async () => {
+    const { subject, calls } = buildTransitionService([
+      NO_ERROR,
+      deliverySnapshot('MERCHANT_ACCEPTED', RESTAURANT_A), // diagnostic read
+      deliverySnapshot('MERCHANT_ACCEPTED', RESTAURANT_A), // self-heal read
+    ]);
+
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_B), ORDER_ID)).rejects.toMatchObject({
+      code: 'NOT_RESTAURANT_MEMBER',
+    });
+
+    expect(calls.find((c) => c.table === 'deliveries')).toBeUndefined();
+  });
+
+  it('a failing self-heal never masks the original transition error', async () => {
+    const { subject } = buildTransitionService([
+      NO_ERROR,
+      deliverySnapshot(),
+      { data: null, error: { message: 'connection reset' } }, // self-heal read fails
+    ]);
+
+    // Still the precise stale-state answer, not a generic INTERNAL_ERROR.
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+      code: 'INVALID_TRANSITION',
+      details: { currentState: 'MERCHANT_ACCEPTED' },
+    });
+  });
+
+  it('issues no query at all for a merchant with no membership — the heal path does not weaken that', async () => {
+    const { subject, calls } = buildTransitionService([]);
+
+    await expect(subject.acceptOrder(merchantUser(), ORDER_ID)).rejects.toMatchObject({
+      code: 'NOT_RESTAURANT_MEMBER',
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('does not attempt a delivery for an order that does not exist', async () => {
+    const { subject, calls } = buildTransitionService([
+      NO_ERROR, // guarded UPDATE: 0 rows
+      NO_ERROR, // diagnostic read: no such order
+      NO_ERROR, // self-heal read: no such order
+    ]);
+
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(calls.find((c) => c.table === 'deliveries')).toBeUndefined();
   });
 });
 

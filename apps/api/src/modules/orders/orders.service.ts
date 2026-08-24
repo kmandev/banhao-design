@@ -28,6 +28,21 @@ interface OrderDiagnosisRow {
   state: string;
 }
 
+/** `orders`, the columns creating this order's `deliveries` row needs. */
+interface OrderDeliverySnapshotRow {
+  id: string;
+  restaurant_id: string;
+  state: string;
+  delivery_lat: number | null;
+  delivery_lng: number | null;
+}
+
+/** `restaurants`, the pickup coordinates a delivery is created with. */
+interface RestaurantPickupRow {
+  lat: number | null;
+  lng: number | null;
+}
+
 type ActorType = 'CUSTOMER' | 'MERCHANT' | 'RIDER' | 'OPERATOR';
 
 /**
@@ -200,9 +215,64 @@ export class OrdersService {
   // must close that gap before dispatch is real.
   // ---------------------------------------------------------------------
 
-  /** `PAID → MERCHANT_ACCEPTED`. Merchant, scoped to their own restaurant. */
+  /**
+   * `PAID → MERCHANT_ACCEPTED`. Merchant, scoped to their own restaurant.
+   *
+   * Also creates the order's `deliveries` row (`RIDER_SEARCHING`) — V1.1 §6's
+   * operations catalogue, the first half of what DEC-020 calls for. Only the
+   * row is created here: candidate selection, `rider_assignment_attempts` and
+   * every other dispatch concern remain Phase G work this method does not do,
+   * so an order reaching `MERCHANT_ACCEPTED` today has a delivery waiting to
+   * be dispatched rather than one actually being broadcast.
+   *
+   * ## Why the delivery step runs on both the success and the failure path
+   *
+   * The guarded `UPDATE` and the `deliveries` `INSERT` are separate statements
+   * (no cross-table transaction — the same accepted limitation the payment
+   * domain documents). A crash between them leaves an order correctly
+   * `MERCHANT_ACCEPTED` with no delivery, and nothing would ever create one:
+   * the merchant's natural retry finds the order no longer `PAID`, so the
+   * guarded `UPDATE` matches 0 rows and the transition legitimately fails.
+   * `ensureDeliveryForAcceptedOrder` therefore runs on *both* outcomes,
+   * guarding on the order's own state rather than on which path reached it —
+   * the same "repair the invariant on the retry that discovers it" shape
+   * `PaymentEventProcessingService.ensureOrderHistoryRecorded` already uses.
+   *
+   * The retry still fails with `INVALID_TRANSITION`, deliberately: this
+   * endpoint reports whether *this call* moved the order, and a second accept
+   * did not. Healing the delivery does not turn a rejected transition into an
+   * accepted one — the two answer different questions, and the existing
+   * stale-state contract (`OrdersService — atomic guarded update`) is the
+   * established convention here.
+   */
   async acceptOrder(user: AuthenticatedUser, orderId: string): Promise<OrderTransitionResponse> {
-    return this.merchantTransition(user, orderId, 'PAID', 'MERCHANT_ACCEPTED', 'accepted_at');
+    const restaurantIds = user.capabilities.merchant.map((m) => m.restaurantId);
+
+    let transitioned: OrderTransitionResponse;
+    try {
+      transitioned = await this.merchantTransition(user, orderId, 'PAID', 'MERCHANT_ACCEPTED', 'accepted_at');
+    } catch (cause) {
+      // Self-heal only. The original failure is what the caller must see, so
+      // a repair attempt that itself fails is logged and swallowed rather
+      // than replacing a precise `INVALID_TRANSITION` / `NOT_FOUND` /
+      // `NOT_RESTAURANT_MEMBER` with a generic `INTERNAL_ERROR`.
+      try {
+        await this.ensureDeliveryForAcceptedOrder(orderId, restaurantIds);
+      } catch (healCause) {
+        const message = healCause instanceof Error ? healCause.message : String(healCause);
+        this.logger.error(`delivery self-heal failed for order ${orderId}: ${message}`);
+      }
+      throw cause;
+    }
+
+    // The order has already moved. A failure here throws `INTERNAL_ERROR`
+    // rather than being swallowed — matching `writeHistory`'s own precedent
+    // for a side effect that fails after its transition committed. Reporting
+    // success while the delivery is missing would hide the loss *and* remove
+    // the retry that the branch above uses to repair it.
+    await this.ensureDeliveryForAcceptedOrder(orderId, restaurantIds);
+
+    return transitioned;
   }
 
   /** `MERCHANT_ACCEPTED → PREPARING`. No timestamp column exists for this one. */
@@ -303,6 +373,108 @@ export class OrdersService {
     await this.writeHistory(orderId, fromState, toState, 'MERCHANT', user.id);
 
     return { orderId: data.id, state: data.state };
+  }
+
+  /**
+   * Creates the `deliveries` row for an order that is `MERCHANT_ACCEPTED`,
+   * if it does not already have one. Idempotent, and safe to call on every
+   * accept attempt — see `acceptOrder`'s own comment for why it runs on both
+   * the success and the failure path.
+   *
+   * ## Guards, and why they are read here rather than passed in
+   *
+   * Both call sites re-read the order rather than reusing the guarded
+   * `UPDATE`'s returned row: the failure path has no returned row at all (0
+   * rows is what brought it here), and the delivery destination lives in
+   * columns that `UPDATE` does not select. Reading once, in one place, keeps
+   * the healing path and the normal path *identical* — which is what makes
+   * the healing path trustworthy, since every accept exercises it.
+   *
+   * The state check is a plain read, not a guard on a write: `deliveries`
+   * has no state to guard against, and `deliveries_order_id_key` — not this
+   * read — is what decides whether a row is created (see below). Only
+   * `MERCHANT_ACCEPTED` is healed, never a later state: an order already
+   * `PREPARING` or beyond may legitimately have a delivery that has moved on
+   * from `RIDER_SEARCHING`, and deciding what state a *missing* delivery
+   * should be resurrected into at that point is a Phase G question this
+   * slice does not answer.
+   *
+   * Restaurant membership is re-checked for the same reason every other
+   * ownership check in this service exists: the failure path is reachable by
+   * a merchant who is not a member of this order's restaurant, and a caller
+   * with no claim on an order must not trigger writes against it.
+   */
+  private async ensureDeliveryForAcceptedOrder(
+    orderId: string,
+    allowedRestaurantIds: string[],
+  ): Promise<void> {
+    // An empty membership list can never match, so short-circuit before
+    // issuing any query at all — `merchantTransition` refuses these callers
+    // without touching the database, and the heal path must not either.
+    if (allowedRestaurantIds.length === 0) {
+      return;
+    }
+
+    const { data: order, error: orderError } = await this.supabase.admin
+      .from('orders')
+      .select('id, restaurant_id, state, delivery_lat, delivery_lng')
+      .eq('id', orderId)
+      .maybeSingle<OrderDeliverySnapshotRow>();
+
+    if (orderError) {
+      this.failDeliveryCreation(orderId, `order read failed: ${orderError.message}`);
+    }
+
+    if (!order || order.state !== 'MERCHANT_ACCEPTED' || !allowedRestaurantIds.includes(order.restaurant_id)) {
+      return;
+    }
+
+    const { data: restaurant, error: restaurantError } = await this.supabase.admin
+      .from('restaurants')
+      .select('lat, lng')
+      .eq('id', order.restaurant_id)
+      .maybeSingle<RestaurantPickupRow>();
+
+    if (restaurantError) {
+      this.failDeliveryCreation(orderId, `restaurant read failed: ${restaurantError.message}`);
+    }
+
+    const { error: insertError } = await this.supabase.admin.from('deliveries').insert({
+      order_id: order.id,
+      state: 'RIDER_SEARCHING',
+      // Pickup is the restaurant's own location; dropoff is the order's
+      // snapshot, never a live read of `addresses` — the order is the
+      // authority for where it is going (§8's snapshot discipline), and the
+      // address may since have been edited or archived.
+      pickup_lat: restaurant?.lat ?? null,
+      pickup_lng: restaurant?.lng ?? null,
+      dropoff_lat: order.delivery_lat,
+      dropoff_lng: order.delivery_lng,
+      // Explicitly null, not omitted: BQ-029/DEC-023 keep the rider earnings
+      // formula OPEN and the column's own migration comment forbids
+      // inventing a default. Writing the null deliberately records that no
+      // amount was computed, rather than leaving a reader to wonder whether
+      // one was forgotten.
+      rider_earning_satang: null,
+    });
+
+    if (insertError) {
+      // `deliveries_order_id_key` is the sole authority on whether this order
+      // already has a delivery — attempted by INSERT, never by a prior
+      // SELECT (ADR-003, and the same discipline the payment domain applies
+      // to its own natural keys). A conflict means a concurrent accept, or
+      // this order's earlier accept, already created it: nothing to do, and
+      // never a second row.
+      if (isUniqueViolation(insertError)) {
+        return;
+      }
+      this.failDeliveryCreation(orderId, `deliveries insert failed: ${insertError.message}`);
+    }
+  }
+
+  private failDeliveryCreation(orderId: string, message: string): never {
+    this.logger.error(`Delivery creation failed for order ${orderId}: ${message}`);
+    throw new DomainError('INTERNAL_ERROR', { message: 'Delivery creation failed' });
   }
 
   private async riderTransition(
@@ -507,4 +679,9 @@ export class OrdersService {
 
     throw new DomainError('INTERNAL_ERROR', { message: 'Order creation failed' });
   }
+}
+
+/** Same shape as the payment domain's own helper — `23505`, however it surfaces. */
+function isUniqueViolation(error: { code?: string; message: string }): boolean {
+  return error.code === '23505' || error.message.includes('duplicate key');
 }
