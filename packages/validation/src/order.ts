@@ -45,3 +45,26 @@ export interface CreateOrderResponse {
   orderNumber: string;
   state: string;
 }
+
+/**
+ * `POST /api/v1/orders/:id/cancel` request body (Phase E-4.1).
+ *
+ * `reason` is free text, not a cause-code enum — the cause-code vocabulary
+ * (`docs/ORDER_LIFECYCLE.md` § 6) is `PROPOSED`, not `ACCEPTED`, so nothing may
+ * validate against it yet. The field is optional: an operator cancellation
+ * should always carry one (DEC-032), but that is a service-level expectation,
+ * not something this shared schema can distinguish from a customer's.
+ */
+export const cancelOrderRequestSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export type CancelOrderRequest = z.infer<typeof cancelOrderRequestSchema>;
+
+/** The response every `POST /api/v1/orders/:id/...` transition returns on success. */
+export interface OrderTransitionResponse {
+  orderId: string;
+  state: string;
+}

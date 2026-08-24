@@ -1,4 +1,4 @@
-import { createOrderRequestSchema } from './order';
+import { cancelOrderRequestSchema, createOrderRequestSchema } from './order';
 
 const ADDRESS_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -92,4 +92,31 @@ describe('createOrderRequestSchema', () => {
       expect(result.success).toBe(false);
     },
   );
+});
+
+describe('cancelOrderRequestSchema', () => {
+  it('accepts an empty body — reason is optional', () => {
+    const result = cancelOrderRequestSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a reason', () => {
+    const result = cancelOrderRequestSchema.safeParse({ reason: 'เปลี่ยนใจ' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an empty-string reason', () => {
+    const result = cancelOrderRequestSchema.safeParse({ reason: '' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a reason over 500 characters', () => {
+    const result = cancelOrderRequestSchema.safeParse({ reason: 'x'.repeat(501) });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an unknown field — strict, like every other order schema', () => {
+    const result = cancelOrderRequestSchema.safeParse({ reason: 'ok', causeCode: 'CUSTOMER_CANCELLED' });
+    expect(result.success).toBe(false);
+  });
 });

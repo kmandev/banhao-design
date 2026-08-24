@@ -1,14 +1,22 @@
-import { Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, Post, UnauthorizedException } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { createOrderRequestSchema, type CreateOrderResponse } from '@banhao/validation';
+import {
+  cancelOrderRequestSchema,
+  createOrderRequestSchema,
+  type CreateOrderResponse,
+  type OrderTransitionResponse,
+} from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { parseOrThrow } from '../../common/validation/parse';
 import type { AuthenticatedUser } from '../../common/types';
 import { OrdersService } from './orders.service';
@@ -40,6 +48,120 @@ export class OrdersController {
   ): Promise<CreateOrderResponse> {
     const input = parseOrThrow(createOrderRequestSchema, body);
     return this.orders.create(requireUser(user).id, input);
+  }
+
+  // ---------------------------------------------------------------------
+  // State transitions — Phase E-4.1. Every route is a command, never
+  // `PATCH { state }` (ADR-009) — the actor is always the server-verified
+  // caller (`@CurrentUser()`), never a body field. `@Roles(...)` here is a
+  // coarse "is this actor this kind of thing at all" filter, exactly like
+  // every other capability-gated route in this API; resource-level
+  // authorization (does this merchant own *this* order's restaurant, does
+  // this customer own *this* order) happens inside `OrdersService`, where
+  // the order itself is resolved — the route only carries an order id, not
+  // a restaurant id, so `@RestaurantScope()` does not apply here the way it
+  // does on `/merchant/restaurants/:restaurantId/...` routes.
+  // ---------------------------------------------------------------------
+
+  @Post(':id/accept')
+  @HttpCode(200)
+  @Roles('MERCHANT')
+  @ApiOkResponse({ description: 'The order, now MERCHANT_ACCEPTED' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not a merchant' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION or NOT_RESTAURANT_MEMBER' })
+  async accept(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<OrderTransitionResponse> {
+    return this.orders.acceptOrder(requireUser(user), id);
+  }
+
+  @Post(':id/start-preparing')
+  @HttpCode(200)
+  @Roles('MERCHANT')
+  @ApiOkResponse({ description: 'The order, now PREPARING' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not a merchant' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION or NOT_RESTAURANT_MEMBER' })
+  async startPreparing(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<OrderTransitionResponse> {
+    return this.orders.startPreparing(requireUser(user), id);
+  }
+
+  @Post(':id/mark-ready')
+  @HttpCode(200)
+  @Roles('MERCHANT')
+  @ApiOkResponse({ description: 'The order, now READY_FOR_PICKUP' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not a merchant' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION or NOT_RESTAURANT_MEMBER' })
+  async markReady(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<OrderTransitionResponse> {
+    return this.orders.markReady(requireUser(user), id);
+  }
+
+  @Post(':id/pickup')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The order, now PICKED_UP' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not a rider' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION' })
+  async pickup(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<OrderTransitionResponse> {
+    return this.orders.pickupOrder(requireUser(user), id);
+  }
+
+  @Post(':id/start-delivery')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The order, now DELIVERING' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not a rider' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION' })
+  async startDelivery(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<OrderTransitionResponse> {
+    return this.orders.startDelivery(requireUser(user), id);
+  }
+
+  @Post(':id/complete')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The order, now DELIVERED' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not a rider' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION' })
+  async complete(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<OrderTransitionResponse> {
+    return this.orders.completeDelivery(requireUser(user), id);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(200)
+  @Roles('CUSTOMER', 'OPERATOR')
+  @ApiOkResponse({ description: 'The order, now CANCELLED' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not the order owner and not an operator' })
+  @ApiNotFoundResponse({ description: 'Order not found, or not owned by this customer' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION — past the cancellable window' })
+  async cancel(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<OrderTransitionResponse> {
+    const input = parseOrThrow(cancelOrderRequestSchema, body ?? {});
+    return this.orders.cancelOrder(requireUser(user), id, input.reason);
   }
 }
 
