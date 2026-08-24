@@ -53,18 +53,27 @@ export class NullPaymentWebhookSimulator {
    * `providerEventId` defaults to a fresh id per call — pass the same value
    * twice to simulate a provider's retry/resend, the case
    * `payment_events`' `(provider, provider_event_id)` uniqueness exists for.
+   * `amountSatang` is required (F-2b): `PaymentEventProcessingService`
+   * compares it against `payments.amount_satang` before treating the event as
+   * a match — pass a deliberately wrong value to simulate an amount
+   * mismatch.
    *
    * The payload is unambiguously synthetic: `simulated: true` and a `source`
    * field naming this class, so a `payment_events.raw_payload` row can never
    * be mistaken for genuine provider data even by a human reading the table.
    */
-  signPaymentSucceeded(input: { providerPaymentId: string; providerEventId?: string }): SignedSimulatedEvent {
+  signPaymentSucceeded(input: {
+    providerPaymentId: string;
+    amountSatang: number;
+    providerEventId?: string;
+  }): SignedSimulatedEvent {
     const payload = {
       simulated: true as const,
       source: 'NullPaymentWebhookSimulator',
       eventType: 'payment.succeeded',
       providerEventId: input.providerEventId ?? `NULL-EVT-${randomUUID()}`,
       providerPaymentId: input.providerPaymentId,
+      amountSatang: input.amountSatang,
       occurredAt: new Date().toISOString(),
     };
 

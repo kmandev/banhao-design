@@ -51,7 +51,7 @@ describe('NullPaymentWebhookSimulator', () => {
       const simulator = new NullPaymentWebhookSimulator();
       const provider = new NullPaymentProvider();
 
-      const { rawBody, headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'NULL-payment-1' });
+      const { rawBody, headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'NULL-payment-1', amountSatang: 7500 });
       const result = provider.verifyWebhookSignature(rawBody, headers);
 
       expect(result.verified).toBe(true);
@@ -61,7 +61,7 @@ describe('NullPaymentWebhookSimulator', () => {
       const simulator = new NullPaymentWebhookSimulator();
       const provider = new NullPaymentProvider();
 
-      const { rawBody, headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'NULL-payment-42' });
+      const { rawBody, headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'NULL-payment-42', amountSatang: 7500 });
       const result = provider.verifyWebhookSignature(rawBody, headers);
 
       expect(result).toMatchObject({ verified: true, providerPaymentId: 'NULL-payment-42' });
@@ -70,8 +70,8 @@ describe('NullPaymentWebhookSimulator', () => {
     it('generates a fresh providerEventId per call by default', () => {
       const simulator = new NullPaymentWebhookSimulator();
 
-      const first = JSON.parse(simulator.signPaymentSucceeded({ providerPaymentId: 'p-1' }).rawBody);
-      const second = JSON.parse(simulator.signPaymentSucceeded({ providerPaymentId: 'p-1' }).rawBody);
+      const first = JSON.parse(simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500 }).rawBody);
+      const second = JSON.parse(simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500 }).rawBody);
 
       expect(first.providerEventId).not.toBe(second.providerEventId);
     });
@@ -79,8 +79,8 @@ describe('NullPaymentWebhookSimulator', () => {
     it('reuses an explicit providerEventId — the mechanism a resend/retry test needs', () => {
       const simulator = new NullPaymentWebhookSimulator();
 
-      const first = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', providerEventId: 'fixed-id' });
-      const second = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', providerEventId: 'fixed-id' });
+      const first = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500, providerEventId: 'fixed-id' });
+      const second = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500, providerEventId: 'fixed-id' });
 
       const firstPayload = JSON.parse(first.rawBody);
       const secondPayload = JSON.parse(second.rawBody);
@@ -94,7 +94,7 @@ describe('NullPaymentWebhookSimulator', () => {
 
     it('the synthetic event is unambiguously distinguishable from real provider data', () => {
       const simulator = new NullPaymentWebhookSimulator();
-      const { rawBody } = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1' });
+      const { rawBody } = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500 });
       const payload = JSON.parse(rawBody);
 
       expect(payload.simulated).toBe(true);
@@ -103,14 +103,14 @@ describe('NullPaymentWebhookSimulator', () => {
 
     it('signs under the exact header NullPaymentProvider reads', () => {
       const simulator = new NullPaymentWebhookSimulator();
-      const { headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1' });
+      const { headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500 });
 
       expect(Object.keys(headers)).toEqual([NULL_PROVIDER_SIGNATURE_HEADER_LOWER]);
     });
 
     it('never resolves to a Promise or performs any I/O — purely synchronous local computation', () => {
       const simulator = new NullPaymentWebhookSimulator();
-      const result = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1' });
+      const result = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500 });
 
       expect(result).not.toBeInstanceOf(Promise);
     });
@@ -120,7 +120,7 @@ describe('NullPaymentWebhookSimulator', () => {
     it('a simulator signed under one secret is rejected by a verifier configured with a different one', () => {
       env({ paymentWebhookDevSecret: 'secret-a' });
       const simulator = new NullPaymentWebhookSimulator();
-      const { rawBody, headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1' });
+      const { rawBody, headers } = simulator.signPaymentSucceeded({ providerPaymentId: 'p-1', amountSatang: 7500 });
 
       env({ paymentWebhookDevSecret: 'secret-b' });
       const provider = new NullPaymentProvider();
