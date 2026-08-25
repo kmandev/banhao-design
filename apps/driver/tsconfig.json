@@ -7,7 +7,7 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "allowJs": true,
-    "types": ["react"]
+    "types": ["react", "jest"]
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
