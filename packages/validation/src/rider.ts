@@ -77,3 +77,17 @@ export interface RiderCancelDeliveryResponse {
   state: string;
   riderId: string;
 }
+
+/**
+ * `POST /api/v1/rider/deliveries/:id/arrived` — Phase G-4. No request body:
+ * the delivery id comes from the route and the rider's identity from the
+ * verified JWT capability (`user.capabilities.rider.riderId`), same as
+ * `POST /rider/offers/:id/accept`. Carries no money field, same reasoning as
+ * `RiderOfferAcceptResponse`.
+ */
+export interface RiderArrivedResponse {
+  deliveryId: string;
+  /** Always `AT_MERCHANT` on success — the only outcome this transition produces. */
+  state: string;
+  riderId: string;
+}

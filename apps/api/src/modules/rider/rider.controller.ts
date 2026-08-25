@@ -11,6 +11,7 @@ import {
 import {
   riderCancelDeliveryRequestSchema,
   riderLocationRequestSchema,
+  type RiderArrivedResponse,
   type RiderCancelDeliveryResponse,
   type RiderLocationResponse,
   type RiderOfferAcceptResponse,
@@ -20,6 +21,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { parseOrThrow } from '../../common/validation/parse';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
+import { DeliveryArrivalService } from './delivery-arrival.service';
 import { DeliveryReleaseService } from './delivery-release.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
 import { RiderLocationService } from './rider-location.service';
@@ -49,6 +51,7 @@ export class RiderController {
     private readonly location: RiderLocationService,
     private readonly offers: OfferAcceptanceService,
     private readonly releases: DeliveryReleaseService,
+    private readonly arrivals: DeliveryArrivalService,
   ) {}
 
   /**
@@ -86,6 +89,26 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderOfferAcceptResponse> {
     return this.offers.acceptOffer(requireUser(user), id);
+  }
+
+  /**
+   * A rider marks that they have reached the merchant for a delivery already
+   * assigned to them — Phase G-4. Delivery-domain only (DEC-018): no order,
+   * payment, or assignment-authority table is touched.
+   */
+  @Post('deliveries/:id/arrived')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The delivery, now AT_MERCHANT' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiNotFoundResponse({ description: 'Delivery not found' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION — the delivery is not currently RIDER_ASSIGNED' })
+  async markArrived(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<RiderArrivedResponse> {
+    return this.arrivals.arrive(requireUser(user), id);
   }
 
   /**
