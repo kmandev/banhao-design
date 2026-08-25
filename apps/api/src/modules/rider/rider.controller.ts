@@ -16,6 +16,7 @@ import {
   type RiderEnRouteResponse,
   type RiderLocationResponse,
   type RiderOfferAcceptResponse,
+  type RiderOfferDeclineResponse,
   type RiderPickedUpResponse,
 } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -95,6 +96,28 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderOfferAcceptResponse> {
     return this.offers.acceptOffer(requireUser(user), id);
+  }
+
+  /**
+   * A rider declines their own offer — Phase G-6.2 (V1.1 §7's `accept|decline`
+   * pair). Single-row, single-domain: only `rider_assignment_attempts` moves,
+   * never the delivery, the order, or any money table. See
+   * `OfferAcceptanceService.declineOffer` for why the broadcast model (DEC-020)
+   * makes this safe to do without touching dispatch state.
+   */
+  @Post('offers/:id/decline')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The offer, now DECLINED' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider' })
+  @ApiNotFoundResponse({ description: 'Offer not found, or not offered to this rider' })
+  @ApiConflictResponse({ description: 'OFFER_TAKEN or OFFER_EXPIRED — the offer is no longer PENDING' })
+  async declineOffer(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<RiderOfferDeclineResponse> {
+    return this.offers.declineOffer(requireUser(user), id);
   }
 
   /**

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { RiderOfferAcceptResponse } from '@banhao/validation';
+import type { RiderOfferAcceptResponse, RiderOfferDeclineResponse } from '@banhao/validation';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
@@ -43,6 +43,8 @@ type RiderClaim = 'claimed' | 'alreadyHoldsThisDelivery' | 'busy';
 
 /**
  * `POST /api/v1/rider/offers/:id/accept` — Phase G-2 (DEC-020, DEC-037).
+ * `POST /api/v1/rider/offers/:id/decline` — Phase G-6.2, documented on
+ * {@link OfferAcceptanceService.declineOffer} itself.
  *
  * ## Two guarded writes, in this order, and why the order matters
  *
@@ -140,6 +142,86 @@ export class OfferAcceptanceService {
     await this.recordAssignment(delivery.id, riderId, offer.id);
 
     return { deliveryId: delivery.id, state: delivery.state, riderId };
+  }
+
+  /**
+   * `POST /api/v1/rider/offers/:id/decline` — Phase G-6.2 (V1.1 §7's
+   * `accept|decline` pair). A single guarded `UPDATE` on
+   * `rider_assignment_attempts` alone: `PENDING -> DECLINED`, scoped to the
+   * caller's own offer. No delivery, order, or money table is read or written
+   * — DEC-020's broadcast model means every eligible rider was offered this
+   * delivery simultaneously, so one rider declining changes nothing for any
+   * other rider's own live offer, and `DispatchService`'s own round logic
+   * (state-driven, never outcome-driven — see its header) is untouched.
+   *
+   * The guarded `UPDATE` is the sole transition authority (ADR-003): ownership
+   * (`rider_id`) and the pre-state (`outcome = 'PENDING'`) are both enforced
+   * inside its `WHERE` clause. A zero-row result does not by itself say why —
+   * {@link readOwnOffer} is reused unchanged for the diagnostic read, which is
+   * what already collapses "does not exist" and "belongs to another rider"
+   * into the same `NOT_FOUND` `acceptOffer` returns, rather than inventing a
+   * new distinction for this endpoint. Whatever `readOwnOffer` returns is by
+   * definition owned by this rider and not `PENDING` (the guarded `UPDATE`
+   * already ruled that combination out), so the only two live outcomes to
+   * classify are `EXPIRED` and everything else already resolved
+   * (`ACCEPTED`/`DECLINED`/`SUPERSEDED`) — both map onto the same catalogue
+   * codes `assertOfferIsAcceptable` already established: `OFFER_EXPIRED` and
+   * `OFFER_TAKEN`. Declining an already-declined offer is therefore a refusal,
+   * not an idempotent success — the same "terminal offer states are refusal"
+   * convention `acceptOffer` uses for `DECLINED`/`SUPERSEDED`.
+   */
+  async declineOffer(user: AuthenticatedUser, offerId: string): Promise<RiderOfferDeclineResponse> {
+    const rider = user.capabilities.rider;
+    if (!rider) {
+      throw new DomainError('FORBIDDEN', { message: 'Not a rider' });
+    }
+    const riderId = rider.riderId;
+
+    const declined = await this.claimDecline(offerId, riderId);
+
+    if (!declined) {
+      const offer = await this.readOwnOffer(offerId, riderId);
+      this.classifyDeclineFailure(offer);
+    }
+
+    return { offerId, riderId, outcome: 'DECLINED' };
+  }
+
+  /** The guarded UPDATE — ownership and pre-state enforced entirely in the `WHERE` clause. */
+  private async claimDecline(offerId: string, riderId: string): Promise<OfferRow | null> {
+    const { data, error } = await this.supabase.admin
+      .from('rider_assignment_attempts')
+      .update({ outcome: 'DECLINED' })
+      .eq('id', offerId)
+      .eq('rider_id', riderId)
+      .eq('outcome', 'PENDING')
+      .select('id, delivery_id, rider_id, outcome, expires_at')
+      .maybeSingle<OfferRow>();
+
+    if (error) {
+      this.logger.error(`Offer decline claim failed for ${offerId} (rider ${riderId}): ${error.message}`);
+      throw new DomainError('INTERNAL_ERROR', { message: 'Offer decline failed' });
+    }
+
+    return data ?? null;
+  }
+
+  /**
+   * Explains a failed guarded decline. Reached only once {@link readOwnOffer}
+   * has already confirmed the offer exists and belongs to this rider, so the
+   * only question left is which non-`PENDING` outcome it already settled into.
+   */
+  private classifyDeclineFailure(offer: OfferRow): never {
+    if (offer.outcome === 'EXPIRED') {
+      throw new DomainError('OFFER_EXPIRED', { details: { offerId: offer.id } });
+    }
+
+    // ACCEPTED, DECLINED, or SUPERSEDED — no longer PENDING, already resolved
+    // one way or another. Same grouping `assertOfferIsAcceptable` uses for
+    // DECLINED/SUPERSEDED, extended to ACCEPTED for the identical reason: the
+    // offer is not live, and OFFER_TAKEN is the catalogue's existing code for
+    // "well-formed request, offer no longer available."
+    throw new DomainError('OFFER_TAKEN', { details: { offerId: offer.id } });
   }
 
   /**

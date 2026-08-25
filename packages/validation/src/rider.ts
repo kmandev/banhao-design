@@ -53,6 +53,21 @@ export interface RiderOfferAcceptResponse {
 }
 
 /**
+ * `POST /api/v1/rider/offers/:id/decline` — Phase G-6.2 (V1.1 §7's
+ * `accept|decline` pair). No request body, same reasoning as
+ * `RiderOfferAcceptResponse`. Carries no `deliveryId`: unlike accept, decline
+ * never touches the delivery domain (DEC-018) — it is a single-row transition
+ * on `rider_assignment_attempts` alone — so there is no delivery state to
+ * report. Carries no money field, same reasoning as `RiderOfferAcceptResponse`.
+ */
+export interface RiderOfferDeclineResponse {
+  offerId: string;
+  riderId: string;
+  /** Always `DECLINED` on success — `rider_assignment_attempts.outcome`'s own value. */
+  outcome: string;
+}
+
+/**
  * `POST /api/v1/rider/deliveries/:id/cancel` — DEC-021's rider-cancel/release
  * slice (Phase G-3). Same shape as `cancelOrderRequestSchema`: a short,
  * optional free-text reason, `.strict()` so no other field — in particular no

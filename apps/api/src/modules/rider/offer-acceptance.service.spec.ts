@@ -521,3 +521,210 @@ describe('OfferAcceptanceService — isolation', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('OfferAcceptanceService — declining an offer (Phase G-6.2, V1.1 §7)', () => {
+  it('a rider declines their own live offer: one guarded UPDATE, PENDING -> DECLINED', async () => {
+    const { supabase, calls } = supabaseStub([{ data: { ...LIVE_OFFER, outcome: 'DECLINED' }, error: null }]);
+
+    const result = await new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID);
+
+    expect(result).toEqual({ offerId: OFFER_ID, riderId: RIDER_ID, outcome: 'DECLINED' });
+    expect(calls).toHaveLength(1);
+
+    const claim = calls[0];
+    expect(claim?.table).toBe('rider_assignment_attempts');
+    expect(claim?.op).toBe('update');
+    expect(claim?.payload).toEqual({ outcome: 'DECLINED' });
+    // Ownership and pre-state are both in the WHERE clause — the guarded
+    // UPDATE is the sole authority, never a prior SELECT.
+    expect(claim?.eq).toEqual({ id: OFFER_ID, rider_id: RIDER_ID, outcome: 'PENDING' });
+  });
+
+  it('the guarded UPDATE is the first and only database call on the happy path — no SELECT precedes it', async () => {
+    const { supabase, calls } = supabaseStub([{ data: { ...LIVE_OFFER, outcome: 'DECLINED' }, error: null }]);
+
+    await new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID);
+
+    expect(calls[0]?.op).toBe('update');
+    expect(calls.some((c) => c.op === 'select')).toBe(false);
+  });
+
+  it("declining someone else's offer never mutates it: the guarded UPDATE's rider_id filter is what fails, and the diagnostic read is scoped the same way — both indistinguishable NOT_FOUND", async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: null, error: null }, // guarded UPDATE: rider_id filter matches nothing
+      { data: null, error: null }, // readOwnOffer, scoped to the caller: also nothing
+    ]);
+
+    await expectDomainError(
+      new OfferAcceptanceService(supabase).declineOffer(riderUser(OTHER_RIDER_ID), OFFER_ID),
+      'NOT_FOUND',
+    );
+
+    const claim = calls[0];
+    expect(claim?.op).toBe('update');
+    expect(claim?.eq).toEqual({ id: OFFER_ID, rider_id: OTHER_RIDER_ID, outcome: 'PENDING' });
+
+    const diagnosis = calls[1];
+    expect(diagnosis?.op).toBe('select');
+    expect(diagnosis?.eq).toMatchObject({ id: OFFER_ID, rider_id: OTHER_RIDER_ID });
+
+    // Ownership enforced inside the guarded write itself — the diagnostic
+    // path never mutates.
+    expect(calls.filter((c) => c.op === 'update')).toHaveLength(1);
+  });
+
+  it('a nonexistent offer id is NOT_FOUND, and writes nothing', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: null, error: null },
+      { data: null, error: null },
+    ]);
+
+    await expectDomainError(new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID), 'NOT_FOUND');
+
+    expect(calls.filter((c) => c.op === 'update' && c.payload)).toHaveLength(1);
+    expect(calls[0]?.payload).toEqual({ outcome: 'DECLINED' });
+  });
+
+  it('an offer already ACCEPTED cannot be declined — OFFER_TAKEN, and the outcome is left untouched', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: null, error: null },
+      { data: { ...LIVE_OFFER, outcome: 'ACCEPTED' }, error: null },
+    ]);
+
+    await expectDomainError(new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID), 'OFFER_TAKEN');
+
+    expect(calls.filter((c) => c.op === 'update')).toHaveLength(1);
+  });
+
+  it('an offer already EXPIRED cannot be declined — OFFER_EXPIRED, reusing the same code acceptOffer uses for its window', async () => {
+    const { supabase } = supabaseStub([
+      { data: null, error: null },
+      { data: { ...LIVE_OFFER, outcome: 'EXPIRED' }, error: null },
+    ]);
+
+    await expectDomainError(new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID), 'OFFER_EXPIRED');
+  });
+
+  it('an offer already SUPERSEDED (another rider won the broadcast) cannot be declined — OFFER_TAKEN', async () => {
+    const { supabase } = supabaseStub([
+      { data: null, error: null },
+      { data: { ...LIVE_OFFER, outcome: 'SUPERSEDED' }, error: null },
+    ]);
+
+    await expectDomainError(new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID), 'OFFER_TAKEN');
+  });
+
+  it('declining an already-DECLINED offer is a refusal, not an idempotent success — matching the repository\'s established "terminal offer state" convention', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: null, error: null },
+      { data: { ...LIVE_OFFER, outcome: 'DECLINED' }, error: null },
+    ]);
+
+    await expectDomainError(new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID), 'OFFER_TAKEN');
+
+    // No second DECLINED write is ever attempted on the refusal path.
+    expect(calls.filter((c) => c.op === 'update')).toHaveLength(1);
+  });
+
+  it('no rider capability fails closed with FORBIDDEN and makes zero database calls', async () => {
+    const { supabase, calls } = supabaseStub([]);
+
+    await expectDomainError(
+      new OfferAcceptanceService(supabase).declineOffer(riderUser(null), OFFER_ID),
+      'FORBIDDEN',
+    );
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a Supabase failure on the guarded UPDATE itself is INTERNAL_ERROR, not silently swallowed', async () => {
+    const { supabase } = supabaseStub([{ data: null, error: { message: 'connection reset' } }]);
+
+    await expectDomainError(
+      new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID),
+      'INTERNAL_ERROR',
+    );
+  });
+
+  it('a Supabase failure on the diagnostic read after a failed guarded UPDATE is INTERNAL_ERROR, per readOwnOffer\'s own mapping', async () => {
+    const { supabase } = supabaseStub([
+      { data: null, error: null },
+      { data: null, error: { message: 'connection reset' } },
+    ]);
+
+    await expectDomainError(
+      new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID),
+      'INTERNAL_ERROR',
+    );
+  });
+
+  it('two concurrent declines by the same rider: the second loses the row-level compare-and-set, not a pre-check, and only one write ever sets DECLINED', async () => {
+    // Both requests contend for the same row. The first statement's guarded
+    // UPDATE matches and commits; the second's `WHERE outcome = 'PENDING'`
+    // re-evaluates against the now-committed row and matches nothing.
+    const first = supabaseStub([{ data: { ...LIVE_OFFER, outcome: 'DECLINED' }, error: null }]);
+    const second = supabaseStub([
+      { data: null, error: null },
+      { data: { ...LIVE_OFFER, outcome: 'DECLINED' }, error: null },
+    ]);
+
+    const won = await new OfferAcceptanceService(first.supabase).declineOffer(riderUser(), OFFER_ID);
+    expect(won).toEqual({ offerId: OFFER_ID, riderId: RIDER_ID, outcome: 'DECLINED' });
+
+    await expectDomainError(
+      new OfferAcceptanceService(second.supabase).declineOffer(riderUser(), OFFER_ID),
+      'OFFER_TAKEN',
+    );
+
+    const declineWrites = [...first.calls, ...second.calls].filter(
+      (c) => c.op === 'update' && c.payload?.outcome === 'DECLINED',
+    );
+    // Two UPDATE *attempts* were issued (one per request), but only the
+    // winner's actually returned a row — asserted above via `won`. Neither
+    // request wrote to any table but rider_assignment_attempts.
+    expect(declineWrites).toHaveLength(2);
+    expect(
+      [...first.calls, ...second.calls].every((c) => c.table === 'rider_assignment_attempts'),
+    ).toBe(true);
+  });
+
+  it('touches only rider_assignment_attempts — no delivery, order, payment, ledger, or availability table', async () => {
+    const { supabase, calls } = supabaseStub([{ data: { ...LIVE_OFFER, outcome: 'DECLINED' }, error: null }]);
+
+    await new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID);
+
+    const tables = [...new Set(calls.map((c) => c.table))];
+    expect(tables).toEqual(['rider_assignment_attempts']);
+    for (const forbidden of [
+      'deliveries',
+      'orders',
+      'payments',
+      'payment_events',
+      'payment_attempts',
+      'payment_transactions',
+      'ledger_entries',
+      'ledger_entry_groups',
+      'rider_assignments',
+      'rider_availability',
+      'delivery_status_history',
+      'order_status_history',
+      'settlements',
+      'refunds',
+      'reconciliation_cases',
+    ]) {
+      expect(tables).not.toContain(forbidden);
+    }
+  });
+
+  it('writes no money: no satang, earning, commission, ledger, settlement, or refund field in any payload', async () => {
+    const { supabase, calls } = supabaseStub([{ data: { ...LIVE_OFFER, outcome: 'DECLINED' }, error: null }]);
+
+    await new OfferAcceptanceService(supabase).declineOffer(riderUser(), OFFER_ID);
+
+    for (const call of calls) {
+      const keys = Object.keys(call.payload ?? {});
+      expect(keys).toEqual(['outcome']);
+      expect(keys.some((k) => /satang|earning|commission|ledger|settlement|refund/i.test(k))).toBe(false);
+    }
+  });
+});
