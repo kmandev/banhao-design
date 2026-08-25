@@ -6,7 +6,26 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "banhaodriver",
-    "ios": { "supportsTablet": false, "bundleIdentifier": "app.banhao.driver" },
-    "android": { "package": "app.banhao.driver" }
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.banhao.driver",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "BANHAO ใช้ตำแหน่งของคุณขณะเปิดแอปเพื่อส่งงานที่อยู่ใกล้คุณ ระบบจะบันทึกเฉพาะตำแหน่งล่าสุดเมื่อคุณกดเปิดรับงานเท่านั้น"
+      }
+    },
+    "android": {
+      "package": "app.banhao.driver",
+      "permissions": ["android.permission.ACCESS_COARSE_LOCATION", "android.permission.ACCESS_FINE_LOCATION"]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "BANHAO ใช้ตำแหน่งของคุณขณะเปิดแอปเพื่อส่งงานที่อยู่ใกล้คุณ ระบบจะบันทึกเฉพาะตำแหน่งล่าสุดเมื่อคุณกดเปิดรับงานเท่านั้น",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ]
+    ]
   }
 }
