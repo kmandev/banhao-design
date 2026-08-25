@@ -105,3 +105,27 @@ export interface RiderPickedUpResponse {
   state: string;
   riderId: string;
 }
+
+/**
+ * `POST /api/v1/rider/deliveries/:id/en-route` — Phase G-6. No request body,
+ * same reasoning as `RiderArrivedResponse`. Carries no money field, same
+ * reasoning as `RiderOfferAcceptResponse`.
+ *
+ * **Two fields, because the two domains genuinely disagree on the name here.**
+ * `RiderPickedUpResponse` could collapse both into one `state` only because
+ * DEC-019 and the delivery state machine happen to use the same word
+ * (`PICKED_UP`) for that step. This transition is the one place they diverge:
+ * V1.1 §7 records it as order `PICKED_UP -> DELIVERING` whose delivery-side
+ * effect is `-> EN_ROUTE`. Reporting a single `state` would force a client to
+ * guess which machine it names, so both are stated — which is DEC-018's
+ * separation made visible rather than papered over.
+ */
+export interface RiderEnRouteResponse {
+  deliveryId: string;
+  orderId: string;
+  /** Always `EN_ROUTE` on success — the **delivery** domain's own state (DEC-018). */
+  state: string;
+  /** Always `DELIVERING` on success — the **order** domain's state for the same step. */
+  orderState: string;
+  riderId: string;
+}

@@ -13,6 +13,7 @@ import {
   riderLocationRequestSchema,
   type RiderArrivedResponse,
   type RiderCancelDeliveryResponse,
+  type RiderEnRouteResponse,
   type RiderLocationResponse,
   type RiderOfferAcceptResponse,
   type RiderPickedUpResponse,
@@ -23,6 +24,7 @@ import { parseOrThrow } from '../../common/validation/parse';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { DeliveryArrivalService } from './delivery-arrival.service';
+import { DeliveryEnRouteService } from './delivery-en-route.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
 import { DeliveryReleaseService } from './delivery-release.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
@@ -55,6 +57,7 @@ export class RiderController {
     private readonly releases: DeliveryReleaseService,
     private readonly arrivals: DeliveryArrivalService,
     private readonly pickups: DeliveryPickupService,
+    private readonly departures: DeliveryEnRouteService,
   ) {}
 
   /**
@@ -135,6 +138,35 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderPickedUpResponse> {
     return this.pickups.pickup(requireUser(user), id);
+  }
+
+  /**
+   * The rider departs the merchant — Phase G-6. `PICKED_UP -> EN_ROUTE` on the
+   * delivery, and — only once that has genuinely happened — `PICKED_UP ->
+   * DELIVERING` on the order, via the existing, unmodified
+   * `OrdersService.startDelivery`.
+   *
+   * The path segment is `en-route` because `EN_ROUTE` is the delivery domain's
+   * own accepted state name (V1.1 §7's side-effect column, `RIDER_LIFECYCLE.md`
+   * §4) and every other route in this controller is named for the delivery
+   * state it produces. The order's name for the same step is `DELIVERING`; both
+   * are in the response.
+   */
+  @Post('deliveries/:id/en-route')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The delivery now EN_ROUTE, and the order now DELIVERING' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiNotFoundResponse({ description: 'Delivery or order not found' })
+  @ApiConflictResponse({
+    description: 'INVALID_TRANSITION — the delivery is not PICKED_UP, or the order is not PICKED_UP',
+  })
+  async markEnRoute(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<RiderEnRouteResponse> {
+    return this.departures.startDelivery(requireUser(user), id);
   }
 
   /**
