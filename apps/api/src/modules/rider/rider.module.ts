@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { OrdersModule } from '../orders/orders.module';
 import { RiderController } from './rider.controller';
 import { RiderLocationService } from './rider-location.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
 import { DeliveryReleaseService } from './delivery-release.service';
 import { DeliveryArrivalService } from './delivery-arrival.service';
+import { DeliveryPickupService } from './delivery-pickup.service';
 import { DispatchService } from './dispatch.service';
 import { DISPATCH_STRATEGY } from './dispatch-strategy.interface';
 import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
@@ -20,11 +22,19 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
  *
  * `DispatchService` is exported for `TickModule`, exactly as
  * `PaymentEventProcessingService` and `PaymentAttemptExpiryService` are — the
- * scheduled tick is a caller of this module, never the other way round. This
- * module imports neither the order nor the payment module, which is what keeps
- * dispatch replaceable without touching either domain.
+ * scheduled tick is a caller of this module, never the other way round.
+ *
+ * `OrdersModule` is imported for `OrdersService` — Phase G-5's join point
+ * (`DeliveryPickupService`) calls the existing, unmodified
+ * `OrdersService.pickupOrder` for the order-side half of the
+ * `AT_MERCHANT`/`READY_FOR_PICKUP -> PICKED_UP` transition rather than
+ * reimplementing it. This is the one deliberate exception to "dispatch
+ * replaceable without touching either domain": the join point is defined by
+ * V1.1 §7 as touching both, so this module now imports the order module
+ * (never the payment module, which stays untouched).
  */
 @Module({
+  imports: [OrdersModule],
   controllers: [RiderController],
   providers: [
     { provide: DISPATCH_STRATEGY, useClass: BroadcastDispatchStrategy },
@@ -32,6 +42,7 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
     OfferAcceptanceService,
     DeliveryReleaseService,
     DeliveryArrivalService,
+    DeliveryPickupService,
     DispatchService,
   ],
   exports: [DispatchService],

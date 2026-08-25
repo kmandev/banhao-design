@@ -91,3 +91,17 @@ export interface RiderArrivedResponse {
   state: string;
   riderId: string;
 }
+
+/**
+ * `POST /api/v1/rider/deliveries/:id/picked-up` — Phase G-5, the order ↔
+ * delivery join point (V1.1 §7). No request body, same reasoning as
+ * `RiderArrivedResponse`. Carries no money field, same reasoning as
+ * `RiderOfferAcceptResponse`.
+ */
+export interface RiderPickedUpResponse {
+  deliveryId: string;
+  orderId: string;
+  /** Always `PICKED_UP` on success — both the delivery's and the order's new state. */
+  state: string;
+  riderId: string;
+}

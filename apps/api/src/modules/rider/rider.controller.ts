@@ -15,6 +15,7 @@ import {
   type RiderCancelDeliveryResponse,
   type RiderLocationResponse,
   type RiderOfferAcceptResponse,
+  type RiderPickedUpResponse,
 } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -22,6 +23,7 @@ import { parseOrThrow } from '../../common/validation/parse';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { DeliveryArrivalService } from './delivery-arrival.service';
+import { DeliveryPickupService } from './delivery-pickup.service';
 import { DeliveryReleaseService } from './delivery-release.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
 import { RiderLocationService } from './rider-location.service';
@@ -52,6 +54,7 @@ export class RiderController {
     private readonly offers: OfferAcceptanceService,
     private readonly releases: DeliveryReleaseService,
     private readonly arrivals: DeliveryArrivalService,
+    private readonly pickups: DeliveryPickupService,
   ) {}
 
   /**
@@ -109,6 +112,29 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderArrivedResponse> {
     return this.arrivals.arrive(requireUser(user), id);
+  }
+
+  /**
+   * The order ↔ delivery join point — Phase G-5. `AT_MERCHANT -> PICKED_UP`
+   * on the delivery, and — only once that has genuinely happened —
+   * `READY_FOR_PICKUP -> PICKED_UP` on the order, via the existing,
+   * unmodified `OrdersService.pickupOrder`.
+   */
+  @Post('deliveries/:id/picked-up')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The delivery and the order, both now PICKED_UP' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiNotFoundResponse({ description: 'Delivery or order not found' })
+  @ApiConflictResponse({
+    description: 'INVALID_TRANSITION — the delivery is not AT_MERCHANT, or the order is not READY_FOR_PICKUP',
+  })
+  async markPickedUp(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<RiderPickedUpResponse> {
+    return this.pickups.pickup(requireUser(user), id);
   }
 
   /**

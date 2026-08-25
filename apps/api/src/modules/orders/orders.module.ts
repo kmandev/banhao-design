@@ -9,10 +9,17 @@ import { OrderPricingService } from './order-pricing.service';
  * `@Global()`, unlike `SupabaseModule` and `UsersModule` (both already
  * global, so `SupabaseService` and `AddressesService` are available here
  * without an import).
+ *
+ * `OrdersService` is exported for `RiderModule` (Phase G-5): the delivery ↔
+ * order join point calls `OrdersService.pickupOrder` directly rather than
+ * reimplementing the `READY_FOR_PICKUP -> PICKED_UP` guarded UPDATE it
+ * already contains — the same "the tick is a caller of this module" shape
+ * `DispatchService`'s own export already uses.
  */
 @Module({
   imports: [CartModule],
   controllers: [OrdersController],
   providers: [OrdersService, OrderPricingService],
+  exports: [OrdersService],
 })
 export class OrdersModule {}
