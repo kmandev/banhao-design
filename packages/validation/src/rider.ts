@@ -146,8 +146,64 @@ export interface RiderEnRouteResponse {
 }
 
 /**
+ * `POST /api/v1/rider/deliveries/:id/proof/upload-url` — POD, Phase G-7.2
+ * Phase 2. Presigns a `PUT` for exactly one proof photo.
+ *
+ * Only `contentType` — the object **key is never supplied by the client**. The
+ * server templates it from the delivery id it has already authorized the
+ * caller for (`deliveryProofObjectKey`), which is what makes "a rider cannot
+ * upload to another rider's delivery" true by construction rather than by a
+ * check that could be forgotten.
+ *
+ * `.strict()` for the same reason `riderLocationRequestSchema` is: a body that
+ * tries to name a key, a bucket, or a delivery must be rejected outright
+ * rather than silently ignored.
+ */
+export const riderProofUploadUrlRequestSchema = z
+  .object({
+    /** Validated again server-side against the storage module's own allow-list. */
+    contentType: z.string().min(1),
+  })
+  .strict();
+
+export type RiderProofUploadUrlRequest = z.infer<typeof riderProofUploadUrlRequestSchema>;
+
+export interface RiderProofUploadUrlResponse {
+  /** A presigned PUT, scoped to one object, one operation, one content type, 5 minutes. */
+  uploadUrl: string;
+  /** The server-templated key the client must echo back to the delivered command. */
+  objectKey: string;
+}
+
+/**
  * `POST /api/v1/rider/deliveries/:id/delivered` — Phase G-7.2, the terminal
- * rider transition. No request body, same reasoning as `RiderArrivedResponse`.
+ * rider transition.
+ *
+ * **The proof photo is REQUIRED** (DEC-038, resolving BQ-018 as mandatory). With COD disabled (DEC-016) the photo is the only evidence a
+ * handover happened, which `docs/RIDER_LIFECYCLE.md` §10 says raises its
+ * importance rather than lowering it. `objectKey` is therefore not optional
+ * here, and the API — not the client — is where that rule is enforced.
+ *
+ * A rider who genuinely cannot photograph has **no app path** to completion by
+ * the same decision (DEC-038): the blocked screen directs them to an
+ * operator, and the delivery stays open. Nothing in this contract admits a
+ * no-photo completion.
+ */
+export const riderDeliveredRequestSchema = z
+  .object({
+    /**
+     * The key returned by `…/proof/upload-url`, echoed back verbatim. The
+     * server re-parses it against the delivery it authorized rather than
+     * trusting it, and requires the object to actually exist before any state
+     * moves — see `parseDeliveryProofObjectKey`.
+     */
+    objectKey: z.string().min(1),
+  })
+  .strict();
+
+export type RiderDeliveredRequest = z.infer<typeof riderDeliveredRequestSchema>;
+
+/**
  * Carries no money field, same reasoning as `RiderOfferAcceptResponse`.
  *
  * **One `state`, not two.** This response takes `RiderPickedUpResponse`'s
@@ -157,9 +213,9 @@ export interface RiderEnRouteResponse {
  * success), so a second field would restate the first rather than resolve an
  * ambiguity. `EN_ROUTE`/`DELIVERING` is the one step where they diverge.
  *
- * **No `proofPhotoPath` and no request body yet.** POD is the next phase; the
- * proof photo becomes a `{ objectKey }` body on this same route then. Adding
- * the field now would ship a contract nothing writes and nothing reads.
+ * **No `proofPhotoPath` in the response.** The stored path is an internal
+ * object key, meaningless without a signature and useless to the driver app,
+ * which already holds the local file it just uploaded.
  */
 export interface RiderDeliveredResponse {
   deliveryId: string;

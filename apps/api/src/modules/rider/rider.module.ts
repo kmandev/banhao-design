@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { OrdersModule } from '../orders/orders.module';
+import { StorageModule } from '../storage/storage.module';
 import { RiderController } from './rider.controller';
 import { RiderLocationService } from './rider-location.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
@@ -7,8 +8,10 @@ import { DeliveryReleaseService } from './delivery-release.service';
 import { DeliveryArrivalService } from './delivery-arrival.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
 import { DeliveryCompletionService } from './delivery-completion.service';
+import { DeliveryProofService } from './delivery-proof.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
 import { DispatchService } from './dispatch.service';
+import { ProofPhotoRetentionService } from './proof-photo-retention.service';
 import { DISPATCH_STRATEGY } from './dispatch-strategy.interface';
 import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
 
@@ -22,9 +25,10 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
  * abstraction, and it is why `DispatchService` owns the round while the
  * strategy owns only candidate selection.
  *
- * `DispatchService` is exported for `TickModule`, exactly as
- * `PaymentEventProcessingService` and `PaymentAttemptExpiryService` are — the
- * scheduled tick is a caller of this module, never the other way round.
+ * `DispatchService` and `ProofPhotoRetentionService` (DEC-039) are exported
+ * for `TickModule`, exactly as `PaymentEventProcessingService` and
+ * `PaymentAttemptExpiryService` are — the scheduled tick is a caller of this
+ * module, never the other way round.
  *
  * `OrdersModule` is imported for `OrdersService` — Phase G-5's join point
  * (`DeliveryPickupService`) calls the existing, unmodified
@@ -39,7 +43,7 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
  * the one `OrdersModule` exports is the only instance.
  */
 @Module({
-  imports: [OrdersModule],
+  imports: [OrdersModule, StorageModule],
   controllers: [RiderController],
   providers: [
     { provide: DISPATCH_STRATEGY, useClass: BroadcastDispatchStrategy },
@@ -50,8 +54,10 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
     DeliveryPickupService,
     DeliveryEnRouteService,
     DeliveryCompletionService,
+    DeliveryProofService,
     DispatchService,
+    ProofPhotoRetentionService,
   ],
-  exports: [DispatchService],
+  exports: [DispatchService, ProofPhotoRetentionService],
 })
 export class RiderModule {}

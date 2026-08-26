@@ -5,6 +5,10 @@ import { TickHmacGuard } from '../../common/guards/tick-hmac.guard';
 import { PaymentEventProcessingService } from '../payments/payment-event-processing.service';
 import { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import { DispatchService, type DispatchRoundResult } from '../rider/dispatch.service';
+import {
+  ProofPhotoRetentionService,
+  type ProofPhotoRetentionResult,
+} from '../rider/proof-photo-retention.service';
 
 export interface TickAcceptedResponse {
   accepted: true;
@@ -14,6 +18,8 @@ export interface TickAcceptedResponse {
   paymentAttemptExpiry: { expired: number; skipped: number };
   /** G-2 — the broadcast dispatch round this tick ran (DEC-020, DEC-037). */
   dispatch: DispatchRoundResult;
+  /** DEC-039 — the POD proof-photo retention purge this tick ran. */
+  podRetention: ProofPhotoRetentionResult;
 }
 
 /**
@@ -41,6 +47,12 @@ export interface TickAcceptedResponse {
  * `apps/tick-worker/` changes to add it. It runs after the payment phases and
  * shares nothing with them — a dispatch round reads and writes only delivery-
  * domain tables (DEC-018).
+ *
+ * `podRetention` (DEC-039) runs last, for the same "no scheduler of its own"
+ * reason as `dispatch`. It is additive in exactly the same way and follows
+ * the same never-throws contract `ProofPhotoRetentionService` documents on
+ * itself — this handler has no per-phase try/catch of its own, so a phase
+ * that *can* throw would fail every phase after it in the same tick.
  */
 @Controller('internal/tick')
 export class TickController {
@@ -48,6 +60,7 @@ export class TickController {
     private readonly paymentEvents: PaymentEventProcessingService,
     private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
     private readonly dispatch: DispatchService,
+    private readonly podRetention: ProofPhotoRetentionService,
   ) {}
 
   @Public()
@@ -59,6 +72,7 @@ export class TickController {
     const paymentEvents = await this.paymentEvents.processPendingEvents();
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
     const dispatch = await this.dispatch.runDispatchRound();
-    return { accepted: true, paymentEvents, paymentAttemptExpiry, dispatch };
+    const podRetention = await this.podRetention.run();
+    return { accepted: true, paymentEvents, paymentAttemptExpiry, dispatch, podRetention };
   }
 }

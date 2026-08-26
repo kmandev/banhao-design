@@ -10,6 +10,9 @@ import { OtpScreen } from '../screens/auth/OtpScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { OfferInboxScreen } from '../screens/OfferInboxScreen';
 import { ActiveDeliveryScreen } from '../screens/ActiveDeliveryScreen';
+import { ProofCameraScreen } from '../screens/ProofCameraScreen';
+import { ProofReviewScreen } from '../screens/ProofReviewScreen';
+import { DeliveryConfirmScreen } from '../screens/DeliveryConfirmScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RiderStack = createNativeStackNavigator<RiderStackParamList>();
@@ -37,10 +40,16 @@ function AuthNavigator() {
 }
 
 /**
- * Three screens now — `Home`, G-7.1's `OfferInbox`, and G-7.2's
- * `ActiveDelivery` — still one stack, one level. The handoff's 4-tab bar
- * arrives when รายได้ (BQ-029, `OPEN`) has something behind it; งานของฉัน now
- * does, but one of four tabs is not a tab bar.
+ * Six screens now — `Home`, G-7.1's `OfferInbox`, G-7.2's `ActiveDelivery`,
+ * and the POD leg (`ProofCamera`, `ProofReview`, `DeliveryConfirm`). Still one
+ * stack. The handoff's 4-tab bar arrives when รายได้ (BQ-029, `OPEN`) has
+ * something behind it; งานของฉัน now does, but one of four tabs is not a tab
+ * bar.
+ *
+ * The camera and review screens are presented with **no header**, so the app's
+ * light chrome never flashes over a dark viewfinder. `DeliveryConfirm` keeps
+ * its header: it is a light screen and a rider may legitimately want to go
+ * back from it before confirming.
  */
 function RiderNavigator() {
   return (
@@ -55,6 +64,21 @@ function RiderNavigator() {
         name="ActiveDelivery"
         component={ActiveDeliveryScreen}
         options={{ title: 'งานที่กำลังทำ' }}
+      />
+      <RiderStack.Screen
+        name="ProofCamera"
+        component={ProofCameraScreen}
+        options={{ headerShown: false }}
+      />
+      <RiderStack.Screen
+        name="ProofReview"
+        component={ProofReviewScreen}
+        options={{ headerShown: false }}
+      />
+      <RiderStack.Screen
+        name="DeliveryConfirm"
+        component={DeliveryConfirmScreen}
+        options={{ title: 'ยืนยันการส่ง' }}
       />
     </RiderStack.Navigator>
   );

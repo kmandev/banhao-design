@@ -6,6 +6,9 @@ import {
   mimeTypeForExtension,
   parseMenuItemImageObjectKey,
   restaurantCoverObjectKey,
+  deliveryProofObjectKey,
+  parseDeliveryProofObjectKey,
+  parseAnyDeliveryProofObjectKey,
 } from './object-key';
 
 const RESTAURANT_ID = '11111111-1111-4111-8111-111111111111';
@@ -182,5 +185,125 @@ describe('parseMenuItemImageObjectKey', () => {
     '',
   ])('rejects a structurally invalid key: %s', (badKey) => {
     expect(parseMenuItemImageObjectKey(badKey, MENU_ITEM_ID)).toBeNull();
+  });
+});
+
+describe('deliveryProofObjectKey / parseDeliveryProofObjectKey (POD)', () => {
+  const DELIVERY_ID = '11111111-1111-4111-8111-111111111111';
+  const OTHER_DELIVERY_ID = '33333333-3333-4333-8333-333333333333';
+
+  it('templates deliveries/{id}/proof/{uuid}.{ext} from validated inputs', () => {
+    const key = deliveryProofObjectKey(DELIVERY_ID, 'image/jpeg');
+
+    expect(key).toMatch(
+      new RegExp(`^deliveries/${DELIVERY_ID}/proof/[0-9a-f-]{36}\\.jpg$`),
+    );
+  });
+
+  it('is non-deterministic, so a retake never overwrites the previous object', () => {
+    expect(deliveryProofObjectKey(DELIVERY_ID, 'image/jpeg')).not.toBe(
+      deliveryProofObjectKey(DELIVERY_ID, 'image/jpeg'),
+    );
+  });
+
+  it.each([
+    ['image/jpeg', 'jpg'],
+    ['image/png', 'png'],
+    ['image/webp', 'webp'],
+  ])('derives the extension from the verified MIME type %s', (mime, ext) => {
+    expect(deliveryProofObjectKey(DELIVERY_ID, mime).endsWith(`.${ext}`)).toBe(true);
+  });
+
+  it('rejects a non-UUID delivery id', () => {
+    expect(() => deliveryProofObjectKey('delivery-1', 'image/jpeg')).toThrow(
+      InvalidObjectKeyInputError,
+    );
+  });
+
+  it.each(['image/gif', 'image/svg+xml', 'application/pdf', 'text/html'])(
+    'rejects the disallowed MIME type %s',
+    (mime) => {
+      expect(() => deliveryProofObjectKey(DELIVERY_ID, mime)).toThrow(InvalidObjectKeyInputError);
+    },
+  );
+
+  it('round-trips a key it minted', () => {
+    const key = deliveryProofObjectKey(DELIVERY_ID, 'image/webp');
+
+    expect(parseDeliveryProofObjectKey(key, DELIVERY_ID)).toEqual({
+      deliveryId: DELIVERY_ID,
+      mimeType: 'image/webp',
+    });
+  });
+
+  it('rejects a key minted for a DIFFERENT delivery', () => {
+    const key = deliveryProofObjectKey(OTHER_DELIVERY_ID, 'image/jpeg');
+
+    // This is what stops Rider A attaching a photo to Rider B's delivery even
+    // with a structurally perfect key.
+    expect(parseDeliveryProofObjectKey(key, DELIVERY_ID)).toBeNull();
+  });
+
+  it.each([
+    ['empty', ''],
+    ['no prefix', `${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.jpg`],
+    ['wrong entity prefix', `menu-items/${DELIVERY_ID}/22222222-2222-4222-8222-222222222222.jpg`],
+    ['leading slash', `/deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.jpg`],
+    ['trailing slash', `deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.jpg/`],
+    ['traversal', `deliveries/${DELIVERY_ID}/proof/../../../secret.jpg`],
+    ['missing proof segment', `deliveries/${DELIVERY_ID}/22222222-2222-4222-8222-222222222222.jpg`],
+    ['wrong middle segment', `deliveries/${DELIVERY_ID}/photos/22222222-2222-4222-8222-222222222222.jpg`],
+    ['extra segment', `deliveries/${DELIVERY_ID}/proof/a/22222222-2222-4222-8222-222222222222.jpg`],
+    ['non-uuid filename', `deliveries/${DELIVERY_ID}/proof/photo.jpg`],
+    ['no extension', `deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222`],
+    ['dot-leading filename', `deliveries/${DELIVERY_ID}/proof/.jpg`],
+    ['disallowed extension', `deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.svg`],
+    ['query string', `deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.jpg?x=1`],
+  ])('rejects %s', (_label, key) => {
+    expect(parseDeliveryProofObjectKey(key, DELIVERY_ID)).toBeNull();
+  });
+
+  it('rejects any key when the expected delivery id is not a UUID', () => {
+    const key = deliveryProofObjectKey(DELIVERY_ID, 'image/jpeg');
+
+    expect(parseDeliveryProofObjectKey(key, 'delivery-1')).toBeNull();
+  });
+});
+
+/**
+ * `parseAnyDeliveryProofObjectKey` — the retention orphan sweep's parser
+ * (DEC-039, `ProofPhotoRetentionService`). Same shape check as
+ * `parseDeliveryProofObjectKey`, minus the final "and it's THIS delivery"
+ * comparison a caller with no delivery id to authorize against cannot make.
+ */
+describe('parseAnyDeliveryProofObjectKey', () => {
+  const DELIVERY_ID = '11111111-1111-4111-8111-111111111111';
+
+  it('extracts the delivery id and MIME type from a key it does not already know the delivery for', () => {
+    const key = deliveryProofObjectKey(DELIVERY_ID, 'image/webp');
+
+    expect(parseAnyDeliveryProofObjectKey(key)).toEqual({
+      deliveryId: DELIVERY_ID,
+      mimeType: 'image/webp',
+    });
+  });
+
+  it('agrees with parseDeliveryProofObjectKey for every case that one accepts or rejects', () => {
+    const key = deliveryProofObjectKey(DELIVERY_ID, 'image/jpeg');
+    expect(parseAnyDeliveryProofObjectKey(key)).toEqual(parseDeliveryProofObjectKey(key, DELIVERY_ID));
+  });
+
+  it.each([
+    ['empty', ''],
+    ['wrong entity prefix', `menu-items/${DELIVERY_ID}/22222222-2222-4222-8222-222222222222.jpg`],
+    ['leading slash', `/deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.jpg`],
+    ['traversal', `deliveries/${DELIVERY_ID}/proof/../../../secret.jpg`],
+    ['wrong middle segment', `deliveries/${DELIVERY_ID}/photos/22222222-2222-4222-8222-222222222222.jpg`],
+    ['non-uuid delivery segment', `deliveries/not-a-uuid/proof/22222222-2222-4222-8222-222222222222.jpg`],
+    ['non-uuid filename', `deliveries/${DELIVERY_ID}/proof/photo.jpg`],
+    ['disallowed extension', `deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.svg`],
+    ['extra segment', `deliveries/${DELIVERY_ID}/proof/a/22222222-2222-4222-8222-222222222222.jpg`],
+  ])('rejects %s with no delivery id to compare against', (_label, key) => {
+    expect(parseAnyDeliveryProofObjectKey(key)).toBeNull();
   });
 });

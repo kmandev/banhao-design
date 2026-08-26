@@ -96,13 +96,20 @@ is Phase F scope rather than an order-creation blocker.
 
 Q-003, Q-009, Q-011, Q-012, Q-015, Q-016, Q-018, Q-019 ·
 BQ-001, BQ-002, BQ-003, BQ-005, BQ-006, BQ-007, BQ-008, BQ-011, BQ-013,
-BQ-016, BQ-017, BQ-018, BQ-022 (**onboarding, approval and contractor status
+BQ-016, BQ-017, BQ-022 (**onboarding, approval and contractor status
 only** — the working-area half is resolved by DEC-037), BQ-024, BQ-029, BQ-031,
 BQ-032, BQ-034, BQ-035
 
 **BQ-020 and BQ-021 left this list on 2026-08-24 — DEC-037.** The rider accept
 window is 60 s, dispatch rounds are 60 s, and a rider holds one active delivery
 at a time.
+
+**BQ-018 left this list on 2026-08-26 — DEC-038.** Proof of delivery is a
+mandatory photo. **Q-012's retention duration also left this list the same
+day — DEC-039** (90 days referenced / 7 days orphan, automatic purge). **Q-012
+is not fully closed**: its lawful-basis half remains `LEGAL_REVIEW_REQUIRED`,
+DEC-039 says so explicitly, and no real proof photo may be stored in
+production on the strength of DEC-039 alone.
 
 ### P2 — refinement
 
@@ -752,10 +759,27 @@ losses.
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER
-status: OPEN
+status: ACCEPTED
+decision: DEC-038, DEC-039 (retention duration)
 blocks: Driver App, dispute handling
 related: Q-013, Q-012
 ```
+
+> **DECIDED 2026-08-26 — DEC-038.** Option **B — a mandatory photo.** A
+> delivery cannot be completed without one: the rider app offers no no-photo
+> path, and `POST /rider/deliveries/:id/delivered` refuses a request with no
+> proof key. A rider who genuinely cannot photograph contacts an operator and
+> the delivery stays open (POD-Q-02). Photos live in a **private** R2 bucket,
+> readable only through a short-lived signed URL minted per request.
+>
+> **Retention duration is now set — DEC-039 (2026-08-26).** 90 days from
+> `delivered_at` for a referenced photo, 7 days from R2 creation time for an
+> unreferenced (orphan) object, purged automatically via the existing tick.
+> This satisfies the recommendation below's "an explicit retention period set
+> under Q-012" half. **Q-012 itself is not closed** — DEC-039 fixes a
+> *duration* only; the PDPA lawful-basis determination remains
+> `LEGAL_REVIEW_REQUIRED`, and DEC-039 explicitly does not authorize storing
+> real proof photos in production on its own.
 
 **Question:** What proves an order was delivered — a rider tap, a photo, a
 customer confirmation code, or a GPS check?

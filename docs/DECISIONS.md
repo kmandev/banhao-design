@@ -47,6 +47,8 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-035** | **Phase 1 delivery fee is flat ฿10 (1000 satang), no distance component** | **ACCEPTED** | **2026-08-24** | `docs/BUSINESS_RULES.md` § 5.2, BQ-026 |
 | **DEC-036** | **Phase 1 service fee is a fixed ฿5 (500 satang)** | **ACCEPTED** | **2026-08-24** | `docs/BUSINESS_RULES.md` § 5.3, BQ-027 |
 | **DEC-037** | **Phase 1 dispatch parameters: 60 s accept window, one active delivery per rider, no eligibility radius** | **ACCEPTED** | **2026-08-24** | `docs/RIDER_LIFECYCLE.md` § 6, BQ-020, BQ-021, BQ-022 (part) |
+| **DEC-038** | **Proof of delivery is a mandatory photo, stored in a private bucket, with no no-photo completion path** | **ACCEPTED** | **2026-08-26** | `docs/RIDER_LIFECYCLE.md` § 10, BQ-018 |
+| **DEC-039** | **POD retention: 90 days (referenced) / 7 days (orphan), automatic purge via the tick — Q-012's lawful basis stays `LEGAL_REVIEW_REQUIRED`** | **ACCEPTED — DURATION ONLY · NOT A PDPA/GO-LIVE APPROVAL** | **2026-08-26** | `apps/api/src/modules/rider/pod-retention-policy.ts`, Q-012 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -2598,3 +2600,272 @@ temptation at each gap is to invent an answer.
 DEC-019, DEC-APP-006, DEC-021, ADR-001, ADR-003,
 DEC-E-01, DEC-E-02, DEC-E-03, DEC-E-04 ·
 BQ-015, BQ-016, BQ-026, BQ-027, BQ-008 · V1.1 §6, §19
+
+---
+
+## DEC-038 — Proof of delivery is a mandatory photo, stored privately, with no no-photo completion path
+
+**Status:** ACCEPTED · **Date:** 2026-08-26 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Three coupled answers, locked together because none of them is safe to
+implement without the other two:
+
+| # | Question | Phase 1 answer | Resolves |
+|---|---|---|---|
+| 1 | Is the proof photo mandatory? | **Yes.** A delivery cannot reach `DELIVERED` without one. | **BQ-018** (Option B) |
+| 2 | What does a rider who cannot photograph do? | **Contacts an operator.** There is no in-app completion path without a photo. | **POD-Q-02** |
+| 3 | Where does the photo live? | **A private R2 bucket** (`R2_PRIVATE_BUCKET`), read only through a short-lived signed URL. | **POD-Q-01** storage half |
+
+**1 — Mandatory.** With cash on delivery disabled (DEC-016), the cash-collection
+confirmation no longer gates `DELIVERED`, which makes the photo the *only*
+evidence a handover happened at all. `docs/RIDER_LIFECYCLE.md` § 10 already
+recorded that this raises BQ-018's importance rather than lowering it.
+
+The rule lives in the **API**, not the client: `riderDeliveredRequestSchema`
+requires `objectKey`, and `DeliveryCompletionService` verifies the object
+structurally and by existence *before* the state machine is touched. A client
+that skipped the camera could not complete a delivery even if it tried.
+
+**2 — No escape path, deliberately.** The alternative — a no-photo completion
+with a reason code — would invent both an operator capability and a policy
+about when a delivery may close unevidenced, neither of which is approved. The
+operator force-unassign path is for a rider who did **not** deliver, which is a
+different and untrue record. So the blocked screen says `ติดต่อผู้ดูแล` and
+stops, and the delivery stays open until an operator intervenes under DEC-031 /
+DEC-032's manual-operations capability.
+
+**3 — A private bucket, not a private prefix.** Public access in Cloudflare R2
+is granted **per bucket**. `R2_PUBLIC_URL` is an `*.r2.dev` development domain
+bound to `R2_BUCKET`, so every object in that bucket is fetchable by anyone
+holding its key. A `deliveries/` prefix inside it would be privacy by
+obscurity — a 122-bit unguessable key — not privacy by authorization. A second
+bucket with no public URL at all is the only structural answer, and it costs
+nothing: R2 bills stored bytes and operations, never buckets.
+
+### Alternatives considered
+
+- **Optional photo.** Rejected — it makes the only evidence of handover
+  optional in the one phase where no other evidence exists.
+- **Mandatory in the UI, optional in the API.** Rejected — it puts a business
+  rule in the client, contradicting ADR-001, and yields a guarantee nothing
+  enforces.
+- **A no-photo completion with a reason code.** Rejected for Phase 1 — see 2
+  above. Revisit if operational evidence shows riders genuinely stranded.
+- **One bucket with a private prefix.** Rejected — see 3 above.
+
+### Consequences
+
+- `apps/driver` gains a camera (`expo-camera`) and both platform permission
+  declarations. A rider must grant camera access to complete any delivery.
+- A rider with a broken camera or permanently denied permission **cannot close
+  a delivery they actually completed** without an operator. This is a known,
+  accepted cost of 1 and 2 together, and it is the first thing to revisit if it
+  turns out to happen often.
+- `R2_PRIVATE_BUCKET` must be provisioned before POD can run. `StorageService`
+  raises rather than falling back to the public bucket when it is unset, and
+  refuses to start if it names the same bucket as `R2_BUCKET`.
+- **No migration.** `deliveries.proof_photo_path` already existed; the photo
+  path is written in the same guarded `UPDATE` that moves `EN_ROUTE →
+  DELIVERED`, so it is effectively write-once.
+
+### What this decision does NOT answer
+
+- **Q-012 — PDPA lawful basis and retention.** Still `OPEN`. Photos are now
+  being captured with **no retention limit and no purge mechanism anywhere in
+  the system**, which is a live exposure that this decision increases rather
+  than reduces. BQ-018's own recommendation asked for "an explicit retention
+  period set under Q-012"; that half is unanswered.
+- **Q-013 — evidential weight in a dispute.** Still `OPEN`.
+- **POD-Q-05 — merchant visibility.** Not in V1.
+- **POD-Q-07 — database-level immutability.** The path is write-once by
+  application rule (the `state = 'EN_ROUTE'` guard), not by a column trigger.
+  Making it a database guarantee would need a migration against a locked schema.
+
+### Related
+
+DEC-016 (COD disabled — why the photo is the only evidence), DEC-018, DEC-031,
+DEC-032, ADR-001, ADR-003 ·
+BQ-018, Q-012, Q-013 ·
+`docs/design/BANHAO POD UX Design.dc.html` (POD-Q-01 … POD-Q-07) ·
+`docs/BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` § 7.3, § 15
+
+---
+
+## DEC-039 — POD proof-photo retention duration (Q-012, retention half only)
+
+**Status:** ACCEPTED — RETENTION DURATION ONLY · **NOT** A PDPA COMPLIANCE OR
+GO-LIVE APPROVAL · **Date:** 2026-08-26 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Three numbers and a mechanism, resolving the retention-duration half of
+Q-012 for Phase 1. **Q-012's lawful-basis half is untouched and stays
+`LEGAL_REVIEW_REQUIRED`** — see "What this decision does NOT answer" below,
+which is not boilerplate here but the load-bearing part of the record.
+
+| # | Question | Phase 1 answer |
+|---|---|---|
+| 1 | Retention for a **referenced** proof photo (`deliveries.proof_photo_path` still set) | **90 days from `delivered_at`.** |
+| 2 | Retention for an **unreferenced** object (a retake's discarded predecessor, or an abandoned upload no delivery ever completed against) | **7 days from the object's own R2 creation time.** |
+| 3 | Purge mechanism | **Automatic**, via the existing approved tick worker (DEC-APP-010) — no second scheduler. Bounded, batched, idempotent, fail-safe, auditable. |
+
+**1 — 90 days for referenced photos.** With COD disabled (DEC-016) and DEC-038
+making the photo the only evidence a handover happened, the retention window
+has to survive the period in which that handover can still be disputed — a
+payment chargeback, a customer complaint, an operator review. That window is
+not independently known (Q-001, the payment provider, is still `OPEN`, so the
+real chargeback window is unknown), so 90 days is a judgment: long enough to
+plausibly cover a real dispute, short enough not to reach for a "keep it a
+year just in case" default that PDPA's data-minimisation principle does not
+tolerate. It is explicitly a number to revisit, not a permanent one — see
+"Review trigger" below. Storage cost was not a factor in either direction:
+at Phase 1 volume the entire feature is inside R2's free tier regardless of
+which of 7/30/90/180/365 days was chosen.
+
+**2 — 7 days for orphans, shorter than 1 because an orphan has no evidential
+value at all.** `DeliveryProofService`'s own header already names retakes and
+abandoned uploads as an accepted, documented consequence of the presign
+pattern — accepted as *existing*, never as *permanent*. An object with no
+`deliveries` row pointing at it cannot be evidence of anything, so there is no
+dispute-window argument for keeping it as long as a referenced photo. 7 days
+only exists to give a stuck-mid-flow rider (POD-Q-02's operator path) a short
+window to actually complete before its now-superseded retake is swept.
+
+**3 — Automatic, via the existing tick.** DEC-APP-010 already fixes the
+Cloudflare Worker cron as the only scheduler in the system; `DispatchService`
+and the payment-tick services already attach additional scheduled work to it
+the same way. `ProofPhotoRetentionService` follows the identical shape:
+bounded per-tick batches (`POD_RETENTION_BATCH_SIZE` for the referenced-photo
+pass, `POD_ORPHAN_SWEEP_PAGE_SIZE` for one page of the orphan sweep — never a
+paginate-to-exhaustion loop within one tick), idempotent deletes (R2's
+`DeleteObject` is itself idempotent, so a retried run of an interrupted
+purge is safe by construction), and a never-throws contract matching
+`PaymentEventProcessingService.processOne`'s own — a bad row here must not
+fail the payment or dispatch phases sharing the same tick invocation.
+
+**Default-off, deliberately.** `POD_RETENTION_PURGE_ENABLED` (an operational
+toggle, not a business value — see "Not an environment variable" below)
+gates every delete. Absent, or anything other than the literal string
+`'true'`, means the service still runs its listing and counting logic every
+tick — so `referencedCandidates`/`orphanCandidates` are always a live report
+of what a purge *would* touch — but nothing is actually deleted. A fresh
+environment can never start destroying evidence by accident.
+
+**Audit trail.** Each successfully purged *referenced* photo writes one
+`audit_logs` row (`actor_type: 'SYSTEM'`, `action: 'PROOF_PHOTO_PURGED'`,
+`entity_type: 'delivery'`, `before`/`after` on `proof_photo_path`, `source:
+'worker'`) — the schema's existing shape, no migration. An orphan purge
+writes **no** `audit_logs` row: an orphan has no `deliveries` row, and
+`audit_logs.entity_id` is `not null` — inventing a placeholder delivery id to
+satisfy that constraint would misrepresent what happened. The service's own
+returned counts (and its logging) are the record for that half instead.
+
+**Order of operations for a referenced purge is fixed and load-bearing:**
+delete the R2 object, **then** clear `proof_photo_path` — under a
+compare-and-swap guard (`WHERE proof_photo_path = <the exact key just
+deleted>`), never a blind `SET proof_photo_path = NULL`. Reversing the order
+would risk clearing a live pointer to an object a failed delete left in
+place; the CAS guard is what stops a second, concurrent process from having
+its own (different) value clobbered.
+
+**Not an environment variable.** `POD_RETENTION_DAYS = 90` and
+`POD_ORPHAN_RETENTION_DAYS = 7` are code constants in
+`apps/api/src/modules/rider/pod-retention-policy.ts`, not configuration —
+the same reasoning `dispatch-policy.ts` already documents for DEC-037's own
+numbers (`ACCEPT_WINDOW_SECONDS`, `ROUND_INTERVAL_SECONDS`): an approved
+business value belongs in the decision log and in the code that cites it,
+not in per-environment configuration where it could drift with no record of
+who changed it or why. `POD_RETENTION_PURGE_ENABLED` is the one genuinely
+operational piece of this feature and is the one environment variable it
+gets.
+
+**No schema migration.** The schema is LOCKED. `deliveries.proof_photo_path`
+is already nullable; a purge is an `UPDATE`, not a schema change.
+`audit_logs` already accepts the tombstone shape this decision uses. No
+`purged_at`, `retention_until`, or new table was added or is needed.
+
+### What this decision does NOT answer
+
+- **Q-012's lawful-basis half — still `LEGAL_REVIEW_REQUIRED`.** This
+  decision sets a *duration*. It does not establish a lawful basis for
+  processing the photo under PDPA, and it must not be read, cited, or
+  represented anywhere as a compliance determination or as approval to store
+  real proof photos in production. Nothing in the implementation claims
+  otherwise: `.env.example`'s documentation of `POD_RETENTION_PURGE_ENABLED`
+  states this explicitly, and enabling that flag in a real deployment remains
+  a decision for whoever owns the legal review, not an engineering default.
+- **Go-live.** `R2_PRIVATE_BUCKET` is still not provisioned as of this
+  decision. This record makes the retention mechanism buildable and
+  reviewable; it does not authorize turning it on against real customer data.
+- **Q-013 — evidential weight in a dispute.** Still `OPEN`, unchanged.
+- **Manual/operator deletion.** No operator deletion capability exists and
+  none is built by this decision — DEC-031/DEC-032's manual-operations
+  capability does not yet extend to proof photos. If that capability is
+  wanted, it needs its own decision: who may delete, under what recorded
+  reason, and through what surface (no Admin app exists until Phase I).
+- **The customer read endpoint.** `GET /api/v1/orders/:id/delivery-proof`
+  (implementation plan §8.3) is not built by this decision and is explicitly
+  a separate task. A purged photo is simply unavailable to that endpoint once
+  it exists — no new customer-facing copy or legal explanation is invented
+  here for that state.
+- **Merchant visibility of `proof_photo_path`.** The existing
+  `deliveries_select_customer`/`_merchant`/`_rider` policies are unchanged.
+  The Q-012 analysis that preceded this decision flagged that the
+  table-wide `grant select on public.deliveries` lets a restaurant member
+  read `proof_photo_path` even though POD-Q-05 says merchant visibility is
+  "not in V1" — recorded here as a known issue, not resolved by this
+  decision, and RLS is not touched.
+
+### Review trigger
+
+Re-decide the 90-day figure the first time any of the following becomes
+known, rather than treating it as permanent: Q-001 names a real payment
+provider (and therefore a real chargeback window), Q-013 settles evidential
+weight, or the Q-012 legal review returns with a specific requirement.
+
+### Alternatives considered
+
+- **A single retention window for both referenced and orphan objects.**
+  Rejected — an orphan has no evidential value at all, so holding it as long
+  as a referenced photo has no justification and is pure PDPA exposure for
+  no benefit.
+- **Manual-only purge.** Rejected for Phase 1 — no operator surface exists to
+  perform it, and building one was explicitly out of scope for this decision
+  (see "What this decision does NOT answer").
+- **A separate "dry run" flag alongside the enable flag.** Rejected — the
+  disabled state already produces the full candidate report (counts, no
+  deletes); a second flag would only be a second way to spell the same
+  behaviour.
+- **`POD_RETENTION_DAYS`/`POD_ORPHAN_RETENTION_DAYS` as environment
+  variables.** Rejected — see "Not an environment variable" above.
+
+### Consequences
+
+- `ProofPhotoRetentionService` (`apps/api/src/modules/rider/`) runs from
+  `POST /internal/tick`, additive to `TickAcceptedResponse` as `podRetention`.
+- `StorageService` gains `listObjects` (one bounded page per call) —  needed
+  by the orphan sweep, which has no `deliveries` row to start from. It is
+  scoped to the private bucket the same way every other POD operation is.
+- `object-key.ts` gains `parseAnyDeliveryProofObjectKey` — the same
+  structural check `parseDeliveryProofObjectKey` already performs, minus the
+  "and it's *this* delivery" comparison a caller with no delivery id to
+  authorize against cannot make. Used only by the orphan sweep.
+- `.env.example` documents `POD_RETENTION_PURGE_ENABLED=false` and explains
+  why the two day-count numbers are code constants instead.
+
+### Evidence
+
+`apps/api/src/modules/rider/pod-retention-policy.ts`,
+`apps/api/src/modules/rider/proof-photo-retention.service.ts` (+ `.spec.ts`),
+`apps/api/src/modules/storage/storage.service.ts` (`listObjects`),
+`apps/api/src/modules/storage/object-key.ts`
+(`parseAnyDeliveryProofObjectKey`), `apps/api/src/modules/tick/tick.controller.ts`.
+
+### Related
+
+DEC-038, DEC-APP-010, DEC-037 (the constants-not-env precedent) · Q-012,
+Q-013, Q-001 · BQ-018 · `docs/RIDER_LIFECYCLE.md` § 10 ·
+`docs/OPEN_BUSINESS_QUESTIONS.md` (BQ-018, Q-012) ·
+`docs/OPEN_DATABASE_QUESTIONS.md` DBQ-008 (retention windows, gated on Q-012)

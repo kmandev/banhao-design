@@ -16,16 +16,18 @@
  * server state rather than five routes. Five separate routes would each have
  * to re-derive which step the rider is on; one screen reads it once.
  *
- * The POD camera, review and confirm routes the POD UX design specifies
- * (`ProofCamera`, `ProofReview`, `DeliveryConfirm`) are **not** here: POD is
- * the next phase, and an empty route would claim a screen that does not
- * exist.
+ * `ProofCamera`, `ProofReview` and `DeliveryConfirm` are the POD leg
+ * (G-7.2 Phase 2), pushed above `ActiveDelivery`. Each carries the
+ * `deliveryId` it acts on, and the last two also the prepared local photo —
+ * see the note on `ProofCamera` for why the photo travels as a route param.
  *
  * There is no tab navigator yet. The handoff's 4-tab bar
  * (หน้าหลัก · งานของฉัน · รายได้ · บัญชี) needs งานของฉัน (G-7.2) and รายได้
  * (BQ-029, `OPEN`) to have anything behind them, and DEC-UX-006 hides the bar
  * during a job anyway. One stack is the honest shape of this slice.
  */
+
+import type { PreparedProofPhoto } from '../lib/proofPhoto';
 
 export type AuthStackParamList = {
   Login: undefined;
@@ -44,4 +46,22 @@ export type RiderStackParamList = {
    * a dead id back into the screen.
    */
   ActiveDelivery: undefined;
+
+  /**
+   * The POD leg — POD UX design §E.
+   *
+   * These three DO carry `deliveryId`, unlike `ActiveDelivery`, and for the
+   * opposite reason: they are pushed *from* a screen that has already resolved
+   * which delivery is active, so re-reading it on each would be three extra
+   * round trips to answer a question already answered. The server re-checks
+   * ownership and state on every call regardless, so a stale id here is
+   * refused rather than trusted.
+   *
+   * `photo` travels as a route param rather than through a store because it is
+   * a local `file://` URI plus its metadata — small, plain, and meaningful
+   * only for the duration of this stack. It never contains image bytes.
+   */
+  ProofCamera: { deliveryId: string };
+  ProofReview: { deliveryId: string; photo: PreparedProofPhoto };
+  DeliveryConfirm: { deliveryId: string; photo: PreparedProofPhoto };
 };

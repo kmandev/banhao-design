@@ -3,6 +3,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import type { SupabaseService } from '../../supabase/supabase.service';
 import type { OrdersService } from '../orders/orders.service';
+import type { StorageService } from '../storage/storage.service';
 
 /**
  * `POST /api/v1/rider/deliveries/:id/delivered` — Phase G-7.2, the terminal
@@ -69,8 +70,15 @@ function supabaseStub(results: Result[]) {
 
 const RIDER_ID = 'rider-1';
 const OTHER_RIDER_ID = 'rider-2';
-const DELIVERY_ID = 'delivery-1';
+// A real UUID: the proof-key parser validates the delivery id it is given, so
+// a placeholder like 'delivery-1' would fail structurally for the right reason
+// and hide whatever a test was actually asserting.
+const DELIVERY_ID = '11111111-1111-4111-8111-111111111111';
+const OTHER_DELIVERY_ID = '33333333-3333-4333-8333-333333333333';
 const ORDER_ID = 'order-1';
+
+/** A well-formed key for DELIVERY_ID, as `deliveryProofObjectKey` would mint it. */
+const PROOF_KEY = `deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.jpg`;
 const DELIVERED_AT = '2026-08-26T11:00:00.000Z';
 
 function riderUser(riderId: string | null = RIDER_ID): AuthenticatedUser {
@@ -139,6 +147,19 @@ function ordersStub(completeDelivery: jest.Mock) {
   return { completeDelivery } as unknown as OrdersService;
 }
 
+/** The proof photo genuinely exists in the private bucket unless a test says otherwise. */
+function storageStub(exists: jest.Mock = jest.fn(async () => true)) {
+  return { storage: { exists } as unknown as StorageService, exists };
+}
+
+/**
+ * Builds the service with the happy-path storage stub. Tests that care about
+ * the proof check construct it themselves.
+ */
+function buildService(supabase: SupabaseService, orders: OrdersService, exists?: jest.Mock) {
+  return new DeliveryCompletionService(supabase, orders, storageStub(exists).storage);
+}
+
 async function expectDomainError(promise: Promise<unknown>, code: string): Promise<void> {
   await expect(promise).rejects.toBeInstanceOf(DomainError);
   await promise.catch((error: DomainError) => expect(error.code).toBe(code));
@@ -151,9 +172,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
   it('transitions the delivery with a guarded UPDATE carrying ownership and pre-state', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     const claim = calls[0];
     expect(claim?.table).toBe('deliveries');
@@ -166,9 +187,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
   it('appends exactly one history row, EN_ROUTE -> DELIVERED, actor RIDER', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     const history = calls.filter((call) => call.table === 'delivery_status_history');
     expect(history).toHaveLength(1);
@@ -185,9 +206,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
   it('closes this rider’s ACCEPTED assignment as COMPLETED, matched on delivery AND rider', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     const assignment = calls.find((call) => call.table === 'rider_assignments');
     expect(assignment?.op).toBe('update');
@@ -204,9 +225,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
   it('releases the rider slot with a guarded 1 -> 0 CAS, never a blind write', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     const availability = calls.find((call) => call.table === 'rider_availability');
     expect(availability?.op).toBe('update');
@@ -220,9 +241,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
     const { supabase } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const user = riderUser();
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(user, DELIVERY_ID);
+    await service.complete(user, DELIVERY_ID, PROOF_KEY);
 
     expect(completeDelivery).toHaveBeenCalledTimes(1);
     expect(completeDelivery).toHaveBeenCalledWith(user, ORDER_ID);
@@ -231,9 +252,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
   it('writes the history row before the assignment, slot and order are touched', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     expect(calls.map((call) => call.table)).toEqual([
       'deliveries',
@@ -246,9 +267,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
   it('never nulls rider_id and never touches reassignment_count', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     // Completion keeps rider_id as the record of who delivered — that is the
     // difference between this path and release_rider_assignment().
@@ -257,22 +278,29 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
     expect(claim?.payload).not.toHaveProperty('reassignment_count');
   });
 
-  it('writes no proof photo — POD is the next phase', async () => {
+  it('writes proof_photo_path in the SAME guarded UPDATE as the state', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
-    expect(calls[0]?.payload).not.toHaveProperty('proof_photo_path');
+    // One statement, not two: there is no window in which the delivery is
+    // DELIVERED with a null path, and no second write a retry could use to
+    // replace evidence.
+    expect(calls[0]?.payload).toMatchObject({
+      state: 'DELIVERED',
+      proof_photo_path: PROOF_KEY,
+    });
+    expect(calls.filter((call) => call.table === 'deliveries')).toHaveLength(1);
   });
 
   it('returns one DELIVERED state for both domains, plus delivered_at', async () => {
     const { supabase } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await expect(service.complete(riderUser(), DELIVERY_ID)).resolves.toEqual({
+    await expect(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY)).resolves.toEqual({
       deliveryId: DELIVERY_ID,
       orderId: ORDER_ID,
       state: 'DELIVERED',
@@ -284,9 +312,9 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
   it('carries no money field', async () => {
     const { supabase } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    const response = await service.complete(riderUser(), DELIVERY_ID);
+    const response = await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     for (const key of Object.keys(response)) {
       expect(key).not.toMatch(/satang|earning|fee|amount/i);
@@ -297,32 +325,32 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
 describe('DeliveryCompletionService — refusals', () => {
   it('refuses a caller with no rider capability, before any read', async () => {
     const { supabase, calls } = supabaseStub([]);
-    const service = new DeliveryCompletionService(supabase, ordersStub(jest.fn()));
+    const service = buildService(supabase, ordersStub(jest.fn()));
 
-    await expectDomainError(service.complete(riderUser(null), DELIVERY_ID), 'FORBIDDEN');
+    await expectDomainError(service.complete(riderUser(null), DELIVERY_ID, PROOF_KEY), 'FORBIDDEN');
     expect(calls).toHaveLength(0);
   });
 
   it('refuses a delivery that does not exist with NOT_FOUND', async () => {
     const { supabase } = supabaseStub([CLAIM_NO_MATCH, { data: null, error: null }]);
-    const service = new DeliveryCompletionService(supabase, ordersStub(jest.fn()));
+    const service = buildService(supabase, ordersStub(jest.fn()));
 
-    await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'NOT_FOUND');
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'NOT_FOUND');
   });
 
   it('refuses a delivery assigned to another rider with NOT_ASSIGNED_RIDER', async () => {
     const { supabase } = supabaseStub([CLAIM_NO_MATCH, deliveryRow('EN_ROUTE', OTHER_RIDER_ID)]);
-    const service = new DeliveryCompletionService(supabase, ordersStub(jest.fn()));
+    const service = buildService(supabase, ordersStub(jest.fn()));
 
-    await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'NOT_ASSIGNED_RIDER');
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'NOT_ASSIGNED_RIDER');
   });
 
   it('never touches another rider’s assignment or slot when refusing', async () => {
     const { supabase, calls } = supabaseStub([CLAIM_NO_MATCH, deliveryRow('DELIVERED', OTHER_RIDER_ID)]);
     const completeDelivery = jest.fn();
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'NOT_ASSIGNED_RIDER');
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'NOT_ASSIGNED_RIDER');
 
     // A delivery already DELIVERED by someone else must not be repairable by
     // this caller: no assignment close, no slot release, no order write.
@@ -336,18 +364,18 @@ describe('DeliveryCompletionService — refusals', () => {
     async (state) => {
       const { supabase } = supabaseStub([CLAIM_NO_MATCH, deliveryRow(state)]);
       const completeDelivery = jest.fn();
-      const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+      const service = buildService(supabase, ordersStub(completeDelivery));
 
-      await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'INVALID_TRANSITION');
+      await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INVALID_TRANSITION');
       expect(completeDelivery).not.toHaveBeenCalled();
     },
   );
 
   it('surfaces a claim transport failure as INTERNAL_ERROR, not a false refusal', async () => {
     const { supabase } = supabaseStub([{ data: null, error: { message: 'connection reset' } }]);
-    const service = new DeliveryCompletionService(supabase, ordersStub(jest.fn()));
+    const service = buildService(supabase, ordersStub(jest.fn()));
 
-    await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'INTERNAL_ERROR');
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INTERNAL_ERROR');
   });
 });
 
@@ -361,9 +389,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       availabilityRow(0),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await expect(service.complete(riderUser(), DELIVERY_ID)).resolves.toEqual({
+    await expect(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY)).resolves.toEqual({
       deliveryId: DELIVERY_ID,
       orderId: ORDER_ID,
       state: 'DELIVERED',
@@ -381,9 +409,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       availabilityRow(0),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     // delivery_status_history has no unique constraint, so "exactly one row"
     // is only true because the repair path never writes one.
@@ -398,9 +426,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       SLOT_RELEASED,
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     // A crash after the delivery UPDATE but before the slot release would
     // otherwise leave the rider holding a slot forever.
@@ -412,9 +440,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
   it('treats an already-COMPLETED assignment as success rather than an error', async () => {
     const { supabase } = supabaseStub([CLAIM_OK, OK, ASSIGNMENT_NO_MATCH, SLOT_RELEASED]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await expect(service.complete(riderUser(), DELIVERY_ID)).resolves.toMatchObject({
+    await expect(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY)).resolves.toMatchObject({
       state: 'DELIVERED',
     });
   });
@@ -428,9 +456,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       availabilityRow(0),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await expect(service.complete(riderUser(), DELIVERY_ID)).resolves.toMatchObject({
+    await expect(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY)).resolves.toMatchObject({
       state: 'DELIVERED',
     });
   });
@@ -444,11 +472,11 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       { data: null, error: null },
     ]);
     const completeDelivery = jest.fn();
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
     // Reporting a clean completion here would tell the rider they are free to
     // take new work without that being confirmable.
-    await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'INTERNAL_ERROR');
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INTERNAL_ERROR');
     expect(completeDelivery).not.toHaveBeenCalled();
   });
 
@@ -460,9 +488,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       SLOT_NO_MATCH,
       availabilityRow(2),
     ]);
-    const service = new DeliveryCompletionService(supabase, ordersStub(jest.fn()));
+    const service = buildService(supabase, ordersStub(jest.fn()));
 
-    await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'INTERNAL_ERROR');
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INTERNAL_ERROR');
   });
 
   it('reports success when the order was already DELIVERED by a concurrent request', async () => {
@@ -474,9 +502,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       orderRow('DELIVERED'),
     ]);
     const completeDelivery = jest.fn().mockRejectedValue(new DomainError('INVALID_TRANSITION'));
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await expect(service.complete(riderUser(), DELIVERY_ID)).resolves.toMatchObject({
+    await expect(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY)).resolves.toMatchObject({
       state: 'DELIVERED',
     });
   });
@@ -490,10 +518,10 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       orderRow('CANCELLED'),
     ]);
     const completeDelivery = jest.fn().mockRejectedValue(new DomainError('INVALID_TRANSITION'));
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
     // The delivery stays DELIVERED; a retry re-enters the repair path.
-    await expectDomainError(service.complete(riderUser(), DELIVERY_ID), 'INVALID_TRANSITION');
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INVALID_TRANSITION');
   });
 
   it('never re-attempts the order write after diagnosing it as already delivered', async () => {
@@ -505,9 +533,9 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       orderRow('DELIVERED'),
     ]);
     const completeDelivery = jest.fn().mockRejectedValue(new DomainError('INVALID_TRANSITION'));
-    const service = new DeliveryCompletionService(supabase, ordersStub(completeDelivery));
+    const service = buildService(supabase, ordersStub(completeDelivery));
 
-    await service.complete(riderUser(), DELIVERY_ID);
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     expect(completeDelivery).toHaveBeenCalledTimes(1);
   });
@@ -530,13 +558,15 @@ describe('DeliveryCompletionService — concurrency', () => {
     const loserOrders = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
 
     const [a, b] = await Promise.all([
-      new DeliveryCompletionService(winner.supabase, ordersStub(winnerOrders)).complete(
+      buildService(winner.supabase, ordersStub(winnerOrders)).complete(
         riderUser(),
         DELIVERY_ID,
+        PROOF_KEY,
       ),
-      new DeliveryCompletionService(loser.supabase, ordersStub(loserOrders)).complete(
+      buildService(loser.supabase, ordersStub(loserOrders)).complete(
         riderUser(),
         DELIVERY_ID,
+        PROOF_KEY,
       ),
     ]);
 
@@ -549,5 +579,138 @@ describe('DeliveryCompletionService — concurrency', () => {
       (call) => call.table === 'delivery_status_history',
     );
     expect(historyRows).toHaveLength(1);
+  });
+});
+
+describe('DeliveryCompletionService — the proof photo (POD, mandatory)', () => {
+  it('verifies the object in the PRIVATE bucket, never the public one', async () => {
+    const { supabase } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery), exists);
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    // A proof photo in the public bucket would be fetchable by anyone holding
+    // its key — the whole reason the bucket split exists.
+    expect(exists).toHaveBeenCalledWith(PROOF_KEY, 'private');
+  });
+
+  it('refuses a structurally invalid key and moves NO state', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const completeDelivery = jest.fn();
+    const service = buildService(supabase, ordersStub(completeDelivery), exists);
+
+    await expectDomainError(
+      service.complete(riderUser(), DELIVERY_ID, 'not-a-key'),
+      'VALIDATION_FAILED',
+    );
+    expect(calls).toHaveLength(0);
+    expect(exists).not.toHaveBeenCalled();
+    expect(completeDelivery).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a key for another delivery', `deliveries/${OTHER_DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.jpg`],
+    ['a path-traversal attempt', `deliveries/${DELIVERY_ID}/proof/../../../etc/passwd.jpg`],
+    ['a missing proof segment', `deliveries/${DELIVERY_ID}/22222222-2222-4222-8222-222222222222.jpg`],
+    ['an extra segment', `deliveries/${DELIVERY_ID}/proof/nested/22222222-2222-4222-8222-222222222222.jpg`],
+    ['a disallowed extension', `deliveries/${DELIVERY_ID}/proof/22222222-2222-4222-8222-222222222222.svg`],
+    ['a non-uuid filename', `deliveries/${DELIVERY_ID}/proof/photo.jpg`],
+    ['a key for the wrong entity', `menu-items/${DELIVERY_ID}/22222222-2222-4222-8222-222222222222.jpg`],
+  ])('refuses %s and moves NO state', async (_label, key) => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const completeDelivery = jest.fn();
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, key), 'VALIDATION_FAILED');
+    expect(calls).toHaveLength(0);
+    expect(completeDelivery).not.toHaveBeenCalled();
+  });
+
+  it('refuses a well-formed key with no object behind it, and moves NO state', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => false);
+    const completeDelivery = jest.fn();
+    const service = buildService(supabase, ordersStub(completeDelivery), exists);
+
+    // A presigned URL authorizes a PUT; issuing one is not proof one happened.
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'NOT_FOUND');
+    expect(calls).toHaveLength(0);
+    expect(completeDelivery).not.toHaveBeenCalled();
+  });
+
+  it('never reports a storage failure as "no photo" — that would refuse an honest rider', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => {
+      throw new Error('R2 unreachable');
+    });
+    const service = buildService(supabase, ordersStub(jest.fn()), exists);
+
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INTERNAL_ERROR');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('verifies the proof BEFORE touching the state machine', async () => {
+    const order: string[] = [];
+    const { supabase } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => {
+      order.push('exists');
+      return true;
+    });
+    const completeDelivery = jest.fn().mockImplementation(async () => {
+      order.push('order');
+      return { orderId: ORDER_ID, state: 'DELIVERED' };
+    });
+    const service = buildService(supabase, ordersStub(completeDelivery), exists);
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    expect(order[0]).toBe('exists');
+  });
+
+  it('does NOT overwrite proof_photo_path on the repair path', async () => {
+    const { supabase, calls } = supabaseStub([
+      CLAIM_NO_MATCH,
+      deliveryRow('DELIVERED'),
+      ASSIGNMENT_NO_MATCH,
+      SLOT_NO_MATCH,
+      availabilityRow(0),
+    ]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    // Evidence that can be replaced is not evidence. Exactly one write is
+    // ATTEMPTED — the guarded UPDATE, which is the authority — and its
+    // `state = 'EN_ROUTE'` guard is what makes it match nothing on a delivery
+    // that is already DELIVERED. The repair path adds no second, unguarded
+    // write of its own, which is the property this asserts.
+    const deliveryWrites = calls.filter(
+      (call) => call.table === 'deliveries' && call.op === 'update',
+    );
+    expect(deliveryWrites).toHaveLength(1);
+    expect(deliveryWrites[0]?.eq).toEqual({
+      id: DELIVERY_ID,
+      state: 'EN_ROUTE',
+      rider_id: RIDER_ID,
+    });
+  });
+
+  it('cannot attach a photo to another rider’s delivery even with a valid key', async () => {
+    const { supabase, calls } = supabaseStub([CLAIM_NO_MATCH, deliveryRow('EN_ROUTE', OTHER_RIDER_ID)]);
+    const completeDelivery = jest.fn();
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await expectDomainError(
+      service.complete(riderUser(), DELIVERY_ID, PROOF_KEY),
+      'NOT_ASSIGNED_RIDER',
+    );
+
+    // No write of any kind reached another rider's delivery.
+    expect(calls.filter((call) => call.op === 'update')).toHaveLength(1); // the failed claim only
+    expect(completeDelivery).not.toHaveBeenCalled();
   });
 });

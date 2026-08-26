@@ -134,6 +134,9 @@ describe('RiderDeliveryRepository.getActiveDelivery', () => {
   });
 });
 
+const PROOF_KEY =
+  'deliveries/11111111-1111-4111-8111-111111111111/proof/22222222-2222-4222-8222-222222222222.jpg';
+
 describe('RiderDeliveryActionsRepository', () => {
   function apiStub() {
     // Typed parameters so `request.mock.calls[0][1]` is inspectable — an
@@ -151,6 +154,16 @@ describe('RiderDeliveryActionsRepository', () => {
     const { client, request } = apiStub();
     const repo = createRiderDeliveryActionsRepository(client, async () => 'token');
 
+    // `markDelivered` alone carries a body — the mandatory proof key.
+    if (method === 'markDelivered') {
+      await repo.markDelivered('delivery-1', PROOF_KEY);
+      expect(request).toHaveBeenCalledWith(`/api/v1/rider/deliveries/delivery-1/${path}`, {
+        method: 'POST',
+        body: JSON.stringify({ objectKey: PROOF_KEY }),
+      });
+      return;
+    }
+
     await repo[method]('delivery-1');
 
     expect(request).toHaveBeenCalledWith(`/api/v1/rider/deliveries/delivery-1/${path}`, {
@@ -162,18 +175,31 @@ describe('RiderDeliveryActionsRepository', () => {
     const { client, request } = apiStub();
     const repo = createRiderDeliveryActionsRepository(client, async () => null);
 
-    await expect(repo.markDelivered('delivery-1')).rejects.toThrow();
+    await expect(repo.markDelivered('delivery-1', PROOF_KEY)).rejects.toThrow();
     // A signed-out app must not issue a delivery transition and collect a 401.
     expect(request).not.toHaveBeenCalled();
   });
 
-  it('sends no request body — the delivery id is the whole command', async () => {
+  it('carries the proof key verbatim, never a key it built itself', async () => {
     const { client, request } = apiStub();
     const repo = createRiderDeliveryActionsRepository(client, async () => 'token');
 
-    await repo.markDelivered('delivery-1');
+    await repo.markDelivered('delivery-1', PROOF_KEY);
 
-    // POD adds `{ objectKey }` here in the next phase; nothing does today.
+    // The server templated this key and re-parses it on arrival; the client
+    // neither constructs nor modifies one.
+    expect(request.mock.calls[0]?.[1]).toEqual({
+      method: 'POST',
+      body: JSON.stringify({ objectKey: PROOF_KEY }),
+    });
+  });
+
+  it('sends no body for the three transitions that need none', async () => {
+    const { client, request } = apiStub();
+    const repo = createRiderDeliveryActionsRepository(client, async () => 'token');
+
+    await repo.markArrived('delivery-1');
+
     expect(request.mock.calls[0]?.[1]).toEqual({ method: 'POST' });
   });
 });

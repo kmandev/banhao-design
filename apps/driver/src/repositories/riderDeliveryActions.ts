@@ -59,8 +59,14 @@ export interface RiderDeliveryActionsRepository {
    * Also what releases the rider's assignment and availability slot, so a
    * successful call is what makes the rider dispatchable again — see
    * `DeliveryCompletionService`.
+   *
+   * `objectKey` is the **required** proof photo key (DEC-038, resolving
+   * BQ-018 as mandatory), echoed back exactly as `…/proof/upload-url` returned
+   * it. The server re-parses it against this delivery and requires the object
+   * to genuinely exist before any state moves — this client neither builds nor
+   * validates it.
    */
-  markDelivered(deliveryId: string): Promise<RiderDeliveredResponse>;
+  markDelivered(deliveryId: string, objectKey: string): Promise<RiderDeliveredResponse>;
 }
 
 export function createRiderDeliveryActionsRepository(
@@ -73,17 +79,21 @@ export function createRiderDeliveryActionsRepository(
    * all rather than send one and collect a 401 — the same precondition
    * `riderOfferActions.ts` applies.
    */
-  async function command<T>(deliveryId: string, path: string): Promise<T> {
+  async function command<T>(deliveryId: string, path: string, body?: unknown): Promise<T> {
     const token = await getAccessToken();
     if (!token) throw new NotAuthenticatedError();
 
-    return client.request<T>(`/api/v1/rider/deliveries/${deliveryId}/${path}`, { method: 'POST' });
+    return client.request<T>(`/api/v1/rider/deliveries/${deliveryId}/${path}`, {
+      method: 'POST',
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
   }
 
   return {
     markArrived: (deliveryId) => command<RiderArrivedResponse>(deliveryId, 'arrived'),
     markPickedUp: (deliveryId) => command<RiderPickedUpResponse>(deliveryId, 'picked-up'),
     markEnRoute: (deliveryId) => command<RiderEnRouteResponse>(deliveryId, 'en-route'),
-    markDelivered: (deliveryId) => command<RiderDeliveredResponse>(deliveryId, 'delivered'),
+    markDelivered: (deliveryId, objectKey) =>
+      command<RiderDeliveredResponse>(deliveryId, 'delivered', { objectKey }),
   };
 }

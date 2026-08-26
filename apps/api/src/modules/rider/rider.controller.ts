@@ -10,7 +10,9 @@ import {
 } from '@nestjs/swagger';
 import {
   riderCancelDeliveryRequestSchema,
+  riderDeliveredRequestSchema,
   riderLocationRequestSchema,
+  riderProofUploadUrlRequestSchema,
   type RiderArrivedResponse,
   type RiderCancelDeliveryResponse,
   type RiderDeliveredResponse,
@@ -19,6 +21,7 @@ import {
   type RiderOfferAcceptResponse,
   type RiderOfferDeclineResponse,
   type RiderPickedUpResponse,
+  type RiderProofUploadUrlResponse,
 } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -28,6 +31,7 @@ import type { AuthenticatedUser } from '../../common/types';
 import { DeliveryArrivalService } from './delivery-arrival.service';
 import { DeliveryCompletionService } from './delivery-completion.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
+import { DeliveryProofService } from './delivery-proof.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
 import { DeliveryReleaseService } from './delivery-release.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
@@ -62,6 +66,7 @@ export class RiderController {
     private readonly pickups: DeliveryPickupService,
     private readonly departures: DeliveryEnRouteService,
     private readonly completions: DeliveryCompletionService,
+    private readonly proofs: DeliveryProofService,
   ) {}
 
   /**
@@ -196,6 +201,37 @@ export class RiderController {
   }
 
   /**
+   * Presigns a `PUT` for one proof photo — POD, Phase G-7.2 Phase 2.
+   *
+   * Authorized to the assigned rider of a delivery that is currently
+   * `EN_ROUTE`, so a presign is never issued for a delivery the rider is not
+   * on or has already closed. The object key is **server-templated** and
+   * returned to the client; the client never supplies one.
+   *
+   * The photo lands in the **private** R2 bucket (`R2_PRIVATE_BUCKET`), which
+   * has no public base URL — see `StorageService`'s `BucketKind`.
+   *
+   * There is deliberately no matching `complete` route the way M-11 and M-12
+   * have one: the completion is `deliveries/:id/delivered` below, which
+   * persists the key in the same guarded UPDATE that moves the state.
+   */
+  @Post('deliveries/:id/proof/upload-url')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'A presigned R2 upload URL and the object key it is scoped to' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION — the delivery is not EN_ROUTE' })
+  async requestProofUploadUrl(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ): Promise<RiderProofUploadUrlResponse> {
+    const input = parseOrThrow(riderProofUploadUrlRequestSchema, body);
+    return this.proofs.requestUploadUrl(requireUser(user), id, input.contentType);
+  }
+
+  /**
    * The rider completes the delivery — Phase G-7.2, the terminal transition.
    * `EN_ROUTE -> DELIVERED` on the delivery, and — only once that has
    * genuinely happened — `DELIVERING -> DELIVERED` on the order, via the
@@ -207,8 +243,10 @@ export class RiderController {
    * rider can be offered work again. See `DeliveryCompletionService` for why
    * `release_rider_assignment()` is deliberately not used for that.
    *
-   * **No request body, and no proof photo.** POD is the next phase; it adds a
-   * `{ objectKey }` body to this same route rather than a route of its own.
+   * **The proof photo is required** (DEC-038, resolving BQ-018 as mandatory).
+   * `objectKey` is the key returned by the presign route above; the server
+   * re-parses it against this delivery and requires the object to genuinely
+   * exist before any state moves.
    */
   @Post('deliveries/:id/delivered')
   @HttpCode(200)
@@ -223,8 +261,10 @@ export class RiderController {
   async markDelivered(
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Param('id') id: string,
+    @Body() body: unknown,
   ): Promise<RiderDeliveredResponse> {
-    return this.completions.complete(requireUser(user), id);
+    const input = parseOrThrow(riderDeliveredRequestSchema, body);
+    return this.completions.complete(requireUser(user), id, input.objectKey);
   }
 
   /**

@@ -16,10 +16,14 @@ import type { RiderOrderDetail } from '../domain/riderOrder';
  * interval, and stops on "blur" (here: unmount) — it is not evidence of real
  * navigation focus timing, exactly as those suites' own notes record.
  */
+// `mock`-prefixed so jest's out-of-scope guard admits it in the factory below.
+const mockNavigate = jest.fn();
+
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useNavigation: () => ({ navigate: mockNavigate }),
     useFocusEffect: (effect: () => void | (() => void)) => {
       (jest.requireActual('react') as typeof import('react')).useEffect(effect, []);
     },
@@ -204,8 +208,8 @@ describe('ActiveDeliveryScreen — rendering the active delivery', () => {
   });
 });
 
-describe('ActiveDeliveryScreen — the delivered command', () => {
-  it('calls the API command, never a direct Supabase write', async () => {
+describe('ActiveDeliveryScreen — the fourth step opens the POD leg', () => {
+  it('navigates to ProofCamera instead of completing the delivery', async () => {
     const { markDelivered } = bind({});
     render(<ActiveDeliveryScreen />);
 
@@ -214,47 +218,14 @@ describe('ActiveDeliveryScreen — the delivered command', () => {
       fireEvent.press(screen.getByTestId('button-delivery-delivered'));
     });
 
-    expect(markDelivered).toHaveBeenCalledWith('delivery-1');
+    // A completion issued from here would carry no photo and the API would
+    // refuse it — the photo is mandatory (DEC-038).
+    expect(mockNavigate).toHaveBeenCalledWith('ProofCamera', { deliveryId: 'delivery-1' });
+    expect(markDelivered).not.toHaveBeenCalled();
   });
 
-  it('shows the completed state only after the server responded, with the server’s own timestamp', async () => {
-    bind({});
-    render(<ActiveDeliveryScreen />);
-
-    await screen.findByTestId('button-delivery-delivered');
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('button-delivery-delivered'));
-    });
-
-    const completed = await screen.findByTestId('delivery-completed');
-    expect(completed).toBeTruthy();
-    // Not a local clock — `deliveries.delivered_at` as the API returned it.
-    expect(screen.getByTestId('delivery-completed-at')).toBeTruthy();
-  });
-
-  it('never shows the completed state when the command fails', async () => {
-    bind({
-      markDelivered: jest.fn(async () => {
-        throw new ApiClientError(409, { code: 'INVALID_TRANSITION', message: 'not EN_ROUTE' });
-      }),
-    });
-    render(<ActiveDeliveryScreen />);
-
-    await screen.findByTestId('button-delivery-delivered');
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('button-delivery-delivered'));
-    });
-
-    await screen.findByTestId('delivery-action-error');
-    expect(screen.queryByTestId('delivery-completed')).toBeNull();
-  });
-
-  it('re-reads the delivery after every action, success or failure', async () => {
-    const { getActiveDelivery, markDelivered } = bind({
-      markDelivered: jest.fn(async () => {
-        throw new ApiClientError(409, { code: 'INVALID_TRANSITION', message: 'not EN_ROUTE' });
-      }),
-    });
+  it('does not re-read the delivery when opening the POD leg', async () => {
+    const { getActiveDelivery } = bind({});
     render(<ActiveDeliveryScreen />);
 
     await screen.findByTestId('button-delivery-delivered');
@@ -264,51 +235,8 @@ describe('ActiveDeliveryScreen — the delivered command', () => {
       fireEvent.press(screen.getByTestId('button-delivery-delivered'));
     });
 
-    // The server's response is the only authority: the state just read is
-    // stale either way, so it is re-read rather than patched locally.
-    await waitFor(() => expect(getActiveDelivery).toHaveBeenCalledTimes(2));
-    expect(markDelivered).toHaveBeenCalledTimes(1);
-  });
-
-  it('maps a known error code to Thai copy, never a server-facing string', async () => {
-    bind({
-      markDelivered: jest.fn(async () => {
-        throw new ApiClientError(403, { code: 'NOT_ASSIGNED_RIDER', message: 'raw server text' });
-      }),
-    });
-    render(<ActiveDeliveryScreen />);
-
-    await screen.findByTestId('button-delivery-delivered');
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('button-delivery-delivered'));
-    });
-
-    await screen.findByTestId('delivery-action-error');
-    expect(screen.getByText('งานนี้ไม่ใช่งานของคุณแล้ว')).toBeTruthy();
-    expect(screen.queryByText('raw server text')).toBeNull();
-  });
-
-  it('after completion the screen returns to the no-active-delivery state', async () => {
-    // The delivery is EN_ROUTE on first read and gone on the post-action
-    // re-read, exactly as the server behaves: DELIVERED is terminal and not in
-    // ACTIVE_DELIVERY_STATES.
-    const getActiveDelivery = jest
-      .fn()
-      .mockResolvedValueOnce(EN_ROUTE_DELIVERY)
-      .mockResolvedValue(null);
-    bind({ getActiveDelivery });
-    render(<ActiveDeliveryScreen />);
-
-    await screen.findByTestId('button-delivery-delivered');
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('button-delivery-delivered'));
-    });
-
-    await screen.findByTestId('delivery-completed');
-    fireEvent.press(screen.getByTestId('button-acknowledge-completion'));
-
-    // Which is what makes the rider available for a subsequent offer.
-    await screen.findByTestId('active-delivery-empty');
+    // Navigation is not an action — nothing changed server-side to re-read.
+    expect(getActiveDelivery).toHaveBeenCalledTimes(1);
   });
 
   it('drives the earlier steps through their own endpoints', async () => {
@@ -321,6 +249,56 @@ describe('ActiveDeliveryScreen — the delivered command', () => {
     });
 
     expect(markArrived).toHaveBeenCalledWith('delivery-1');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the delivery after an earlier-step action, success or failure', async () => {
+    const { getActiveDelivery, markArrived } = bind({
+      getActiveDelivery: jest.fn(async () => ASSIGNED_DELIVERY),
+      markArrived: jest.fn(async () => {
+        throw new ApiClientError(409, { code: 'INVALID_TRANSITION', message: 'not assigned' });
+      }),
+    });
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('button-delivery-arrived');
+    expect(getActiveDelivery).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('button-delivery-arrived'));
+    });
+
+    await waitFor(() => expect(getActiveDelivery).toHaveBeenCalledTimes(2));
+    expect(markArrived).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps a known error code to Thai copy, never a server-facing string', async () => {
+    bind({
+      getActiveDelivery: jest.fn(async () => ASSIGNED_DELIVERY),
+      markArrived: jest.fn(async () => {
+        throw new ApiClientError(403, { code: 'NOT_ASSIGNED_RIDER', message: 'raw server text' });
+      }),
+    });
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('button-delivery-arrived');
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('button-delivery-arrived'));
+    });
+
+    await screen.findByTestId('delivery-action-error');
+    expect(screen.getByText('งานนี้ไม่ใช่งานของคุณแล้ว')).toBeTruthy();
+    expect(screen.queryByText('raw server text')).toBeNull();
+  });
+
+  it('shows the no-active-delivery state once a completed delivery leaves the active states', async () => {
+    // What the rider comes back to after the POD leg succeeds: DELIVERED is
+    // terminal and outside ACTIVE_DELIVERY_STATES, which is also what makes
+    // them available for a subsequent offer.
+    bind({ getActiveDelivery: jest.fn(async () => null) });
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('active-delivery-empty');
   });
 });
 
@@ -367,14 +345,14 @@ describe('ActiveDeliveryScreen — polling', () => {
 
   it('an action does not restart or duplicate the poll timer', async () => {
     jest.useFakeTimers();
-    const { getActiveDelivery } = bind({});
+    const { getActiveDelivery } = bind({ getActiveDelivery: jest.fn(async () => ASSIGNED_DELIVERY) });
     render(<ActiveDeliveryScreen />);
 
     await act(async () => {
       await Promise.resolve();
     });
     await act(async () => {
-      fireEvent.press(screen.getByTestId('button-delivery-delivered'));
+      fireEvent.press(screen.getByTestId('button-delivery-arrived'));
     });
 
     const afterAction = getActiveDelivery.mock.calls.length;

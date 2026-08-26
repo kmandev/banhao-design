@@ -1,10 +1,15 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, colors, fontFamily, fontSize, radius, spacing } from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { useActiveDelivery } from '../hooks/useActiveDelivery';
 import { DELIVERY_STEPS, currentStep } from '../domain/riderDelivery';
 import type { RiderActiveDelivery } from '../domain/riderDelivery';
 import type { RiderOrderDetail } from '../domain/riderOrder';
+import type { RiderStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<RiderStackParamList>;
 
 /**
  * R-06 งานที่กำลังทำ — the rider's active delivery (Phase G-7.2).
@@ -25,11 +30,20 @@ import type { RiderOrderDetail } from '../domain/riderOrder';
  * the **server's** state says the rider is on — `currentStep(delivery.state)`,
  * never a locally advanced counter.
  *
+ * ## The fourth step goes through POD
+ *
+ * Steps 1–3 call their API command directly. Step 4 does **not**: a completion
+ * requires a proof photo (DEC-038, resolving BQ-018 as mandatory), so
+ * `ส่งสำเร็จ` navigates into `ProofCamera` and the POD leg owns capture,
+ * upload and confirmation from there. This screen never calls
+ * `markDelivered` — `useActiveDelivery.runStep` cannot even express it.
+ *
+ * A rider who abandons the POD leg comes back to this screen with the delivery
+ * exactly as it was: still `EN_ROUTE`, still theirs, still open.
+ *
  * ## What is deliberately not here
  *
- * **No proof photo, no camera, no upload.** POD is the next phase; `ส่งสำเร็จ`
- * completes the delivery on its own in this slice, exactly as the endpoint
- * does. **No money** — BQ-029 is `OPEN` and every rider domain type in this app
+ * **No money** — BQ-029 is `OPEN` and every rider domain type in this app
  * is money-free. **No map** — `deliveryAddressSnapshot` and `deliveryLandmark`
  * are what the rider navigates by, and no map library exists in this app. **No
  * cancel/release control** — that is `POST /deliveries/:id/cancel`, DEC-021,
@@ -38,31 +52,8 @@ import type { RiderOrderDetail } from '../domain/riderOrder';
  * not wired in this slice.
  */
 export function ActiveDeliveryScreen() {
-  const { view, refresh, busy, actionError, completedAt, acknowledgeCompletion, runStep } =
-    useActiveDelivery();
-
-  // Shown after a successful `delivered` and only then — `completedAt` is set
-  // from the server's own `deliveries.delivered_at`, never optimistically.
-  if (completedAt) {
-    return (
-      <Screen scroll testID="screen-active-delivery">
-        <View style={styles.completed} testID="delivery-completed">
-          <Text style={styles.completedMark}>✓</Text>
-          <Text style={styles.completedTitle}>ส่งสำเร็จ</Text>
-          <Text style={styles.muted}>งานนี้ปิดเรียบร้อยแล้ว</Text>
-          <Text style={styles.metaValue} testID="delivery-completed-at">
-            เวลาส่งสำเร็จ {formatTimestamp(completedAt)}
-          </Text>
-          <Text style={styles.muted}>คุณพร้อมรับงานใหม่แล้ว</Text>
-          <Button
-            label="กลับหน้าหลัก"
-            onPress={acknowledgeCompletion}
-            testID="button-acknowledge-completion"
-          />
-        </View>
-      </Screen>
-    );
-  }
+  const navigation = useNavigation<Nav>();
+  const { view, refresh, busy, actionError, runStep } = useActiveDelivery();
 
   return (
     <Screen scroll testID="screen-active-delivery">
@@ -104,7 +95,15 @@ export function ActiveDeliveryScreen() {
           delivery={view.delivery}
           order={view.order}
           busy={busy}
-          onStep={(action) => void runStep(view.delivery.deliveryId, action)}
+          onStep={(action) => {
+            // Step 4 needs a photo, so it opens the POD leg rather than
+            // calling the API — see this file's header.
+            if (action === 'delivered') {
+              navigation.navigate('ProofCamera', { deliveryId: view.delivery.deliveryId });
+              return;
+            }
+            void runStep(view.delivery.deliveryId, action);
+          }}
         />
       ) : null}
     </Screen>
@@ -190,16 +189,6 @@ function ActiveDeliveryBody({
       )}
     </View>
   );
-}
-
-/**
- * Absolute local time — the same convention `HomeScreen.formatRecordedAt` and
- * `OfferInboxScreen.formatTimestamp` use, for the same reason (DQ-G7-03).
- */
-function formatTimestamp(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleString('th-TH');
 }
 
 const styles = StyleSheet.create({

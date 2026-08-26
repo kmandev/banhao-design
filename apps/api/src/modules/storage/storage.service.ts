@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   NotFound,
   PutObjectCommand,
   S3Client,
@@ -47,12 +49,48 @@ export interface UploadInput {
   key: string;
   body: Buffer;
   contentType: string;
+  bucket?: BucketKind;
 }
+
+/** One object returned by {@link StorageService.listObjects}. */
+export interface ListedObject {
+  key: string;
+  /** Absent only if R2's response omits it, which the SDK type allows but real listings don't in practice. */
+  lastModified: Date | undefined;
+}
+
+/**
+ * Which of the two R2 buckets an operation targets.
+ *
+ * `'public'` (the default, `R2_BUCKET`) holds catalog assets — restaurant
+ * covers and menu images — and is served through `R2_PUBLIC_URL`, an
+ * `*.r2.dev` development domain. Public access in R2 is granted **per
+ * bucket**, so every object in it is readable by anyone holding its key.
+ *
+ * `'private'` (`R2_PRIVATE_BUCKET`) holds delivery proof photos (POD) and
+ * nothing else. It has no public base URL, and {@link StorageService.getPublicUrl}
+ * refuses to resolve a key against it — a private object is reachable only
+ * through {@link StorageService.getSignedDownloadUrl}, minted per request for a
+ * caller the API has already authorized.
+ *
+ * The split is a bucket rather than a key prefix precisely because the public
+ * setting is bucket-scoped: a `deliveries/` prefix inside the public bucket
+ * would be privacy by obscurity, not by authorization.
+ */
+export type BucketKind = 'public' | 'private';
 
 /** A short-lived, single-object, single-operation authorization — never a credential. */
 const DEFAULT_SIGNED_UPLOAD_EXPIRY_SECONDS = 300;
 
-/** Thrown when R2 is used before all five configuration values are present. */
+/**
+ * Read authorizations are shorter still than write ones. A download URL is
+ * handed to a *viewer* (a customer opening the proof card), so it lives as
+ * long as looking at one image takes and no longer — and it is never
+ * persisted anywhere, so a fresh one is minted on every open.
+ */
+const DEFAULT_SIGNED_DOWNLOAD_EXPIRY_SECONDS = 120;
+
+/** Thrown when R2 is used before the configuration values it needs are present. */
 export class StorageConfigError extends Error {
   constructor(missing: string[]) {
     super(
@@ -84,10 +122,30 @@ function assertSafeObjectKey(key: string): void {
   }
 }
 
+/**
+ * The `listObjects` equivalent of {@link assertSafeObjectKey} — a prefix is
+ * not itself a key (it legitimately ends in `/`, e.g. `deliveries/`), so the
+ * "no empty segment" rule above would reject every real prefix. Still refuses
+ * a leading slash or `..`, for the same reason.
+ */
+function assertSafeObjectPrefix(prefix: string): void {
+  if (prefix.startsWith('/') || prefix.includes('..')) {
+    throw new Error(`Refusing unsafe object prefix: ${prefix}`);
+  }
+}
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly bucket: string;
+  /**
+   * Undefined until `R2_PRIVATE_BUCKET` is configured. Deliberately NOT
+   * validated in the constructor alongside the other five: the public
+   * catalog flows (M-11, M-12) predate POD and must keep starting without it,
+   * so absence is reported by {@link resolveBucket} at the moment a private
+   * operation is actually attempted.
+   */
+  private readonly privateBucket: string | undefined;
   private readonly publicUrl: string;
   private readonly client: S3Client;
 
@@ -110,7 +168,18 @@ export class StorageService {
     }
 
     this.bucket = resolved.r2Bucket as string;
+    this.privateBucket = resolved.r2PrivateBucket;
     this.publicUrl = (resolved.r2PublicUrl as string).replace(/\/+$/, '');
+
+    if (this.privateBucket && this.privateBucket === this.bucket) {
+      // Configuring both names to the same bucket would silently defeat the
+      // entire point of the split: proof photos would land in the bucket
+      // R2_PUBLIC_URL serves. Fail at startup rather than at the first upload.
+      throw new StorageConfigError([
+        'R2_PRIVATE_BUCKET must name a DIFFERENT bucket from R2_BUCKET — ' +
+          'R2 grants public access per bucket, so sharing one would expose proof photos',
+      ]);
+    }
 
     const clientConfig: S3ClientConfig = {
       region: 'auto',
@@ -143,7 +212,7 @@ export class StorageService {
 
     await this.client.send(
       new PutObjectCommand({
-        Bucket: this.bucket,
+        Bucket: this.resolveBucket(input.bucket),
         Key: input.key,
         Body: input.body,
         ContentType: input.contentType,
@@ -153,10 +222,12 @@ export class StorageService {
     return { key: input.key };
   }
 
-  async delete(key: string): Promise<void> {
+  async delete(key: string, bucket: BucketKind = 'public'): Promise<void> {
     assertSafeObjectKey(key);
 
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.resolveBucket(bucket), Key: key }),
+    );
   }
 
   /**
@@ -170,16 +241,59 @@ export class StorageService {
    * credentials problem must not be reported as "the object doesn't exist,"
    * since a caller here treats `false` as license to reject the request.
    */
-  async exists(key: string): Promise<boolean> {
+  async exists(key: string, bucket: BucketKind = 'public'): Promise<boolean> {
     assertSafeObjectKey(key);
 
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.resolveBucket(bucket), Key: key }),
+      );
       return true;
     } catch (error) {
       if (error instanceof NotFound) return false;
       throw error;
     }
+  }
+
+  /**
+   * Lists up to one page of objects under a prefix — added for the POD
+   * orphan sweep (`ProofPhotoRetentionService`, DEC-039), which has no
+   * `deliveries` row to start from and must instead discover candidate
+   * objects directly in R2.
+   *
+   * Deliberately **one page per call, never a fetch-until-exhausted loop** —
+   * the caller is a scheduled tick and must do bounded work; if there is more
+   * than one page under the prefix, later objects wait for a later tick
+   * rather than this call running an unbounded number of R2 requests.
+   *
+   * Returns each object's key and `LastModified` — the retention sweep uses
+   * the latter to decide age without a second `HeadObject` round trip per
+   * object.
+   */
+  async listObjects(
+    prefix: string,
+    bucket: BucketKind = 'private',
+    options: { maxKeys?: number; continuationToken?: string } = {},
+  ): Promise<{ objects: ListedObject[]; nextContinuationToken: string | undefined }> {
+    assertSafeObjectPrefix(prefix);
+
+    const result = await this.client.send(
+      new ListObjectsV2Command({
+        Bucket: this.resolveBucket(bucket),
+        Prefix: prefix,
+        MaxKeys: options.maxKeys,
+        ContinuationToken: options.continuationToken,
+      }),
+    );
+
+    const objects = (result.Contents ?? [])
+      .filter((object): object is { Key: string; LastModified?: Date } => Boolean(object.Key))
+      .map((object) => ({ key: object.Key, lastModified: object.LastModified }));
+
+    return {
+      objects,
+      nextContinuationToken: result.IsTruncated ? result.NextContinuationToken : undefined,
+    };
   }
 
   /**
@@ -206,15 +320,64 @@ export class StorageService {
     key: string,
     contentType: string,
     expiresInSeconds: number = DEFAULT_SIGNED_UPLOAD_EXPIRY_SECONDS,
+    bucket: BucketKind = 'public',
   ): Promise<string> {
     assertSafeObjectKey(key);
 
     const command = new PutObjectCommand({
-      Bucket: this.bucket,
+      Bucket: this.resolveBucket(bucket),
       Key: key,
       ContentType: contentType,
     });
 
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+  }
+
+  /**
+   * A presigned `GET` URL scoped to exactly one object — the capability this
+   * service did not have before POD, because everything it served until now
+   * was a public catalog asset resolved through {@link getPublicUrl}.
+   *
+   * This is the **only** way an object in the private bucket is ever read. The
+   * URL is minted per request for a caller the API has already authorized, is
+   * short-lived by default (2 minutes — as long as looking at one image
+   * takes), and is never persisted: a screen that needs the image again asks
+   * for a fresh one rather than caching a stale authorization.
+   *
+   * The credentials that produced it are never sent to the client, exactly as
+   * with {@link getSignedUploadUrl}.
+   */
+  async getSignedDownloadUrl(
+    key: string,
+    expiresInSeconds: number = DEFAULT_SIGNED_DOWNLOAD_EXPIRY_SECONDS,
+    bucket: BucketKind = 'private',
+  ): Promise<string> {
+    assertSafeObjectKey(key);
+
+    const command = new GetObjectCommand({
+      Bucket: this.resolveBucket(bucket),
+      Key: key,
+    });
+
+    return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+  }
+
+  /**
+   * Maps a {@link BucketKind} onto a configured bucket name.
+   *
+   * `'private'` raises {@link StorageConfigError} when `R2_PRIVATE_BUCKET` is
+   * unset rather than silently falling back to the public bucket — a fallback
+   * here would put proof photos in the bucket `R2_PUBLIC_URL` serves, which is
+   * precisely the outcome the split exists to prevent. Failing loudly is the
+   * only safe behaviour.
+   */
+  private resolveBucket(kind: BucketKind = 'public'): string {
+    if (kind === 'public') return this.bucket;
+
+    if (!this.privateBucket) {
+      throw new StorageConfigError(['R2_PRIVATE_BUCKET']);
+    }
+
+    return this.privateBucket;
   }
 }

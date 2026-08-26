@@ -43,6 +43,10 @@ import {
   type RiderDeliveryActionsRepository,
 } from './riderDeliveryActions';
 import { createRiderOrderViewRepository, type RiderOrderViewRepository } from './riderOrderView';
+import {
+  createRiderProofUploadRepository,
+  type RiderProofUploadRepository,
+} from './riderProofUpload';
 import { captureForegroundPosition } from '../lib/deviceLocation';
 import type { DevicePosition } from '../lib/deviceLocation';
 
@@ -54,6 +58,7 @@ export * from './riderOfferActions';
 export * from './riderDelivery';
 export * from './riderDeliveryActions';
 export * from './riderOrderView';
+export * from './riderProofUpload';
 
 /** The device's own position source, behind an interface so a test never needs a GPS. */
 export interface DeviceLocationSource {
@@ -69,6 +74,7 @@ export interface Repositories {
   delivery: RiderDeliveryRepository;
   deliveryActions: RiderDeliveryActionsRepository;
   riderOrderView: RiderOrderViewRepository;
+  proofUpload: RiderProofUploadRepository;
   deviceLocation: DeviceLocationSource;
 }
 
@@ -81,5 +87,6 @@ export const repositories: Repositories = {
   delivery: createRiderDeliveryRepository(supabase),
   deliveryActions: createRiderDeliveryActionsRepository(),
   riderOrderView: createRiderOrderViewRepository(supabase),
+  proofUpload: createRiderProofUploadRepository(),
   deviceLocation: { capturePosition: captureForegroundPosition },
 };

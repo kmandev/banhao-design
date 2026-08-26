@@ -33,14 +33,22 @@ import { ApiClientError } from '../lib/apiClient';
  * the true state on the re-read; the client never decides a transition is
  * illegal on its own.
  *
- * ## Completion
+ * ## Completion is NOT run from here
  *
- * A successful `delivered` sets {@link ActiveDeliveryController.completedAt}
- * and the re-read then returns `null`, because `DELIVERED` is terminal and not
- * in `ACTIVE_DELIVERY_STATES`. Both facts are exposed rather than one: without
- * `completedAt` the screen would snap from "delivering" to "no active
- * delivery" with no confirmation that the delivery succeeded, which is exactly
- * the "silence drawn as calm" the redesign forbids.
+ * `runStep` drives the first three transitions only. The fourth — `delivered`
+ * — requires a proof photo (DEC-038, resolving BQ-018 as mandatory), so the
+ * screen navigates into the POD leg (`ProofCamera` → `ProofReview` →
+ * `DeliveryConfirm`) instead, and `useProofSubmission` owns the presign,
+ * upload and confirm sequence.
+ *
+ * That split is why `runStep`'s type excludes `'delivered'`: a completion
+ * issued from here would have no photo and the API would refuse it. Making it
+ * unrepresentable is better than a runtime guard.
+ *
+ * After a successful completion the delivery leaves `ACTIVE_DELIVERY_STATES`
+ * (`DELIVERED` is terminal), so this hook's next focused read returns `null`
+ * and the screen shows its no-active-delivery state — which is also what makes
+ * the rider available for a subsequent offer.
  */
 const POLL_INTERVAL_MS = 15_000;
 
@@ -58,11 +66,7 @@ export interface ActiveDeliveryController {
   busy: boolean;
   /** The last transition failure, cleared when a new action starts. */
   actionError: string | null;
-  /** `deliveries.delivered_at` from a successful completion in this session, else `null`. */
-  completedAt: string | null;
-  /** Dismisses the completion confirmation and returns the screen to its normal states. */
-  acknowledgeCompletion: () => void;
-  runStep: (deliveryId: string, action: DeliveryAction) => Promise<void>;
+  runStep: (deliveryId: string, action: Exclude<DeliveryAction, 'delivered'>) => Promise<void>;
 }
 
 /** A load failure. The repository's own message — see `riderDeliveryQueries.ts`'s `raise`. */
@@ -96,7 +100,6 @@ export function useActiveDelivery(): ActiveDeliveryController {
   const [view, setView] = useState<ActiveDeliveryView>({ status: 'loading' });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [completedAt, setCompletedAt] = useState<string | null>(null);
 
   // Guards the one read in flight — a slow response must not overlap with the
   // next timer tick or a post-action refresh.
@@ -169,20 +172,14 @@ export function useActiveDelivery(): ActiveDeliveryController {
   );
 
   const runStep = useCallback(
-    async (deliveryId: string, action: DeliveryAction) => {
+    async (deliveryId: string, action: Exclude<DeliveryAction, 'delivered'>) => {
       setActionError(null);
       setBusy(true);
 
       try {
         const actions = repositories.deliveryActions;
 
-        if (action === 'delivered') {
-          const result = await actions.markDelivered(deliveryId);
-          // Only reached on a 200. `completedAt` is never set optimistically
-          // and never from a local clock — it is the server's own
-          // `deliveries.delivered_at`.
-          setCompletedAt(result.deliveredAt ?? new Date().toISOString());
-        } else if (action === 'arrived') {
+        if (action === 'arrived') {
           await actions.markArrived(deliveryId);
         } else if (action === 'pickedUp') {
           await actions.markPickedUp(deliveryId);
@@ -203,7 +200,5 @@ export function useActiveDelivery(): ActiveDeliveryController {
     [load],
   );
 
-  const acknowledgeCompletion = useCallback(() => setCompletedAt(null), []);
-
-  return { view, refresh, busy, actionError, completedAt, acknowledgeCompletion, runStep };
+  return { view, refresh, busy, actionError, runStep };
 }

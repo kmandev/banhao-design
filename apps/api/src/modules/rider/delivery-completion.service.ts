@@ -5,6 +5,8 @@ import { DomainError } from '../../common/errors/domain-error';
 import { getCorrelationId } from '../../common/correlation/correlation';
 import type { AuthenticatedUser } from '../../common/types';
 import { OrdersService } from '../orders/orders.service';
+import { StorageService } from '../storage/storage.service';
+import { parseDeliveryProofObjectKey } from '../storage/object-key';
 
 /** `deliveries`, what the guarded UPDATE returns on a match, and the diagnostic read's own shape. */
 interface DeliveryRow {
@@ -13,6 +15,7 @@ interface DeliveryRow {
   rider_id: string | null;
   order_id: string;
   delivered_at: string | null;
+  proof_photo_path: string | null;
 }
 
 /** `orders`, the single column the order-side diagnostic read needs. */
@@ -135,11 +138,22 @@ interface RiderAvailabilityRow {
  *
  * No payment, ledger, refund, reconciliation or settlement row is read or
  * written. No `rider_assignment_attempts` write — a completed delivery's
- * offers were already resolved at accept time. **No proof photo**: POD is the
- * next phase, and `deliveries.proof_photo_path` is left exactly as it was
- * (null for every delivery completed through this slice). No notification, no
- * earning, no `rider_earning_satang` (BQ-029 is `OPEN`; a value here would be
- * invented).
+ * offers were already resolved at accept time. No notification, no earning, no
+ * `rider_earning_satang` (BQ-029 is `OPEN`; a value here would be invented).
+ *
+ * ## The proof photo (POD, Phase 2)
+ *
+ * `objectKey` is **required** — DEC-038, resolving BQ-018 as mandatory. With COD disabled (DEC-016) the photo is the only evidence a
+ * handover happened, and this endpoint is where that rule lives, not the
+ * client. A rider who genuinely cannot photograph has no completion path at
+ * all (DEC-038): the driver app directs them to an operator and the delivery
+ * stays open.
+ *
+ * The photo is verified before the state machine is touched
+ * ({@link assertProofUploaded}) and persisted in the same guarded UPDATE that
+ * moves the state ({@link claimCompletion}), so there is no window in which a
+ * delivery is `DELIVERED` with a null path, and no second write a retry could
+ * use to replace evidence.
  */
 @Injectable()
 export class DeliveryCompletionService {
@@ -148,9 +162,14 @@ export class DeliveryCompletionService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly orders: OrdersService,
+    private readonly storage: StorageService,
   ) {}
 
-  async complete(user: AuthenticatedUser, deliveryId: string): Promise<RiderDeliveredResponse> {
+  async complete(
+    user: AuthenticatedUser,
+    deliveryId: string,
+    objectKey: string,
+  ): Promise<RiderDeliveredResponse> {
     // `@Roles('RIDER')` already refused anyone without an APPROVED rider row
     // (see `RiderController`'s own note on this), so this narrows the type and
     // fails closed if the route is ever wired without the decorator.
@@ -160,7 +179,12 @@ export class DeliveryCompletionService {
     }
     const riderId = rider.riderId;
 
-    const delivery = await this.claimCompletion(deliveryId, riderId);
+    // The proof is verified BEFORE the state machine is touched, so a
+    // fabricated, foreign, or never-uploaded key moves nothing. See
+    // {@link assertProofUploaded}.
+    await this.assertProofUploaded(deliveryId, objectKey);
+
+    const delivery = await this.claimCompletion(deliveryId, riderId, objectKey);
 
     if (!delivery) {
       // Lost the guarded UPDATE, or the delivery is not in a completable
@@ -249,15 +273,91 @@ export class DeliveryCompletionService {
     await this.advanceOrder(user, delivery.order_id, delivery.id, riderId);
   }
 
-  /** The guarded UPDATE — ownership and pre-state enforced entirely in the `WHERE` clause. */
-  private async claimCompletion(deliveryId: string, riderId: string): Promise<DeliveryRow | null> {
+  /**
+   * Proves a real proof photo exists at a key that could only belong to
+   * **this** delivery — POD, Phase G-7.2 Phase 2.
+   *
+   * Two independent checks, the pair `MenuItemImageService.completeUpload`
+   * already relies on, because this key (like a menu item's) carries a
+   * server-generated random UUID that nothing observable here can recompute:
+   *
+   * 1. **Structure** — `parseDeliveryProofObjectKey` demands the exact
+   *    documented shape for this authorized delivery id. A key minted for
+   *    another delivery, a traversal attempt, an unsupported extension and a
+   *    garbled string all fail identically.
+   * 2. **Existence** — `StorageService.exists()` against the **private**
+   *    bucket. A presigned URL merely *authorizes* a PUT; issuing one is not
+   *    proof one happened, so nothing is written until real bytes are there.
+   *
+   * Structure narrows what shape of key can matter; existence proves one was
+   * actually used. Together they replace M-11's recompute-and-compare, which
+   * is unavailable here by construction.
+   *
+   * **Runs before the guarded UPDATE**, deliberately: the POD design's
+   * acceptance criterion 11 requires that a structurally invalid key, a key
+   * for another delivery, and a key with no object behind it are all refused
+   * and **none of them moves any state**. Verifying after the claim would
+   * leave a delivery `DELIVERED` with a rejected photo.
+   */
+  private async assertProofUploaded(deliveryId: string, objectKey: string): Promise<void> {
+    const parsed = parseDeliveryProofObjectKey(objectKey, deliveryId);
+    if (!parsed) {
+      // Deliberately generic — see `parseDeliveryProofObjectKey`'s own note on
+      // why every rejection reason gets the same answer.
+      throw new DomainError('VALIDATION_FAILED', {
+        message: 'objectKey is not a valid proof photo key for this delivery',
+        details: { objectKey: ['does not match the expected key shape for this delivery'] },
+      });
+    }
+
+    let uploaded: boolean;
+    try {
+      uploaded = await this.storage.exists(objectKey, 'private');
+    } catch (cause) {
+      // A transport or configuration failure must never read as "no photo" —
+      // that would refuse a rider who genuinely uploaded one.
+      const message = cause instanceof Error ? cause.message : String(cause);
+      this.logger.error(`Proof photo existence check failed for delivery ${deliveryId}: ${message}`);
+      throw new DomainError('INTERNAL_ERROR', { message: 'Proof photo verification failed' });
+    }
+
+    if (!uploaded) {
+      throw new DomainError('NOT_FOUND', {
+        message: 'No proof photo was found at the expected key — upload it before confirming',
+      });
+    }
+  }
+
+  /**
+   * The guarded UPDATE — ownership and pre-state enforced entirely in the
+   * `WHERE` clause.
+   *
+   * `proof_photo_path` is written **in this same statement**, not a separate
+   * one. That is what makes the photo and the completion atomic: there is no
+   * moment where the delivery is `DELIVERED` with a null path, and no second
+   * write that a retry could use to replace evidence. The `state = 'EN_ROUTE'`
+   * guard is also what makes the path effectively write-once — a second call
+   * matches zero rows and never reaches the write. Note honestly that the
+   * *database* does not enforce this: `deliveries` carries no
+   * column-immutability trigger (deliberately — `state` and `rider_id` must
+   * advance freely), so this is an application rule (POD-Q-07).
+   */
+  private async claimCompletion(
+    deliveryId: string,
+    riderId: string,
+    objectKey: string,
+  ): Promise<DeliveryRow | null> {
     const { data, error } = await this.supabase.admin
       .from('deliveries')
-      .update({ state: 'DELIVERED', delivered_at: new Date().toISOString() })
+      .update({
+        state: 'DELIVERED',
+        delivered_at: new Date().toISOString(),
+        proof_photo_path: objectKey,
+      })
       .eq('id', deliveryId)
       .eq('state', 'EN_ROUTE')
       .eq('rider_id', riderId)
-      .select('id, state, rider_id, order_id, delivered_at')
+      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path')
       .maybeSingle<DeliveryRow>();
 
     if (error) {
@@ -278,7 +378,7 @@ export class DeliveryCompletionService {
   private async readDelivery(deliveryId: string): Promise<DeliveryRow | null> {
     const { data, error } = await this.supabase.admin
       .from('deliveries')
-      .select('id, state, rider_id, order_id, delivered_at')
+      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path')
       .eq('id', deliveryId)
       .maybeSingle<DeliveryRow>();
 

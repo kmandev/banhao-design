@@ -30,6 +30,12 @@ jest.mock('@aws-sdk/client-s3', () => {
   class FakeHeadObjectCommand {
     constructor(public readonly input: Record<string, unknown>) {}
   }
+  class FakeGetObjectCommand {
+    constructor(public readonly input: Record<string, unknown>) {}
+  }
+  class FakeListObjectsV2Command {
+    constructor(public readonly input: Record<string, unknown>) {}
+  }
   // Mirrors the real `NotFound` exception's `instanceof`-checkable shape.
   // Defined inside the factory — jest.mock() factories may not reference
   // out-of-scope variables/classes.
@@ -50,6 +56,8 @@ jest.mock('@aws-sdk/client-s3', () => {
     PutObjectCommand: FakePutObjectCommand,
     DeleteObjectCommand: FakeDeleteObjectCommand,
     HeadObjectCommand: FakeHeadObjectCommand,
+    GetObjectCommand: FakeGetObjectCommand,
+    ListObjectsV2Command: FakeListObjectsV2Command,
     NotFound: FakeNotFound,
   };
 });
@@ -298,5 +306,154 @@ describe('StorageService.exists', () => {
   it('rejects an unsafe key before ever calling R2', async () => {
     await expect(service().exists('../escape')).rejects.toThrow();
     expect(sendMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The public/private bucket split — POD, Phase G-7.2 Phase 2.
+ *
+ * `R2_PUBLIC_URL` is an `*.r2.dev` development domain, and public access in R2
+ * is granted **per bucket**. So a proof photo placed in `R2_BUCKET` would be
+ * fetchable by anyone holding its key. These tests assert that the split is
+ * real at the command level — which bucket each operation names — rather than
+ * a naming convention inside one bucket.
+ */
+const PRIVATE_ENV: Partial<ServerEnv> = { ...FULL_ENV, r2PrivateBucket: 'banhao-private' };
+
+function privateService(): StorageService {
+  return serviceWith(PRIVATE_ENV as ServerEnv);
+}
+
+describe('StorageService — the private bucket', () => {
+  it('defaults every existing operation to the PUBLIC bucket, unchanged', async () => {
+    await privateService().getSignedUploadUrl('restaurants/x/cover.jpg', 'image/jpeg');
+
+    const command = getSignedUrlMock.mock.calls[0]?.[1] as { input: Record<string, unknown> };
+    expect(command.input.Bucket).toBe('banhao-assets');
+  });
+
+  it('presigns an upload into the private bucket when asked', async () => {
+    await privateService().getSignedUploadUrl('deliveries/x/proof/y.jpg', 'image/jpeg', 300, 'private');
+
+    const command = getSignedUrlMock.mock.calls[0]?.[1] as { input: Record<string, unknown> };
+    expect(command.input.Bucket).toBe('banhao-private');
+  });
+
+  it('checks existence against the private bucket when asked', async () => {
+    sendMock.mockResolvedValue({});
+
+    await privateService().exists('deliveries/x/proof/y.jpg', 'private');
+
+    const command = sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> };
+    expect(command.input.Bucket).toBe('banhao-private');
+  });
+
+  it('signs a download URL against the private bucket by default', async () => {
+    await privateService().getSignedDownloadUrl('deliveries/x/proof/y.jpg');
+
+    const command = getSignedUrlMock.mock.calls[0]?.[1] as { input: Record<string, unknown> };
+    expect(command.input.Bucket).toBe('banhao-private');
+    expect(command.input.Key).toBe('deliveries/x/proof/y.jpg');
+  });
+
+  it('gives a download URL a short default expiry — an authorization, not a link', async () => {
+    await privateService().getSignedDownloadUrl('deliveries/x/proof/y.jpg');
+
+    expect(getSignedUrlMock.mock.calls[0]?.[2]).toEqual({ expiresIn: 120 });
+  });
+
+  it('refuses a private operation when R2_PRIVATE_BUCKET is unset, rather than falling back', async () => {
+    // A fallback here would put proof photos in the bucket R2_PUBLIC_URL
+    // serves — precisely what the split exists to prevent.
+    await expect(service().getSignedDownloadUrl('deliveries/x/proof/y.jpg')).rejects.toBeInstanceOf(
+      StorageConfigError,
+    );
+  });
+
+  it('still serves public operations when R2_PRIVATE_BUCKET is unset', async () => {
+    await expect(
+      service().getSignedUploadUrl('restaurants/x/cover.jpg', 'image/jpeg'),
+    ).resolves.toEqual(expect.any(String));
+  });
+
+  it('refuses at startup when the two buckets are the same', () => {
+    expect(() =>
+      serviceWith({ ...FULL_ENV, r2PrivateBucket: 'banhao-assets' } as ServerEnv),
+    ).toThrow(StorageConfigError);
+  });
+
+  it('rejects an unsafe key on the private path too', async () => {
+    await expect(
+      privateService().getSignedDownloadUrl('deliveries/../../etc/passwd'),
+    ).rejects.toThrow(/unsafe object key/i);
+  });
+});
+
+/**
+ * `listObjects` — added for the POD retention orphan sweep (DEC-039,
+ * `ProofPhotoRetentionService`), which has no `deliveries` row to start from
+ * and must discover candidate objects directly in R2.
+ */
+describe('StorageService — listObjects', () => {
+  it('defaults to the private bucket — the only bucket POD objects live in', async () => {
+    sendMock.mockResolvedValue({ Contents: [], IsTruncated: false });
+
+    await privateService().listObjects('deliveries/');
+
+    const command = sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> };
+    expect(command.input.Bucket).toBe('banhao-private');
+    expect(command.input.Prefix).toBe('deliveries/');
+  });
+
+  it('passes maxKeys and continuationToken through to the R2 command', async () => {
+    sendMock.mockResolvedValue({ Contents: [], IsTruncated: false });
+
+    await privateService().listObjects('deliveries/', 'private', {
+      maxKeys: 100,
+      continuationToken: 'tok-1',
+    });
+
+    const command = sendMock.mock.calls[0]?.[0] as { input: Record<string, unknown> };
+    expect(command.input.MaxKeys).toBe(100);
+    expect(command.input.ContinuationToken).toBe('tok-1');
+  });
+
+  it('maps Contents to {key, lastModified} and drops any entry with no Key', async () => {
+    const lastModified = new Date('2026-01-01T00:00:00Z');
+    sendMock.mockResolvedValue({
+      Contents: [
+        { Key: 'deliveries/a/proof/x.jpg', LastModified: lastModified },
+        { LastModified: lastModified }, // no Key — must be dropped, not crash
+      ],
+      IsTruncated: false,
+    });
+
+    const result = await privateService().listObjects('deliveries/');
+
+    expect(result.objects).toEqual([{ key: 'deliveries/a/proof/x.jpg', lastModified }]);
+  });
+
+  it('returns the continuation token only when R2 reports truncation', async () => {
+    sendMock.mockResolvedValue({ Contents: [], IsTruncated: true, NextContinuationToken: 'tok-2' });
+
+    const truncated = await privateService().listObjects('deliveries/');
+    expect(truncated.nextContinuationToken).toBe('tok-2');
+
+    sendMock.mockResolvedValue({ Contents: [], IsTruncated: false, NextContinuationToken: 'tok-2' });
+    const notTruncated = await privateService().listObjects('deliveries/');
+    expect(notTruncated.nextContinuationToken).toBeUndefined();
+  });
+
+  it('rejects an unsafe prefix before ever calling R2', async () => {
+    await expect(privateService().listObjects('../escape/')).rejects.toThrow(/unsafe object prefix/i);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it('allows a bare namespace prefix ending in "/" — listObjects is not a key', async () => {
+    sendMock.mockResolvedValue({ Contents: [], IsTruncated: false });
+    await expect(privateService().listObjects('deliveries/')).resolves.toEqual({
+      objects: [],
+      nextContinuationToken: undefined,
+    });
   });
 });

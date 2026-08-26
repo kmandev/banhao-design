@@ -46,6 +46,32 @@ const serverEnvSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   R2_BUCKET: z.string().min(1).optional(),
   R2_PUBLIC_URL: z.string().url().optional(),
+
+  // The PRIVATE bucket — delivery proof photos (POD, G-7.2 Phase 2) and
+  // nothing else. Separate from R2_BUCKET because public access in R2 is a
+  // BUCKET-level setting: R2_PUBLIC_URL is an *.r2.dev development domain,
+  // which makes every object in R2_BUCKET readable by anyone holding its key.
+  // A proof photo shows a customer's doorway and is personal data under PDPA
+  // (Q-012), so it must live where no public base URL exists at all rather
+  // than relying on a random key being unguessable. Two buckets cost nothing
+  // extra — R2 bills stored bytes and operations, never buckets.
+  //
+  // Optional here for the same reason the five above are: only the POD
+  // endpoints need it, and StorageService raises StorageConfigError at the
+  // point of use rather than failing every unrelated route's startup. There
+  // is deliberately NO R2_PRIVATE_PUBLIC_URL — a private object is only ever
+  // reachable through a short-lived signed URL the API mints per request.
+  R2_PRIVATE_BUCKET: z.string().min(1).optional(),
+
+  // DEC-039 — the POD proof-photo retention purge's operational on/off
+  // switch. Unlike POD_RETENTION_DAYS/POD_ORPHAN_RETENTION_DAYS (DEC-039's
+  // approved numbers, kept as constants in pod-retention-policy.ts per the
+  // same reasoning DEC-037's ACCEPT_WINDOW_SECONDS documents), this is not a
+  // business value — it is a deploy-time toggle, the same kind of thing
+  // NODE_ENV is. Defaults to OFF: absent or anything other than the literal
+  // string 'true' means no destructive delete ever runs, so a fresh
+  // environment never starts purging evidence by accident.
+  POD_RETENTION_PURGE_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
 export type ServerEnv = {
@@ -63,6 +89,8 @@ export type ServerEnv = {
   r2SecretAccessKey: string | undefined;
   r2Bucket: string | undefined;
   r2PublicUrl: string | undefined;
+  r2PrivateBucket: string | undefined;
+  podRetentionPurgeEnabled: boolean;
 };
 
 export class EnvValidationError extends Error {
@@ -102,5 +130,7 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEn
     r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY,
     r2Bucket: env.R2_BUCKET,
     r2PublicUrl: env.R2_PUBLIC_URL,
+    r2PrivateBucket: env.R2_PRIVATE_BUCKET,
+    podRetentionPurgeEnabled: env.POD_RETENTION_PURGE_ENABLED === 'true',
   };
 }

@@ -182,3 +182,139 @@ export function parseMenuItemImageObjectKey(
 
   return { menuItemId: menuItemSegment, mimeType };
 }
+
+/**
+ * `deliveries/{deliveryId}/proof/{uuid}.{ext}` — the delivery proof photo
+ * (POD, Phase G-7.2 Phase 2).
+ *
+ * The third key builder this module's own header anticipated ("a future
+ * menu-gallery or **delivery-proof** key builder"), written to the same rule
+ * as the other two: server-templated from a validated UUID and an
+ * allow-listed MIME type, never from anything a client supplies.
+ *
+ * **Not deterministic, deliberately** — the same choice
+ * `menuItemImageObjectKey` makes, for the same reason. A rider may retake the
+ * photo any number of times before confirming, and each retake uploads a new
+ * object, so the key needs a component that changes between uploads. That
+ * component is a server-generated `crypto.randomUUID()`. The consequence is
+ * the same too: M-11's recompute-and-compare check is unavailable here, and
+ * {@link parseDeliveryProofObjectKey} plus a real `exists()` replace it.
+ *
+ * **These objects live in the PRIVATE bucket** (`R2_PRIVATE_BUCKET`), never
+ * the public one. `getPublicUrl` must never be called with a key this
+ * function produced — see `StorageService`'s `BucketKind` for why the split is
+ * a bucket rather than this prefix.
+ */
+export function deliveryProofObjectKey(deliveryId: string, mimeType: string): string {
+  const parsedId = uuidSchema.safeParse(deliveryId);
+  if (!parsedId.success) {
+    throw new InvalidObjectKeyInputError(`deliveryId must be a UUID, got: ${deliveryId}`);
+  }
+
+  if (!isAllowedImageMimeType(mimeType)) {
+    throw new InvalidObjectKeyInputError(
+      `Unsupported MIME type for a delivery proof photo: ${mimeType}. ` +
+        `Allowed: ${Object.keys(ALLOWED_IMAGE_MIME_TYPES).join(', ')}`,
+    );
+  }
+
+  const ext = ALLOWED_IMAGE_MIME_TYPES[mimeType];
+  return `deliveries/${parsedId.data}/proof/${randomUUID()}.${ext}`;
+}
+
+/** A `deliveries/{deliveryId}/proof/{uuid}.{ext}` key, already confirmed structurally valid. */
+export interface ParsedDeliveryProofKey {
+  deliveryId: string;
+  mimeType: AllowedImageMimeType;
+}
+
+/**
+ * Structurally validates a client-submitted proof key **without** trusting it
+ * — the same problem `parseMenuItemImageObjectKey` solves, and the same
+ * answer, because this key shares that one's server-generated random UUID and
+ * therefore cannot be recomputed from anything observable at completion time.
+ *
+ * What this proves: the key is *exactly* the documented shape for **this**
+ * authorized delivery id — literal `deliveries/` prefix, a UUID equal to the
+ * delivery the caller has already been proven assigned to, a literal `proof/`
+ * segment, another UUID, an allow-listed extension, and nothing else. No extra
+ * segments, no leading or trailing slash, no query string, no traversal. A key
+ * that parses could only have come from {@link deliveryProofObjectKey} for a
+ * genuine delivery id, or from a 122-bit guess.
+ *
+ * Structural validity is **not** treated as proof of upload:
+ * `DeliveryCompletionService` still requires `StorageService.exists()` against
+ * the private bucket to return true before any state moves, exactly mirroring
+ * M-11 and M-12's "existence is the real proof" model. Structure narrows what
+ * shape of key can matter; existence proves one was actually used.
+ *
+ * The `expectedDeliveryId` check is what makes Rider A unable to attach a
+ * photo to Rider B's delivery even with a valid key: the caller's authorized
+ * delivery id is compared against the one embedded in the key, so a key minted
+ * for another delivery fails here regardless of whether its object exists.
+ *
+ * Returns `null` for anything failing any part of the shape check — the caller
+ * cannot tell *why* from the return value, deliberately: a traversal attempt,
+ * a foreign delivery's key, and a garbled string all deserve the same generic
+ * answer.
+ */
+export function parseDeliveryProofObjectKey(
+  key: string,
+  expectedDeliveryId: string,
+): ParsedDeliveryProofKey | null {
+  const expectedId = uuidSchema.safeParse(expectedDeliveryId);
+  if (!expectedId.success) return null;
+
+  const parsed = parseAnyDeliveryProofObjectKey(key);
+  if (!parsed || parsed.deliveryId !== expectedId.data) return null;
+
+  return parsed;
+}
+
+/**
+ * The same shape check as {@link parseDeliveryProofObjectKey}, but without an
+ * expected delivery id to compare against — for the one caller that
+ * genuinely does not have one yet: the retention orphan sweep
+ * (`ProofPhotoRetentionService`), which lists raw keys out of R2 and must
+ * discover which delivery (if any) a key names before it can even ask
+ * whether that delivery still references it.
+ *
+ * This is **not** a weaker check — it proves exactly the same structural
+ * shape (`deliveries/{uuid}/proof/{uuid}.{ext}`, an allow-listed extension,
+ * nothing else) — it is simply missing the final "and it's *this* delivery"
+ * comparison that only a caller who already has an authorized delivery id can
+ * make. `parseDeliveryProofObjectKey` is what every authorization-bearing
+ * caller must keep using; this exists only for a caller with no delivery id
+ * to authorize against in the first place.
+ */
+export function parseAnyDeliveryProofObjectKey(key: string): ParsedDeliveryProofKey | null {
+  const PREFIX = 'deliveries/';
+  if (!key.startsWith(PREFIX)) return null;
+
+  const rest = key.slice(PREFIX.length);
+  const segments = rest.split('/');
+  if (segments.length !== 3) return null;
+
+  const [deliverySegment, proofSegment, filename] = segments;
+  if (
+    !deliverySegment ||
+    !uuidSchema.safeParse(deliverySegment).success ||
+    proofSegment !== 'proof' ||
+    !filename
+  ) {
+    return null;
+  }
+
+  const dotIndex = filename.lastIndexOf('.');
+  if (dotIndex <= 0) return null;
+
+  const uuidPart = filename.slice(0, dotIndex);
+  const extension = filename.slice(dotIndex + 1);
+
+  if (!uuidSchema.safeParse(uuidPart).success) return null;
+
+  const mimeType = mimeTypeForExtension(extension);
+  if (!mimeType) return null;
+
+  return { deliveryId: deliverySegment, mimeType };
+}
