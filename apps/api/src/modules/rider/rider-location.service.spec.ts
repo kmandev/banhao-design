@@ -6,6 +6,7 @@ import type { DeliveryReleaseService } from './delivery-release.service';
 import type { DeliveryArrivalService } from './delivery-arrival.service';
 import type { DeliveryPickupService } from './delivery-pickup.service';
 import type { DeliveryEnRouteService } from './delivery-en-route.service';
+import type { DeliveryCompletionService } from './delivery-completion.service';
 import type { AuthenticatedUser } from '../../common/types';
 import type { SupabaseService } from '../../supabase/supabase.service';
 
@@ -187,6 +188,7 @@ describe('RiderController — the location route accepts no rider identity from 
   const arrivals = {} as DeliveryArrivalService;
   const pickups = {} as DeliveryPickupService;
   const departures = {} as DeliveryEnRouteService;
+  const completions = {} as DeliveryCompletionService;
 
   it('passes the JWT-resolved rider id to the service, ignoring anything the body might claim', async () => {
     const updateLocation = jest.fn().mockResolvedValue({
@@ -200,6 +202,7 @@ describe('RiderController — the location route accepts no rider identity from 
       arrivals,
       pickups,
       departures,
+      completions,
     );
 
     await controller.updateLocation(riderUser(RIDER_ID), BUNTHARIK);
@@ -216,6 +219,7 @@ describe('RiderController — the location route accepts no rider identity from 
       arrivals,
       pickups,
       departures,
+      completions,
     );
 
     await expect(
@@ -233,6 +237,7 @@ describe('RiderController — the location route accepts no rider identity from 
       arrivals,
       pickups,
       departures,
+      completions,
     );
 
     await expect(

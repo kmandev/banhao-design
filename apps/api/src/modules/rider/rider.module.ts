@@ -6,6 +6,7 @@ import { OfferAcceptanceService } from './offer-acceptance.service';
 import { DeliveryReleaseService } from './delivery-release.service';
 import { DeliveryArrivalService } from './delivery-arrival.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
+import { DeliveryCompletionService } from './delivery-completion.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
 import { DispatchService } from './dispatch.service';
 import { DISPATCH_STRATEGY } from './dispatch-strategy.interface';
@@ -48,6 +49,7 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
     DeliveryArrivalService,
     DeliveryPickupService,
     DeliveryEnRouteService,
+    DeliveryCompletionService,
     DispatchService,
   ],
   exports: [DispatchService],

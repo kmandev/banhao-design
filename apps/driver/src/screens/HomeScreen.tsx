@@ -25,13 +25,19 @@ type Nav = NativeStackNavigationProp<RiderStackParamList>;
  *
  * ## What is deliberately not here
  *
- * No assigned order, no earnings, no money of any kind, no restaurant or
- * customer detail, no map, no delivery action, no proof photo, no failure or
- * cancellation control. The assigned order is G-7.2; earnings are
- * **BQ-029, `OPEN`** and cannot be rendered without inventing a formula.
- * `RiderOrderViewRepository` exists (G6.3) and is deliberately not imported.
- * Offers themselves are G-7.1 — this screen only links to `OfferInboxScreen`,
- * which is where `RiderOfferInboxRepository` (G6.4) is actually consumed.
+ * No earnings, no money of any kind, no map, no proof photo, no failure or
+ * cancellation control. Earnings are **BQ-029, `OPEN`** and cannot be rendered
+ * without inventing a formula.
+ *
+ * No assigned-order or delivery detail either: this screen only **links** to
+ * the two screens that own those reads. `RiderOfferInboxRepository` (G6.4) is
+ * consumed by `OfferInboxScreen` (G-7.1); `RiderDeliveryRepository` and
+ * `RiderOrderViewRepository` (G6.3) are consumed by `ActiveDeliveryScreen`
+ * (G-7.2). Neither is imported here, so Home makes no extra read.
+ *
+ * The งานที่กำลังทำ row carries no badge or count — that would need a read
+ * Home does not make (DG-05 in the Driver App redesign, still an open
+ * recommendation rather than an approved one).
  *
  * ## The approval gate
  *
@@ -95,6 +101,12 @@ export function HomeScreen() {
       </View>
 
       <AvailabilityPanel controller={availability} />
+
+      <Button
+        label="งานที่กำลังทำ"
+        onPress={() => navigation.navigate('ActiveDelivery')}
+        testID="button-view-active-delivery"
+      />
 
       <Button
         label="งานที่เสนอ"

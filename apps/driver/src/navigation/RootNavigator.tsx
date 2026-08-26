@@ -9,6 +9,7 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 import { OtpScreen } from '../screens/auth/OtpScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { OfferInboxScreen } from '../screens/OfferInboxScreen';
+import { ActiveDeliveryScreen } from '../screens/ActiveDeliveryScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RiderStack = createNativeStackNavigator<RiderStackParamList>();
@@ -36,9 +37,10 @@ function AuthNavigator() {
 }
 
 /**
- * Two screens now — `Home` and G-7.1's `OfferInbox` — still one stack, one
- * level. The handoff's 4-tab bar arrives when งานของฉัน (G-7.2) and รายได้
- * (BQ-029, `OPEN`) have something behind them.
+ * Three screens now — `Home`, G-7.1's `OfferInbox`, and G-7.2's
+ * `ActiveDelivery` — still one stack, one level. The handoff's 4-tab bar
+ * arrives when รายได้ (BQ-029, `OPEN`) has something behind it; งานของฉัน now
+ * does, but one of four tabs is not a tab bar.
  */
 function RiderNavigator() {
   return (
@@ -48,6 +50,11 @@ function RiderNavigator() {
         name="OfferInbox"
         component={OfferInboxScreen}
         options={{ title: 'งานที่เสนอ' }}
+      />
+      <RiderStack.Screen
+        name="ActiveDelivery"
+        component={ActiveDeliveryScreen}
+        options={{ title: 'งานที่กำลังทำ' }}
       />
     </RiderStack.Navigator>
   );

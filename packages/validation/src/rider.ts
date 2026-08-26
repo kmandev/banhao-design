@@ -144,3 +144,29 @@ export interface RiderEnRouteResponse {
   orderState: string;
   riderId: string;
 }
+
+/**
+ * `POST /api/v1/rider/deliveries/:id/delivered` — Phase G-7.2, the terminal
+ * rider transition. No request body, same reasoning as `RiderArrivedResponse`.
+ * Carries no money field, same reasoning as `RiderOfferAcceptResponse`.
+ *
+ * **One `state`, not two.** This response takes `RiderPickedUpResponse`'s
+ * shape rather than `RiderEnRouteResponse`'s, for the same reason: both
+ * domains genuinely use the same word here. `deliveries.state` becomes
+ * `DELIVERED` and `orders.state` becomes `DELIVERED` (DEC-019's terminal
+ * success), so a second field would restate the first rather than resolve an
+ * ambiguity. `EN_ROUTE`/`DELIVERING` is the one step where they diverge.
+ *
+ * **No `proofPhotoPath` and no request body yet.** POD is the next phase; the
+ * proof photo becomes a `{ objectKey }` body on this same route then. Adding
+ * the field now would ship a contract nothing writes and nothing reads.
+ */
+export interface RiderDeliveredResponse {
+  deliveryId: string;
+  orderId: string;
+  /** Always `DELIVERED` on success — both the delivery's and the order's new state. */
+  state: string;
+  /** `deliveries.delivered_at`, the moment the delivery was confirmed complete. */
+  deliveredAt: string | null;
+  riderId: string;
+}

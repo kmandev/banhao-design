@@ -14,10 +14,15 @@
  * substitute their own stubs through this object, as `AddressScreen.test.tsx`
  * already does on the customer side.
  *
- * `G6.3`'s `riderOrderView` is deliberately **not** bound here. It is the
- * Phase G-7.2 contract, and G-7.2 has no screen in this slice — binding it now
- * would claim a consumer that does not exist. `G6.4`'s `riderOfferInbox` *is*
- * bound (`offers`, below): G-7.1 is its first consumer.
+ * `G6.3`'s `riderOrderView` **is** bound now (`riderOrderView`, below).
+ * G-7.2's `ActiveDeliveryScreen` is its first consumer — it was deliberately
+ * left unbound while no screen existed, and that condition no longer holds.
+ * `G6.4`'s `riderOfferInbox` is bound as `offers`: G-7.1 is its consumer.
+ *
+ * `delivery` (read, Supabase under RLS) and `deliveryActions` (write, through
+ * the NestJS API) are the G-7.2 pair, split for exactly the reason
+ * `offers`/`offerActions` are: DEC-APP-008 puts reads on PostgREST and writes
+ * on the API, and `deliveries` grants `authenticated` no `update` at all.
  */
 
 import { supabase } from '../lib/supabase';
@@ -32,6 +37,12 @@ import {
   createRiderOfferActionsRepository,
   type RiderOfferActionsRepository,
 } from './riderOfferActions';
+import { createRiderDeliveryRepository, type RiderDeliveryRepository } from './riderDelivery';
+import {
+  createRiderDeliveryActionsRepository,
+  type RiderDeliveryActionsRepository,
+} from './riderDeliveryActions';
+import { createRiderOrderViewRepository, type RiderOrderViewRepository } from './riderOrderView';
 import { captureForegroundPosition } from '../lib/deviceLocation';
 import type { DevicePosition } from '../lib/deviceLocation';
 
@@ -40,6 +51,9 @@ export * from './riderAvailability';
 export * from './apiRiderLocation';
 export * from './riderOfferInbox';
 export * from './riderOfferActions';
+export * from './riderDelivery';
+export * from './riderDeliveryActions';
+export * from './riderOrderView';
 
 /** The device's own position source, behind an interface so a test never needs a GPS. */
 export interface DeviceLocationSource {
@@ -52,6 +66,9 @@ export interface Repositories {
   location: RiderLocationRepository;
   offers: RiderOfferInboxRepository;
   offerActions: RiderOfferActionsRepository;
+  delivery: RiderDeliveryRepository;
+  deliveryActions: RiderDeliveryActionsRepository;
+  riderOrderView: RiderOrderViewRepository;
   deviceLocation: DeviceLocationSource;
 }
 
@@ -61,5 +78,8 @@ export const repositories: Repositories = {
   location: createApiRiderLocationRepository(),
   offers: createRiderOfferInboxRepository(supabase),
   offerActions: createRiderOfferActionsRepository(),
+  delivery: createRiderDeliveryRepository(supabase),
+  deliveryActions: createRiderDeliveryActionsRepository(),
+  riderOrderView: createRiderOrderViewRepository(supabase),
   deviceLocation: { capturePosition: captureForegroundPosition },
 };

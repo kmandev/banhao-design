@@ -10,9 +10,15 @@
  *   R-03 หน้าหลัก               → `Home`
  *   R-04 เปิด/ปิดรับงาน          → the control on `Home`
  *
- * R-05 (offer) is now `OfferInbox` — G-7.1. Offer lost, to-restaurant,
- * arrived, pickup, to-customer, handoff remain **not** routes here: they are
- * G-7.2, and adding empty routes for them now would claim screens that do not
+ * R-05 (offer) is `OfferInbox` — G-7.1. R-06 (งานที่กำลังทำ) is now
+ * `ActiveDelivery` — G-7.2 Phase 1, which folds to-restaurant, arrival,
+ * pickup, departure and handoff into ONE screen driven by the delivery's own
+ * server state rather than five routes. Five separate routes would each have
+ * to re-derive which step the rider is on; one screen reads it once.
+ *
+ * The POD camera, review and confirm routes the POD UX design specifies
+ * (`ProofCamera`, `ProofReview`, `DeliveryConfirm`) are **not** here: POD is
+ * the next phase, and an empty route would claim a screen that does not
  * exist.
  *
  * There is no tab navigator yet. The handoff's 4-tab bar
@@ -29,4 +35,13 @@ export type AuthStackParamList = {
 export type RiderStackParamList = {
   Home: undefined;
   OfferInbox: undefined;
+  /**
+   * No `deliveryId` parameter, deliberately. The screen reads *the* active
+   * delivery from `deliveries` under `deliveries_select_rider`, and DEC-037
+   * limits a rider to one at a time — so an id in the route would be a second,
+   * staleable source of truth for something the server already answers
+   * unambiguously, and a rider returning from a completed delivery would carry
+   * a dead id back into the screen.
+   */
+  ActiveDelivery: undefined;
 };

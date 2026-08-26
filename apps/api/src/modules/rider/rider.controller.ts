@@ -13,6 +13,7 @@ import {
   riderLocationRequestSchema,
   type RiderArrivedResponse,
   type RiderCancelDeliveryResponse,
+  type RiderDeliveredResponse,
   type RiderEnRouteResponse,
   type RiderLocationResponse,
   type RiderOfferAcceptResponse,
@@ -25,6 +26,7 @@ import { parseOrThrow } from '../../common/validation/parse';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { DeliveryArrivalService } from './delivery-arrival.service';
+import { DeliveryCompletionService } from './delivery-completion.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
 import { DeliveryReleaseService } from './delivery-release.service';
@@ -59,6 +61,7 @@ export class RiderController {
     private readonly arrivals: DeliveryArrivalService,
     private readonly pickups: DeliveryPickupService,
     private readonly departures: DeliveryEnRouteService,
+    private readonly completions: DeliveryCompletionService,
   ) {}
 
   /**
@@ -190,6 +193,38 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderEnRouteResponse> {
     return this.departures.startDelivery(requireUser(user), id);
+  }
+
+  /**
+   * The rider completes the delivery — Phase G-7.2, the terminal transition.
+   * `EN_ROUTE -> DELIVERED` on the delivery, and — only once that has
+   * genuinely happened — `DELIVERING -> DELIVERED` on the order, via the
+   * existing, unmodified `OrdersService.completeDelivery`.
+   *
+   * Unlike the three transitions above, this one also **gives back** what
+   * accept took: the `rider_assignments` row is closed `COMPLETED` and
+   * `rider_availability.active_delivery_count` is released `1 -> 0`, so the
+   * rider can be offered work again. See `DeliveryCompletionService` for why
+   * `release_rider_assignment()` is deliberately not used for that.
+   *
+   * **No request body, and no proof photo.** POD is the next phase; it adds a
+   * `{ objectKey }` body to this same route rather than a route of its own.
+   */
+  @Post('deliveries/:id/delivered')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The delivery and the order, both now DELIVERED' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiNotFoundResponse({ description: 'Delivery or order not found' })
+  @ApiConflictResponse({
+    description: 'INVALID_TRANSITION — the delivery is not EN_ROUTE, or the order is not DELIVERING',
+  })
+  async markDelivered(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<RiderDeliveredResponse> {
+    return this.completions.complete(requireUser(user), id);
   }
 
   /**
