@@ -1,4 +1,5 @@
 import { Text, StyleSheet, type TextStyle } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { HomeScreen } from './HomeScreen';
 import { AuthProvider } from '../hooks/useAuth';
@@ -10,7 +11,7 @@ import { LocationPermissionDeniedError } from '../lib/deviceLocation';
 /**
  * R-03 หน้าหลัก + R-04 เปิด/ปิดรับงาน, and the DEC-UX-006 gate in front of them.
  *
- * The two properties this suite exists to protect:
+ * The three properties this suite exists to protect:
  *
  * 1. **A non-approved rider has no toggle in the tree at all** — not a
  *    disabled one. DEC-UX-006 is explicit, and "absent" is asserted by
@@ -18,7 +19,20 @@ import { LocationPermissionDeniedError } from '../lib/deviceLocation';
  * 2. **The rider is never shown as online unless the server actually holds a
  *    position and the flag.** Every failure in the go-online sequence must stop
  *    before `setOnline(true)` is called.
+ * 3. **The G-7.1 entry point navigates, and reads nothing new.** Same
+ *    `useNavigation` mock `AddressScreen.test.tsx` establishes on the customer
+ *    side — `navigate` is a spy, everything else is the real module.
  */
+
+const mockNavigate = jest.fn();
+
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useNavigation: () => ({ navigate: mockNavigate }),
+  };
+});
 
 const APPROVED_PROFILE = {
   riderId: 'rider-1',
@@ -82,9 +96,11 @@ function bind(overrides: {
 
 function renderHome() {
   return render(
-    <AuthProvider>
-      <HomeScreen />
-    </AuthProvider>,
+    <NavigationContainer>
+      <AuthProvider>
+        <HomeScreen />
+      </AuthProvider>
+    </NavigationContainer>,
   );
 }
 
@@ -312,6 +328,30 @@ describe('HomeScreen — going offline', () => {
     expect(capturePosition).not.toHaveBeenCalled();
     expect(reportPosition).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByTestId('button-go-online')).toBeTruthy());
+  });
+});
+
+describe('HomeScreen — G-7.1 entry point', () => {
+  it('navigates to OfferInbox and reads nothing new to do it', async () => {
+    bind({ availability: OFFLINE });
+
+    renderHome();
+    await waitFor(() => expect(screen.getByTestId('button-view-offers')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('button-view-offers'));
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('OfferInbox');
+  });
+
+  it('is absent for a non-approved rider, same as the toggle', async () => {
+    bind({ profile: async () => ({ ...APPROVED_PROFILE, status: 'SUSPENDED' }) });
+
+    renderHome();
+
+    await waitFor(() => expect(screen.getByTestId('screen-status')).toBeTruthy());
+    expect(screen.queryByTestId('button-view-offers')).toBeNull();
   });
 });
 

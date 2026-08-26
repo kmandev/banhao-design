@@ -1,4 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, colors, fontFamily, fontSize, spacing } from '@banhao/ui';
 import { Screen } from '../components/Screen';
 import { StatusStrip } from '../components/StatusStrip';
@@ -7,7 +9,10 @@ import { useAuth } from '../hooks/useAuth';
 import { useRiderAvailability } from '../hooks/useRiderAvailability';
 import { isApproved } from '../domain/riderProfile';
 import { repositories } from '../repositories';
+import type { RiderStackParamList } from '../navigation/types';
 import { StatusScreen } from './StatusScreen';
+
+type Nav = NativeStackNavigationProp<RiderStackParamList>;
 
 /**
  * R-03 หน้าหลัก + R-04 เปิด/ปิดรับงาน — the rider's home and the availability
@@ -20,13 +25,13 @@ import { StatusScreen } from './StatusScreen';
  *
  * ## What is deliberately not here
  *
- * No offers, no assigned order, no earnings, no money of any kind, no
- * restaurant or customer detail, no map, no delivery action, no proof photo,
- * no failure or cancellation control. Offers are Phase G-7.1; the assigned
- * order is G-7.2; earnings are **BQ-029, `OPEN`** and cannot be rendered
- * without inventing a formula. `RiderOfferInboxRepository` and
- * `RiderOrderViewRepository` exist (G6.4 / G6.3) and are deliberately not
- * imported.
+ * No assigned order, no earnings, no money of any kind, no restaurant or
+ * customer detail, no map, no delivery action, no proof photo, no failure or
+ * cancellation control. The assigned order is G-7.2; earnings are
+ * **BQ-029, `OPEN`** and cannot be rendered without inventing a formula.
+ * `RiderOrderViewRepository` exists (G6.3) and is deliberately not imported.
+ * Offers themselves are G-7.1 — this screen only links to `OfferInboxScreen`,
+ * which is where `RiderOfferInboxRepository` (G6.4) is actually consumed.
  *
  * ## The approval gate
  *
@@ -37,6 +42,7 @@ import { StatusScreen } from './StatusScreen';
  */
 export function HomeScreen() {
   const { signOut } = useAuth();
+  const navigation = useNavigation<Nav>();
   const profileState = useAsyncData(() => repositories.riderProfile.getOwnProfile(), []);
 
   const profile = profileState.status === 'success' ? profileState.data : null;
@@ -89,6 +95,12 @@ export function HomeScreen() {
       </View>
 
       <AvailabilityPanel controller={availability} />
+
+      <Button
+        label="งานที่เสนอ"
+        onPress={() => navigation.navigate('OfferInbox')}
+        testID="button-view-offers"
+      />
 
       <Button
         label="รีเฟรชสถานะ"

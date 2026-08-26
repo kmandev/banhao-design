@@ -8,6 +8,7 @@ import { SplashScreen } from '../screens/auth/SplashScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { OtpScreen } from '../screens/auth/OtpScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { OfferInboxScreen } from '../screens/OfferInboxScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RiderStack = createNativeStackNavigator<RiderStackParamList>();
@@ -35,14 +36,19 @@ function AuthNavigator() {
 }
 
 /**
- * One screen, one level — DEC-UX-006's single-task shape, and the honest size
- * of this slice. The handoff's 4-tab bar arrives when งานของฉัน (G-7.2) and
- * รายได้ (BQ-029, `OPEN`) have something behind them.
+ * Two screens now — `Home` and G-7.1's `OfferInbox` — still one stack, one
+ * level. The handoff's 4-tab bar arrives when งานของฉัน (G-7.2) and รายได้
+ * (BQ-029, `OPEN`) have something behind them.
  */
 function RiderNavigator() {
   return (
     <RiderStack.Navigator screenOptions={headerOptions}>
       <RiderStack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+      <RiderStack.Screen
+        name="OfferInbox"
+        component={OfferInboxScreen}
+        options={{ title: 'งานที่เสนอ' }}
+      />
     </RiderStack.Navigator>
   );
 }

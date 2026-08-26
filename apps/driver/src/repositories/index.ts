@@ -14,9 +14,10 @@
  * substitute their own stubs through this object, as `AddressScreen.test.tsx`
  * already does on the customer side.
  *
- * `G6.3`/`G6.4`'s `riderOrderView` and `riderOfferInbox` are deliberately
- * **not** bound here. They are Phase G-7.1/G-7.2 contracts with no screen in
- * this slice, and binding them now would claim a consumer that does not exist.
+ * `G6.3`'s `riderOrderView` is deliberately **not** bound here. It is the
+ * Phase G-7.2 contract, and G-7.2 has no screen in this slice — binding it now
+ * would claim a consumer that does not exist. `G6.4`'s `riderOfferInbox` *is*
+ * bound (`offers`, below): G-7.1 is its first consumer.
  */
 
 import { supabase } from '../lib/supabase';
@@ -26,12 +27,19 @@ import {
   type RiderAvailabilityRepository,
 } from './riderAvailability';
 import { createApiRiderLocationRepository, type RiderLocationRepository } from './apiRiderLocation';
+import { createRiderOfferInboxRepository, type RiderOfferInboxRepository } from './riderOfferInbox';
+import {
+  createRiderOfferActionsRepository,
+  type RiderOfferActionsRepository,
+} from './riderOfferActions';
 import { captureForegroundPosition } from '../lib/deviceLocation';
 import type { DevicePosition } from '../lib/deviceLocation';
 
 export * from './riderProfile';
 export * from './riderAvailability';
 export * from './apiRiderLocation';
+export * from './riderOfferInbox';
+export * from './riderOfferActions';
 
 /** The device's own position source, behind an interface so a test never needs a GPS. */
 export interface DeviceLocationSource {
@@ -42,6 +50,8 @@ export interface Repositories {
   riderProfile: RiderProfileRepository;
   availability: RiderAvailabilityRepository;
   location: RiderLocationRepository;
+  offers: RiderOfferInboxRepository;
+  offerActions: RiderOfferActionsRepository;
   deviceLocation: DeviceLocationSource;
 }
 
@@ -49,5 +59,7 @@ export const repositories: Repositories = {
   riderProfile: createRiderProfileRepository(supabase),
   availability: createRiderAvailabilityRepository(supabase),
   location: createApiRiderLocationRepository(),
+  offers: createRiderOfferInboxRepository(supabase),
+  offerActions: createRiderOfferActionsRepository(),
   deviceLocation: { capturePosition: captureForegroundPosition },
 };
