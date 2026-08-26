@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#C2431F;text-decoration:none}
+  a:hover{color:#8F3116}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<div style="max-width:1400px;margin:0 auto;padding:48px 40px 120px">
+
+  <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+    <div style="width:52px;height:52px;border-radius:16px;background:#C2431F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;flex:0 0 auto">📷</div>
+    <div style="flex:1;min-width:280px">
+      <div style="font-size:24px;font-weight:700;letter-spacing:.12em">BANHAO — PROOF OF DELIVERY (POD)</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:2px;line-height:1.6">UX/UI design specification · DESIGN ONLY — no source, schema, migration, storage bucket, RLS or endpoint is created or changed by this document</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:26px">
+    <div style="background:#E7F4EE;border:1.5px solid #0F8B5F;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#0A5C3F;font-weight:700">THE HEADLINE FINDING</div>
+      <div style="font-size:13.5px;margin-top:6px;line-height:1.65;color:#25453A"><span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">deliveries.proof_photo_path</span> <strong>already exists</strong> in the deployed schema. POD needs <strong>no migration</strong>.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">NEW DELIVERY STATES</div>
+      <div style="font-size:13.5px;margin-top:6px;line-height:1.65"><strong>None.</strong> POD is a precondition of the existing <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">EN_ROUTE → DELIVERED</span> transition, not a state of its own. §B.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">STORAGE</div>
+      <div style="font-size:13.5px;margin-top:6px;line-height:1.65">Cloudflare R2 behind <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">StorageService</span> — <strong>not</strong> Supabase Storage. The existing presign → PUT → verify pattern is reused unchanged.</div>
+    </div>
+    <div style="background:#FBEAEA;border:1px solid #F0C9C9;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#B23030;font-weight:700">BLOCKING CAPABILITY GAPS</div>
+      <div style="font-size:13.5px;margin-top:6px;line-height:1.65;color:#8F3A3A"><strong>4</strong> — the delivered command, the proof presign, the proof key builder, and a signed <em>download</em> URL. Plus one dependency: the driver app has no camera. <a href="#sG" style="color:#B23030;font-weight:700">§G</a>.</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:24px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="12">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- ══════════════ 0 — REPOSITORY FINDINGS ══════════════ -->
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION 0</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Repository findings</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:940px;margin-bottom:24px">
+    Read at commit <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">7bd8d61</span>. Where this specification and the repository disagreed, the repository won and the disagreement is recorded rather than designed around.
+  </div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff">
+    <div style="display:grid;grid-template-columns:70px 1.1fr 2.1fr 1.2fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 16px">
+      <div>ID</div><div>AREA</div><div>WHAT IS ACTUALLY THERE</div><div>SOURCE</div>
+    </div>
+    <sc-for list="{{ findings }}" as="f" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:70px 1.1fr 2.1fr 1.2fr;padding:13px 16px;border-top:1px solid #F0EAE1;font-size:13.5px;line-height:1.65;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#C2431F;font-weight:600">{{ f.id }}</div>
+        <div style="font-weight:600">{{ f.area }}</div>
+        <div style="color:#4A4038">{{ f.detail }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9A8C7E;word-break:break-word">{{ f.source }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;background:#FDF3E6;border:1px solid #F0DFC4;border-radius:16px;padding:20px 22px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px">Three places where this brief and the repository disagreed</div>
+    <div style="font-size:13.5px;line-height:1.85;color:#5A4E42">
+      <strong>1. The proposed state chain does not exist.</strong> The brief sketches <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">ARRIVED → POD_CAPTURED → DELIVERY_CONFIRMED → COMPLETED</span>. The deployed <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">deliveries.state</span> CHECK has none of those four names, and the schema is locked. The design maps POD onto the states that exist and adds none. §B.<br>
+      <strong>2. "Do not commit to a schema until inspection confirms the architecture" — inspection confirms it.</strong> The column exists, the storage boundary exists, and the key-builder module names a delivery proof as its own anticipated third caller. This design therefore does commit, to what is already there.<br>
+      <strong>3. There is no arrival step to design.</strong> The brief asks for a "ถึงจุดส่งแล้ว" arrival state. <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">deliveries.state</span> has <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">AT_MERCHANT</span> for the shop but no equivalent for the customer, and no endpoint would accept one. Arrival at the customer is therefore a <em>screen state</em>, not a server state — the rider is already <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">EN_ROUTE</span> and stays there until delivery is confirmed.
+    </div>
+  </div>
+
+  <!-- ══════════════ A — OBJECTIVE + DIRECTION ══════════════ -->
+  <div id="sA" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION A</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Objective, scope and design direction</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:20px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">OBJECTIVE</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038;margin-top:10px">One photograph of the food at the place it was left, captured by the rider, reviewable and retakeable, and then — as a separate, deliberate act — a confirmation that completes the delivery. With cash on delivery disabled, this photo is the only evidence a handover happened at all.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">IN SCOPE</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038;margin-top:10px">Rider: the delivery-completion leg of the active-delivery screen, camera, review, confirm, and every failure between. Customer: a proof section on order detail and a completed indication on tracking. Plus the backend capabilities all of that requires, named but not built.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">OUT OF SCOPE</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038;margin-top:10px">Signatures, OTP-at-door, barcode scanning, multiple photos, video, annotation, face blurring, geofenced auto-arrival, the earlier steps of the active-delivery screen (G-7.2), and the delivery-failure path — <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">FAILED</span> exists in the schema but has no endpoint and no approved copy.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">VISUAL DIRECTION</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038;margin-top:10px">The Driver App redesign's language, unchanged: cream ground, one 60 px primary action, 22 px cards, mono for facts and time, state carried by fill + border + word. The camera is the single exception — a dark viewfinder is a functional requirement, so it adds a small dark-surface set, named in full below and used nowhere else in either app.</div>
+      <div style="margin-top:12px;border-top:1px solid #F0EAE1;padding-top:12px">
+        <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">POD DARK-SURFACE TOKENS — THE COMPLETE ADDITION</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-top:9px">
+          <sc-for list="{{ darkTokens }}" as="d" hint-placeholder-count="6">
+            <div style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.6;border-bottom:1px solid #F5F0E9;padding-bottom:7px">
+              <span style="width:16px;height:16px;border-radius:5px;border:1px solid rgba(31,26,22,.18);flex:0 0 auto;margin-top:2px;background:{{ d.value }}"></span>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">{{ d.name }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A6E64">{{ d.value }}</span>
+                </div>
+                <div style="color:#4A4038;margin-top:2px">{{ d.use }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:12.5px;color:#5A4E42;line-height:1.7;margin-top:10px">Six values, all confined to the three modal camera and viewer screens (P-04, P-05, C-19b). The Driver App redesign's §D token table stays the complete list for every light screen; this is its dark counterpart, and nothing else in POD introduces a colour.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;background:#211B16;color:#F5EFE7;border-radius:16px;padding:24px">
+    <div style="font-size:11px;letter-spacing:.14em;color:#E4A03E;font-weight:600">SIX DESIGN DECISIONS</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-top:16px">
+      <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="6">
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#E4A03E;font-weight:600">{{ d.id }}</div>
+          <div style="font-size:14.5px;font-weight:600;margin:5px 0 6px;line-height:1.5">{{ d.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#C9BFB4">{{ d.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ══════════════ B — STATE MACHINE ══════════════ -->
+  <div id="sB" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION B</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Delivery state-machine integration</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:960px;margin-bottom:24px">
+    <strong>No new state is necessary, and none is proposed.</strong> The photo is not a stage of the delivery — it is an argument the rider assembles before issuing one command. Everything between EN_ROUTE and DELIVERED happens on the rider's device, where a retake costs nothing and an abandoned attempt leaves no trace.
+  </div>
+
+  <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:26px;overflow-x:auto">
+    <div style="display:flex;align-items:flex-start;gap:14px;min-width:1000px">
+      <div style="flex:0 0 150px;border:1px solid #E0D6C8;border-radius:14px;padding:14px;background:#FBF7F1">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700">EN_ROUTE</div>
+        <div style="font-size:12px;color:#7A6E64;line-height:1.6;margin-top:5px">Existing state. Reached by the existing <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">en-route</span> command.</div>
+      </div>
+      <div style="flex:0 0 20px;padding-top:22px;font-size:20px;color:#C9BFB4">→</div>
+      <div style="flex:1;border:1.5px dashed #C2431F;border-radius:14px;padding:14px;background:#FDF3E6;min-width:420px">
+        <div style="font-size:12.5px;font-weight:700;color:#C2431F;letter-spacing:.06em">CLIENT-ONLY — NO SERVER STATE EXISTS OR IS ADDED</div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:88px;background:#fff;border:1px solid #F0DFC4;border-radius:10px;padding:9px 10px;font-size:12px;line-height:1.5"><strong>ถึงจุดส่ง</strong><br><span style="color:#7A6E64">screen state</span></div>
+          <div style="flex:1;min-width:88px;background:#fff;border:1px solid #F0DFC4;border-radius:10px;padding:9px 10px;font-size:12px;line-height:1.5"><strong>ถ่ายรูป</strong><br><span style="color:#7A6E64">camera</span></div>
+          <div style="flex:1;min-width:88px;background:#fff;border:1px solid #F0DFC4;border-radius:10px;padding:9px 10px;font-size:12px;line-height:1.5"><strong>ตรวจรูป</strong><br><span style="color:#7A6E64">retake here</span></div>
+          <div style="flex:1;min-width:88px;background:#fff;border:1px solid #F0DFC4;border-radius:10px;padding:9px 10px;font-size:12px;line-height:1.5"><strong>อัปโหลด</strong><br><span style="color:#7A6E64">PUT → R2</span></div>
+        </div>
+        <div style="font-size:12.5px;color:#5A4E42;line-height:1.7;margin-top:10px">Abandoning at any point leaves the delivery exactly as it was. An uploaded-but-unconfirmed object is an orphan in R2 and nothing else — no row references it, no state moved. That is the same accepted orphan behaviour the menu-image and cover flows already document.</div>
+      </div>
+      <div style="flex:0 0 20px;padding-top:22px;font-size:20px;color:#C2431F">→</div>
+      <div style="flex:0 0 220px;border:1.5px solid #0F8B5F;border-radius:14px;padding:14px;background:#E7F4EE">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;color:#0A5C3F">DELIVERED</div>
+        <div style="font-size:12px;color:#25453A;line-height:1.65;margin-top:5px">Existing state. One new command, one transaction: verify the object exists → write <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">proof_photo_path</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">state</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">delivered_at</span> → move the order <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">DELIVERING → DELIVERED</span>.</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:22px">
+      <div style="background:#FBF7F1;border:1px solid #E9E0D5;border-radius:12px;padding:14px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Why not a POD_CAPTURED state</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#5A4E42">It would be a state only the rider's own device could ever cause, carrying no obligation for anyone else, and it would need a CHECK-constraint change to a locked schema. A state that nothing reads is a migration for a comment.</div>
+      </div>
+      <div style="background:#FBF7F1;border:1px solid #E9E0D5;border-radius:12px;padding:14px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Why the upload is not its own endpoint pair</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#5A4E42">M-11 and M-12 use presign + a separate <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px">complete</span>. Here the completion <em>is</em> the delivered command: folding them removes the state where a photo is recorded against a delivery that never completed, and the state where a delivery completes with no photo. One transaction, one authority.</div>
+      </div>
+      <div style="background:#FBF7F1;border:1px solid #E9E0D5;border-radius:12px;padding:14px 16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Where the order state moves</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#5A4E42">Exactly as the pickup and en-route commands already do it — the delivery moves first, and only once that has genuinely happened does the order follow, through the existing unmodified orders service. DEC-018's separation is preserved.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ C — RIDER FLOW ══════════════ -->
+  <div id="sC" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION C</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Rider journey</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:980px;margin-bottom:12px">
+    Five taps from arriving to delivered: <strong>ถึงจุดส่งแล้ว → ถ่ายรูป → ถ่าย → ใช้รูปนี้ → ส่งสำเร็จ</strong>. Frames at 360 × 760, the same width and the same tokens as the Driver App redesign.
+  </div>
+
+  <div style="display:flex;gap:26px;flex-wrap:wrap">
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:42</span><span>◗◗◗ 64%</span></div>
+        <div style="flex:1;padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <div style="font-size:24px;font-weight:700">งานที่กำลังทำ</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#7A6E64">#BH-0241</div>
+          </div>
+
+          <div style="display:flex;gap:7px">
+            <div style="flex:1;height:5px;border-radius:3px;background:#0F8B5F"></div>
+            <div style="flex:1;height:5px;border-radius:3px;background:#0F8B5F"></div>
+            <div style="flex:1;height:5px;border-radius:3px;background:#0F8B5F"></div>
+            <div style="flex:1;height:5px;border-radius:3px;background:#C2431F"></div>
+          </div>
+          <div style="font-size:13px;color:#7A6E64;font-family:'IBM Plex Mono',monospace">ขั้นที่ 4 จาก 4 · ส่งถึงลูกค้า</div>
+
+          <div style="border-radius:22px;background:#fff;border:1.5px solid #E0D6C8;padding:18px;display:flex;flex-direction:column;gap:12px">
+            <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.06em">จุดส่ง</div>
+            <div style="font-size:18px;font-weight:700;line-height:1.5">คุณสมหญิง · 62 ม.4 ต.บุณฑริก</div>
+            <div style="font-size:15px;color:#4A4038;line-height:1.7">จุดสังเกต: ตรงข้ามร้านขำอะไหล่ ประตูรั้วสีเขียว</div>
+            <div style="height:1px;background:#F0EAE1"></div>
+            <div style="font-size:14.5px;color:#4A4038;line-height:1.7">ฝากไว้ที่โต๊ะหน้าบ้าน ไม่ต้องกดกริ่ง</div>
+            <div style="display:flex;gap:10px;margin-top:2px">
+              <div style="flex:1;height:52px;border-radius:14px;border:1.5px solid #E0D6C8;background:#fff;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600">โทรหาลูกค้า</div>
+              <div style="flex:1;height:52px;border-radius:14px;border:1.5px solid #E0D6C8;background:#fff;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600">นำทาง</div>
+            </div>
+          </div>
+
+          <div style="flex:1"></div>
+          <div style="height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:700">ถึงจุดส่งแล้ว</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-01</span> <span style="font-size:13px;color:#5A4E42">Active delivery, final step · the POD leg begins here</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:44</span><span>◗◗◗ 64%</span></div>
+        <div style="flex:1;padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:24px;font-weight:700">ถึงจุดส่งแล้ว</div>
+          <div style="border-radius:22px;background:#E7F4EE;border:1.5px solid #0F8B5F;padding:18px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:12px;height:12px;border-radius:50%;background:#0F8B5F;flex:0 0 auto"></span>
+              <span style="font-size:19px;font-weight:700;color:#0A5C3F">พร้อมยืนยันการส่ง</span>
+            </div>
+            <div style="font-size:15px;line-height:1.75;color:#25453A">วางอาหารตามที่ลูกค้าแจ้ง แล้วถ่ายรูปเป็นหลักฐาน</div>
+          </div>
+
+          <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+            <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.06em">สิ่งที่ต้องถ่าย</div>
+            <div style="font-size:15.5px;line-height:1.75;color:#4A4038">ถ่ายรูปอาหารหรือพัสดุที่วางไว้ ณ จุดส่ง</div>
+            <div style="background:#FDF3E6;border:1px solid #F0DFC4;border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.7;color:#5A4E42">ไม่ต้องถ่ายหน้าลูกค้า ไม่ต้องถ่ายบัตรหรือเอกสาร</div>
+          </div>
+
+          <div style="flex:1"></div>
+          <div style="height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;gap:10px;color:#fff;font-size:19px;font-weight:700">
+            <span style="width:22px;height:18px;border:2.5px solid #fff;border-radius:5px;display:inline-block;position:relative"></span>ถ่ายรูปหลักฐาน
+          </div>
+          <div style="height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:15.5px;color:#7A6E64;font-weight:500">ยังไม่ถึง · กลับไปหน้างาน</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-02</span> <span style="font-size:13px;color:#5A4E42">Arrived · a screen state, not a server state</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:44</span><span>◗◗◗ 64%</span></div>
+        <div style="flex:1;padding:20px;display:flex;flex-direction:column;gap:18px;justify-content:center">
+          <div style="width:64px;height:64px;border-radius:20px;background:#FDF3E6;border:1px solid #F0DFC4;display:flex;align-items:center;justify-content:center">
+            <span style="width:28px;height:22px;border:2.5px solid #C2431F;border-radius:6px;display:inline-block"></span>
+          </div>
+          <div style="font-size:23px;font-weight:700;line-height:1.45">ขออนุญาตใช้กล้อง</div>
+          <div style="font-size:16px;line-height:1.8;color:#4A4038">BANHAO ใช้กล้องเพื่อถ่ายรูปหลักฐานการส่งเท่านั้น ระบบไม่เปิดกล้องเองและไม่ถ่ายรูปโดยที่คุณไม่ได้กด</div>
+          <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:9px">
+            <div style="font-size:14.5px;color:#4A4038;line-height:1.7">· รูปถูกส่งไปเก็บที่ระบบ ไม่ได้เก็บในคลังรูปของเครื่อง</div>
+            <div style="font-size:14.5px;color:#4A4038;line-height:1.7">· ลูกค้าเห็นรูปนี้ในรายละเอียดออเดอร์ของตัวเอง</div>
+            <div style="font-size:14.5px;color:#4A4038;line-height:1.7">· คุณถ่ายใหม่ได้ก่อนกดยืนยัน</div>
+          </div>
+          <div style="height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:700">อนุญาตใช้กล้อง</div>
+          <div style="height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:15.5px;color:#7A6E64;font-weight:500">ไม่ใช่ตอนนี้</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-03</span> <span style="font-size:13px;color:#5A4E42">Pre-permission rationale · shown before the OS prompt</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #1F1A16;background:#0F0D0B;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.18);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8078;flex:0 0 auto"><span>18:45</span><span>◗◗◗ 63%</span></div>
+        <div style="padding:8px 16px 12px;display:flex;align-items:center;justify-content:space-between;flex:0 0 auto">
+          <div style="width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">✕</div>
+          <div style="font-size:15px;font-weight:600;color:#fff">ถ่ายรูปหลักฐาน</div>
+          <div style="width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px">⚡</div>
+        </div>
+        <div style="flex:1;margin:0 16px;border-radius:20px;background:#1C1815;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+          <div style="position:absolute;inset:22px;border:2px dashed rgba(255,255,255,.30);border-radius:16px"></div>
+          <div style="color:rgba(255,255,255,.34);font-size:14px;text-align:center;line-height:1.8;padding:0 30px">ภาพจากกล้อง<br><span style="font-size:12.5px">จัดอาหารให้อยู่ในกรอบ</span></div>
+          <div style="position:absolute;left:16px;right:16px;bottom:16px;background:rgba(0,0,0,.58);border-radius:14px;padding:12px 14px">
+            <div style="color:#fff;font-size:14.5px;line-height:1.7;font-weight:500">ถ่ายรูปอาหาร/พัสดุที่วางไว้ ณ จุดส่ง</div>
+            <div style="color:rgba(255,255,255,.62);font-size:13px;line-height:1.6;margin-top:3px">ให้เห็นจุดวางพอเป็นหลักฐาน · ไม่ต้องมีคนอยู่ในรูป</div>
+          </div>
+        </div>
+        <div style="padding:20px 16px 26px;display:flex;align-items:center;justify-content:space-between;flex:0 0 auto">
+          <div style="width:52px;font-size:13px;color:rgba(255,255,255,.55)">ยกเลิก</div>
+          <div style="width:82px;height:82px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center">
+            <div style="width:62px;height:62px;border-radius:50%;background:#C2431F"></div>
+          </div>
+          <div style="width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px">↺</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-04</span> <span style="font-size:13px;color:#5A4E42">Camera · 82 px shutter, guidance always visible</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #1F1A16;background:#0F0D0B;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.18);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8078;flex:0 0 auto"><span>18:45</span><span>◗◗◗ 63%</span></div>
+        <div style="padding:8px 16px 12px;text-align:center;font-size:15px;font-weight:600;color:#fff;flex:0 0 auto">ตรวจรูปก่อนยืนยัน</div>
+        <div style="flex:1;margin:0 16px;border-radius:20px;background:#2A241F;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+          <div style="color:rgba(255,255,255,.40);font-size:14px;text-align:center;line-height:1.8;padding:0 30px">รูปที่ถ่ายไว้<br><span style="font-size:12.5px">ถุงอาหารบนโต๊ะหน้าบ้าน</span></div>
+          <div style="position:absolute;top:14px;left:14px;background:rgba(0,0,0,.6);border-radius:999px;padding:6px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#fff">18:45:12</div>
+        </div>
+        <div style="padding:16px;flex:0 0 auto">
+          <div style="background:rgba(255,255,255,.10);border-radius:14px;padding:12px 14px;margin-bottom:14px">
+            <div style="color:rgba(255,255,255,.86);font-size:14px;line-height:1.7">เห็นอาหารและจุดวางชัดเจนไหม ถ้าไม่ชัด ถ่ายใหม่ได้</div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div style="flex:0 0 38%;height:60px;border-radius:16px;border:1.5px solid rgba(255,255,255,.42);display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:600">ถ่ายใหม่</div>
+            <div style="flex:1;height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:700">ใช้รูปนี้</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-05</span> <span style="font-size:13px;color:#5A4E42">Review · ใช้รูปนี้ does not deliver anything yet</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:46</span><span>◗◗◗ 63%</span></div>
+        <div style="flex:1;padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+          <div style="font-size:24px;font-weight:700">ยืนยันการส่ง</div>
+          <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px;display:flex;gap:14px;align-items:center">
+            <div style="width:76px;height:76px;border-radius:14px;background:#2A241F;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:11px;text-align:center;line-height:1.4">รูป<br>หลักฐาน</div>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:700">รูปหลักฐานพร้อมแล้ว</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#7A6E64;margin-top:4px;line-height:1.6">ถ่ายเมื่อ 18:45:12</div>
+              <div style="font-size:13.5px;color:#C2431F;font-weight:600;margin-top:6px">ถ่ายใหม่</div>
+            </div>
+          </div>
+
+          <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px;display:flex;flex-direction:column;gap:11px">
+            <div style="display:flex;justify-content:space-between;gap:12px"><span style="font-size:14px;color:#7A6E64">ออเดอร์</span><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">#BH-0241</span></div>
+            <div style="height:1px;background:#F0EAE1"></div>
+            <div style="display:flex;justify-content:space-between;gap:12px"><span style="font-size:14px;color:#7A6E64">ผู้รับ</span><span style="font-size:14.5px;font-weight:600;text-align:right">คุณสมหญิง</span></div>
+            <div style="height:1px;background:#F0EAE1"></div>
+            <div><div style="font-size:14px;color:#7A6E64;margin-bottom:4px">จุดส่ง</div><div style="font-size:14.5px;line-height:1.7;color:#1F1A16">62 ม.4 ต.บุณฑริก · ประตูรั้วสีเขียว</div></div>
+          </div>
+
+          <div style="font-size:13px;color:#9A8C7E;line-height:1.75">กดยืนยันแล้วงานนี้จะปิดและแก้ไขรูปไม่ได้</div>
+          <div style="flex:1"></div>
+          <div style="height:60px;border-radius:16px;background:#0F8B5F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:700">ส่งสำเร็จ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-06</span> <span style="font-size:13px;color:#5A4E42">Confirm · the only screen whose CTA is green, because it is terminal</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:46</span><span>◗◗◗ 63%</span></div>
+        <div style="flex:1;padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:24px;font-weight:700">ยืนยันการส่ง</div>
+          <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:18px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;gap:12px;align-items:center">
+              <span style="width:22px;height:22px;border:2.5px solid #E0D6C8;border-top-color:#C2431F;border-radius:50%;display:inline-block;animation:spin .8s linear infinite;flex:0 0 auto"></span>
+              <span style="font-size:17px;font-weight:700">กำลังส่งรูปหลักฐาน</span>
+            </div>
+            <div style="height:8px;border-radius:4px;background:#EFE7DC;overflow:hidden"><div style="width:62%;height:8px;background:#C2431F"></div></div>
+            <div style="font-size:14px;color:#7A6E64;line-height:1.7">อย่าปิดแอปจนกว่าจะเสร็จ · ระบบจะยืนยันการส่งให้อัตโนมัติเมื่ออัปโหลดสำเร็จ</div>
+          </div>
+          <div style="border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;padding:14px 16px;font-size:13.5px;line-height:1.75;color:#5A4E42">ยังไม่ถือว่าส่งสำเร็จ จนกว่าระบบจะตอบรับ</div>
+          <div style="flex:1"></div>
+          <div style="height:60px;border-radius:16px;background:#0F8B5F;opacity:.5;display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:700">ส่งสำเร็จ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-07</span> <span style="font-size:13px;color:#5A4E42">Uploading then confirming · CTA inert, never optimistic</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:47</span><span>✕ ไม่มีสัญญาณ</span></div>
+        <div style="background:#FBEAEA;border-bottom:1px solid #F0C9C9;padding:12px 18px;display:flex;align-items:center;gap:10px;flex:0 0 auto">
+          <span style="width:9px;height:9px;border-radius:50%;background:#D93A3A;animation:pulse 1.4s ease-in-out infinite;flex:0 0 auto"></span>
+          <span style="font-size:14px;color:#B23030;font-weight:600">เชื่อมต่อไม่ได้</span>
+        </div>
+        <div style="flex:1;padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:24px;font-weight:700">ยืนยันการส่ง</div>
+          <div style="border-radius:20px;background:#FBEAEA;border:1.5px solid #F0C9C9;padding:18px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <span style="width:26px;height:26px;border-radius:50%;background:#D93A3A;color:#fff;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">!</span>
+              <div>
+                <div style="font-size:17px;font-weight:700;color:#B23030">ส่งรูปไม่สำเร็จ</div>
+                <div style="font-size:14.5px;color:#8F3A3A;line-height:1.75;margin-top:5px">ยังไม่ได้ยืนยันการส่ง งานนี้ยังเปิดอยู่</div>
+              </div>
+            </div>
+            <div style="height:1px;background:#F0C9C9"></div>
+            <div style="display:flex;gap:12px;align-items:center">
+              <div style="width:52px;height:52px;border-radius:12px;background:#2A241F;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.45);font-size:10px">รูป</div>
+              <div style="font-size:14px;color:#8F3A3A;line-height:1.7;flex:1">รูปที่ถ่ายไว้ยังอยู่ในเครื่อง ไม่ต้องถ่ายใหม่</div>
+            </div>
+          </div>
+          <div style="height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:700">ลองส่งอีกครั้ง</div>
+          <div style="height:52px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">ถ่ายรูปใหม่</div>
+          <div style="font-size:13px;color:#9A8C7E;line-height:1.75">เมื่อสัญญาณกลับมา กดลองส่งอีกครั้ง ระบบไม่ปิดงานให้เองระหว่างที่ไม่มีสัญญาณ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-08</span> <span style="font-size:13px;color:#5A4E42">Upload / confirm failure · photo preserved, retry idempotent</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:47</span><span>◗◗◗ 62%</span></div>
+        <div style="flex:1;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center">
+          <div style="width:88px;height:88px;border-radius:28px;background:#E7F4EE;border:1.5px solid #0F8B5F;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:40px;color:#0F8B5F;font-weight:700;line-height:1">✓</span>
+          </div>
+          <div style="font-size:28px;font-weight:700;color:#0A5C3F">ส่งสำเร็จ</div>
+          <div style="font-size:16px;color:#4A4038;line-height:1.8;max-width:280px">งาน <span style="font-family:'IBM Plex Mono',monospace">#BH-0241</span> ปิดเรียบร้อย ระบบบันทึกรูปหลักฐานไว้แล้ว</div>
+          <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:14px 18px;width:100%;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between"><span style="font-size:13.5px;color:#7A6E64">เวลาส่งสำเร็จ</span><span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600">18:47:03</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="font-size:13.5px;color:#7A6E64">รูปหลักฐาน</span><span style="font-size:13.5px;font-weight:600;color:#0A5C3F">บันทึกแล้ว</span></div>
+          </div>
+          <div style="height:60px;border-radius:16px;background:#C2431F;width:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:700;margin-top:4px">กลับหน้าหลัก</div>
+          <div style="font-size:13.5px;color:#7A6E64;line-height:1.7">คุณพร้อมรับงานใหม่แล้ว</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-09</span> <span style="font-size:13px;color:#5A4E42">Delivered · shown only after the server accepted</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:45</span><span>◗◗◗ 63%</span></div>
+        <div style="flex:1;padding:20px;display:flex;flex-direction:column;gap:16px;justify-content:center">
+          <div style="width:64px;height:64px;border-radius:20px;background:#EFE7DC;border:1px solid #C9BFB4;display:flex;align-items:center;justify-content:center;font-size:26px">🚫</div>
+          <div style="font-size:22px;font-weight:700;line-height:1.45">แอปยังไม่ได้รับอนุญาตใช้กล้อง</div>
+          <div style="font-size:15.5px;color:#4A4038;line-height:1.8">เปิดสิทธิ์กล้องในตั้งค่าของเครื่อง แล้วกลับมาถ่ายรูปหลักฐาน</div>
+          <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:16px 18px;font-size:14px;line-height:1.85;color:#4A4038;font-family:'IBM Plex Mono',monospace">ตั้งค่า › BANHAO Driver › กล้อง</div>
+          <div style="height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700">เปิดตั้งค่า</div>
+          <div style="height:52px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">ลองอีกครั้ง</div>
+          <div style="background:#FDF3E6;border:1px solid #F0DFC4;border-radius:14px;padding:13px 15px;font-size:13.5px;line-height:1.75;color:#5A4E42">งานนี้ยังไม่ปิด และยังอยู่ในรายการงานของคุณ · ถ้าถ่ายรูปไม่ได้จริง ๆ ให้ติดต่อผู้ดูแล</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">P-10</span> <span style="font-size:13px;color:#5A4E42">Permission denied / camera unavailable · same screen, different body</span></div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════ D — CUSTOMER FLOW ══════════════ -->
+  <div id="sD" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION D</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Customer journey</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:980px;margin-bottom:12px">
+    Two touchpoints, in the Customer App's own card language — <span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px">Card</span>, the small muted letter-spaced section label, <span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px">StateView</span> for absence. The photo lives on order detail (C-19), never on tracking (C-14), which is a live-progress screen and stays one.
+  </div>
+
+  <div style="display:flex;gap:26px;flex-wrap:wrap">
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:48</span><span>◗◗◗ 88%</span></div>
+        <div style="flex:1;padding:18px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:16px;display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:26px;font-weight:700;color:#0A5C3F">จัดส่งสำเร็จ</div>
+            <div style="font-size:12px;color:#9A8C7E">#BH-0241</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+              <span style="font-size:15px;font-weight:600">ร้านก๋วยเตี๋ยวป้าน้อย</span>
+              <span style="font-size:15px;font-weight:700">฿145</span>
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.5px;padding:4px 4px 0">สถานะออเดอร์</div>
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:16px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;gap:12px;align-items:flex-start"><span style="width:10px;height:10px;border-radius:50%;background:#C9BFB4;margin-top:6px;flex:0 0 auto"></span><div><div style="font-size:14.5px;color:#5A4E42">กำลังจัดส่ง</div><div style="font-size:12px;color:#9A8C7E;margin-top:2px">18:31</div></div></div>
+            <div style="display:flex;gap:12px;align-items:flex-start"><span style="width:10px;height:10px;border-radius:50%;background:#0F8B5F;margin-top:6px;flex:0 0 auto"></span><div><div style="font-size:14.5px;font-weight:700;color:#1F1A16">จัดส่งสำเร็จ</div><div style="font-size:12px;color:#9A8C7E;margin-top:2px">18:47</div></div></div>
+          </div>
+
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:14px 16px;display:flex;align-items:center;gap:12px">
+            <div style="width:44px;height:44px;border-radius:12px;background:#EFE7DC;display:flex;align-items:center;justify-content:center;flex:0 0 auto"><span style="width:20px;height:16px;border:2px solid #7A6E64;border-radius:4px;display:inline-block"></span></div>
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:600">หลักฐานการจัดส่ง</div>
+              <div style="font-size:13px;color:#7A6E64;margin-top:2px">ดูรูปในรายละเอียดออเดอร์</div>
+            </div>
+            <span style="font-size:20px;color:#C9BFB4">›</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">C-14</span> <span style="font-size:13px;color:#5A4E42">Tracking · one row points to the proof, no photo here</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:49</span><span>◗◗◗ 88%</span></div>
+        <div style="flex:1;padding:18px 16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:16px;display:flex;align-items:center;gap:10px">
+            <span style="background:#E7F4EE;color:#0A5C3F;border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600">จัดส่งสำเร็จ</span>
+            <span style="font-size:12px;color:#9A8C7E">#BH-0241</span>
+          </div>
+
+          <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.5px;padding:4px 4px 0">หลักฐานการจัดส่ง</div>
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:14px;display:flex;flex-direction:column;gap:12px">
+            <div style="height:186px;border-radius:12px;background:#2A241F;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.42);font-size:13px;text-align:center;line-height:1.7">รูปหลักฐานการจัดส่ง<br><span style="font-size:11.5px">แตะเพื่อดูเต็มจอ</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:13.5px;color:#7A6E64">ถ่ายเมื่อ</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600">26 ส.ค. 2569 18:45</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:13.5px;color:#7A6E64">ส่งสำเร็จเมื่อ</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600">26 ส.ค. 2569 18:47</span>
+            </div>
+            <div style="font-size:12.5px;color:#9A8C7E;line-height:1.75;border-top:1px solid #F0EAE1;padding-top:10px">รูปนี้ถ่ายโดยไรเดอร์ที่จุดส่ง เพื่อเป็นหลักฐานว่ามีการส่งอาหารแล้ว</div>
+          </div>
+
+          <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.5px;padding:4px 4px 0">ที่อยู่จัดส่ง</div>
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:14px 16px">
+            <div style="font-size:14px;line-height:1.7">62 ม.4 ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี</div>
+            <div style="font-size:12.5px;color:#7A6E64;margin-top:4px">จุดสังเกต: ประตูรั้วสีเขียว</div>
+          </div>
+        </div>
+        <div style="padding:12px 16px 20px;border-top:1px solid #EFE7DC;flex:0 0 auto">
+          <div style="height:52px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600">ให้คะแนนร้านนี้</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">C-19</span> <span style="font-size:13px;color:#5A4E42">Order detail · new card, inserted above ที่อยู่จัดส่ง</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #1F1A16;background:#0F0D0B;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.18);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8078;flex:0 0 auto"><span>18:49</span><span>◗◗◗ 88%</span></div>
+        <div style="padding:8px 16px 12px;display:flex;align-items:center;justify-content:space-between;flex:0 0 auto">
+          <div style="width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">✕</div>
+          <div style="font-size:15px;font-weight:600;color:#fff">หลักฐานการจัดส่ง</div>
+          <div style="width:44px"></div>
+        </div>
+        <div style="flex:1;margin:0 12px;border-radius:16px;background:#2A241F;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.40);font-size:14px;text-align:center;line-height:1.8">รูปเต็มจอ<br><span style="font-size:12px">ซูมได้ · ไม่มีปุ่มดาวน์โหลด</span></div>
+        <div style="padding:16px;flex:0 0 auto">
+          <div style="background:rgba(255,255,255,.10);border-radius:14px;padding:13px 15px;display:flex;flex-direction:column;gap:5px">
+            <div style="color:#fff;font-family:'IBM Plex Mono',monospace;font-size:13.5px">ถ่ายเมื่อ 26 ส.ค. 2569 18:45</div>
+            <div style="color:rgba(255,255,255,.6);font-size:12.5px;line-height:1.65">ลิงก์รูปมีอายุจำกัด และใช้ได้เฉพาะบัญชีของคุณ</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">C-19b</span> <span style="font-size:13px;color:#5A4E42">Full-screen viewer · short-lived signed URL, no download action</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>18:50</span><span>◗◗◗ 87%</span></div>
+        <div style="flex:1;padding:18px 16px;display:flex;flex-direction:column;gap:12px">
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:16px;display:flex;align-items:center;gap:10px">
+            <span style="background:#E7F4EE;color:#0A5C3F;border-radius:999px;padding:5px 12px;font-size:12.5px;font-weight:600">จัดส่งสำเร็จ</span>
+            <span style="font-size:12px;color:#9A8C7E">#BH-0198</span>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:#7A6E64;letter-spacing:.5px;padding:4px 4px 0">หลักฐานการจัดส่ง</div>
+          <div style="background:#fff;border-radius:16px;border:1px solid #E9E0D5;padding:22px 16px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+            <div style="width:52px;height:52px;border-radius:16px;background:#EFE7DC;display:flex;align-items:center;justify-content:center;font-size:22px">🧾</div>
+            <div style="font-size:15px;font-weight:600">ออเดอร์นี้ไม่มีรูปหลักฐาน</div>
+            <div style="font-size:13px;color:#7A6E64;line-height:1.7;max-width:250px">ออเดอร์ที่ส่งก่อนระบบเริ่มเก็บรูปหลักฐานจะไม่มีรูป</div>
+          </div>
+          <div style="border:1px dashed #C9BFB4;border-radius:16px;padding:14px 16px;background:#F3EDE4">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A6E64;font-weight:600;letter-spacing:.1em">WHY THIS STATE IS REAL</div>
+            <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:5px"><span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">proof_photo_path</span> is nullable and every delivery completed before this feature ships has it null. The card is rendered with this body rather than hidden, so a customer asking "where is my photo" gets an answer instead of a missing section.</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">C-19c</span> <span style="font-size:13px;color:#5A4E42">Delivered, no proof · the pre-feature backlog</span></div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════ E — SCREEN INVENTORY ══════════════ -->
+  <div id="sE" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION E</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">Screen inventory and navigation changes</div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff">
+    <div style="display:grid;grid-template-columns:70px 1.2fr 0.7fr 1.9fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 16px">
+      <div>ID</div><div>SCREEN</div><div>KIND</div><div>NAVIGATION AND PRIMARY ACTION</div>
+    </div>
+    <sc-for list="{{ screens }}" as="s" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:70px 1.2fr 0.7fr 1.9fr;padding:12px 16px;border-top:1px solid #F0EAE1;font-size:13.5px;line-height:1.65;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#C2431F;font-weight:600">{{ s.id }}</div>
+        <div style="font-weight:600">{{ s.name }}</div>
+        <div><span style="{{ s.badge }}">{{ s.kind }}</span></div>
+        <div style="color:#4A4038">{{ s.nav }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:20px 22px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px">Navigation changes</div>
+    <div style="font-size:13.5px;line-height:1.85;color:#4A4038">
+      <strong>Driver.</strong> Three routes join the rider stack, all pushed, all above the active-delivery screen G-7.2 introduces: <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">ProofCamera</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">ProofReview</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">DeliveryConfirm</span> — each taking <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">{ deliveryId }</span>, and the last two also the local photo URI. Camera and review are presented modally (dark, no header) so the app's light chrome does not flash over a viewfinder. On success the stack resets to Home rather than popping, so back cannot return to a confirm screen for a delivery that is already closed. Still no tab bar.<br>
+      <strong>Customer.</strong> One route: <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">ProofViewer</span>, pushed from the C-19 card, modal and dark. C-14 gains a row that navigates to the existing <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">OrderDetail</span> — no new destination.
+    </div>
+  </div>
+
+  <!-- ══════════════ F — STATE MATRIX ══════════════ -->
+  <div id="sF" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION F</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">State matrix — camera, upload, offline</div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow-x:auto;background:#fff">
+    <div style="min-width:1160px">
+      <div style="display:grid;grid-template-columns:1.1fr 1.5fr 1.6fr 1.6fr 1.5fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.08em;color:#7A6E64;padding:12px 16px">
+        <div>CONDITION</div><div>WHAT THE RIDER SEES</div><div>WHAT THE APP DOES</div><div>WHAT MUST NOT HAPPEN</div><div>RECOVERY</div>
+      </div>
+      <sc-for list="{{ stateMatrix }}" as="m" hint-placeholder-count="11">
+        <div style="display:grid;grid-template-columns:1.1fr 1.5fr 1.6fr 1.6fr 1.5fr;padding:13px 16px;border-top:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;align-items:start">
+          <div style="font-weight:700">{{ m.cond }}</div>
+          <div style="color:#4A4038">{{ m.sees }}</div>
+          <div style="color:#4A4038">{{ m.does }}</div>
+          <div style="color:#8F3A3A">{{ m.never }}</div>
+          <div style="color:#4A4038">{{ m.recovery }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ══════════════ G — BACKEND CAPABILITIES ══════════════ -->
+  <div id="sG" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION G</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Backend capability requirements</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:960px;margin-bottom:24px">
+    Named, not built. Nothing below is implemented by this document, and nothing below requires a schema change — the column, the storage boundary and the RLS policies all already exist.
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ capabilities }}" as="c" hint-placeholder-count="6">
+      <div style="background:#fff;border:1px solid #E9E0D5;border-left:4px solid #C2431F;border-radius:14px;padding:18px 20px">
+        <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;color:#C2431F">{{ c.id }}</span>
+          <span style="font-size:16px;font-weight:700">{{ c.title }}</span>
+          <span style="{{ c.badge }}">{{ c.kind }}</span>
+        </div>
+        <div style="font-size:13.5px;line-height:1.8;color:#4A4038;margin-top:8px">{{ c.detail }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5A4E42;margin-top:8px;background:#F3EDE4;border-radius:10px;padding:10px 12px;line-height:1.7;word-break:break-word">{{ c.shape }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ══════════════ H — STORAGE MODEL ══════════════ -->
+  <div id="sH" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION H</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">Storage and access model</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Conceptual model — as the schema already holds it</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:2;color:#4A4038;background:#F3EDE4;border-radius:12px;padding:14px 16px">deliveries<br>&nbsp;├─ proof_photo_path&nbsp;&nbsp;text, nullable ✓ exists<br>&nbsp;├─ delivered_at&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;timestamptz ✓ exists<br>&nbsp;└─ state = DELIVERED&nbsp;&nbsp;✓ exists<br><br>delivery_status_history<br>&nbsp;└─ EN_ROUTE → DELIVERED, actor RIDER ✓ exists</div>
+      <div style="font-size:13.5px;line-height:1.8;color:#4A4038;margin-top:12px">
+        <strong>There is no POD table, and none is proposed.</strong> A delivery has at most one proof photo, so a separate row would carry a foreign key and one column. <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">captured_at</span> is not stored separately either — the design displays <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">delivered_at</span> as the confirmation time and reads the capture time from the object's own metadata, so no column is invented for it. <strong>Open decision POD-Q-03</strong> if the Product Owner wants capture time as a first-class stored fact.
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Access model</div>
+      <div style="display:flex;flex-direction:column;gap:11px;font-size:13.5px;line-height:1.75;color:#4A4038">
+        <div><strong>Who may create.</strong> Only the rider currently assigned to the delivery, and only while it is <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">EN_ROUTE</span>. Enforced the way every other rider command already is — <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">@Roles('RIDER')</span> plus the assigned-rider check plus a guarded conditional update whose WHERE clause carries the expected state.</div>
+        <div><strong>Who may read.</strong> The order's customer, the restaurant's members, and platform staff on the service role. Never another rider, never anonymous. The rider who took it can see it while the delivery is theirs.</div>
+        <div><strong>How it is read.</strong> A short-lived signed GET URL minted per request by the API, never a public URL and never the stored path. The path is meaningless without a signature, which is why the existing full-row customer SELECT on <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">deliveries</span> is not itself a leak.</div>
+        <div><strong>When it becomes immutable.</strong> At confirmation. Retake is unlimited before, impossible after — a delivered delivery's proof is evidence, and evidence that can be replaced is not evidence. <strong>Note honestly:</strong> <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">deliveries</span> carries no column-immutability trigger, so this is an application rule, not a database guarantee. Making it one would need a migration, which is out of scope.</div>
+        <div><strong>Retention.</strong> No mechanism exists and none is designed. The photo is personal data under PDPA — it can show a doorway, a house number, incidentally a passer-by. Q-012 gates this and is <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">OPEN</span>.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px">Object key, and why it takes this shape</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px;font-size:13.5px;line-height:1.8;color:#4A4038">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;background:#F3EDE4;border-radius:10px;padding:11px 13px;margin-bottom:10px">deliveries/{deliveryId}/proof/{uuid}.{ext}</div>
+        Server-templated from a validated UUID and an allow-listed MIME type, exactly like the two key builders that already exist. The client never supplies a key or a filename.
+      </div>
+      <div><strong>Not deterministic, deliberately.</strong> A retake before confirmation uploads a second object, so the key needs a component that changes — a server-generated UUID, the same choice the menu-item key already makes for the same reason. The cover-image style recompute-and-compare check is therefore unavailable here.</div>
+      <div><strong>What replaces it</strong> is the pair the menu-item flow already relies on: a strict structural parse of the submitted key against <em>this</em> authorized delivery id, plus <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">exists()</span> proving real bytes are there. Structure narrows what shape can matter; existence proves it was used.</div>
+      <div><strong>Orphans are accepted,</strong> as they already are for covers and menu images: a retake leaves the previous object unreferenced, and an abandoned attempt leaves one with no row pointing at it. Both are harmless and both are stated rather than swept up by a cleanup job nobody has specified.</div>
+    </div>
+  </div>
+
+  <!-- ══════════════ I — PRIVACY + A11Y ══════════════ -->
+  <div id="sI" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION I</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">Privacy, safety and accessibility</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Privacy by what the UI asks for</div>
+      <div style="font-size:13.5px;line-height:1.85;color:#4A4038">
+        The camera never asks for a person. Guidance names the subject — the food at the drop point — and states the exclusions in the same breath: <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">ไม่ต้องถ่ายหน้าลูกค้า ไม่ต้องถ่ายบัตรหรือเอกสาร</span>. No prompt, label or field anywhere in the flow requests a face, an ID, a phone number or a house number.<br><br>
+        <strong>If a face appears anyway.</strong> The review screen exists precisely for this: retake is free and unlimited before confirmation. The review copy asks whether the drop point is clear, which is the question that also catches a person in frame. Automatic face detection or blurring is deliberately not designed — it would be a new capability, an accuracy claim, and a false sense of safety.<br><br>
+        <strong>What the customer is never shown.</strong> No rider name, photo, phone number, plate or location. The proof card carries the image, two timestamps and one sentence of explanation.<br><br>
+        <strong>What the rider is never shown.</strong> Nothing new. The flow adds no customer field the assigned-order read path does not already carry.
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Accessibility</div>
+      <div style="font-size:13.5px;line-height:1.85;color:#4A4038">
+        <strong>Targets.</strong> 82 px shutter, 60 px primary actions, 52 px secondary, 44 px floor for the camera's icon buttons — the redesign's scale, unchanged.<br><br>
+        <strong>Contrast on the viewfinder.</strong> White on a 58%-black scrim, not on the live image, so guidance stays readable against any scene. The shutter is a white ring around a filled core so it is findable without colour.<br><br>
+        <strong>Screen reader.</strong> The shutter is a button labelled <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">ถ่ายรูปหลักฐาน</span>, not "camera". The preview is an image with a label stating what it shows and when it was taken. Upload progress is a <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">polite</span> live region announcing percentage, not a spinner alone.<br><br>
+        <strong>Colour is never the only signal.</strong> The green ส่งสำเร็จ CTA is also the only 20 px label on its screen and carries the word; the failure state carries an icon, a heading and a body line.<br><br>
+        <strong>Reduce motion.</strong> The progress bar stays (it is information), the pulse and the success check's scale-in become static.<br><br>
+        <strong>One-handed.</strong> Every primary action sits in the bottom third. Nothing important is within 16 px of a screen edge.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ J — ANALYTICS ══════════════ -->
+  <div id="sJ" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION J</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Analytics and events</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:960px;margin-bottom:20px">
+    <strong>There is no analytics infrastructure in this repository</strong> — no client SDK, no event table, no telemetry module. The list below is a requirement for whoever adds one, not a spec against an existing pipeline. Until then, <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">delivery_status_history</span> already answers the only question that matters operationally: when did this delivery complete, and who moved it.
+  </div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff">
+    <div style="display:grid;grid-template-columns:1.2fr 2fr 1.3fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 16px">
+      <div>EVENT</div><div>WHY IT IS WORTH RECORDING</div><div>PROPERTIES</div>
+    </div>
+    <sc-for list="{{ events }}" as="e" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:1.2fr 2fr 1.3fr;padding:12px 16px;border-top:1px solid #F0EAE1;font-size:13px;line-height:1.7;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600">{{ e.name }}</div>
+        <div style="color:#4A4038">{{ e.why }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ e.props }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="font-size:13px;color:#8F3A3A;line-height:1.75;margin-top:12px;background:#FBEAEA;border:1px solid #F0C9C9;border-radius:12px;padding:12px 14px;max-width:960px">
+    No event carries an image, a coordinate, an address, a phone number or a customer id. A delivery id is enough to answer every question above, and it is already the unit of every operational query.
+  </div>
+
+  <!-- ══════════════ K — ACCEPTANCE ══════════════ -->
+  <div id="sK" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION K</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">Acceptance criteria</div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff">
+    <div style="display:grid;grid-template-columns:60px 1.4fr 2.2fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 16px">
+      <div>#</div><div>SCENARIO</div><div>PASSES WHEN</div>
+    </div>
+    <sc-for list="{{ acceptance }}" as="a" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:60px 1.4fr 2.2fr;padding:12px 16px;border-top:1px solid #F0EAE1;font-size:13.5px;line-height:1.7;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:#C2431F">{{ a.n }}</div>
+        <div style="font-weight:600">{{ a.scenario }}</div>
+        <div style="color:#4A4038">{{ a.pass }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ══════════════ L — OPEN DECISIONS ══════════════ -->
+  <div id="sL" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION L</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Open decisions</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:960px;margin-bottom:20px">
+    Each one needs a Product Owner answer. Where a decision blocks nothing, the design states the interim behaviour it assumed and marks it as assumed rather than decided.
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ questions }}" as="q" hint-placeholder-count="7">
+      <div style="background:#fff;border:1px solid #F0DFC4;border-left:4px solid #E4A03E;border-radius:14px;padding:18px 20px">
+        <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;color:#8A6A0B">{{ q.id }}</span>
+          <span style="font-size:16px;font-weight:700">{{ q.title }}</span>
+          <span style="{{ q.badge }}">{{ q.blocks }}</span>
+        </div>
+        <div style="font-size:13.5px;line-height:1.8;color:#4A4038;margin-top:8px">{{ q.detail }}</div>
+        <div style="font-size:13.5px;line-height:1.8;color:#0A5C3F;margin-top:8px;background:#E7F4EE;border-radius:10px;padding:10px 12px"><strong>{{ q.stanceLabel }}</strong> {{ q.stance }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ══════════════ M — REPORT ══════════════ -->
+  <div id="sM" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION M</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">Final report</div>
+
+  <div style="background:#211B16;border-radius:16px;padding:26px;overflow-x:auto">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+      <sc-for list="{{ report }}" as="r" hint-placeholder-count="13">
+        <div style="display:flex;gap:12px;align-items:baseline;border-bottom:1px solid rgba(255,255,255,.10);padding-bottom:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#A2968A;flex:0 0 168px;letter-spacing:.06em">{{ r.k }}</div>
+          <div style="font-size:13.5px;color:#F5EFE7;line-height:1.65;font-weight:500;flex:1">{{ r.v }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:20px;background:rgba(228,160,62,.14);border:1px solid rgba(228,160,62,.4);border-radius:12px;padding:16px 18px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#E4A03E;font-weight:600;letter-spacing:.1em">NEXT_STEP</div>
+      <div style="font-size:14px;color:#F5EFE7;line-height:1.8;margin-top:8px">
+        Product Owner answers <strong>POD-Q-01</strong> (is the photo mandatory) and <strong>POD-Q-02</strong> (what a rider who genuinely cannot photograph does). Those two shape the confirm screen and nothing else can be built around them. In parallel, engineering can specify the four capabilities in §G — none of them needs a decision, and one of them, the delivered command, is already blocking G-7.2 independently of POD.
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:40px;padding-top:20px;border-top:1px solid #EAE1D6;font-size:12.5px;color:#9A8C7E;line-height:1.8">
+    Design artifact · no repository file created, modified, or committed · sources read at <span style="font-family:'IBM Plex Mono',monospace">7bd8d61</span>: <span style="font-family:'IBM Plex Mono',monospace">supabase/migrations/20260811000009_delivery_domain.sql</span>, <span style="font-family:'IBM Plex Mono',monospace">…000011_rls_policies.sql</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/api/src/modules/storage/**</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/api/src/modules/merchant/menu-item-image.*</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/api/src/modules/rider/rider.controller.ts</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/driver/**</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/customer/src/screens/Order*.tsx</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/customer/src/domain/order.ts</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/RIDER_LIFECYCLE.md</span> · companion: <a href="./BANHAO Driver App Redesign.dc.html">BANHAO Driver App Redesign</a>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:900}}">
+const OK = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#E7F4EE;color:#0A6B49;font-weight:700;font-size:11px;white-space:nowrap';
+const WARN = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#FDF3E6;color:#8A6A0B;font-weight:700;font-size:11px;white-space:nowrap';
+const BAD = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#FBEAEA;color:#B23030;font-weight:700;font-size:11px;white-space:nowrap';
+const NEUTRAL = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#EFE7DC;color:#5A4E42;font-weight:700;font-size:11px;white-space:nowrap';
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      nav: [
+        { href: '#s0', label: '0 · Findings' },
+        { href: '#sA', label: 'A · Objective' },
+        { href: '#sB', label: 'B · State machine' },
+        { href: '#sC', label: 'C · Rider' },
+        { href: '#sD', label: 'D · Customer' },
+        { href: '#sE', label: 'E · Inventory + nav' },
+        { href: '#sF', label: 'F · States' },
+        { href: '#sG', label: 'G · Backend' },
+        { href: '#sH', label: 'H · Storage' },
+        { href: '#sI', label: 'I · Privacy + a11y' },
+        { href: '#sJ', label: 'J · Analytics' },
+        { href: '#sK', label: 'K · Acceptance' },
+        { href: '#sL', label: 'L · Open decisions' },
+        { href: '#sM', label: 'M · Report' },
+      ],
+
+      findings: [
+        { id: 'PF-01', area: 'The column exists', detail: '`deliveries.proof_photo_path text` is in the deployed table — nullable, no default, no constraint. POD was anticipated by the schema and needs no migration to store its result.', source: '20260811000009_delivery_domain.sql:32' },
+        { id: 'PF-02', area: 'Delivery states are fixed', detail: "The CHECK is UNASSIGNED, RIDER_SEARCHING, RIDER_ASSIGNED, RIDER_REASSIGNING, AT_MERCHANT, PICKED_UP, EN_ROUTE, DELIVERED, FAILED, ABANDONED. There is no ARRIVED, no POD_CAPTURED, no CONFIRMED, no COMPLETED. `delivered_at` and `failed_at` columns already exist.", source: 'same file, lines 13–23' },
+        { id: 'PF-03', area: 'Deliveries are mutable but undeletable', detail: '`deliveries_reject_delete` blocks DELETE for every role. There is deliberately no column-immutability trigger — state and rider_id are meant to advance freely — so `proof_photo_path` is writable more than once as far as the database is concerned.', source: 'same file, comments on deliveries' },
+        { id: 'PF-04', area: 'No delivered endpoint', detail: 'RiderController exposes location, offers/:id/accept, offers/:id/decline, deliveries/:id/arrived, picked-up, en-route, cancel. There is no route that reaches DELIVERED. This is the single largest gap, and it blocks G-7.2 with or without POD.', source: 'apps/api/.../rider.controller.ts' },
+        { id: 'PF-05', area: 'Storage is Cloudflare R2', detail: 'Not Supabase Storage. `StorageService` wraps the S3 SDK behind a provider-agnostic boundary, and no business module may import the SDK directly. No Supabase storage bucket or storage.objects policy exists anywhere in the migrations.', source: 'modules/storage/storage.service.ts' },
+        { id: 'PF-06', area: 'A delivery proof was already anticipated', detail: '`object-key.ts` opens by naming "a future menu-gallery or delivery-proof key builder" as its next sibling, and `getPublicUrl` documents itself as "never for a private key such as a future delivery-proof photo". The architecture for this feature was left deliberately open.', source: 'modules/storage/object-key.ts' },
+        { id: 'PF-07', area: 'The upload pattern is established twice', detail: 'presign a PUT scoped to one object, one operation and one content type (5-minute expiry) → the client uploads straight to R2 → a complete step verifies with `exists()` and persists the **object key**, never a URL. Allowed types are jpeg, png, webp.', source: 'restaurant-cover.*, menu-item-image.*' },
+        { id: 'PF-08', area: 'There is no signed download path', detail: '`StorageService` has upload, delete, exists, getPublicUrl and getSignedUploadUrl. There is no `getSignedDownloadUrl`. Everything served today is a public catalog asset, so the need never arose.', source: 'modules/storage/storage.service.ts' },
+        { id: 'PF-09', area: 'Customers can already read the delivery row', detail: '`deliveries_select_customer` grants full-row SELECT on the delivery for the customer\'s own order — which includes `proof_photo_path`, `rider_id` and `rider_earning_satang`. A path with no signature is useless, so this is not a leak today; it is also not a good customer read path.', source: '20260811000011_rls_policies.sql' },
+        { id: 'PF-10', area: 'No customer screen reads deliveries', detail: 'OrderTracking (C-14) and OrderDetail (C-19) read `orders`, `order_items`, `order_item_options` and `order_status_history` only. `OrderDetail` has four cards plus a rating action shown for DELIVERED orders. Adding proof means a new read path, not a new policy.', source: 'apps/customer/src/screens/Order*.tsx' },
+        { id: 'PF-11', area: 'The rider has no active-delivery screen yet', detail: 'The driver app has Splash, Login, Otp, Home, Status and OfferInbox. `RiderOrderViewRepository` is built and unused. POD therefore lands on a screen G-7.2 still has to create — this design specifies POD\'s leg of it, not the whole screen.', source: 'apps/driver/src/screens/**' },
+        { id: 'PF-12', area: 'No camera capability at all', detail: 'apps/driver depends on expo-location and nothing camera-related. app.json declares only location permissions and the expo-location plugin — no NSCameraUsageDescription, no android.permission.CAMERA.', source: 'apps/driver/package.json, app.json' },
+        { id: 'PF-13', area: 'Proof of delivery is an open business question', detail: 'BQ-018 is PROPOSED: mandatory or optional, storage, retention (PDPA, Q-012) and evidential weight in a dispute (Q-013) are all undecided. The same document notes that with COD disabled, proof of delivery is the only evidence a handover happened — raising its importance, not lowering it.', source: 'docs/RIDER_LIFECYCLE.md §10' },
+        { id: 'PF-14', area: 'The rider view already reasoned about the photo', detail: "The rider order views migration explicitly lists the rider's own earning and proof photo among things a view does not project — so proof-photo visibility has been considered once already, and the answer was to keep it out of a shared read path.", source: '20260811000012_rider_order_views.sql' },
+      ],
+
+      darkTokens: [
+        { name: 'camera.ground', value: '#0F0D0B', use: 'The modal screen behind the viewfinder — P-04, P-05, C-19b.' },
+        { name: 'camera.viewfinder', value: '#1C1815', use: 'The live-preview well before the camera stream paints.' },
+        { name: 'camera.imageWell', value: '#2A241F', use: 'Behind a captured or loaded photo — review, confirm thumbnail, viewer.' },
+        { name: 'camera.scrim', value: 'rgba(0,0,0,.58)', use: 'Guidance panel over the live image. Carries white text, so it must be a scrim and not a tint.' },
+        { name: 'camera.control', value: 'rgba(255,255,255,.12)', use: 'Icon-button fill on dark — cancel, flash, flip, viewer close.' },
+        { name: 'camera.panel', value: 'rgba(255,255,255,.10)', use: 'Metadata and guidance panels on dark, where no live image sits behind them.' },
+      ],
+
+      decisions: [
+        { id: 'PD-01', title: 'POD adds no delivery state', body: 'Capture, review and retake all happen on the device. One command crosses EN_ROUTE → DELIVERED, and it carries the photo with it. Nothing partial is ever persisted, so nothing partial can be recovered wrong.' },
+        { id: 'PD-02', title: 'The photo and the confirmation are one transaction', body: 'Not presign → complete → deliver. The delivered command *is* the complete step: it verifies the object exists, then writes path, state and timestamp together. A delivery cannot complete without proof, and proof cannot be recorded against a delivery that did not complete.' },
+        { id: 'PD-03', title: 'ส่งสำเร็จ is green, and it is the only green button in the app', body: 'Every other primary action is the brand orange. This one is terminal and irreversible, so it is coloured differently on purpose — the rider should feel the difference between advancing a step and closing a job.' },
+        { id: 'PD-04', title: 'Arrival is a screen state, not a server state', body: 'There is no endpoint that would accept an arrival at the customer and no state to move to. ถึงจุดส่งแล้ว therefore changes what the screen shows and nothing else — honest, and it needs no backend at all.' },
+        { id: 'PD-05', title: 'The captured file survives every failure except a retake', body: 'A failed upload, a lost connection, a backgrounded app, a killed app: the local URI and its delivery id persist, and returning to the delivery resumes at the confirm screen with the photo intact. Only the rider deletes it, by retaking.' },
+        { id: 'PD-06', title: 'The customer sees an image, two times and one sentence', body: 'No rider identity, no map, no coordinates, no download button. The photo answers one question — was my food actually delivered — and the card is sized for that question and no other.' },
+      ],
+
+      screens: [
+        { id: 'P-01', name: 'Active delivery · final step', kind: 'EDIT', badge: WARN, nav: 'Part of G-7.2\'s screen. POD adds the fourth step and its CTA ถึงจุดส่งแล้ว. Everything above it is out of scope here.' },
+        { id: 'P-02', name: 'Arrived', kind: 'NEW', badge: WARN, nav: 'Same route as P-01, different local state. Primary: ถ่ายรูปหลักฐาน. Secondary returns to the travelling state — no server call either way.' },
+        { id: 'P-03', name: 'Camera rationale', kind: 'NEW', badge: WARN, nav: 'Shown once, before the OS prompt, only if permission has never been asked. Primary: อนุญาตใช้กล้อง triggers the real request.' },
+        { id: 'P-04', name: 'ProofCamera', kind: 'NEW', badge: WARN, nav: 'Modal, dark, no header. Shutter, flash toggle, camera flip, cancel. Capture pushes ProofReview.' },
+        { id: 'P-05', name: 'ProofReview', kind: 'NEW', badge: WARN, nav: 'Modal, dark. ถ่ายใหม่ pops back to the camera and discards; ใช้รูปนี้ pushes DeliveryConfirm. Nothing is uploaded from this screen.' },
+        { id: 'P-06', name: 'DeliveryConfirm', kind: 'NEW', badge: WARN, nav: 'Light. Thumbnail with a retake affordance, order, recipient, drop point. Primary ส่งสำเร็จ is the only thing that calls the server.' },
+        { id: 'P-07', name: 'Confirm · in flight', kind: 'NEW', badge: WARN, nav: 'Same screen. Upload progress then command; the CTA is inert throughout and the back gesture is blocked.' },
+        { id: 'P-08', name: 'Confirm · failed', kind: 'NEW', badge: WARN, nav: 'Same screen. ลองส่งอีกครั้ง retries from whichever step failed; ถ่ายรูปใหม่ returns to the camera.' },
+        { id: 'P-09', name: 'Delivered', kind: 'NEW', badge: WARN, nav: 'Reached only on a 200. กลับหน้าหลัก resets the stack to Home — the confirm screen must not be reachable by back.' },
+        { id: 'P-10', name: 'Camera blocked', kind: 'NEW', badge: WARN, nav: 'One screen, three bodies: permission denied, permanently denied, hardware unavailable. เปิดตั้งค่า opens app settings.' },
+        { id: 'C-14', name: 'Order tracking', kind: 'EDIT', badge: WARN, nav: 'Delivered orders gain one row pointing at the detail screen. No photo, no new route.' },
+        { id: 'C-19', name: 'Order detail', kind: 'EDIT', badge: WARN, nav: 'One new card, หลักฐานการจัดส่ง, inserted above ที่อยู่จัดส่ง. Tapping the image pushes ProofViewer.' },
+        { id: 'C-19b', name: 'ProofViewer', kind: 'NEW', badge: WARN, nav: 'Modal, dark, pinch to zoom, no download or share action. Closing returns to C-19.' },
+        { id: 'C-19c', name: 'Detail · no proof', kind: 'NEW', badge: WARN, nav: 'The same card with an explanatory body, for a delivered order whose path is null. Not a hidden section.' },
+      ],
+
+      stateMatrix: [
+        { cond: 'Permission never asked', sees: 'P-03 rationale, then the OS prompt', does: 'Asks only when the rider taps ถ่ายรูปหลักฐาน — never on screen mount', never: 'Prompting before the rider has any reason to say yes', recovery: 'ไม่ใช่ตอนนี้ returns to P-02 with the job still open' },
+        { cond: 'Permission denied once', sees: 'P-10, body: not yet allowed', does: 'Offers a plain retry that re-requests', never: 'Looping the OS prompt, or implying the job can be closed', recovery: 'ลองอีกครั้ง re-requests; the delivery stays EN_ROUTE' },
+        { cond: 'Permission denied permanently', sees: 'P-10, body naming the exact settings path', does: 'Deep-links to app settings', never: 'A dead end with no route forward', recovery: 'Returning from settings re-checks on focus' },
+        { cond: 'Camera hardware unavailable', sees: 'P-10, body: camera cannot be opened', does: 'Reports the failure plainly', never: 'A black viewfinder with a live shutter', recovery: 'Retry, and POD-Q-02 governs whether an alternative exists' },
+        { cond: 'Capture fails or the file is unreadable', sees: 'Camera stays open, one inline line: ถ่ายไม่สำเร็จ ลองอีกครั้ง', does: 'Discards the attempt; validates size and type before leaving the camera', never: 'Advancing to review with a zero-byte or unreadable file', recovery: 'Tap the shutter again' },
+        { cond: 'Low light', sees: 'Flash control, and review copy asking whether the drop point is clear', does: 'Nothing automatic', never: 'A quality score or a blur-detection claim the app cannot back', recovery: 'ถ่ายใหม่, unlimited before confirmation' },
+        { cond: 'Presign request fails', sees: 'P-08, ส่งรูปไม่สำเร็จ', does: 'Stops before any upload', never: 'Retrying in a tight loop', recovery: 'ลองส่งอีกครั้ง restarts from the presign' },
+        { cond: 'Upload to R2 fails or times out', sees: 'P-08, with the thumbnail and ไม่ต้องถ่ายใหม่', does: 'Keeps the local file; the delivery is untouched', never: 'ส่งสำเร็จ, or any wording implying the job closed', recovery: 'Retry re-presigns and re-uploads — a new key, and the orphan is accepted' },
+        { cond: 'Upload succeeds, delivered command fails', sees: 'P-08, same screen, same copy', does: 'Holds the object key so the retry reuses the uploaded object', never: 'A second upload of the same photo, or a locally faked completion', recovery: 'Retry sends the command alone; the command is idempotent for an already-DELIVERED delivery' },
+        { cond: 'No connectivity at the door', sees: 'Offline banner plus P-08', does: 'Nothing in the background — no queue, no auto-complete', never: 'A queued completion that fires unattended', recovery: 'The rider retries when signal returns; the photo is still there' },
+        { cond: 'App killed mid-flow', sees: 'On reopening, the delivery resumes at P-06 with the photo', does: 'Persists the local URI and delivery id, nothing else', never: 'Losing the photo and forcing a second walk to the door', recovery: 'Confirm or retake, as if nothing happened' },
+      ],
+
+      capabilities: [
+        { id: 'POD-C-01', title: 'The delivered command', kind: 'BLOCKING', badge: BAD, detail: 'The one genuinely missing endpoint, and it is missing for G-7.2 regardless of POD. Same shape as every other rider command: assigned-rider authorization, a guarded conditional update carrying the expected state, delivery first and the order second through the existing orders service. It additionally verifies the object exists before writing anything, and it must be idempotent — a retry against an already-DELIVERED delivery returns success rather than a conflict, because the rider cannot tell a lost response from a failed one.', shape: 'POST /api/v1/rider/deliveries/:id/delivered   body { objectKey }   →  { deliveryId, state: "DELIVERED", orderId, orderState: "DELIVERED", deliveredAt }   ·  409 INVALID_TRANSITION when not EN_ROUTE  ·  403 NOT_ASSIGNED_RIDER  ·  404 when no object exists at the key' },
+        { id: 'POD-C-02', title: 'The proof upload URL', kind: 'BLOCKING', badge: BAD, detail: 'A presigned PUT, scoped exactly as the two existing upload endpoints are: one object, one operation, one content type, five minutes. Authorized to the assigned rider of a delivery that is currently EN_ROUTE — so a presign is never issued for a delivery the rider is not on or has already closed.', shape: 'POST /api/v1/rider/deliveries/:id/proof/upload-url   body { contentType }   →  { uploadUrl, objectKey }' },
+        { id: 'POD-C-03', title: 'A delivery-proof key builder and parser', kind: 'BLOCKING', badge: BAD, detail: 'The third sibling `object-key.ts` already names. Builder templates the key from a validated delivery id and an allow-listed MIME type; parser proves a submitted key is exactly that shape for this authorized delivery id. Neither touches StorageService, which stays entity-agnostic.', shape: 'deliveryProofObjectKey(deliveryId, mimeType) → "deliveries/{id}/proof/{uuid}.{ext}"   ·   parseDeliveryProofObjectKey(key, expectedDeliveryId) → { deliveryId, mimeType } | null' },
+        { id: 'POD-C-04', title: 'A signed download URL', kind: 'BLOCKING', badge: BAD, detail: 'The capability StorageService does not have. A proof photo is the first private object in the system, and `getPublicUrl` documents itself as explicitly not for it. One new method on the existing provider boundary, plus one authorized endpoint per audience that mints it. Short expiry — minutes, not hours — and never persisted anywhere.', shape: 'StorageService.getSignedDownloadUrl(key, expiresInSeconds)   ·   GET /api/v1/orders/:id/delivery-proof → { photoUrl, capturedAt, deliveredAt } for the order\'s own customer' },
+        { id: 'POD-C-05', title: 'Camera capability in the driver app', kind: 'DEPENDENCY', badge: WARN, detail: 'A package plus two permission declarations, neither of which exists today. This is an install and a config change, not application logic — flagged here because the flow cannot be built without it and this document may not perform it.', shape: 'expo-camera (or expo-image-picker) · app.json: ios.infoPlist.NSCameraUsageDescription (Thai, matching the location string\'s tone) · android.permissions += CAMERA' },
+        { id: 'POD-C-06', title: 'A customer-facing proof read', kind: 'RECOMMENDED', badge: WARN, detail: 'The customer can already SELECT the whole deliveries row under existing RLS, which would work and is the wrong path: it hands the client `rider_id` and `rider_earning_satang` to get one nullable text column. Routing the read through POD-C-04\'s endpoint returns only the three fields the card renders. No policy changes either way — this is a client-architecture recommendation, and the alternative (a column-scoped view) would be a migration.', shape: 'Customer app: repositories.deliveryProof.getForOrder(orderId) → { photoUrl, capturedAt, deliveredAt } | null' },
+      ],
+
+      events: [
+        { name: 'pod_capture_started', why: 'How often a rider reaches the camera at all — the denominator for everything else.', props: 'deliveryId' },
+        { name: 'pod_permission_result', why: 'Whether the rationale screen is doing its job, and how many riders are stuck at the OS level.', props: 'deliveryId, outcome' },
+        { name: 'pod_photo_retaken', why: 'A high retake rate means the guidance or the camera is wrong, not the rider.', props: 'deliveryId, attempt' },
+        { name: 'pod_upload_failed', why: 'The single most likely field failure. Distinguishes network from server.', props: 'deliveryId, stage, errorCode' },
+        { name: 'pod_upload_duration_ms', why: 'Whether a rider waits at the door for an unacceptable time on a rural connection.', props: 'deliveryId, bytes, durationMs' },
+        { name: 'pod_delivery_confirmed', why: 'The success event, and the only one that pairs with a state transition.', props: 'deliveryId, attempts' },
+        { name: 'pod_flow_abandoned', why: 'A rider who reached the camera and left without confirming is the case worth phoning about.', props: 'deliveryId, lastStep' },
+        { name: 'pod_customer_viewed', why: 'Whether customers actually look. If nobody does, the retention argument changes.', props: 'orderId' },
+      ],
+
+      acceptance: [
+        { n: '1', scenario: 'Happy path', pass: 'A rider on an EN_ROUTE delivery captures one photo, reviews it, confirms, and sees ส่งสำเร็จ only after a 200. The delivery is DELIVERED with a non-null proof_photo_path and a delivered_at; the order is DELIVERED.' },
+        { n: '2', scenario: 'Retake', pass: 'Retaking any number of times before confirmation leaves exactly one path recorded — the last one uploaded — and the delivery unchanged until confirmation.' },
+        { n: '3', scenario: 'Abandon', pass: 'Leaving the flow after an upload but before confirming leaves the delivery EN_ROUTE and proof_photo_path null. The uploaded object is an accepted orphan.' },
+        { n: '4', scenario: 'No premature success', pass: 'ส่งสำเร็จ appears in no screen state other than after a successful command response. Verified by forcing a network failure at each of the three stages.' },
+        { n: '5', scenario: 'Offline at the door', pass: 'The photo persists, the delivery stays open, no background task fires, and a retry after signal returns completes normally.' },
+        { n: '6', scenario: 'App killed mid-flow', pass: 'Reopening the app returns the rider to the confirm screen for the same delivery with the same photo, without a second capture.' },
+        { n: '7', scenario: 'Idempotent retry', pass: 'A retry after a lost response on an already-DELIVERED delivery returns success and does not produce a second delivery_status_history row.' },
+        { n: '8', scenario: 'Permission refused', pass: 'Every refusal path ends on a screen with a route forward and the delivery still open. No path closes a delivery without a photo.' },
+        { n: '9', scenario: 'Wrong state', pass: 'The command on a delivery that is not EN_ROUTE returns 409 INVALID_TRANSITION and the UI reports it without claiming success.' },
+        { n: '10', scenario: 'Foreign delivery', pass: 'Both the presign and the command refuse a delivery the caller is not the assigned rider of, and the refusal does not reveal whether the id exists.' },
+        { n: '11', scenario: 'Fabricated key', pass: 'A structurally invalid key, a key for another delivery, and a key with no object behind it are all refused, and none of them moves any state.' },
+        { n: '12', scenario: 'Customer read', pass: "The order's own customer sees the photo, both timestamps and no rider identity. Any other authenticated account is refused." },
+        { n: '13', scenario: 'Link expiry', pass: 'A proof URL stops working after its expiry, and reopening the screen mints a fresh one rather than failing.' },
+        { n: '14', scenario: 'Legacy order', pass: 'A delivered order with a null path renders the explanatory card, not a hidden section, an empty frame, or a broken image.' },
+      ],
+
+      questions: [
+        { id: 'POD-Q-01', title: 'Is the photo mandatory?', blocks: 'BLOCKS THE CONFIRM SCREEN', badge: BAD, detail: 'BQ-018 has been open since the lifecycle document was written and the answer changes one thing structurally: whether ส่งสำเร็จ can ever be reachable without an image. Everything else in this design is identical either way.', stanceLabel: 'Assumed for these frames:', stance: 'mandatory. With COD disabled the photo is the only evidence a handover happened, which the lifecycle document says raises its importance rather than lowering it. The frames therefore give the confirm screen no path to completion without an image.' },
+        { id: 'POD-Q-02', title: 'What does a rider who genuinely cannot photograph do?', blocks: 'BLOCKS AN ESCAPE PATH', badge: BAD, detail: 'A broken camera, a permanently refused permission, a phone at 1%. If the photo is mandatory this rider cannot close a delivery they have actually completed — and the operator force-unassign path is for a rider who did not deliver, which is a different and untrue record.', stanceLabel: 'Not designed here:', stance: 'the frames say ติดต่อผู้ดูแล and stop. Designing a no-photo completion would invent both an operator capability and a policy about evidence-free deliveries. This is the second question the Product Owner has to answer before implementation starts.' },
+        { id: 'POD-Q-03', title: 'Is capture time a stored fact?', blocks: 'NON-BLOCKING', badge: WARN, detail: 'The design shows both ถ่ายเมื่อ and ส่งสำเร็จเมื่อ. Only the second is a column. The first can come from the object\'s own metadata, or it can be a new column — which would be a migration.', stanceLabel: 'Assumed:', stance: 'read it from object metadata, and if that is unavailable show only delivered_at. The gap between capture and confirmation is seconds in the happy path; it is only interesting when an upload failed, and the events in §J cover that better than a column would.' },
+        { id: 'POD-Q-04', title: 'How long is a proof photo kept?', blocks: 'NON-BLOCKING, LEGAL', badge: BAD, detail: 'Q-012 gates PDPA lawful basis and retention and is OPEN. A proof photo is personal data: it can show a doorway, a house number, and incidentally a person. No retention or purge mechanism exists anywhere in the system.', stanceLabel: 'Assumed:', stance: 'kept indefinitely, because that is what building nothing produces — stated plainly rather than presented as a decision. A retention answer will need a purge mechanism, and that mechanism should be specified before the first photo is stored, not after.' },
+        { id: 'POD-Q-05', title: 'Can the merchant see the photo?', blocks: 'NON-BLOCKING', badge: WARN, detail: '`deliveries_select_merchant` already grants the restaurant\'s members the delivery row, so the capability is a signed-URL endpoint away. Whether they should is a product question about disputes, and the merchant web UI does not exist yet.', stanceLabel: 'Assumed:', stance: 'not in V1. No merchant surface exists to put it on, and adding an audience to evidence is easier than removing one.' },
+        { id: 'POD-Q-06', title: 'Does the customer get a notification?', blocks: 'NON-BLOCKING', badge: WARN, detail: 'A `notifications` table exists with a customer read policy, and the delivered transition is the natural trigger. Nothing in this design writes to it.', stanceLabel: 'Assumed:', stance: 'out of scope. Notification content and channel are a separate piece of design work, and the tracking screen already reflects the completed state on its next read.' },
+        { id: 'POD-Q-07', title: 'Should the photo be immutable in the database?', blocks: 'NON-BLOCKING', badge: WARN, detail: 'The design treats the path as write-once at confirmation, but `deliveries` has no column-immutability trigger, so nothing in the database enforces it. Adding one is a migration against a locked schema.', stanceLabel: 'Assumed:', stance: 'an application rule, documented as such. The command only ever writes the path in the same guarded update that moves EN_ROUTE → DELIVERED, so the state guard is what makes a second write impossible in practice.' },
+      ],
+
+      report: [
+        { k: 'STATUS', v: 'DESIGN COMPLETE — awaiting Product Owner approval' },
+        { k: 'DESIGN_FILE', v: 'BANHAO POD UX Design.dc.html (repository target at implementation time: docs/design/BANHAO_POD_UX_DESIGN.md)' },
+        { k: 'FILES_CREATED', v: 'One design artifact in this design project. No repository file.' },
+        { k: 'FILES_MODIFIED', v: 'None' },
+        { k: 'SOURCE_CODE_CHANGED', v: 'NO' },
+        { k: 'DATABASE_CHANGED', v: 'NO' },
+        { k: 'SCHEMA_CHANGED', v: 'NO — and none is required; the column already exists' },
+        { k: 'MIGRATIONS_CREATED', v: 'NO' },
+        { k: 'STORAGE_CHANGED', v: 'NO — no bucket created, no object uploaded' },
+        { k: 'RLS_CHANGED', v: 'NO — the three policies this design relies on already exist' },
+        { k: 'FIXTURES_CREATED', v: 'NO' },
+        { k: 'PRODUCTION_TOUCHED', v: 'NO — banhao-dev is the only environment referenced, and it was read, not written' },
+        { k: 'COMMIT', v: 'NO' },
+        { k: 'PUSH', v: 'NO' },
+        { k: 'NEW_STATES_PROPOSED', v: 'NONE' },
+        { k: 'BLOCKING_CAPABILITIES', v: '4 — POD-C-01 delivered command · POD-C-02 presign · POD-C-03 key builder · POD-C-04 signed download' },
+        { k: 'OPEN_DECISIONS', v: '7 — POD-Q-01 and POD-Q-02 block implementation; the other five have stated interim assumptions' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
