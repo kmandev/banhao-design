@@ -356,13 +356,51 @@ happen and needs an answer. Tips are not in the design at all.
 
 ## 10. Proof of delivery
 
-`PROPOSED` — BQ-018. The Driver App sitemap includes
-`ยืนยันส่งสำเร็จ + ถ่ายรูป`. Undecided: mandatory or optional, storage, retention
-(🔴 PDPA, Q-012), and evidential weight in a dispute (Q-013).
+`ACCEPTED` — **DEC-038** (2026-08-26), resolving BQ-018 as Option B.
 
-With COD disabled, the cash-collection confirmation no longer gates `DELIVERED`,
-which makes proof of delivery the **only** evidence that a handover happened.
-That raises BQ-018's importance rather than lowering it.
+With COD disabled (DEC-016), the cash-collection confirmation no longer gates
+`DELIVERED`, which makes proof of delivery the **only** evidence that a handover
+happened. That raised BQ-018's importance rather than lowering it, and is the
+reason the answer is *mandatory* rather than *optional*.
+
+| Rule | Phase 1 |
+|---|---|
+| Photo required to complete | **Yes** — `EN_ROUTE → DELIVERED` is refused without one |
+| Where the rule is enforced | The **API** (`riderDeliveredRequestSchema` + `DeliveryCompletionService`), never the client |
+| Number of photos | Exactly one |
+| Capture source | Camera only — no gallery import |
+| Retakes | Unlimited **before** confirmation; impossible after |
+| Storage | A **private** R2 bucket (`R2_PRIVATE_BUCKET`), no public URL |
+| Read access | Short-lived signed URL, minted per request for an authorized caller |
+| Stored as | `deliveries.proof_photo_path`, written in the same guarded `UPDATE` as the state |
+| Rider who cannot photograph | **Contacts an operator.** No in-app completion path (POD-Q-02) |
+
+**Retention — `ACCEPTED (duration only)`, DEC-039 (2026-08-26):**
+
+| Rule | Phase 1 |
+|---|---|
+| Referenced photo (`proof_photo_path` still set) | Purged **90 days** after `delivered_at` |
+| Unreferenced/orphan object (a retake's predecessor, an abandoned upload) | Purged **7 days** after its own R2 creation time |
+| Mechanism | Automatic — `ProofPhotoRetentionService`, from the existing tick (DEC-APP-010). Default-**off** via `POD_RETENTION_PURGE_ENABLED` until explicitly enabled |
+| Audit | One `audit_logs` row per referenced-photo purge; orphan purges are recorded in aggregate only (no `deliveries` row exists to attach one to) |
+
+DEC-039 sets the **duration** only. **Q-012's lawful-basis half is still
+`LEGAL_REVIEW_REQUIRED`** and is not answered by this decision — see DEC-039's
+own "What this decision does NOT answer". Nothing in this record authorizes
+storing real proof photos in production; `R2_PRIVATE_BUCKET` is not yet
+provisioned.
+
+**Still `OPEN`:**
+
+- **Q-013** — evidential weight in a dispute.
+
+The capture flow limits exposure by what it asks for rather than by processing:
+the guidance names the subject (the food at the drop point) and states the
+exclusions in the same breath — `ไม่ต้องถ่ายหน้าลูกค้า ไม่ต้องถ่ายบัตรหรือ
+เอกสาร`. No automatic face detection or blurring is performed; the review
+screen and free retakes are the control instead. The image is re-encoded before
+upload, which also strips any EXIF the camera attached — so no location travels
+with a photo in a flow that deliberately records none.
 
 ---
 
@@ -396,8 +434,14 @@ location, **no radius**).
 
 **Still `OPEN`:** BQ-022's remainder (onboarding artefacts, who approves them,
 contractor status — `LEGAL_REVIEW_REQUIRED`) · BQ-024 (cancellation
-compensation) · BQ-026 / BQ-029 (**all rider and delivery numbers**) · BQ-018
-(proof of delivery) · BQ-015 (who bears the cost of wasted food — P0).
+compensation) · BQ-026 / BQ-029 (**all rider and delivery numbers**) · BQ-015
+(who bears the cost of wasted food — P0).
+
+**BQ-018 (proof of delivery) closed on 2026-08-26 — DEC-038** (§ 10). Its
+retention half is now also **locked — DEC-039** (§ 10): 90 days referenced /
+7 days orphan, automatic purge. **Q-012 itself is not closed by either
+decision** — the PDPA lawful-basis / legal-review half remains `OPEN`, and
+neither DEC-038 nor DEC-039 is a PDPA compliance or go-live approval.
 
 Dispatch **structure** may now be designed (DEC-020) and its **parameters** are
 fixed (DEC-037). Dispatch **economics** may not be built — every rider *money*
