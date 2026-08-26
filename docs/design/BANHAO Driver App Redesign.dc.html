@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#C2431F;text-decoration:none}
+  a:hover{color:#8F3116}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<div style="max-width:1400px;margin:0 auto;padding:48px 40px 120px">
+
+  <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+    <div style="width:52px;height:52px;border-radius:16px;background:#C2431F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;flex:0 0 auto">🛵</div>
+    <div style="flex:1;min-width:280px">
+      <div style="font-size:24px;font-weight:700;letter-spacing:.12em">BANHAO — DRIVER APP UI REDESIGN</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:2px;line-height:1.6">Design artifact · DESIGN ONLY — no source, schema, RLS, API, or G7.1 behaviour is changed by this document</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:26px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">INSPECTED COMMIT</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;margin-top:6px;color:#1F1A16;word-break:break-all">7bd8d6192a4ce023b25c3f74020a0b6534ad43a5</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">SURFACE</div>
+      <div style="font-size:13.5px;margin-top:6px;line-height:1.6">apps/driver · Expo 52 · RN 0.76.5 · React Navigation native-stack</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">SCREENS TODAY</div>
+      <div style="font-size:13.5px;margin-top:6px;line-height:1.6">6 — Splash · Login · Otp · Home · Status · OfferInbox</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:14px;padding:14px 16px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">READINESS</div>
+      <div style="font-size:13.5px;margin-top:6px;line-height:1.6;font-weight:600;color:#0F8B5F">READY — 6 DATA GAPs, none blocking a frame in §C. One (DG-04) needs a backend command before G-7.2.</div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:24px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="9">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:14px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1000px">
+    <strong>Reading key.</strong>
+    <span style="display:inline-block;padding:1px 8px;border-radius:6px;background:#E7F4EE;color:#0A6B49;font-weight:600;font-size:12px">EXISTS</span> already implemented and under G7.1 acceptance — the redesign keeps its behaviour.
+    <span style="display:inline-block;padding:1px 8px;border-radius:6px;background:#FDF3E6;color:#8A6A0B;font-weight:600;font-size:12px">REDESIGN</span> presentation change only, same data and same calls.
+    <span style="display:inline-block;padding:1px 8px;border-radius:6px;background:#FBEAEA;color:#B23030;font-weight:600;font-size:12px">DATA GAP</span> the UI wants a value no read path carries; an option is proposed, no backend is touched.
+    <span style="display:inline-block;padding:1px 8px;border-radius:6px;background:#EFE7DC;color:#5A4E42;font-weight:600;font-size:12px">FUTURE</span> out of scope for this slice (G-7.2 and later).
+  </div>
+
+  <!-- ══════════════ 0 — REPOSITORY FINDINGS ══════════════ -->
+  <sc-if value="{{ showRepoFindings }}" hint-placeholder-val="{{ true }}">
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION 0</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Repository findings</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:900px;margin-bottom:24px">
+    Read out of the repository at the commit above, not recalled. Everything the redesign is allowed to assume is in this table; everything else is a DATA GAP in §H.
+  </div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff">
+    <div style="display:grid;grid-template-columns:76px 1.1fr 2fr 1.3fr;gap:0;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 16px">
+      <div>ID</div><div>AREA</div><div>WHAT THE CODE ACTUALLY DOES</div><div>SOURCE</div>
+    </div>
+    <sc-for list="{{ findings }}" as="f" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:76px 1.1fr 2fr 1.3fr;gap:0;padding:13px 16px;border-top:1px solid #F0EAE1;font-size:13.5px;line-height:1.65;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#C2431F;font-weight:600">{{ f.id }}</div>
+        <div style="font-weight:600">{{ f.area }}</div>
+        <div style="color:#4A4038">{{ f.detail }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9A8C7E;word-break:break-word">{{ f.source }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-top:20px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">UX problems this redesign fixes</div>
+      <div style="font-size:13.5px;line-height:1.8;color:#4A4038">
+        1. Status is a strip; the control that changes it is a separate button further down. Two glances for one fact.<br>
+        2. The offer card's largest element is a round number. The only time-critical value — the 60-second window — is rendered as an absolute timestamp the rider has to subtract from the clock.<br>
+        3. Nothing distinguishes a live offer from a listed-but-expired one, even though expired offers genuinely appear in the list.<br>
+        4. Errors are one line of red body text at the top of a scroll view; a rider who has scrolled never sees it.<br>
+        5. Body copy is 14–15px. Outdoors, at arm's length, in sun, on a bike.<br>
+        6. White on <span style="font-family:'IBM Plex Mono',monospace">#E4572E</span> measures 3.68:1 — below AA for the 15px button label in use.
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">What must not move, and why</div>
+      <div style="font-size:13.5px;line-height:1.8;color:#4A4038">
+        <strong>Polling semantics.</strong> Fetch on focus · 15 s interval while focused · timer cleared on blur · immediate fetch on refocus · post-action re-read coalesced by <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">refreshPending</span>. Tests E, M, N, O, P, Q are exactly this.<br>
+        <strong>Server authority.</strong> No optimistic accept, no local list patching, no client-side expiry gate. The card is re-read from the server after every action.<br>
+        <strong>The approval gate.</strong> A non-approved rider gets a tree with no toggle in it — absent, not disabled (DEC-UX-006).<br>
+        <strong>Position before flag.</strong> Going online is capture → POST location → set <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">is_online</span>. Any failure leaves the rider offline and says why.
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ══════════════ A — DESIGN OVERVIEW ══════════════ -->
+  <div id="sA" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION A</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Design overview</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:20px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">CONCEPT</div>
+      <div style="font-size:19px;font-weight:700;margin:8px 0 10px;line-height:1.4">One fact, one action, per screen</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038">Each screen answers a single question in its largest element and offers exactly one control to change the answer. Home answers <em>am I receiving work</em>. The inbox answers <em>how long do I have</em>. Nothing else competes for the first glance.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">PHILOSOPHY</div>
+      <div style="font-size:19px;font-weight:700;margin:8px 0 10px;line-height:1.4">The screen never knows better than the server</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038">A countdown that hits zero does not disable รับงาน; the rider taps and the API says <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">OFFER_EXPIRED</span>. A tap never moves a card by itself — the list is re-read. Silence is drawn as silence, never as calm.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">VISUAL DIRECTION</div>
+      <div style="font-size:19px;font-weight:700;margin:8px 0 10px;line-height:1.4">Operational, not decorative</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038">The customer app's warm cream and orange, turned up for daylight: one saturated accent used only for the primary action, state carried by a filled surface plus a border plus a word — never by hue alone. No gradient, no shadow that isn't separating a layer, no illustration.</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">INFORMATION HIERARCHY</div>
+      <div style="font-size:19px;font-weight:700;margin:8px 0 10px;line-height:1.4">Time · state · identity · detail</div>
+      <div style="font-size:14px;line-height:1.8;color:#4A4038">Perishable values are biggest: the countdown, then the online state. Identity (round number, offer id) is mono, small, and never competes. Absent data is stated in words rather than filled with a placeholder.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;background:#211B16;color:#F5EFE7;border-radius:16px;padding:24px">
+    <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600">SEVEN DESIGN DECISIONS</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px;margin-top:16px">
+      <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="7">
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#E4A03E;font-weight:600">{{ d.id }}</div>
+          <div style="font-size:14.5px;font-weight:600;margin:5px 0 6px;line-height:1.5">{{ d.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#C9BFB4">{{ d.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ══════════════ B — INFORMATION ARCHITECTURE ══════════════ -->
+  <div id="sB" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION B</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Information architecture</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:900px;margin-bottom:24px">
+    Two stacks, one level deep, chosen by the Supabase session alone — unchanged from the implementation. No tab bar: งานของฉัน is G-7.2 and รายได้ is BQ-029 (<span style="font-family:'IBM Plex Mono',monospace;font-size:13px">OPEN</span>), so three of four tabs would open onto nothing.
+  </div>
+
+  <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:26px;overflow-x:auto">
+    <div style="display:flex;gap:34px;min-width:900px;align-items:flex-start">
+      <div style="flex:0 0 200px">
+        <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600;margin-bottom:10px">SESSION = NULL</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="border:1px solid #E0D6C8;border-radius:12px;padding:12px 14px;background:#FBF7F1"><div style="font-size:14px;font-weight:600">Splash</div><div style="font-size:12px;color:#9A8C7E;font-family:'IBM Plex Mono',monospace">initialising</div></div>
+          <div style="border:1px solid #E0D6C8;border-radius:12px;padding:12px 14px;background:#FBF7F1"><div style="font-size:14px;font-weight:600">Login · R-01</div><div style="font-size:12px;color:#9A8C7E;font-family:'IBM Plex Mono',monospace">phone → OTP</div></div>
+          <div style="border:1px solid #E0D6C8;border-radius:12px;padding:12px 14px;background:#FBF7F1"><div style="font-size:14px;font-weight:600">Otp</div><div style="font-size:12px;color:#9A8C7E;font-family:'IBM Plex Mono',monospace">verify · resend 60 s</div></div>
+        </div>
+      </div>
+      <div style="flex:0 0 30px;padding-top:60px;font-size:22px;color:#C2431F">→</div>
+      <div style="flex:0 0 260px">
+        <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600;margin-bottom:10px">SESSION SET · GATE ON riders.status</div>
+        <div style="border:1.5px solid #C2431F;border-radius:14px;padding:14px;background:#FDF3E6">
+          <div style="font-size:14px;font-weight:700">Home · R-03</div>
+          <div style="font-size:12.5px;color:#5A4E42;line-height:1.6;margin-top:4px">fresh <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">riders</span> read on every mount — never a cached grant</div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <div style="flex:1;border:1px solid #E0D6C8;border-radius:12px;padding:11px 12px;background:#EFE7DC">
+            <div style="font-size:12.5px;font-weight:600">≠ APPROVED</div>
+            <div style="font-size:12px;color:#7A6E64;margin-top:3px">Status · R-02<br>no toggle in tree</div>
+          </div>
+          <div style="flex:1;border:1px solid #0F8B5F;border-radius:12px;padding:11px 12px;background:#E7F4EE">
+            <div style="font-size:12.5px;font-weight:600">APPROVED</div>
+            <div style="font-size:12px;color:#4A4038;margin-top:3px">availability + offer entry</div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:0 0 30px;padding-top:60px;font-size:22px;color:#C2431F">→</div>
+      <div style="flex:0 0 230px">
+        <div style="font-size:11px;letter-spacing:.14em;color:#A2968A;font-weight:600;margin-bottom:10px">PUSHED ROUTE</div>
+        <div style="border:1.5px solid #C2431F;border-radius:14px;padding:14px;background:#fff">
+          <div style="font-size:14px;font-weight:700">OfferInbox · R-05</div>
+          <div style="font-size:12.5px;color:#5A4E42;line-height:1.6;margin-top:4px">the only polling screen in the app · header title งานที่เสนอ · back label กลับ</div>
+        </div>
+        <div style="border:1px dashed #C9BFB4;border-radius:14px;padding:14px;background:#F3EDE4;margin-top:12px">
+          <div style="font-size:13.5px;font-weight:700;color:#7A6E64">ActiveDelivery · R-06 … R-10</div>
+          <div style="font-size:12px;color:#9A8C7E;line-height:1.6;margin-top:4px">FUTURE · G-7.2. Not a route yet — an empty route would claim a screen that does not exist.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ C — SCREEN DESIGNS ══════════════ -->
+  <div id="sC" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION C</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Screen designs</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:900px;margin-bottom:12px">
+    Drawn at 360 × 760 — the real design width, so every size below is the size to implement. Thai copy in the frames is the copy to ship.
+  </div>
+
+  <!-- ---------- AUTH ---------- -->
+  <sc-if value="{{ showAuth }}" hint-placeholder-val="{{ true }}">
+  <div style="font-size:17px;font-weight:700;margin:34px 0 4px;color:#C2431F">C1 · Authentication — R-01</div>
+  <div style="font-size:14px;color:#5A4E42;line-height:1.7;max-width:900px;margin-bottom:20px">Retained wholesale. Shared <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">thaiPhoneSchema</span> / <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">verifyOtpSchema</span> validation, +66 assembly, resend countdown reset only on a successful send. The redesign raises type sizes and gives the field a 56 px target.</div>
+
+  <div style="display:flex;gap:26px;flex-wrap:wrap">
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:32</span><span>◗◗◗ 78%</span></div>
+        <div style="flex:1;padding:32px 20px 24px;display:flex;flex-direction:column;gap:20px">
+          <div style="width:64px;height:64px;border-radius:20px;background:#C2431F;display:flex;align-items:center;justify-content:center;font-size:30px">🛵</div>
+          <div>
+            <div style="font-size:26px;font-weight:700;line-height:1.45">เข้าสู่ระบบไรเดอร์</div>
+            <div style="font-size:16px;color:#7A6E64;line-height:1.7;margin-top:6px">ใส่เบอร์มือถือเพื่อรับรหัสยืนยัน</div>
+          </div>
+          <div style="margin-top:8px">
+            <div style="font-size:14px;font-weight:600;color:#5A4E42;margin-bottom:8px">เบอร์มือถือ</div>
+            <div style="height:56px;border-radius:16px;border:1.5px solid #C2431F;background:#fff;display:flex;align-items:center;padding:0 16px;gap:10px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:17px;color:#7A6E64">+66</span>
+              <span style="width:1px;height:24px;background:#E9E0D5"></span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:19px;letter-spacing:.04em">81 234 5678</span>
+            </div>
+          </div>
+          <div style="height:56px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:600;margin-top:4px">ขอรหัส OTP</div>
+          <div style="font-size:13px;color:#9A8C7E;line-height:1.7">ระบบส่งรหัส 6 หลักทาง SMS · ใช้ได้กับเบอร์ที่ลงทะเบียนเป็นไรเดอร์เท่านั้น</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-01a</span> <span style="font-size:13px;color:#5A4E42">Login · EXISTS, type scaled up</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:33</span><span>◗◗◗ 78%</span></div>
+        <div style="flex:1;padding:32px 20px 24px;display:flex;flex-direction:column;gap:20px">
+          <div>
+            <div style="font-size:26px;font-weight:700;line-height:1.45">ยืนยัน OTP</div>
+            <div style="font-size:16px;color:#7A6E64;line-height:1.7;margin-top:6px">ส่งรหัส 6 หลักไปที่ <span style="font-family:'IBM Plex Mono',monospace">+66812345678</span></div>
+          </div>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#5A4E42;margin-bottom:8px">รหัสยืนยัน</div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #C2431F;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600">1</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #C2431F;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600">2</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #C2431F;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600">3</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #E9E0D5;background:#fff"></div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #E9E0D5;background:#fff"></div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #E9E0D5;background:#fff"></div>
+            </div>
+          </div>
+          <div style="height:56px;border-radius:16px;background:#C2431F;opacity:.5;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:600">ยืนยัน</div>
+          <div style="height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#9A8C7E;font-size:16px">ขอรหัสใหม่ใน 47 วินาที</div>
+          <div style="height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#7A6E64;font-size:16px;font-weight:500">เปลี่ยนเบอร์</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-01b</span> <span style="font-size:13px;color:#5A4E42">Otp · six boxed digits replace one field</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:33</span><span>◗◗◗ 78%</span></div>
+        <div style="flex:1;padding:32px 20px 24px;display:flex;flex-direction:column;gap:20px">
+          <div style="font-size:26px;font-weight:700;line-height:1.45">ยืนยัน OTP</div>
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#5A4E42;margin-bottom:8px">รหัสยืนยัน</div>
+            <div style="display:flex;gap:8px">
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #D93A3A;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#B23030">0</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #D93A3A;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#B23030">0</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #D93A3A;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#B23030">0</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #D93A3A;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#B23030">0</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #D93A3A;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#B23030">0</div>
+              <div style="flex:1;height:60px;border-radius:14px;border:1.5px solid #D93A3A;background:#FBEAEA;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#B23030">0</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+              <span style="width:18px;height:18px;border-radius:50%;background:#D93A3A;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">!</span>
+              <span style="font-size:14.5px;color:#B23030;font-weight:500">รหัสไม่ถูกต้อง</span>
+            </div>
+          </div>
+          <div style="height:56px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:600">ยืนยัน</div>
+          <div style="height:52px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;color:#1F1A16;font-size:16px;font-weight:600">ขอรหัสใหม่</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-01c</span> <span style="font-size:13px;color:#5A4E42">Invalid OTP · field-level, never a dialog</span></div>
+    </div>
+
+  </div>
+  </sc-if>
+
+  <!-- ---------- HOME ---------- -->
+  <sc-if value="{{ showHome }}" hint-placeholder-val="{{ true }}">
+  <div style="font-size:17px;font-weight:700;margin:44px 0 4px;color:#C2431F">C2 · Home and the approval gate — R-02 / R-03 / R-04</div>
+  <div style="font-size:14px;color:#5A4E42;line-height:1.7;max-width:900px;margin-bottom:20px">The availability strip and its button merge into one <strong>state card</strong>: the card <em>is</em> the state, and the control that changes it lives inside it. Status, reason, recorded position and action become one glance and one thumb.</div>
+
+  <div style="display:flex;gap:26px;flex-wrap:wrap">
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:32</span><span>◗◗◗ 78%</span></div>
+        <div style="flex:1;padding:20px 20px 24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font-size:26px;font-weight:700;line-height:1.4">หน้าหลัก</div>
+              <div style="font-size:16px;color:#7A6E64;margin-top:2px">สมชาย ใจดี</div>
+            </div>
+            <div style="width:44px;height:44px;border-radius:14px;background:#fff;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:18px">↻</div>
+          </div>
+
+          <div style="border-radius:22px;background:#fff;border:1.5px solid #E0D6C8;padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:14px;height:14px;border-radius:50%;background:#9A8C7E;flex:0 0 auto"></span>
+              <span style="font-size:24px;font-weight:700">ปิดรับงาน</span>
+            </div>
+            <div style="font-size:16px;line-height:1.7;color:#4A4038">ยังไม่ได้เปิดรับงาน จะไม่มีงานใหม่ส่งมา</div>
+            <div style="height:1px;background:#F0EAE1"></div>
+            <div style="font-size:13.5px;color:#7A6E64;line-height:1.7;font-family:'IBM Plex Mono',monospace">ตำแหน่งล่าสุด · 26/08/2569 13:58</div>
+            <div style="height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;font-weight:700;gap:10px">เปิดรับงาน</div>
+          </div>
+
+          <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:16px 18px;display:flex;align-items:center;gap:14px">
+            <div style="width:46px;height:46px;border-radius:14px;background:#F3EDE4;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto">📋</div>
+            <div style="flex:1">
+              <div style="font-size:18px;font-weight:600">งานที่เสนอ</div>
+              <div style="font-size:14px;color:#7A6E64;margin-top:2px">ไม่มีงานรอการตอบรับ</div>
+            </div>
+            <div style="font-size:22px;color:#C9BFB4">›</div>
+          </div>
+
+          <div style="flex:1"></div>
+          <div style="font-size:12.5px;color:#9A8C7E;line-height:1.75">ระบบบันทึกเฉพาะตำแหน่งล่าสุดเมื่อคุณกดเปิดรับงานหรือกดรีเฟรชเท่านั้น ไม่มีการติดตามขณะปิดแอป</div>
+          <div style="height:52px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">ออกจากระบบ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-03a</span> <span style="font-size:13px;color:#5A4E42">Home · OFFLINE — one primary action, 60 px tall</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:34</span><span>◗◗◗ 77%</span></div>
+        <div style="flex:1;padding:20px 20px 24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+            <div>
+              <div style="font-size:26px;font-weight:700;line-height:1.4">หน้าหลัก</div>
+              <div style="font-size:16px;color:#7A6E64;margin-top:2px">สมชาย ใจดี</div>
+            </div>
+            <div style="width:44px;height:44px;border-radius:14px;background:#fff;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:18px">↻</div>
+          </div>
+
+          <div style="border-radius:22px;background:#E7F4EE;border:1.5px solid #0F8B5F;padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:14px;height:14px;border-radius:50%;background:#0F8B5F;flex:0 0 auto;animation:pulse 1.8s ease-in-out infinite"></span>
+              <span style="font-size:24px;font-weight:700;color:#0A5C3F">กำลังรับงาน</span>
+            </div>
+            <div style="font-size:16px;line-height:1.7;color:#25453A">ระบบจะส่งงานใหม่มาให้เมื่อมีงานเข้า</div>
+            <div style="height:1px;background:#C8E3D6"></div>
+            <div style="font-size:13.5px;color:#4A6B5C;line-height:1.7;font-family:'IBM Plex Mono',monospace">ตำแหน่งล่าสุด · 26/08/2569 14:34</div>
+            <div style="height:60px;border-radius:16px;background:#fff;border:1.5px solid #0F8B5F;display:flex;align-items:center;justify-content:center;color:#0A5C3F;font-size:19px;font-weight:700">ปิดรับงาน</div>
+          </div>
+
+          <div style="border-radius:20px;background:#fff;border:1.5px solid #C2431F;padding:16px 18px;display:flex;align-items:center;gap:14px">
+            <div style="width:46px;height:46px;border-radius:14px;background:#FDF3E6;display:flex;align-items:center;justify-content:center;font-size:20px;flex:0 0 auto">📋</div>
+            <div style="flex:1">
+              <div style="font-size:18px;font-weight:700">งานที่เสนอ</div>
+              <div style="font-size:14px;color:#C2431F;margin-top:2px;font-weight:600">2 งานรอการตอบรับ</div>
+            </div>
+            <div style="min-width:30px;height:30px;border-radius:15px;background:#C2431F;color:#fff;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 9px">2</div>
+          </div>
+
+          <div style="flex:1"></div>
+          <div style="font-size:12.5px;color:#9A8C7E;line-height:1.75">ระบบบันทึกเฉพาะตำแหน่งล่าสุดเมื่อคุณกดเปิดรับงานหรือกดรีเฟรชเท่านั้น ไม่มีการติดตามขณะปิดแอป</div>
+          <div style="height:52px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">ออกจากระบบ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-03b</span> <span style="font-size:13px;color:#5A4E42">Home · ONLINE + waiting offers <span style="color:#B23030;font-weight:600">(count = DATA GAP DG-05)</span></span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:35</span><span>◗◗◗ 77%</span></div>
+        <div style="flex:1;padding:20px 20px 24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div>
+            <div style="font-size:26px;font-weight:700;line-height:1.4">สถานะไรเดอร์</div>
+            <div style="font-size:16px;color:#7A6E64;margin-top:2px">ไรเดอร์รออนุมัติ ค.</div>
+          </div>
+
+          <div style="border-radius:22px;background:#FDF3E6;border:1.5px solid #E0D6C8;padding:20px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:34px;height:34px;border-radius:12px;background:#fff;border:1px solid #E0D6C8;display:flex;align-items:center;justify-content:center;font-size:17px;flex:0 0 auto">🕓</span>
+              <span style="font-size:23px;font-weight:700">รอตรวจสอบ</span>
+            </div>
+            <div style="font-size:16px;line-height:1.75;color:#4A4038">อยู่ระหว่างรอการอนุมัติ ยังรับงานไม่ได้</div>
+          </div>
+
+          <div style="font-size:14.5px;color:#7A6E64;line-height:1.8;padding:0 4px">เมื่อบัญชีได้รับอนุมัติแล้ว ปุ่มเปิดรับงานจะปรากฏบนหน้านี้</div>
+
+          <div style="border:1px dashed #C9BFB4;border-radius:16px;padding:14px 16px;background:#F3EDE4">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A6E64;font-weight:600;letter-spacing:.1em">DEC-UX-006</div>
+            <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:5px">No availability control anywhere in this tree — absent, not disabled. No offer entry point. No onboarding, upload, appeal or retry action: BQ-022 is OPEN and LEGAL_REVIEW_REQUIRED.</div>
+          </div>
+
+          <div style="flex:1"></div>
+          <div style="height:56px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">ออกจากระบบ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-02a</span> <span style="font-size:13px;color:#5A4E42">Status · pending variant (3 statuses)</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:36</span><span>◗◗◗ 76%</span></div>
+        <div style="flex:1;padding:20px 20px 24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+          <div>
+            <div style="font-size:26px;font-weight:700;line-height:1.4">สถานะไรเดอร์</div>
+            <div style="font-size:16px;color:#7A6E64;margin-top:2px">สมชาย ใจดี</div>
+          </div>
+          <div style="border-radius:22px;background:#EFE7DC;border:1.5px solid #C9BFB4;padding:20px;display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:34px;height:34px;border-radius:12px;background:#fff;border:1px solid #C9BFB4;display:flex;align-items:center;justify-content:center;font-size:17px;flex:0 0 auto">🚫</span>
+              <span style="font-size:23px;font-weight:700">ยังรับงานไม่ได้</span>
+            </div>
+            <div style="font-size:16px;line-height:1.75;color:#4A4038">บัญชีถูกระงับชั่วคราว ยังรับงานไม่ได้</div>
+          </div>
+          <div style="font-size:14.5px;color:#7A6E64;line-height:1.8;padding:0 4px">เมื่อบัญชีได้รับอนุมัติแล้ว ปุ่มเปิดรับงานจะปรากฏบนหน้านี้</div>
+          <div style="border:1px dashed #C9BFB4;border-radius:16px;padding:14px 16px;background:#F3EDE4">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A6E64;font-weight:600;letter-spacing:.1em">DQ-G7-01 · OPEN</div>
+            <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:5px">Copy stays factual and non-directive. DOCUMENTS_REJECTED currently lands here; whether it deserves a fifth "action needed" variant is the open question, and this redesign does not decide it.</div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="height:56px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">ออกจากระบบ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-02b</span> <span style="font-size:13px;color:#5A4E42">Status · blocked variant (3 statuses + no record)</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:37</span><span>◗◗◗ 76%</span></div>
+        <div style="flex:1;padding:20px 20px 24px;display:flex;flex-direction:column;gap:16px">
+          <div>
+            <div style="font-size:26px;font-weight:700;line-height:1.4">หน้าหลัก</div>
+            <div style="font-size:16px;color:#7A6E64;margin-top:2px">สมชาย ใจดี</div>
+          </div>
+          <div style="border-radius:22px;background:#fff;border:1.5px solid #E0D6C8;padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:14px;height:14px;border-radius:50%;background:#9A8C7E;flex:0 0 auto"></span>
+              <span style="font-size:24px;font-weight:700">ปิดรับงาน</span>
+            </div>
+            <div style="font-size:16px;line-height:1.7;color:#4A4038">ยังไม่ได้เปิดรับงาน จะไม่มีงานใหม่ส่งมา</div>
+            <div style="height:1px;background:#F0EAE1"></div>
+            <div style="height:60px;border-radius:16px;background:#C2431F;opacity:.55;display:flex;align-items:center;justify-content:center;gap:12px">
+              <span style="width:22px;height:22px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span>
+              <span style="color:#fff;font-size:18px;font-weight:700">กำลังเปิดรับงาน…</span>
+            </div>
+            <div style="font-size:14px;color:#7A6E64;line-height:1.7">กำลังบันทึกตำแหน่ง แล้วจึงเปิดรับงาน</div>
+          </div>
+
+          <div style="border-radius:18px;background:#FBEAEA;border:1px solid #F0C9C9;padding:16px 18px;display:flex;gap:12px;align-items:flex-start">
+            <span style="width:24px;height:24px;border-radius:50%;background:#D93A3A;color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">!</span>
+            <div>
+              <div style="font-size:16px;font-weight:700;color:#B23030">เปิดรับงานไม่สำเร็จ</div>
+              <div style="font-size:14.5px;color:#8F3A3A;line-height:1.7;margin-top:4px">ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง — เปิดสิทธิ์ตำแหน่งในตั้งค่า แล้วลองอีกครั้ง</div>
+              <div style="font-size:13px;color:#8F3A3A;line-height:1.7;margin-top:8px;font-weight:600">คุณยังปิดรับงานอยู่</div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="height:52px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">ออกจากระบบ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-04</span> <span style="font-size:13px;color:#5A4E42">Going online · busy, then failed — flag never set</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:38</span><span>◗◗◗ 75%</span></div>
+        <div style="flex:1;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center">
+          <div style="width:64px;height:64px;border-radius:20px;background:#FBEAEA;border:1px solid #F0C9C9;display:flex;align-items:center;justify-content:center;font-size:28px">⚠️</div>
+          <div style="font-size:22px;font-weight:700;line-height:1.5">โหลดสถานะไรเดอร์ไม่สำเร็จ</div>
+          <div style="font-size:15px;color:#7A6E64;line-height:1.75">ตรวจการเชื่อมต่ออินเทอร์เน็ต แล้วลองอีกครั้ง</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9A8C7E;background:#F3EDE4;border-radius:10px;padding:10px 12px;max-width:280px;line-height:1.6">Rider profile read failed: network request failed</div>
+          <div style="height:56px;width:100%;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;margin-top:6px">ลองอีกครั้ง</div>
+          <div style="font-size:13px;color:#9A8C7E;line-height:1.7;max-width:280px">ระบบไม่แสดงสถานะที่เดาเอง — หากอ่านไม่สำเร็จ จะไม่บอกว่าคุณได้รับอนุมัติหรือไม่</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-03e</span> <span style="font-size:13px;color:#5A4E42">Profile read error · never rendered as "not approved"</span></div>
+    </div>
+
+  </div>
+  </sc-if>
+
+  <!-- ---------- OFFER INBOX ---------- -->
+  <sc-if value="{{ showInbox }}" hint-placeholder-val="{{ true }}">
+  <div style="font-size:17px;font-weight:700;margin:44px 0 4px;color:#C2431F">C3 · Offer inbox — R-05 · the G7.1 surface</div>
+  <div style="font-size:14px;color:#5A4E42;line-height:1.7;max-width:1000px;margin-bottom:20px">
+    The card is rebuilt around the one perishable value the read path actually carries: <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">expires_at</span>. The countdown is derived from it and from nothing else — no invented timer, no fabricated window. Round number and offered time drop to mono metadata. What the read path does not carry is <em>stated</em>, not faked.
+  </div>
+
+  <div style="display:flex;gap:26px;flex-wrap:wrap">
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:39</span><span>◗◗◗ 75%</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid #EFE7DC;flex:0 0 auto">
+          <span style="font-size:20px;color:#C2431F">‹</span><span style="font-size:16px;color:#C2431F">กลับ</span>
+          <span style="flex:1;text-align:center;font-size:17px;font-weight:600;margin-right:52px">งานที่เสนอ</span>
+        </div>
+        <div style="flex:1;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center">
+          <div style="width:72px;height:72px;border-radius:22px;background:#F3EDE4;display:flex;align-items:center;justify-content:center;font-size:30px">📭</div>
+          <div style="font-size:21px;font-weight:700">ยังไม่มีงาน</div>
+          <div style="font-size:15.5px;color:#7A6E64;line-height:1.75;max-width:260px">เมื่อมีงานใหม่เข้ามา ระบบจะแสดงที่หน้านี้ทันที</div>
+          <div style="display:flex;align-items:center;gap:8px;background:#E7F4EE;border-radius:999px;padding:8px 14px;margin-top:4px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#0F8B5F;animation:pulse 1.8s ease-in-out infinite"></span>
+            <span style="font-size:13.5px;color:#0A5C3F;font-weight:600">อัปเดตอยู่</span>
+          </div>
+        </div>
+        <div style="padding:0 20px 22px;flex:0 0 auto">
+          <div style="height:52px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">รีเฟรช</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-05a</span> <span style="font-size:13px;color:#5A4E42">Empty · Test D. "อัปเดตอยู่" only while the timer is alive</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:40</span><span>◗◗◗ 74%</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid #EFE7DC;flex:0 0 auto">
+          <span style="font-size:20px;color:#C2431F">‹</span><span style="font-size:16px;color:#C2431F">กลับ</span>
+          <span style="flex:1;text-align:center;font-size:17px;font-weight:600;margin-right:52px">งานที่เสนอ</span>
+        </div>
+        <div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+
+          <div style="border-radius:22px;background:#fff;border:2px solid #C2431F;box-shadow:0 4px 14px rgba(31,26,22,.10);overflow:hidden">
+            <div style="background:#C2431F;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+              <span style="color:#fff;font-size:15px;font-weight:700;letter-spacing:.02em">งานใหม่</span>
+              <div style="display:flex;align-items:baseline;gap:6px">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:600;color:#fff;line-height:1">00:41</span>
+                <span style="font-size:13px;color:#FBD9C9">เหลือ</span>
+              </div>
+            </div>
+            <div style="height:5px;background:#F0C9C9"><div style="width:68%;height:5px;background:#C2431F"></div></div>
+            <div style="padding:18px 16px;display:flex;flex-direction:column;gap:14px">
+              <div style="font-size:21px;font-weight:700">งานรอบที่ 1</div>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#7A6E64"><span>เสนอเมื่อ</span><span style="color:#4A4038">14:39:36</span></div>
+                <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#7A6E64"><span>หมดเวลารับ</span><span style="color:#4A4038">14:40:36</span></div>
+              </div>
+              <div style="background:#FDF3E6;border:1px solid #F0DFC4;border-radius:14px;padding:12px 14px;font-size:13.5px;line-height:1.7;color:#5A4E42">รายละเอียดร้านและจุดส่งจะแสดงหลังรับงาน</div>
+              <div style="display:flex;gap:10px">
+                <div style="flex:0 0 34%;height:60px;border-radius:16px;border:1.5px solid #E0D6C8;background:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;color:#5A4E42">ปฏิเสธ</div>
+                <div style="flex:1;height:60px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff">รับงาน</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px;justify-content:center;padding-top:2px">
+            <span style="width:8px;height:8px;border-radius:50%;background:#0F8B5F;animation:pulse 1.8s ease-in-out infinite"></span>
+            <span style="font-size:13px;color:#7A6E64">อัปเดตอยู่ · ตรวจงานใหม่ทุก 15 วินาที</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-05b</span> <span style="font-size:13px;color:#5A4E42">One live offer · Test C. Countdown ← expires_at only</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:41</span><span>◗◗◗ 74%</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid #EFE7DC;flex:0 0 auto">
+          <span style="font-size:20px;color:#C2431F">‹</span><span style="font-size:16px;color:#C2431F">กลับ</span>
+          <span style="flex:1;text-align:center;font-size:17px;font-weight:600;margin-right:52px">งานที่เสนอ</span>
+        </div>
+        <div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+
+          <div style="border-radius:22px;background:#fff;border:2px solid #C2431F;overflow:hidden">
+            <div style="background:#C2431F;padding:11px 16px;display:flex;align-items:center;justify-content:space-between">
+              <span style="color:#fff;font-size:14.5px;font-weight:700">กำลังรับงาน…</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;color:#fff;line-height:1">00:33</span>
+            </div>
+            <div style="padding:18px 16px;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:20px;font-weight:700">งานรอบที่ 1</div>
+              <div style="height:60px;border-radius:16px;background:#F3EDE4;display:flex;align-items:center;justify-content:center;gap:12px">
+                <span style="width:22px;height:22px;border:2.5px solid #E0D6C8;border-top-color:#C2431F;border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span>
+                <span style="font-size:17px;font-weight:600;color:#5A4E42">กำลังส่งคำขอรับงาน</span>
+              </div>
+              <div style="font-size:13px;color:#9A8C7E;line-height:1.7;text-align:center">รอผลจากระบบ · กดซ้ำไม่ได้</div>
+            </div>
+          </div>
+
+          <div style="border-radius:22px;background:#fff;border:1px solid #E9E0D5;overflow:hidden;opacity:.45">
+            <div style="background:#EFE7DC;padding:11px 16px;display:flex;align-items:center;justify-content:space-between">
+              <span style="color:#5A4E42;font-size:14.5px;font-weight:700">งานใหม่</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;color:#5A4E42;line-height:1">00:52</span>
+            </div>
+            <div style="padding:18px 16px;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:20px;font-weight:700">งานรอบที่ 2</div>
+              <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#7A6E64"><span>หมดเวลารับ</span><span>14:42:04</span></div>
+              <div style="display:flex;gap:10px">
+                <div style="flex:0 0 34%;height:56px;border-radius:16px;border:1.5px solid #E0D6C8;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#9A8C7E">ปฏิเสธ</div>
+                <div style="flex:1;height:56px;border-radius:16px;background:#C9BFB4;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff">รับงาน</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="text-align:center;font-size:13px;color:#9A8C7E;line-height:1.7;padding-top:2px">ทำได้ครั้งละงาน — งานอื่นจะกดได้เมื่อรายการนี้เสร็จ</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-05c</span> <span style="font-size:13px;color:#5A4E42">Multiple offers · one action at a time (busyOfferId)</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column;position:relative">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:42</span><span>◗◗◗ 73%</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid #EFE7DC;flex:0 0 auto">
+          <span style="font-size:20px;color:#C2431F">‹</span><span style="font-size:16px;color:#C2431F">กลับ</span>
+          <span style="flex:1;text-align:center;font-size:17px;font-weight:600;margin-right:52px">งานที่เสนอ</span>
+        </div>
+        <div style="flex:1;padding:16px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+
+          <div style="border-radius:22px;background:#fff;border:1.5px solid #C9BFB4;overflow:hidden">
+            <div style="background:#EFE7DC;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+              <span style="color:#5A4E42;font-size:15px;font-weight:700">หมดเวลารับ</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;color:#8F7F70;line-height:1">00:00</span>
+            </div>
+            <div style="padding:18px 16px;display:flex;flex-direction:column;gap:13px">
+              <div style="font-size:21px;font-weight:700;color:#5A4E42">งานรอบที่ 1</div>
+              <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#9A8C7E"><span>หมดเวลารับ</span><span>14:40:36</span></div>
+              <div style="background:#F3EDE4;border:1px solid #E0D6C8;border-radius:14px;padding:12px 14px;font-size:13.5px;line-height:1.7;color:#5A4E42">งานนี้เลยเวลารับแล้ว จะหายไปจากรายการเมื่อระบบอัปเดตรอบถัดไป</div>
+              <div style="display:flex;gap:10px">
+                <div style="flex:0 0 34%;height:56px;border-radius:16px;border:1.5px solid #E0D6C8;background:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#5A4E42">ปฏิเสธ</div>
+                <div style="flex:1;height:56px;border-radius:16px;background:#fff;border:1.5px solid #C9BFB4;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#5A4E42">รับงาน</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="border:1px dashed #C9BFB4;border-radius:16px;padding:13px 15px;background:#F3EDE4">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A6E64;font-weight:600;letter-spacing:.1em">WHY THE BUTTONS STAY LIVE</div>
+            <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:5px">Both actions remain tappable at 00:00. The server decides expiry, and Test I drives accept on an expired offer <em>through this screen</em>. Disabling here would make that test unexecutable and put the client in front of the authority.</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:16px;right:16px;bottom:22px;background:#211B16;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 -8px 30px rgba(31,26,22,.16)">
+          <span style="width:10px;height:10px;border-radius:50%;background:#FF6B6B;flex:0 0 auto"></span>
+          <span style="flex:1;color:#F5EFE7;font-size:15.5px;line-height:1.5;font-weight:500">งานนี้ถูกไรเดอร์คนอื่นรับไปแล้ว</span>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-05d</span> <span style="font-size:13px;color:#5A4E42">Expired card + OFFER_TAKEN toast · Tests H, I</span></div>
+    </div>
+
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px solid #E0D6C8;background:#FBF7F1;overflow:hidden;box-shadow:0 4px 14px rgba(31,26,22,.08);display:flex;flex-direction:column">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:43</span><span>✕ ไม่มีสัญญาณ</span></div>
+        <div style="height:52px;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid #EFE7DC;flex:0 0 auto">
+          <span style="font-size:20px;color:#C2431F">‹</span><span style="font-size:16px;color:#C2431F">กลับ</span>
+          <span style="flex:1;text-align:center;font-size:17px;font-weight:600;margin-right:52px">งานที่เสนอ</span>
+        </div>
+        <div style="background:#FBEAEA;border-bottom:1px solid #F0C9C9;padding:12px 16px;display:flex;align-items:center;gap:10px;flex:0 0 auto">
+          <span style="width:9px;height:9px;border-radius:50%;background:#D93A3A;animation:pulse 1.4s ease-in-out infinite;flex:0 0 auto"></span>
+          <span style="font-size:14px;color:#B23030;font-weight:600;line-height:1.5">เชื่อมต่อไม่ได้ — ข้อมูลอาจไม่เป็นปัจจุบัน</span>
+        </div>
+        <div style="flex:1;padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center">
+          <div style="width:66px;height:66px;border-radius:20px;background:#FBEAEA;border:1px solid #F0C9C9;display:flex;align-items:center;justify-content:center;font-size:28px">📡</div>
+          <div style="font-size:21px;font-weight:700;line-height:1.5">โหลดรายการงานไม่สำเร็จ</div>
+          <div style="font-size:15.5px;color:#7A6E64;line-height:1.75;max-width:270px">ตรวจสัญญาณอินเทอร์เน็ต แล้วกดลองอีกครั้ง</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9A8C7E;background:#F3EDE4;border-radius:10px;padding:10px 12px;max-width:290px;line-height:1.6">Rider offer read failed: network request failed</div>
+        </div>
+        <div style="padding:0 20px 22px;flex:0 0 auto;display:flex;flex-direction:column;gap:10px">
+          <div style="height:56px;border-radius:16px;background:#C2431F;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700">ลองอีกครั้ง</div>
+          <div style="font-size:12.5px;color:#9A8C7E;line-height:1.7;text-align:center">ระบบจะลองอีกครั้งเองทุก 15 วินาทีขณะเปิดหน้านี้</div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">R-05e</span> <span style="font-size:13px;color:#5A4E42">Load error + offline banner · retry is idempotent (a read)</span></div>
+    </div>
+
+    <sc-if value="{{ showFutureScope }}" hint-placeholder-val="{{ true }}">
+    <div style="width:360px;flex:0 0 auto">
+      <div style="height:760px;border-radius:34px;border:1px dashed #C9BFB4;background:#F3EDE4;overflow:hidden;display:flex;flex-direction:column;position:relative">
+        <div style="height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9A8C7E;flex:0 0 auto"><span>14:44</span><span>◗◗◗ 72%</span></div>
+        <div style="flex:1;padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:inline-block;align-self:flex-start;background:#EFE7DC;border:1px solid #C9BFB4;border-radius:999px;padding:6px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#5A4E42;letter-spacing:.1em">FUTURE · G-7.2</div>
+          <div style="font-size:24px;font-weight:700;line-height:1.4;color:#5A4E42">งานที่กำลังทำ</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="background:#fff;border:1px solid #E0D6C8;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;opacity:.75"><span style="width:30px;height:30px;border-radius:10px;background:#C2431F;color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">1</span><div><div style="font-size:16px;font-weight:600">ไปที่ร้าน</div><div style="font-size:13px;color:#7A6E64;margin-top:2px">ถึงร้านแล้ว → AT_MERCHANT</div></div></div>
+            <div style="background:#fff;border:1px solid #E0D6C8;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;opacity:.55"><span style="width:30px;height:30px;border-radius:10px;background:#EFE7DC;color:#5A4E42;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">2</span><div><div style="font-size:16px;font-weight:600">รับอาหารแล้ว</div><div style="font-size:13px;color:#7A6E64;margin-top:2px">picked-up → PICKED_UP</div></div></div>
+            <div style="background:#fff;border:1px solid #E0D6C8;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center;opacity:.55"><span style="width:30px;height:30px;border-radius:10px;background:#EFE7DC;color:#5A4E42;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">3</span><div><div style="font-size:16px;font-weight:600">ออกไปส่ง</div><div style="font-size:13px;color:#7A6E64;margin-top:2px">en-route → EN_ROUTE</div></div></div>
+            <div style="background:#FBEAEA;border:1px solid #F0C9C9;border-radius:16px;padding:14px 16px;display:flex;gap:12px;align-items:center"><span style="width:30px;height:30px;border-radius:10px;background:#D93A3A;color:#fff;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">4</span><div><div style="font-size:16px;font-weight:600;color:#B23030">ส่งสำเร็จ</div><div style="font-size:13px;color:#8F3A3A;margin-top:2px;line-height:1.6">no endpoint exists — DG-04</div></div></div>
+          </div>
+          <div style="background:#fff;border:1px dashed #C9BFB4;border-radius:16px;padding:14px 16px;font-size:13px;line-height:1.75;color:#5A4E42">
+            Not designed further here. Three of the four transitions have endpoints today; the fourth does not, and <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">rider_order_view</span> carries no delivery id or delivery state. Designing this screen before those are settled would draw a flow that cannot be finished.
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64;font-weight:600">R-06+</span> <span style="font-size:13px;color:#5A4E42">Active delivery · FUTURE, scope marker only</span></div>
+    </div>
+    </sc-if>
+
+  </div>
+  </sc-if>
+
+  <!-- ══════════════ D — COMPONENT LIBRARY + TOKENS ══════════════ -->
+  <div id="sD" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION D</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Component library and semantic tokens</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:960px;margin-bottom:24px">
+    Thirty-three semantic tokens, of which <strong>17 already exist</strong> in <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">packages/ui/src/theme/tokens.ts</span> and <strong>16 are new</strong> — every one a tint or shade of a colour that is already there, each listed below with the value to add, so nothing is left to be invented at implementation time. No component hard-codes a hex; every colour in every frame in §C resolves to a row in this table.
+  </div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:1fr 1.1fr 1fr 1.6fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 16px">
+      <div>SEMANTIC TOKEN</div><div>VALUE</div><div>SOURCE</div><div>USED FOR</div>
+    </div>
+    <sc-for list="{{ semanticTokens }}" as="t" hint-placeholder-count="33">
+      <div style="display:grid;grid-template-columns:1fr 1.1fr 1fr 1.6fr;padding:11px 16px;border-top:1px solid #F0EAE1;font-size:13px;align-items:center">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600">{{ t.name }}</div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="{{ t.swatch }}"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5A4E42">{{ t.value }}</span></div>
+        <div style="font-size:12px;color:#9A8C7E">{{ t.source }}</div>
+        <div style="color:#4A4038;line-height:1.6">{{ t.use }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Type scale — driver override</div>
+      <div style="font-size:13px;color:#7A6E64;line-height:1.7;margin-bottom:14px">The shared scale tops out at 13px body, tuned for a phone held still indoors. The driver app steps every role up and never renders below 12.5px.</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <sc-for list="{{ typeScale }}" as="ty" hint-placeholder-count="7">
+          <div style="display:flex;align-items:baseline;gap:12px;border-bottom:1px solid #F5F0E9;padding-bottom:7px">
+            <div style="width:104px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9A8C7E;flex:0 0 auto">{{ ty.px }}</div>
+            <div style="flex:1;font-size:13.5px;font-weight:600">{{ ty.role }}</div>
+            <div style="font-size:12px;color:#9A8C7E;text-align:right;flex:0 0 auto">{{ ty.weight }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Touch targets and spacing</div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;line-height:1.7;color:#4A4038">
+        <div><strong>60 px</strong> — the one primary action on a screen (เปิดรับงาน, รับงาน). Above the 44 pt baseline because it is pressed with a glove, on a bike stand, in a hurry.</div>
+        <div><strong>56 px</strong> — secondary and destructive-adjacent controls, inputs, retry.</div>
+        <div><strong>52 px</strong> — low-emphasis controls (ออกจากระบบ, รีเฟรช).</div>
+        <div><strong>44 px</strong> — floor. Icon buttons in the header only.</div>
+        <div><strong>10 px</strong> — minimum gap between two controls of different consequence; ปฏิเสธ and รับงาน never touch.</div>
+        <div><strong>16 / 20 px</strong> — screen gutter and card padding. Base-4 scale unchanged.</div>
+        <div style="padding-top:4px;border-top:1px solid #F5F0E9"><strong>Radius</strong> — 16 controls · 20–22 cards · 34 device. Existing <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">radius.xl</span> / <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">radius.xxl</span>.</div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">Contrast findings — acted on</div>
+      <div style="display:flex;flex-direction:column;gap:12px;font-size:13.5px;line-height:1.75;color:#4A4038">
+        <div style="background:#FBEAEA;border:1px solid #F0C9C9;border-radius:12px;padding:12px 14px">
+          <div style="font-weight:700;color:#B23030">White on #E4572E = 3.68:1</div>
+          <div style="margin-top:4px;color:#8F3A3A">Fails AA for the 15px semibold button label the shared Button ships. Already recorded as UX-FINDING-02 against Design System v1.0.</div>
+        </div>
+        <div style="background:#E7F4EE;border:1px solid #C8E3D6;border-radius:12px;padding:12px 14px">
+          <div style="font-weight:700;color:#0A5C3F">White on #C2431F = 5.07:1</div>
+          <div style="margin-top:4px;color:#25453A">Passes AA at every size. It is already a token (<span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">colors.primaryPressed</span>), so the driver app adopts it as its <em>resting</em> primary fill and darkens the pressed state one step. No new colour enters the system.</div>
+        </div>
+        <div><strong>#9A8C7E on cream = 3.06:1.</strong> Decorative only (UX-Q-001). The driver app never uses it for a value the rider must read — only for the privacy note and captions.</div>
+        <div style="padding-top:2px;border-top:1px solid #F5F0E9"><strong>The other measured pairs.</strong> <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">state.dangerText</span> #B23030 on cream = <strong>5.9:1</strong>, which is why error headlines do not use <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">state.danger</span> #D93A3A (4.3:1 — passes AA for body, but not with headline weight over a tinted surface). <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">onSuccess.text</span> #0A5C3F on #E7F4EE = <strong>7.4:1</strong>. <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">text.secondary</span> #4A4038 on cream = <strong>9.3:1</strong>, against 4.6:1 for the #7A6E64 it replaces.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff;margin-top:20px">
+    <div style="display:grid;grid-template-columns:1.2fr 0.7fr 2fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 16px">
+      <div>COMPONENT</div><div>STATUS</div><div>CONTRACT</div>
+    </div>
+    <sc-for list="{{ components }}" as="c" hint-placeholder-count="12">
+      <div style="display:grid;grid-template-columns:1.2fr 0.7fr 2fr;padding:12px 16px;border-top:1px solid #F0EAE1;font-size:13.5px;line-height:1.65;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600">{{ c.name }}</div>
+        <div><span style="{{ c.badge }}">{{ c.status }}</span></div>
+        <div style="color:#4A4038">{{ c.detail }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ══════════════ E — STATE MATRIX ══════════════ -->
+  <div id="sE" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION E</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">State matrix</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:960px;margin-bottom:24px">Every cell is a state the code can actually reach. A dash means the state does not exist on that screen — not that it was skipped.</div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow-x:auto;background:#fff">
+    <div style="min-width:1180px">
+      <div style="display:grid;grid-template-columns:1.1fr 1.2fr 1.2fr 1.4fr 1.2fr 1.2fr 1.5fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.08em;color:#7A6E64;padding:12px 16px">
+        <div>SCREEN</div><div>LOADING</div><div>EMPTY</div><div>ERROR</div><div>OFFLINE</div><div>DISABLED / INERT</div><div>EDGE CASE</div>
+      </div>
+      <sc-for list="{{ stateMatrix }}" as="s" hint-placeholder-count="6">
+        <div style="display:grid;grid-template-columns:1.1fr 1.2fr 1.2fr 1.4fr 1.2fr 1.2fr 1.5fr;padding:13px 16px;border-top:1px solid #F0EAE1;font-size:12.5px;line-height:1.65;align-items:start">
+          <div style="font-weight:700">{{ s.screen }}</div>
+          <div style="color:#4A4038">{{ s.loading }}</div>
+          <div style="color:#4A4038">{{ s.empty }}</div>
+          <div style="color:#4A4038">{{ s.error }}</div>
+          <div style="color:#4A4038">{{ s.offline }}</div>
+          <div style="color:#4A4038">{{ s.disabled }}</div>
+          <div style="color:#4A4038">{{ s.edge }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ══════════════ F — G7.1 COMPATIBILITY ══════════════ -->
+  <div id="sF" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION F</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">G7.1 compatibility matrix — tests A to S</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:1000px;margin-bottom:24px">
+    Tests as specified in <span style="font-family:'IBM Plex Mono',monospace;font-size:14px">docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md</span> §4. For each one: what the redesign changes, and what must stay identical for the test to keep passing.
+  </div>
+
+  <div style="border:1px solid #E9E0D5;border-radius:16px;overflow:hidden;background:#fff">
+    <div style="display:grid;grid-template-columns:44px 1.2fr 2.2fr 1fr;background:#F3EDE4;font-size:11.5px;font-weight:600;letter-spacing:.08em;color:#7A6E64;padding:12px 16px">
+      <div>#</div><div>TEST</div><div>WHAT THE REDESIGN DOES ABOUT IT</div><div>VERDICT</div>
+    </div>
+    <sc-for list="{{ g71 }}" as="g" hint-placeholder-count="19">
+      <div style="display:grid;grid-template-columns:44px 1.2fr 2.2fr 1fr;padding:12px 16px;border-top:1px solid #F0EAE1;font-size:13px;line-height:1.7;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-weight:700;color:#C2431F">{{ g.t }}</div>
+        <div style="font-weight:600">{{ g.test }}</div>
+        <div style="color:#4A4038">{{ g.ui }}</div>
+        <div><span style="{{ g.badge }}">{{ g.verdict }}</span></div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;background:#211B16;color:#F5EFE7;border-radius:16px;padding:22px 24px">
+    <div style="font-size:11px;letter-spacing:.14em;color:#E4A03E;font-weight:600">THE FOUR THINGS THAT WOULD BREAK ACCEPTANCE</div>
+    <div style="font-size:14px;line-height:1.85;margin-top:12px;color:#DCD3C9">
+      1. Disabling รับงาน / ปฏิเสธ when a countdown reaches zero — breaks <strong>I</strong>, and puts the client ahead of the server.<br>
+      2. Removing an acted-on card locally instead of re-reading the list — breaks <strong>M</strong> and hides the real outcome of <strong>H</strong>.<br>
+      3. Adding a second timer, a background task, or Realtime to the inbox — breaks <strong>N</strong>, <strong>O</strong>, <strong>P</strong> and crosses TQ-002, which is still <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">OPEN</span>.<br>
+      4. Rendering a disabled toggle for a non-approved rider instead of no toggle — breaks <strong>B</strong> and contradicts DEC-UX-006.
+    </div>
+  </div>
+
+  <!-- ══════════════ G — IMPLEMENTATION HANDOFF ══════════════ -->
+  <div id="sG" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION G</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Implementation handoff</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin-top:20px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px">File-by-file scope</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <sc-for list="{{ files }}" as="fl" hint-placeholder-count="12">
+          <div style="display:flex;gap:10px;align-items:flex-start;border-bottom:1px solid #F5F0E9;padding-bottom:9px">
+            <span style="{{ fl.badge }}">{{ fl.status }}</span>
+            <div style="flex:1">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;word-break:break-all">{{ fl.path }}</div>
+              <div style="font-size:12.5px;color:#5A4E42;line-height:1.65;margin-top:3px">{{ fl.detail }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:700;margin-bottom:10px">Animation guidance</div>
+        <div style="font-size:13.5px;line-height:1.8;color:#4A4038">
+          Four movements, and no fifth. <strong>Online dot</strong> — 1.8 s opacity pulse, the only ambient motion in the app, and it means "the timer is alive". <strong>Countdown</strong> — a 1 s tick on the mono digits and a linear progress bar; no easing, no bounce. <strong>Card enter</strong> — 160 ms fade + 8 px rise when a poll adds an offer, so a new card is noticed without the list jumping. <strong>Toast</strong> — 180 ms slide from the bottom inset, 4 s hold, 140 ms out. Everything else is instant. Honour <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">AccessibilityInfo.isReduceMotionEnabled</span>: the pulse becomes a static dot, the card enter becomes an opacity step.
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+        <div style="font-size:15px;font-weight:700;margin-bottom:10px">Accessibility</div>
+        <div style="font-size:13.5px;line-height:1.8;color:#4A4038">
+          Every control keeps <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">accessibilityRole="button"</span> and the <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">accessibilityState</span> pair the shared Button already sets. The countdown gets <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">accessibilityLiveRegion="polite"</span> with an <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">accessibilityLabel</span> of "เหลือเวลารับงาน 41 วินาที" — never the bare digits. State is never colour alone: the online card carries a word, a dot, a fill and a border. Text scales to 200% without truncation — no fixed-height text container in any frame above. All existing <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">testID</span> values are preserved verbatim; the acceptance suite selects on them.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ H — DATA GAPS ══════════════ -->
+  <div id="sH" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION H</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">DATA GAPs</div>
+  <div style="font-size:15px;color:#5A4E42;line-height:1.75;max-width:1000px;margin-bottom:24px">
+    Values the brief asks the UI to show that no read path carries. None is fixed here. For each: the option this design recommends, and what it would cost.
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ gaps }}" as="g" hint-placeholder-count="6">
+      <div style="background:#fff;border:1px solid #F0C9C9;border-left:4px solid #D93A3A;border-radius:14px;padding:18px 20px">
+        <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;color:#B23030">{{ g.id }}</span>
+          <span style="font-size:16px;font-weight:700">{{ g.title }}</span>
+        </div>
+        <div style="font-size:13.5px;line-height:1.8;color:#4A4038;margin-top:8px">{{ g.detail }}</div>
+        <div style="font-size:13.5px;line-height:1.8;color:#0A5C3F;margin-top:8px;background:#E7F4EE;border-radius:10px;padding:10px 12px"><strong>Recommendation.</strong> {{ g.option }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ══════════════ I — REPORT ══════════════ -->
+  <div id="sI" style="height:1px;background:#EAE1D6;margin:56px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">SECTION I</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 20px">DRIVER_APP_DESIGN_REPORT</div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">Screens designed</div>
+      <div style="font-size:13.5px;line-height:1.85;color:#4A4038">
+        13 frames across 6 routes: Login · Otp (valid + invalid) · Status (pending, blocked) · Home (offline, online-with-offers, going-online busy/failed, profile error) · Offer inbox (empty, one live offer, multiple with one busy, expired + conflict toast, load error + offline banner) · Active delivery scope marker. No new route is proposed.
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">Backend dependencies</div>
+      <div style="font-size:13.5px;line-height:1.85;color:#4A4038">
+        Reads: <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">riders</span> · <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">rider_availability</span> · <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">rider_assignment_attempts</span>, all direct-to-Supabase under existing RLS. Writes: <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">rider_availability.is_online</span> (column-scoped grant), <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">POST /rider/location</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">POST /rider/offers/:id/accept</span>, <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">…/decline</span>. <strong>The redesign needs nothing that does not already exist.</strong>
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">Retained vs replaced</div>
+      <div style="font-size:13.5px;line-height:1.85;color:#4A4038">
+        <strong>Retained unchanged:</strong> all four hooks, all seven repositories, both navigators, <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Screen</span>, every Thai action-error string, every testID, the whole auth flow's logic. <strong>Replaced:</strong> <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">StatusStrip</span> → <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">StateCard</span>; the inline offer card → <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">OfferCard</span> + <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Countdown</span>; inline red error text → <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">Toast</span>; ad-hoc centred views → <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">EmptyState</span> / <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px">ErrorState</span>. <strong>Emoji glyphs are carried over unchanged</strong> — the frames above use them exactly as StatusStrip and Splash ship them today. They are stand-ins, not a decision: see the icon-set item opposite.
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid #E9E0D5;border-radius:16px;padding:22px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">Open questions this design does not answer</div>
+      <div style="font-size:13.5px;line-height:1.85;color:#4A4038">
+        <strong>The icon set.</strong> Every glyph in §C is an emoji, carried over from the current StatusStrip and Splash. Emoji are not brand assets and render differently on every Android OEM, so a rider on one handset sees a different mark from a rider on another. No repository document specifies an icon set for this app, and this design does not invent one — the frames keep the glyphs that ship today and flag the choice. Deciding it is a small, separate piece of design work.<br>
+        <strong>DQ-G7-01</strong> — which strip variant DOCUMENTS_REJECTED wears; the redesign keeps the interim mapping. <strong>DQ-G7-02</strong> — whether the inbox may state its 15-second cadence in copy; the frames do, and this needs UX sign-off. <strong>DQ-G7-03</strong> — position staleness; presence only, absolute timestamps. <strong>BQ-029</strong> — every rider money number. <strong>BQ-022</strong> — onboarding, which is why no Status screen offers an action. <strong>TQ-002</strong> — push versus polling.
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;background:#E7F4EE;border:1.5px solid #0F8B5F;border-radius:16px;padding:24px">
+    <div style="font-size:11px;letter-spacing:.14em;color:#0A5C3F;font-weight:700">IMPLEMENTATION READINESS</div>
+    <div style="font-size:28px;font-weight:700;color:#0A5C3F;margin:8px 0 10px">READY</div>
+    <div style="font-size:14.5px;line-height:1.8;color:#25453A;max-width:1000px">
+      Every screen in §C is buildable against the read and write paths that exist at the inspected commit, with no schema, RLS, API, endpoint or business-rule change. The 16 new token values in §D are additive and fully enumerated, so no colour has to be decided during implementation. Four things are conditional rather than blocking: the offer count on Home (DG-05) needs a focus-only read to be approved as within polling policy; the 15-second cadence copy (DQ-G7-02) needs UX sign-off; the icon set is undecided and the frames carry today's emoji as stand-ins; and the active-delivery flow (DG-04) stays out of scope until G-7.2 has a completion endpoint and a delivery-state read path. None of the four blocks any frame drawn above.
+    </div>
+  </div>
+
+  <div style="margin-top:40px;padding-top:20px;border-top:1px solid #EAE1D6;font-size:12.5px;color:#9A8C7E;line-height:1.8">
+    Design artifact · no repository file was created, modified, or committed in producing it · sources: <span style="font-family:'IBM Plex Mono',monospace">apps/driver/**</span>, <span style="font-family:'IBM Plex Mono',monospace">packages/ui/src/theme/tokens.ts</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/api/src/modules/rider/**</span>, <span style="font-family:'IBM Plex Mono',monospace">supabase/migrations/20260811000011_rls_policies.sql</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/DRIVER_APP_DESIGN_QUESTIONS.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/RIDER_LIFECYCLE.md</span> · read at <span style="font-family:'IBM Plex Mono',monospace">7bd8d61</span>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1400,&quot;height&quot;:900},&quot;frameSet&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;All screens&quot;,&quot;Auth only&quot;,&quot;Home only&quot;,&quot;Offer inbox only&quot;],&quot;default&quot;:&quot;All screens&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Review&quot;},&quot;showRepoFindings&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Review&quot;},&quot;showFutureScope&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Review&quot;}}">
+const OK = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#E7F4EE;color:#0A6B49;font-weight:700;font-size:11px;white-space:nowrap';
+const WARN = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#FDF3E6;color:#8A6A0B;font-weight:700;font-size:11px;white-space:nowrap';
+const BAD = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#FBEAEA;color:#B23030;font-weight:700;font-size:11px;white-space:nowrap';
+const NEUTRAL = 'display:inline-block;padding:2px 9px;border-radius:6px;background:#EFE7DC;color:#5A4E42;font-weight:700;font-size:11px;white-space:nowrap';
+
+const sw = (c) => `width:18px;height:18px;border-radius:5px;background:${c};border:1px solid rgba(31,26,22,.12);flex:0 0 auto;display:inline-block`;
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      showRepoFindings: this.props.showRepoFindings ?? true,
+      showFutureScope: this.props.showFutureScope ?? true,
+      showAuth: (this.props.frameSet ?? 'All screens') === 'All screens' || this.props.frameSet === 'Auth only',
+      showHome: (this.props.frameSet ?? 'All screens') === 'All screens' || this.props.frameSet === 'Home only',
+      showInbox: (this.props.frameSet ?? 'All screens') === 'All screens' || this.props.frameSet === 'Offer inbox only',
+
+      nav: [
+        { href: '#s0', label: '0 · Repository findings' },
+        { href: '#sA', label: 'A · Overview' },
+        { href: '#sB', label: 'B · IA' },
+        { href: '#sC', label: 'C · Screens' },
+        { href: '#sD', label: 'D · Components + tokens' },
+        { href: '#sE', label: 'E · State matrix' },
+        { href: '#sF', label: 'F · G7.1 A–S' },
+        { href: '#sG', label: 'G · Handoff' },
+        { href: '#sH', label: 'H · DATA GAPs' },
+        { href: '#sI', label: 'I · Report' },
+      ],
+
+      findings: [
+        { id: 'RF-01', area: 'Screens that exist', detail: 'Splash, Login, Otp, Home, Status (rendered by Home as the approval gate, not a route), OfferInbox. Six screens, no tab bar, one stack level.', source: 'apps/driver/src/screens/**' },
+        { id: 'RF-02', area: 'Navigation', detail: 'Two native stacks chosen by Supabase session alone. RiderStack = Home + OfferInbox. Thai back label กลับ set globally.', source: 'navigation/RootNavigator.tsx' },
+        { id: 'RF-03', area: 'Approval gate', detail: 'Home reads riders fresh on every mount; a non-APPROVED rider renders StatusScreen, which has no toggle and no offer entry anywhere in its tree.', source: 'screens/HomeScreen.tsx' },
+        { id: 'RF-04', area: 'Availability write', detail: 'is_online is written client → Supabase under a column-scoped grant. Going online is capture position → POST /rider/location → set flag; any failure leaves the rider offline.', source: 'hooks/useRiderAvailability.ts' },
+        { id: 'RF-05', area: 'Offer read', detail: 'Direct Supabase select on rider_assignment_attempts, filtered outcome = PENDING only. No expires_at filter, so an expired-but-PENDING offer still lists.', source: 'data/riderOfferQueries.ts' },
+        { id: 'RF-06', area: 'Offer payload', detail: 'RiderOfferSummary is offerId, deliveryId, roundNo, offeredAt, expiresAt, outcome. No restaurant, address, distance, fee or ETA — a documented privacy boundary, not an oversight.', source: 'domain/riderOffer.ts' },
+        { id: 'RF-07', area: 'Polling', detail: 'useFocusEffect fetches on focus, sets a 15 000 ms interval while focused, clears it on blur. A load arriving mid-flight is coalesced into exactly one more read via refreshPending.', source: 'hooks/useRiderOfferInbox.ts' },
+        { id: 'RF-08', area: 'Offer actions', detail: 'accept and decline go through POST /api/v1/rider/offers/:id/*. One action at a time via busyOfferId; the list is always re-read afterwards, never patched locally.', source: 'repositories/riderOfferActions.ts' },
+        { id: 'RF-09', area: 'Error codes', detail: 'ACTION_ERROR_COPY maps OFFER_TAKEN, OFFER_EXPIRED, RIDER_HAS_ACTIVE_DELIVERY, NOT_FOUND, FORBIDDEN to Thai copy. Branching is on ApiClientError.code, never on message.', source: 'hooks/useRiderOfferInbox.ts' },
+        { id: 'RF-10', area: 'Accept window', detail: '60 s, fixed by DEC-037. expires_at = offered_at + 60 s. Rounds re-broadcast every 60 s, aligned to the existing one-minute tick.', source: 'modules/rider/dispatch-policy.ts' },
+        { id: 'RF-11', area: 'Dispatch eligibility', detail: 'APPROVED and is_online and location IS NOT NULL. No radius, zone, ranking or score. One active delivery per rider, enforced server-side by a CAS on active_delivery_count.', source: 'broadcast-dispatch.strategy.ts' },
+        { id: 'RF-12', area: 'Rider endpoints', detail: 'location, offers/:id/accept, offers/:id/decline, deliveries/:id/arrived, picked-up, en-route, cancel. There is no availability endpoint and no delivered endpoint.', source: 'modules/rider/rider.controller.ts' },
+        { id: 'RF-13', area: 'Design tokens', detail: 'colors, spacing (base 4), radius, fontSize (13 px body default), fontFamily (four bundled IBM Plex Sans Thai weights), shadows, sizes (touchTarget 44, buttonHeight 52).', source: 'packages/ui/src/theme/tokens.ts' },
+        { id: 'RF-14', area: 'Built but unused', detail: 'RiderOrderViewRepository (G6.3) returns the assigned order with restaurant name, delivery address, recipient, landmark, distance and quoted ETA. No screen consumes it yet.', source: 'repositories/riderOrderView.ts' },
+      ],
+
+      decisions: [
+        { id: 'DD-01', title: 'The state card replaces the strip plus button', body: 'Status, reason, recorded position and the control that changes them become one 22 px-radius card. One glance, one thumb, no scroll between reading a state and changing it.' },
+        { id: 'DD-02', title: 'The countdown is the offer card\u2019s largest element', body: 'Derived from expires_at and nothing else, rendered in mono at 30 px with a linear bar. Round number drops to a 21 px title; offered time drops to mono metadata.' },
+        { id: 'DD-03', title: 'Zero on the clock never disables an action', body: 'The card restyles to an expired treatment; both buttons stay live. The server owns expiry, and Test I exercises accept on an expired offer through this screen.' },
+        { id: 'DD-04', title: 'Absent data is stated, never faked', body: 'No placeholder restaurant, no dash for distance, no invented fee. One line: \u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e23\u0e49\u0e32\u0e19\u0e41\u0e25\u0e30\u0e08\u0e38\u0e14\u0e2a\u0e48\u0e07\u0e08\u0e30\u0e41\u0e2a\u0e14\u0e07\u0e2b\u0e25\u0e31\u0e07\u0e23\u0e31\u0e1a\u0e07\u0e32\u0e19.' },
+        { id: 'DD-05', title: 'Live-ness is drawn, not promised', body: 'A pulsing dot with \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e15\u0e2d\u0e22\u0e39\u0e48 appears only while the poll timer is actually alive, and disappears on blur. It reports the app\u2019s own state, never the server\u2019s intent.' },
+        { id: 'DD-06', title: 'Primary fill moves to #C2431F', body: 'An existing token. 5.07:1 against white versus 3.68:1 for #E4572E, which fails AA at the shipped label size. The brand orange stays for tints, badges and the mark.' },
+        { id: 'DD-07', title: 'Consequence sets emphasis, not symmetry', body: '\u0e23\u0e31\u0e1a\u0e07\u0e32\u0e19 is 66% width, filled, 60 px, thumb-side. \u0e1b\u0e0f\u0e34\u0e40\u0e2a\u0e18 is 34%, outlined, and never adjacent to a screen edge. 10 px between them; no swipe, no dialog.' },
+      ],
+
+      semanticTokens: [
+        { name: 'action.primary', value: '#C2431F', swatch: sw('#C2431F'), source: 'colors.primaryPressed', use: 'The one primary action per screen. 5.07:1 on white.' },
+        { name: 'action.primaryPressed', value: '#8F3116', swatch: sw('#8F3116'), source: 'NEW — one shade down', use: 'Pressed state for action.primary.' },
+        { name: 'brand.accent', value: '#E4572E', swatch: sw('#E4572E'), source: 'colors.primary', use: 'Brand mark, badge fills, tints. Never behind small white text.' },
+        { name: 'onPrimary.text', value: '#FFFFFF', swatch: sw('#FFFFFF'), source: 'colors.surfaceRaised', use: 'Label on action.primary and on brand.accent fills.' },
+        { name: 'onPrimary.muted', value: '#FBD9C9', swatch: sw('#FBD9C9'), source: 'NEW — accent tint', use: 'The เหลือ unit label beside the countdown, on the accent header. R-05b.' },
+        { name: 'state.online', value: '#0F8B5F', swatch: sw('#0F8B5F'), source: 'colors.success', use: 'Online card border, status dot, live-pill icon.' },
+        { name: 'state.onlineSurface', value: '#E7F4EE', swatch: sw('#E7F4EE'), source: 'colors.successSoft', use: 'Online card fill, live pill, positive callout.' },
+        { name: 'onSuccess.text', value: '#0A5C3F', swatch: sw('#0A5C3F'), source: 'NEW — success shade', use: 'กำลังรับงาน headline and ปิดรับงาน label on the online card. 7.4:1 on onlineSurface. R-03b.' },
+        { name: 'onSuccess.body', value: '#25453A', swatch: sw('#25453A'), source: 'NEW — success shade', use: 'Body copy inside the online card. R-03b.' },
+        { name: 'onSuccess.meta', value: '#4A6B5C', swatch: sw('#4A6B5C'), source: 'NEW — success shade', use: 'Mono position line inside the online card. R-03b.' },
+        { name: 'border.success', value: '#C8E3D6', swatch: sw('#C8E3D6'), source: 'NEW — success tint', use: 'Divider inside the online card, border of positive callouts. R-03b.' },
+        { name: 'state.pendingSurface', value: '#FDF3E6', swatch: sw('#FDF3E6'), source: 'colors.warningSoft', use: 'Awaiting-approval card, data-boundary note, badge tint.' },
+        { name: 'border.pending', value: '#F0DFC4', swatch: sw('#F0DFC4'), source: 'NEW — pending tint', use: 'Border of the data-boundary note on the offer card. R-05b.' },
+        { name: 'state.blockedSurface', value: '#EFE7DC', swatch: sw('#EFE7DC'), source: 'colors.surfaceSunken', use: 'Blocked card fill, expired offer header, inactive step marker.' },
+        { name: 'border.neutral', value: '#C9BFB4', swatch: sw('#C9BFB4'), source: 'NEW — border shade', use: 'Blocked card border, expired card border, chevron, dashed scope frames. R-02b, R-05d.' },
+        { name: 'text.inactive', value: '#8F7F70', swatch: sw('#8F7F70'), source: 'NEW — neutral shade', use: 'The 00:00 countdown on an expired card — readable, clearly spent. R-05d.' },
+        { name: 'state.danger', value: '#D93A3A', swatch: sw('#D93A3A'), source: 'colors.danger', use: 'Error icon fill, offline banner dot, field border.' },
+        { name: 'state.dangerSurface', value: '#FBEAEA', swatch: sw('#FBEAEA'), source: 'NEW — danger tint', use: 'Error card and offline banner fill. R-03e, R-04, R-05e.' },
+        { name: 'border.danger', value: '#F0C9C9', swatch: sw('#F0C9C9'), source: 'NEW — danger tint', use: 'Border of the error card and offline banner.' },
+        { name: 'state.dangerText', value: '#B23030', swatch: sw('#B23030'), source: 'NEW — needed for AA', use: 'Error headline. colors.danger on cream is 4.3:1; this is 5.9:1.' },
+        { name: 'onDanger.body', value: '#8F3A3A', swatch: sw('#8F3A3A'), source: 'NEW — danger shade', use: 'Body copy inside a danger surface, one step softer than the headline.' },
+        { name: 'surface.app', value: '#FBF7F1', swatch: sw('#FBF7F1'), source: 'colors.surface', use: 'Screen background.' },
+        { name: 'surface.card', value: '#FFFFFF', swatch: sw('#FFFFFF'), source: 'colors.surfaceRaised', use: 'Every card.' },
+        { name: 'surface.inset', value: '#F3EDE4', swatch: sw('#F3EDE4'), source: 'colors.surfaceAlt', use: 'Mono server-message block, icon tiles, acting-state button, scope frames.' },
+        { name: 'surface.inverse', value: '#211B16', swatch: sw('#211B16'), source: 'colors.shellDark', use: 'Toast only.' },
+        { name: 'text.primary', value: '#1F1A16', swatch: sw('#1F1A16'), source: 'colors.textPrimary', use: 'Headings, values, button labels on light.' },
+        { name: 'text.secondary', value: '#4A4038', swatch: sw('#4A4038'), source: 'NEW — neutral shade', use: 'Body copy on light surfaces. Genuinely new: tokens.ts jumps from #1F1A16 to #7A6E64, and #7A6E64 is too light for copy a rider must read outdoors.' },
+        { name: 'text.meta', value: '#7A6E64', swatch: sw('#7A6E64'), source: 'colors.textMuted', use: 'Mono metadata, field labels.' },
+        { name: 'text.faint', value: '#9A8C7E', swatch: sw('#9A8C7E'), source: 'colors.textSubtle', use: 'Privacy note and captions only — 3.06:1, never a value the rider must read.' },
+        { name: 'border.default', value: '#E9E0D5', swatch: sw('#E9E0D5'), source: 'colors.border', use: 'Card borders at rest.' },
+        { name: 'border.strong', value: '#E0D6C8', swatch: sw('#E0D6C8'), source: 'colors.borderStrong', use: 'State card at rest, input at rest, secondary button.' },
+        { name: 'divider.card', value: '#F0EAE1', swatch: sw('#F0EAE1'), source: 'NEW — border tint', use: 'Hairline inside a white card, and between table rows.' },
+        { name: 'divider.hairline', value: '#F5F0E9', swatch: sw('#F5F0E9'), source: 'NEW — border tint', use: 'The lightest separator, for dense metadata lists.' },
+      ],
+
+      typeScale: [
+        { px: '26 / 1.4', role: 'Screen title', weight: 'bold 700' },
+        { px: '24 / 1.35', role: 'State headline (\u0e01\u0e33\u0e25\u0e31\u0e07\u0e23\u0e31\u0e1a\u0e07\u0e32\u0e19)', weight: 'bold 700' },
+        { px: '30 mono', role: 'Countdown', weight: 'semibold 600' },
+        { px: '21 / 1.4', role: 'Card title, empty/error headline', weight: 'bold 700' },
+        { px: '19–20', role: 'Primary button label', weight: 'bold 700' },
+        { px: '16–17', role: 'Body, secondary button label, list row', weight: 'regular 400 / semibold 600' },
+        { px: '13.5–14', role: 'Supporting copy, mono metadata', weight: 'regular 400' },
+        { px: '12.5', role: 'Privacy note, caption — floor', weight: 'regular 400' },
+      ],
+
+      components: [
+        { name: 'StateCard', status: 'NEW', badge: WARN, detail: 'Replaces StatusStrip. Props: variant (online | offline | pending | blocked), headline, detail, meta, action, busy. Renders the action inside itself for online/offline; renders none for pending/blocked, so DEC-UX-006 is a structural property rather than a prop.' },
+        { name: 'Countdown', status: 'NEW', badge: WARN, detail: 'Props: expiresAt (string | null). Ticks locally at 1 s from the server value; clamps at 00:00 and never disables anything. Null renders \u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38\u0e40\u0e27\u0e25\u0e32 and the expired treatment, because the API treats a null expiry as expired.' },
+        { name: 'OfferCard', status: 'REDESIGN', badge: WARN, detail: 'Props: offer, busy, disabled, onAccept, onDecline. Three visual states — live, acting, expired — all driven by expiresAt and the two flags the hook already exposes. testIDs unchanged.' },
+        { name: 'ActionPair', status: 'NEW', badge: WARN, detail: '34/66 split, 60 px, 10 px gap, primary on the right. Used only where a decline and an accept sit together.' },
+        { name: 'Toast', status: 'NEW', badge: WARN, detail: 'Bottom-anchored, above the safe-area inset, one at a time, 4 s. Replaces the inline red text that a scrolled rider never sees. Consumes actionError unchanged.' },
+        { name: 'ConnectionBanner', status: 'NEW', badge: WARN, detail: 'Full-width strip under the header when a read has failed and not yet recovered. Silence must never look like calm.' },
+        { name: 'LivePill', status: 'NEW', badge: WARN, detail: 'Pulsing dot + \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e15\u0e2d\u0e22\u0e39\u0e48. Mounted only while the poll timer is alive, so it cannot outlive it.' },
+        { name: 'EmptyState / ErrorState', status: 'NEW', badge: WARN, detail: 'Icon, headline, one line of guidance, optional mono server message, one primary retry. Replaces four ad-hoc centred views.' },
+        { name: 'ListRow', status: 'NEW', badge: WARN, detail: 'Icon, title, subtitle, trailing badge or chevron. The offer entry on Home. 76 px tall.' },
+        { name: 'OtpBoxes', status: 'REDESIGN', badge: WARN, detail: 'Six 60 px boxes over one hidden input. Same verifyOtpSchema validation, same error surface.' },
+        { name: 'Button', status: 'EXISTS', badge: OK, detail: 'Kept. Needs one addition: a size prop (lg 60 / md 56 / sm 52) and the action.primary fill. Variants, loading, disabled opacity and accessibility props are unchanged.' },
+        { name: 'Screen', status: 'EXISTS', badge: OK, detail: 'Kept exactly. Safe-area edges, keyboard avoidance, scroll and footer slot already cover every frame above; the toast mounts in the footer slot.' },
+      ],
+
+      stateMatrix: [
+        { screen: 'Login R-01a', loading: 'Button spinner while requesting OTP', empty: '—', error: 'Field-level error under the input; unconfigured Supabase is a hard stop, not a demo mode', offline: 'Same field error path (send fails)', disabled: 'CTA disabled until thaiPhoneSchema passes', edge: 'Non-rider phone: OTP still sends; the gate is riders.status on Home' },
+        { screen: 'Otp R-01b', loading: 'Verify spinner; resend spinner separately', empty: '—', error: 'Six boxes turn danger + \u0e23\u0e2b\u0e31\u0e2a\u0e44\u0e21\u0e48\u0e16\u0e39\u0e01\u0e15\u0e49\u0e2d\u0e07', offline: 'Same', disabled: 'Verify disabled until 6 digits; resend disabled for 60 s', edge: 'Countdown resets only on a successful resend' },
+        { screen: 'Status R-02', loading: 'Inherited from Home\u2019s profile read', empty: 'No rider record \u2192 blocked variant, \u0e1a\u0e31\u0e0d\u0e0a\u0e35\u0e19\u0e35\u0e49\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e25\u0e07\u0e17\u0e30\u0e40\u0e1a\u0e35\u0e22\u0e19\u0e40\u0e1b\u0e47\u0e19\u0e44\u0e23\u0e40\u0e14\u0e2d\u0e23\u0e4c', error: 'Never shown here — a failed profile read renders Home\u2019s error, not a false status', offline: 'Same', disabled: 'No control exists to disable — sign out only', edge: '7 statuses \u2192 2 variants; DQ-G7-01 open' },
+        { screen: 'Home R-03', loading: 'Profile spinner, then availability spinner inside the card', empty: '—', error: 'Full-screen error with retry; never rendered as \u201cnot approved\u201d', offline: 'Availability read fails \u2192 card error with retry; toggle unavailable', disabled: 'Toggle inert while busy; offer entry stays enabled offline or online', edge: 'Online with no recorded position \u2192 stated plainly, structurally near-unreachable' },
+        { screen: 'Offer inbox R-05', loading: 'Centred spinner on first focus and on manual refresh', empty: '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e07\u0e32\u0e19 + live pill. Never an error', error: 'ErrorState + mono server message + retry; the 15 s timer keeps running', offline: 'ConnectionBanner + ErrorState; retry is a read, so it is safe to repeat', disabled: 'Non-acting cards dim to 45% while busyOfferId is set', edge: 'Expired-but-PENDING offer lists and stays actionable; concurrent offers across rounds are legitimate' },
+        { screen: 'Toast layer', loading: '—', empty: '—', error: 'OFFER_TAKEN, OFFER_EXPIRED, RIDER_HAS_ACTIVE_DELIVERY, NOT_FOUND, FORBIDDEN, plus a neutral fallback', offline: 'Network failures use the inline load path, not a toast', disabled: '—', edge: 'One toast at a time; a second replaces the first rather than stacking' },
+      ],
+
+      g71: [
+        { t: 'A', test: 'Approved rider enters inbox', ui: 'Home shows the state card and the งานที่เสนอ row; the row is always enabled for an approved rider, online or not. Route unchanged.', verdict: 'Preserved', badge: OK },
+        { t: 'B', test: 'Non-approved rider cannot see entry', ui: 'StateCard renders no action for pending/blocked and the offer row is not in the tree. Absent, not disabled.', verdict: 'Preserved', badge: OK },
+        { t: 'C', test: 'Pending offer appears', ui: 'Same query, same fields. The card now leads with the countdown derived from expires_at; roundNo remains visible as the title.', verdict: 'Preserved', badge: OK },
+        { t: 'D', test: 'Empty inbox', ui: 'EmptyState with ยังไม่มีงาน — explicitly not an error state, and the live pill shows the timer is still running.', verdict: 'Preserved', badge: OK },
+        { t: 'E', test: 'Polling adds an offer within 15 s', ui: 'Interval untouched at 15 000 ms. A new card enters with a 160 ms fade and 8 px rise so it is noticed without the list jumping.', verdict: 'Preserved', badge: OK },
+        { t: 'F', test: 'Accept succeeds', ui: 'Same POST. The card enters its acting state, both buttons leave the tree, and the list is re-read on settle.', verdict: 'Preserved', badge: OK },
+        { t: 'G', test: 'Decline succeeds', ui: 'Same POST, same acting state, same re-read. No delivery-side UI implication is drawn.', verdict: 'Preserved', badge: OK },
+        { t: 'H', test: 'OFFER_TAKEN on the loser', ui: 'Toast carries the existing string งานนี้ถูกไรเดอร์คนอื่นรับไปแล้ว; the list re-reads and the offer disappears on the server\u2019s authority, never locally.', verdict: 'Improved', badge: OK },
+        { t: 'I', test: 'OFFER_EXPIRED', ui: 'The expired treatment is new; the buttons deliberately stay live so accept can still be driven from this screen. This is the one test a naive redesign would break.', verdict: 'Preserved by design', badge: WARN },
+        { t: 'J', test: 'NOT_FOUND on a foreign or random offer id', ui: 'Driven by API call, not by UI. Toast falls back to ไม่พบงานนี้แล้ว.', verdict: 'Preserved', badge: OK },
+        { t: 'K', test: 'RIDER_HAS_ACTIVE_DELIVERY', ui: 'Existing string surfaces in the toast. No client-side pre-check is added — active_delivery_count is deliberately not projected into any client type.', verdict: 'Preserved', badge: OK },
+        { t: 'L', test: 'FORBIDDEN for a non-approved rider', ui: 'Unreachable through the UI by construction (Test B); the direct-call path is unaffected. Copy retained for the revocation-mid-session case.', verdict: 'Preserved', badge: OK },
+        { t: 'M', test: 'Post-action refresh removes the acted-on card', ui: 'runAction\u2019s guaranteed re-read and refreshPending coalescing are untouched. The card is never removed by the UI itself.', verdict: 'Preserved', badge: OK },
+        { t: 'N', test: 'Poll timer survives an accept', ui: 'No new timer, no interval restart on action, no second effect. The countdown is a render-local tick, not a data fetch.', verdict: 'Preserved', badge: OK },
+        { t: 'O', test: 'Poll timer survives a decline', ui: 'As N.', verdict: 'Preserved', badge: OK },
+        { t: 'P', test: 'Blur stops network reads', ui: 'useFocusEffect cleanup unchanged. The live pill unmounts with the timer, so a stopped timer is visible rather than inferred. Countdown ticks are local and issue no request.', verdict: 'Preserved', badge: OK },
+        { t: 'Q', test: 'Refocus fetches immediately', ui: 'Unchanged. Loading state on refocus is the centred spinner, so an immediate fetch is observable.', verdict: 'Preserved', badge: OK },
+        { t: 'R', test: 'Foreign rider RLS isolation', ui: 'No UI implication — the redesign adds no query, no filter and no id parameter. Row scope stays the policy\u2019s.', verdict: 'Preserved', badge: OK },
+        { t: 'S', test: 'Locked G7 fixture untouched', ui: 'No design change can affect it; the redesign writes nothing outside the two calls that already exist.', verdict: 'N/A', badge: NEUTRAL },
+      ],
+
+      files: [
+        { path: 'src/components/StateCard.tsx', status: 'NEW', badge: WARN, detail: 'Replaces StatusStrip.tsx. Four variants; renders its own action for online/offline only.' },
+        { path: 'src/components/OfferCard.tsx', status: 'NEW', badge: WARN, detail: 'Extracted from OfferInboxScreen. Live / acting / expired.' },
+        { path: 'src/components/Countdown.tsx', status: 'NEW', badge: WARN, detail: 'One setInterval per mounted card, cleared on unmount. No fetch.' },
+        { path: 'src/components/Toast.tsx', status: 'NEW', badge: WARN, detail: 'Mounted in Screen\u2019s footer slot.' },
+        { path: 'src/components/ConnectionBanner.tsx', status: 'NEW', badge: WARN, detail: 'Rendered from the existing error view state; no connectivity library is added.' },
+        { path: 'src/components/EmptyState.tsx · ErrorState.tsx · ListRow.tsx · LivePill.tsx', status: 'NEW', badge: WARN, detail: 'Presentation only, no data access.' },
+        { path: 'src/components/StatusStrip.tsx', status: 'DELETE', badge: BAD, detail: 'Superseded by StateCard. Its variant mapping moves with it unchanged.' },
+        { path: 'src/screens/HomeScreen.tsx', status: 'EDIT', badge: WARN, detail: 'Presentation only. The profile read, the approval branch, the availability hook wiring and every testID stay as they are.' },
+        { path: 'src/screens/StatusScreen.tsx', status: 'EDIT', badge: WARN, detail: 'Swap StatusStrip for StateCard. statusStripVariant and the copy map are unchanged.' },
+        { path: 'src/screens/OfferInboxScreen.tsx', status: 'EDIT', badge: WARN, detail: 'Split into OfferCard + the four state views. The hook contract is consumed exactly as it is today.' },
+        { path: 'src/screens/auth/*.tsx', status: 'EDIT', badge: WARN, detail: 'Type scale, target sizes, OTP boxes. No change to validation, navigation or auth calls.' },
+        { path: 'src/hooks/** · src/repositories/** · src/data/** · src/domain/** · src/navigation/**', status: 'KEEP', badge: OK, detail: 'Not touched by this redesign. Every behaviour under G7.1 acceptance lives here.' },
+        { path: 'packages/ui/src/theme/tokens.ts', status: 'ADD', badge: WARN, detail: 'The 16 new values enumerated in \u00a7D \u2014 every one a tint or shade of a colour already in the file, added under a driver semantic layer. Strictly additive: no existing value changes, so the customer app is unaffected. \u00a7D is the complete list; there is nothing else to add.' },
+        { path: 'packages/ui/src/components/Button.tsx', status: 'EDIT', badge: WARN, detail: 'Add a size prop (lg/md/sm). Behaviour, variants and accessibility props unchanged.' },
+      ],
+
+      gaps: [
+        { id: 'DG-01', title: 'The offer card cannot show restaurant, pickup, dropoff or distance', detail: 'rider_assignment_attempts projects six columns and none of them is a place. The table\u2019s own comment calls this the rider\u2019s only pre-accept read path and a privacy boundary: an unaccepted rider is not yet a party to the order or the delivery. deliveries and orders grant a rider nothing until they are assigned.', option: 'State the boundary in one line on the card — \u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14\u0e23\u0e49\u0e32\u0e19\u0e41\u0e25\u0e30\u0e08\u0e38\u0e14\u0e2a\u0e48\u0e07\u0e08\u0e30\u0e41\u0e2a\u0e14\u0e07\u0e2b\u0e25\u0e31\u0e07\u0e23\u0e31\u0e1a\u0e07\u0e32\u0e19 — and make the countdown the card\u2019s subject instead. Do not add a placeholder row per missing field: six empty rows read as a broken screen. If the Product Owner wants pre-accept detail, that is a privacy decision plus a new read path, and it belongs in a decision record, not in a redesign.' },
+        { id: 'DG-02', title: 'There is no \u0e04\u0e48\u0e32\u0e23\u0e2d\u0e1a to show, anywhere', detail: 'BQ-029 (the rider earnings formula) is OPEN, deliveries.rider_earning_satang stays NULL by instruction, and every rider domain type in the app is deliberately money-free. Neither the offer path nor the assigned-order path carries a satang column.', option: 'Show no money in any frame — not a zero, not a dash, not \u201c\u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u201d. A rider who sees \u0e0f0 once will not trust the number when it is real. Reserve the layout slot in OfferCard so adding it later is one component change, and leave it unrendered until BQ-029 is answered.' },
+        { id: 'DG-03', title: 'No mechanism pushes an offer to the app', detail: 'TQ-002 (Realtime versus polling per surface) is OPEN, rider_assignment_attempts is not in the realtime publication, and adding it is a migration the schema lock forbids. The rider must have the app open and the inbox focused.', option: 'Keep the 15 s foreground poll exactly as implemented and make its liveness visible with the pulsing pill, so a rider can tell the difference between \u201cno work\u201d and \u201cnot listening\u201d. Whether the copy may state the cadence out loud is DQ-G7-02 and needs UX sign-off; the frames assume yes.' },
+        { id: 'DG-04', title: 'The active-delivery flow cannot be completed', detail: 'Three of the four transitions have endpoints (arrived, picked-up, en-route). There is no deliveries/:id/delivered route in RiderController. Separately, rider_order_view projects no delivery id and no delivery state, so after a restart the app cannot tell which step the rider is on — even though deliveries_select_rider would allow reading it.', option: 'Keep R-06+ out of scope, as this design does. When G-7.2 starts it needs two things first: a completion command, and a client read path for the rider\u2019s own deliveries row (the RLS policy already permits it — this is client work, not a backend change). Designing a four-step flow whose last step has no endpoint would ship a dead end.' },
+        { id: 'DG-05', title: 'The offer count on Home needs a read Home does not make today', detail: 'Home reads riders and rider_availability. The 2 \u0e07\u0e32\u0e19\u0e23\u0e2d\u0e01\u0e32\u0e23\u0e15\u0e2d\u0e1a\u0e23\u0e31\u0e1a badge in frame R-03b would need the same pending-offers query the inbox runs.', option: 'Fetch it once on focus, with no timer, reusing the existing repository — one read per Home focus, the same shape as the profile read. Explicitly not a second poller: that would cross the policy the inbox\u2019s timer was scoped to. If even a focus-only read is unwanted, drop the badge and keep the row subtitle static; nothing else in the frame depends on it.' },
+        { id: 'DG-06', title: 'No \u0e27\u0e31\u0e19\u0e19\u0e35\u0e49 summary exists', detail: 'The brief asks for today\u2019s basic summary if the API supports it. Nothing in the rider read path aggregates completed deliveries, hours or earnings, and the money half is BQ-029.', option: 'Omit it. Home is stronger with one state card and one row than with a summary block that would have to be filled with counts nobody has agreed to compute. Revisit when \u0e23\u0e32\u0e22\u0e44\u0e14\u0e49 has a decided formula and a read path.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
