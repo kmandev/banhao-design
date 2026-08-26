@@ -68,3 +68,23 @@ export interface OrderTransitionResponse {
   orderId: string;
   state: string;
 }
+
+/**
+ * `GET /api/v1/orders/:id/delivery-proof` (Phase G-7.4, Plan §8.3).
+ *
+ * `null` is a valid, successful response — no delivery yet, no photo on
+ * record, the object no longer exists, or the referenced-photo retention
+ * window (DEC-039, 90 days from `deliveredAt`) has elapsed. `photoUrl` is a
+ * short-lived signed GET (`StorageService.getSignedDownloadUrl`), never a raw
+ * object key or a public URL.
+ *
+ * `capturedAt` and `deliveredAt` are the same instant and the same column
+ * (`deliveries.delivered_at`): the proof photo is written in the same guarded
+ * `UPDATE` that moves the delivery to `DELIVERED` (`DeliveryCompletionService`),
+ * so no separate capture timestamp exists.
+ */
+export interface DeliveryProofResponse {
+  photoUrl: string;
+  capturedAt: string;
+  deliveredAt: string;
+}

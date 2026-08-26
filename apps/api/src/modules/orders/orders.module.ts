@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { CartModule } from '../cart/cart.module';
+import { StorageModule } from '../storage/storage.module';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { OrderPricingService } from './order-pricing.service';
+import { DeliveryProofController } from './delivery-proof.controller';
+import { DeliveryProofService } from './delivery-proof.service';
 
 /**
  * `CartModule` is imported explicitly for `CartService` — it is not
@@ -17,9 +20,9 @@ import { OrderPricingService } from './order-pricing.service';
  * `DispatchService`'s own export already uses.
  */
 @Module({
-  imports: [CartModule],
-  controllers: [OrdersController],
-  providers: [OrdersService, OrderPricingService],
+  imports: [CartModule, StorageModule],
+  controllers: [OrdersController, DeliveryProofController],
+  providers: [OrdersService, OrderPricingService, DeliveryProofService],
   exports: [OrdersService],
 })
 export class OrdersModule {}
