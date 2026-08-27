@@ -147,17 +147,33 @@ function ordersStub(completeDelivery: jest.Mock) {
   return { completeDelivery } as unknown as OrdersService;
 }
 
-/** The proof photo genuinely exists in the private bucket unless a test says otherwise. */
-function storageStub(exists: jest.Mock = jest.fn(async () => true)) {
-  return { storage: { exists } as unknown as StorageService, exists };
+/** A well-within-the-limit size (1 KB) — the default so every test not about size behaves as before. */
+const SMALL_OBJECT_BYTES = 1024;
+/** G7.4 — the server-side ceiling `assertProofSizeWithinLimit` enforces, mirrored from the service under test. */
+const PROOF_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * The proof photo genuinely exists in the private bucket, and comes in well
+ * under the size ceiling, unless a test says otherwise.
+ */
+function storageStub(
+  exists: jest.Mock = jest.fn(async () => true),
+  getObjectSize: jest.Mock = jest.fn(async () => SMALL_OBJECT_BYTES),
+) {
+  return { storage: { exists, getObjectSize } as unknown as StorageService, exists, getObjectSize };
 }
 
 /**
  * Builds the service with the happy-path storage stub. Tests that care about
  * the proof check construct it themselves.
  */
-function buildService(supabase: SupabaseService, orders: OrdersService, exists?: jest.Mock) {
-  return new DeliveryCompletionService(supabase, orders, storageStub(exists).storage);
+function buildService(
+  supabase: SupabaseService,
+  orders: OrdersService,
+  exists?: jest.Mock,
+  getObjectSize?: jest.Mock,
+) {
+  return new DeliveryCompletionService(supabase, orders, storageStub(exists, getObjectSize).storage);
 }
 
 async function expectDomainError(promise: Promise<unknown>, code: string): Promise<void> {
@@ -712,5 +728,154 @@ describe('DeliveryCompletionService — the proof photo (POD, mandatory)', () =>
     // No write of any kind reached another rider's delivery.
     expect(calls.filter((call) => call.op === 'update')).toHaveLength(1); // the failed claim only
     expect(completeDelivery).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The server-side proof-photo size limit — G7.4,
+ * `docs/BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` §7.4/§9/§16, which recorded
+ * that no such limit was enforced anywhere server-side and recommended
+ * rejecting oversized objects using the `HeadObject`-reported size the
+ * existence check already has access to.
+ *
+ * Every scenario here drives the decision through `StorageService.getObjectSize`
+ * — a real byte count returned by the storage abstraction, not a pre-baked
+ * boolean like `isSmallEnough` — so the test demonstrates the actual security
+ * property: the API decides from R2's own reported size, never a client claim.
+ */
+describe('DeliveryCompletionService — server-side proof photo size limit (G7.4)', () => {
+  it('accepts a proof object at exactly the 2 MB boundary', async () => {
+    const { supabase } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const getObjectSize = jest.fn(async () => PROOF_PHOTO_MAX_BYTES);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery), exists, getObjectSize);
+
+    await expect(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY)).resolves.toMatchObject({
+      state: 'DELIVERED',
+    });
+  });
+
+  it('rejects a proof object one byte over the 2 MB boundary, and moves NO state', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const getObjectSize = jest.fn(async () => PROOF_PHOTO_MAX_BYTES + 1);
+    const completeDelivery = jest.fn();
+    const service = buildService(supabase, ordersStub(completeDelivery), exists, getObjectSize);
+
+    await expectDomainError(
+      service.complete(riderUser(), DELIVERY_ID, PROOF_KEY),
+      'VALIDATION_FAILED',
+    );
+    // The guarded UPDATE was never reached — no write, no partial state move.
+    expect(calls).toHaveLength(0);
+    expect(completeDelivery).not.toHaveBeenCalled();
+  });
+
+  it('accepts a proof object well below the 2 MB boundary', async () => {
+    const { supabase } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const getObjectSize = jest.fn(async () => 400 * 1024);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery), exists, getObjectSize);
+
+    await expect(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY)).resolves.toMatchObject({
+      state: 'DELIVERED',
+    });
+  });
+
+  it('fails closed when the R2 metadata lookup fails, and moves NO state', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const getObjectSize = jest.fn(async () => {
+      throw new Error('R2 HeadObject timed out');
+    });
+    const completeDelivery = jest.fn();
+    const service = buildService(supabase, ordersStub(completeDelivery), exists, getObjectSize);
+
+    await expectDomainError(
+      service.complete(riderUser(), DELIVERY_ID, PROOF_KEY),
+      'INTERNAL_ERROR',
+    );
+    expect(calls).toHaveLength(0);
+    expect(completeDelivery).not.toHaveBeenCalled();
+  });
+
+  it('never exposes the raw storage error to the caller', async () => {
+    const { supabase } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const getObjectSize = jest.fn(async () => {
+      throw new Error('AccessDenied: arn:aws:s3:::banhao-private secret leak attempt');
+    });
+    const service = buildService(supabase, ordersStub(jest.fn()), exists, getObjectSize);
+
+    let thrown: unknown;
+    try {
+      await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(DomainError);
+    expect((thrown as DomainError).message).not.toContain('AccessDenied');
+    expect((thrown as DomainError).message).not.toContain('banhao-private');
+  });
+
+  it('does not persist proof_photo_path for an oversized object', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const getObjectSize = jest.fn(async () => PROOF_PHOTO_MAX_BYTES + 1);
+    const service = buildService(supabase, ordersStub(jest.fn()), exists, getObjectSize);
+
+    await expectDomainError(
+      service.complete(riderUser(), DELIVERY_ID, PROOF_KEY),
+      'VALIDATION_FAILED',
+    );
+
+    // The guarded UPDATE that would have written proof_photo_path never ran.
+    expect(calls.filter((call) => call.table === 'deliveries')).toHaveLength(0);
+  });
+
+  it('checks size against the PRIVATE bucket, using the already-validated key', async () => {
+    const { supabase } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => true);
+    const getObjectSize = jest.fn(async () => SMALL_OBJECT_BYTES);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery), exists, getObjectSize);
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    expect(getObjectSize).toHaveBeenCalledWith(PROOF_KEY, 'private');
+  });
+
+  it('checks size only AFTER existence has already been confirmed', async () => {
+    const order: string[] = [];
+    const { supabase } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => {
+      order.push('exists');
+      return true;
+    });
+    const getObjectSize = jest.fn(async () => {
+      order.push('size');
+      return SMALL_OBJECT_BYTES;
+    });
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery), exists, getObjectSize);
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    expect(order).toEqual(['exists', 'size']);
+  });
+
+  it('never checks size for a missing object — existence still fails first', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const exists = jest.fn(async () => false);
+    const getObjectSize = jest.fn(async () => SMALL_OBJECT_BYTES);
+    const completeDelivery = jest.fn();
+    const service = buildService(supabase, ordersStub(completeDelivery), exists, getObjectSize);
+
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'NOT_FOUND');
+    expect(getObjectSize).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
   });
 });

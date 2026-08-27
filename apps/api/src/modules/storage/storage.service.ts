@@ -256,6 +256,37 @@ export class StorageService {
   }
 
   /**
+   * The actual size of an object in R2, in bytes — via `ContentLength` on the
+   * same `HeadObjectCommand` {@link exists} uses. Added for POD's server-side
+   * proof-photo size limit (G7.4, `docs/BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md`
+   * §7.4): the client's declared file size is never trusted, only what R2
+   * itself reports for the object that actually landed.
+   *
+   * A caller reaching this method has typically already confirmed existence
+   * (via {@link exists}) and is asking "how big", not "does it exist" — so
+   * unlike `exists`, a genuine `NotFound` here is **not** swallowed into a
+   * sentinel return value. It propagates like any other failure, and so does
+   * an R2 response that omits `ContentLength` (the SDK types it as optional;
+   * a real HeadObject response always carries it, so its absence is treated
+   * as a metadata-lookup failure, not as "zero bytes"). Both fail closed —
+   * this method never resolves to a size a caller could compare against a
+   * limit and get a false "within bounds".
+   */
+  async getObjectSize(key: string, bucket: BucketKind = 'public'): Promise<number> {
+    assertSafeObjectKey(key);
+
+    const result = await this.client.send(
+      new HeadObjectCommand({ Bucket: this.resolveBucket(bucket), Key: key }),
+    );
+
+    if (result.ContentLength === undefined) {
+      throw new Error(`R2 HeadObject for "${key}" returned no ContentLength`);
+    }
+
+    return result.ContentLength;
+  }
+
+  /**
    * Lists up to one page of objects under a prefix — added for the POD
    * orphan sweep (`ProofPhotoRetentionService`, DEC-039), which has no
    * `deliveries` row to start from and must instead discover candidate

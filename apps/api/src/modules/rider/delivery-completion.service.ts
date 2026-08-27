@@ -30,6 +30,20 @@ interface RiderAvailabilityRow {
 }
 
 /**
+ * The server-side ceiling on a proof photo's actual R2 object size — G7.4,
+ * `docs/BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` §7.4/§9/§16, which records
+ * that "no limit exists anywhere today" server-side and recommends enforcing
+ * one by rejecting oversized objects at `HeadObject` time.
+ *
+ * Matches `PROOF_PHOTO_MAX_BYTES` in `apps/driver/src/lib/proofPhoto.ts`
+ * exactly — same 2 MB ceiling, not a new number. The two constants cannot
+ * share a definition (separate apps, no shared package for it), so this one
+ * is the security boundary and the driver one is a client-side backstop that
+ * protects nobody who skips it, per that file's own comment.
+ */
+const PROOF_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
  * `POST /api/v1/rider/deliveries/:id/delivered` — Phase G-7.2, the **terminal**
  * rider transition. `EN_ROUTE -> DELIVERED` on `deliveries`, and — only once
  * that has genuinely happened — `DELIVERING -> DELIVERED` on `orders`.
@@ -293,11 +307,16 @@ export class DeliveryCompletionService {
    * actually used. Together they replace M-11's recompute-and-compare, which
    * is unavailable here by construction.
    *
+   * A third check follows existence: the object's actual size, from R2's own
+   * `ContentLength` — never the client's declared size — must not exceed
+   * {@link PROOF_PHOTO_MAX_BYTES}. See {@link assertProofSizeWithinLimit}.
+   *
    * **Runs before the guarded UPDATE**, deliberately: the POD design's
    * acceptance criterion 11 requires that a structurally invalid key, a key
    * for another delivery, and a key with no object behind it are all refused
    * and **none of them moves any state**. Verifying after the claim would
-   * leave a delivery `DELIVERED` with a rejected photo.
+   * leave a delivery `DELIVERED` with a rejected photo — and the same is true
+   * of an oversized one.
    */
   private async assertProofUploaded(deliveryId: string, objectKey: string): Promise<void> {
     const parsed = parseDeliveryProofObjectKey(objectKey, deliveryId);
@@ -324,6 +343,41 @@ export class DeliveryCompletionService {
     if (!uploaded) {
       throw new DomainError('NOT_FOUND', {
         message: 'No proof photo was found at the expected key — upload it before confirming',
+      });
+    }
+
+    await this.assertProofSizeWithinLimit(deliveryId, objectKey);
+  }
+
+  /**
+   * The size half of {@link assertProofUploaded} — G7.4. Reads the object's
+   * real `ContentLength` from R2 via `StorageService.getObjectSize` and
+   * refuses anything over {@link PROOF_PHOTO_MAX_BYTES}. The client's own
+   * declared size (or the client-side check in `apps/driver/src/lib/proofPhoto.ts`)
+   * is never consulted — only what R2 itself reports for the object already
+   * confirmed to exist.
+   *
+   * Fails closed on a lookup failure, exactly as {@link assertProofUploaded}
+   * does for existence: a transport error, a missing `ContentLength`, or the
+   * object having vanished between the `exists()` call and this one must never
+   * read as "small enough". None of those raw causes reaches the caller — only
+   * the generic `INTERNAL_ERROR` `DomainError`, matching this file's existing
+   * convention of never exposing a raw storage-provider error.
+   */
+  private async assertProofSizeWithinLimit(deliveryId: string, objectKey: string): Promise<void> {
+    let sizeBytes: number;
+    try {
+      sizeBytes = await this.storage.getObjectSize(objectKey, 'private');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      this.logger.error(`Proof photo size check failed for delivery ${deliveryId}: ${message}`);
+      throw new DomainError('INTERNAL_ERROR', { message: 'Proof photo verification failed' });
+    }
+
+    if (sizeBytes > PROOF_PHOTO_MAX_BYTES) {
+      throw new DomainError('VALIDATION_FAILED', {
+        message: 'Proof photo exceeds the maximum allowed size',
+        details: { objectKey: [`must be ${PROOF_PHOTO_MAX_BYTES} bytes or fewer`] },
       });
     }
   }

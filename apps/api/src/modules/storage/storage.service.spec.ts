@@ -390,6 +390,62 @@ describe('StorageService — the private bucket', () => {
 });
 
 /**
+ * `getObjectSize` — added for POD's server-side proof-photo size limit (G7.4,
+ * `docs/BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` §7.4/§9/§16). Uses the same
+ * `HeadObjectCommand` as `exists`, so these tests assert the one thing that
+ * differs: what the method does with `ContentLength` once the command
+ * resolves (or fails).
+ */
+describe('StorageService.getObjectSize', () => {
+  it('returns the actual ContentLength R2 reports', async () => {
+    sendMock.mockResolvedValueOnce({ ContentLength: 512_000 });
+
+    await expect(service().getObjectSize('restaurants/r1/cover.webp')).resolves.toBe(512_000);
+
+    const command = sendMock.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect(command.input).toEqual({ Bucket: 'banhao-assets', Key: 'restaurants/r1/cover.webp' });
+  });
+
+  it('fails closed when the HeadObject response omits ContentLength', async () => {
+    sendMock.mockResolvedValueOnce({});
+
+    await expect(service().getObjectSize('restaurants/r1/cover.webp')).rejects.toThrow(
+      /ContentLength/,
+    );
+  });
+
+  it('propagates a genuine NotFound rather than reporting a size', async () => {
+    sendMock.mockRejectedValueOnce(new NotFound({ message: 'not found', $metadata: {} }));
+
+    await expect(service().getObjectSize('restaurants/r1/cover.webp')).rejects.toBeInstanceOf(
+      NotFound,
+    );
+  });
+
+  it('propagates any other transport failure unchanged', async () => {
+    sendMock.mockRejectedValueOnce(new Error('network timeout'));
+
+    await expect(service().getObjectSize('restaurants/r1/cover.webp')).rejects.toThrow(
+      'network timeout',
+    );
+  });
+
+  it('checks size against the private bucket when asked', async () => {
+    sendMock.mockResolvedValueOnce({ ContentLength: 900_000 });
+
+    await privateService().getObjectSize('deliveries/x/proof/y.jpg', 'private');
+
+    const command = sendMock.mock.calls[0][0] as { input: Record<string, unknown> };
+    expect(command.input.Bucket).toBe('banhao-private');
+  });
+
+  it('rejects an unsafe key before ever calling R2', async () => {
+    await expect(service().getObjectSize('../escape')).rejects.toThrow();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * `listObjects` — added for the POD retention orphan sweep (DEC-039,
  * `ProofPhotoRetentionService`), which has no `deliveries` row to start from
  * and must discover candidate objects directly in R2.
