@@ -20,8 +20,10 @@ import { apiAddressRepository } from './apiAddresses';
 import { mockAddressRepository } from './mockAddresses';
 import { supabaseOrderDetailRepository } from './supabaseOrderDetail';
 import { supabaseOrderHistoryRepository } from './supabaseOrderHistory';
+import { apiDeliveryProofRepository } from './apiDeliveryProof';
 import type {
   CartValidationRepository,
+  DeliveryProofRepository,
   NotificationRepository,
   OrderCreationRepository,
   OrderDetailRepository,
@@ -57,6 +59,10 @@ export {
   supabaseOrderHistoryRepository,
   createSupabaseOrderHistoryRepository,
 } from './supabaseOrderHistory';
+export {
+  apiDeliveryProofRepository,
+  createApiDeliveryProofRepository,
+} from './apiDeliveryProof';
 
 /**
  * Simulated latency, so loading states are actually exercised in development
@@ -105,6 +111,11 @@ export const mockOrderDetailRepository: OrderDetailRepository = {
   getOrder: () => delay(null),
 };
 
+/** Fixture delivery-proof — no photo, for screen tests that are not about POD. */
+export const mockDeliveryProofRepository: DeliveryProofRepository = {
+  getDeliveryProof: () => delay(null),
+};
+
 /**
  * The active repositories.
  *
@@ -136,6 +147,10 @@ export const mockOrderDetailRepository: OrderDetailRepository = {
  * C-19 real: the history card now carries a genuine order UUID rather than a
  * fixture string.
  *
+ * **Delivery proof is live** — Phase G7.4. `GET /api/v1/orders/:id/delivery-proof`
+ * mints a short-lived signed R2 URL server-side, so — unlike order detail —
+ * this goes through the API rather than a direct Supabase read.
+ *
  * Notifications remain mock-backed: they are later-phase work this task does
  * not touch.
  */
@@ -146,6 +161,7 @@ export const repositories: Repositories = {
   orderCreation: apiOrderCreationRepository,
   orders: supabaseOrderHistoryRepository,
   orderDetail: supabaseOrderDetailRepository,
+  deliveryProof: apiDeliveryProofRepository,
   notifications: mockNotificationRepository,
   addresses: apiAddressRepository,
 };
@@ -165,6 +181,7 @@ export const mockRepositories: Repositories = {
   orderCreation: mockOrderCreationRepository,
   orders: mockOrderRepository,
   orderDetail: mockOrderDetailRepository,
+  deliveryProof: mockDeliveryProofRepository,
   notifications: mockNotificationRepository,
   addresses: mockAddressRepository,
 };

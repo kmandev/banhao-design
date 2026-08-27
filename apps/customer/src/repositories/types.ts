@@ -163,6 +163,36 @@ export interface NotificationRepository {
 }
 
 /**
+ * `GET /api/v1/orders/:id/delivery-proof` (Phase G7.4 / T3.4).
+ *
+ * Deliberately its own interface, not an addition to `OrderDetailRepository`:
+ * that one is a direct Supabase read under RLS (DEC-APP-008), while this
+ * endpoint mints a short-lived signed R2 URL server-side and must go through
+ * the trusted writer — the same read/write-boundary reasoning
+ * `CartValidationRepository`'s own comment gives for staying separate from
+ * `CartRepository`.
+ *
+ * `photoUrl` is a signed URL valid for a short window (R2, ~120s default) —
+ * callers must treat it as request-scoped, never persist it, and re-fetch
+ * rather than reuse a stale one.
+ *
+ * `null` means no photo is currently available to show — an order not yet
+ * delivered, no photo on file, the retention window has passed, or the
+ * caller's own order/delivery lookup did not resolve. These are
+ * indistinguishable by design (`DeliveryProofService`'s own privacy note) and
+ * are all a normal, non-error outcome — never rendered as a failure.
+ */
+export interface DeliveryProof {
+  photoUrl: string;
+  capturedAt: string;
+  deliveredAt: string;
+}
+
+export interface DeliveryProofRepository {
+  getDeliveryProof(orderId: string): Promise<DeliveryProof | null>;
+}
+
+/**
  * `POST /api/v1/me/addresses` body (Phase DQ-04), field-for-field the same
  * required/optional split as `createAddressSchema`
  * (`packages/validation/src/address.ts`) — the repository does not loosen or
@@ -198,6 +228,7 @@ export interface Repositories {
   orderCreation: OrderCreationRepository;
   orders: OrderRepository;
   orderDetail: OrderDetailRepository;
+  deliveryProof: DeliveryProofRepository;
   notifications: NotificationRepository;
   addresses: AddressRepository;
 }

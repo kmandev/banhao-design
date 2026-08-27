@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { OrderDetailScreen } from './OrderDetailScreen';
 import { repositories } from '../repositories';
 import type { OrderDetail } from '../domain/order';
-import type { OrderDetailRepository } from '../repositories/types';
+import type { DeliveryProofRepository, OrderDetailRepository } from '../repositories/types';
 
 /**
  * Phase E-3B.1 — `OrderDetailScreen` against a stubbed `orderDetail`
@@ -20,10 +20,15 @@ import type { OrderDetailRepository } from '../repositories/types';
  */
 
 const mockGetOrder = jest.fn();
+const mockGetDeliveryProof = jest.fn();
 
 function stub() {
   const orderDetailRepo: OrderDetailRepository = { getOrder: mockGetOrder };
   (repositories as unknown as { orderDetail: OrderDetailRepository }).orderDetail = orderDetailRepo;
+
+  const deliveryProofRepo: DeliveryProofRepository = { getDeliveryProof: mockGetDeliveryProof };
+  (repositories as unknown as { deliveryProof: DeliveryProofRepository }).deliveryProof =
+    deliveryProofRepo;
 }
 
 const mockGoBack = jest.fn();
@@ -86,6 +91,8 @@ const ORDER: OrderDetail = {
 
 beforeEach(() => {
   mockGetOrder.mockReset();
+  mockGetDeliveryProof.mockReset();
+  mockGetDeliveryProof.mockResolvedValue(null);
   mockGoBack.mockReset();
   mockNavigate.mockReset();
   stub();
@@ -245,4 +252,170 @@ it('no longer renders the undesigned refresh control', async () => {
 
   await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
   expect(screen.queryByTestId('button-refresh-order')).toBeNull();
+});
+
+/**
+ * Proof of delivery (POD, Phase G7.4 / T3.4) — `repositories.deliveryProof`
+ * is a second, independent read from `repositories.orderDetail`, so these
+ * tests stub it separately and assert it degrades without ever touching the
+ * rest of the receipt.
+ */
+const PROOF = {
+  photoUrl: 'https://r2.example.com/signed/deliveries/order-1/proof/abc.jpg?sig=xyz',
+  capturedAt: '2026-08-19T05:10:00Z',
+  deliveredAt: '2026-08-19T05:10:00Z',
+};
+
+describe('OrderDetailScreen — proof of delivery (POD)', () => {
+  it('renders the POD card for a delivered order with a proof photo', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockResolvedValue(PROOF);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-card')).toBeTruthy());
+    expect(screen.getByText('หลักฐานการส่ง')).toBeTruthy();
+    expect(screen.getByTestId('pod-thumbnail')).toBeTruthy();
+    expect(mockGetDeliveryProof).toHaveBeenCalledWith('order-1');
+  });
+
+  it('renders the delivered timestamp using the same long-form date helper the screen already uses', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    // 05:10Z = 12:10 Bangkok, 19 Aug 2026 = 19 ส.ค. 2569.
+    mockGetDeliveryProof.mockResolvedValue(PROOF);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-card')).toBeTruthy());
+    expect(screen.getByText('19 ส.ค. 2569 · 12:10 น.')).toBeTruthy();
+  });
+
+  it('omits the POD card when the proof is null — not an error, not a placeholder', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockResolvedValue(null);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+    await waitFor(() => expect(mockGetDeliveryProof).toHaveBeenCalled());
+
+    expect(screen.queryByTestId('pod-card')).toBeNull();
+    expect(screen.queryByTestId('pod-error-card')).toBeNull();
+    expect(screen.queryByText('หลักฐานการส่ง')).toBeNull();
+    expect(screen.queryByText('ไม่มีหลักฐาน')).toBeNull();
+    // The rest of the receipt is unaffected.
+    expect(screen.getByText('ที่อยู่จัดส่ง')).toBeTruthy();
+  });
+
+  it('never calls the delivery-proof repository for a non-delivered order', async () => {
+    mockGetOrder.mockResolvedValue(ORDER); // PREPARING
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('screen-order-detail')).toBeTruthy());
+    expect(mockGetDeliveryProof).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('pod-card')).toBeNull();
+  });
+
+  it('keeps the main receipt visible when the POD fetch fails, showing only a scoped inline retry', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockRejectedValue(new Error('internal error'));
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-error-card')).toBeTruthy());
+
+    // The rest of the order detail screen rendered normally — no global error state.
+    expect(screen.getByTestId('screen-order-detail')).toBeTruthy();
+    expect(screen.getByText('ที่อยู่จัดส่ง')).toBeTruthy();
+    expect(screen.getByText('ค่าอาหาร')).toBeTruthy();
+    // The raw repository error message is never shown.
+    expect(screen.queryByText('internal error')).toBeNull();
+  });
+
+  it('retries only the POD fetch from its own inline retry action', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockRejectedValueOnce(new Error('Network request failed'));
+    mockGetDeliveryProof.mockResolvedValue(PROOF);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-error-card')).toBeTruthy());
+    expect(mockGetOrder).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(screen.getByTestId('button-retry-pod'));
+
+    await waitFor(() => expect(screen.getByTestId('pod-card')).toBeTruthy());
+    expect(mockGetDeliveryProof).toHaveBeenCalledTimes(2);
+    // The main order read was never re-triggered by the POD retry.
+    expect(mockGetOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a NOT_FOUND-mapped null proof the same as any other null — no authorization details shown', async () => {
+    // The repository already folds NOT_FOUND into null (apiDeliveryProof.ts);
+    // this exercises the screen's side of that contract.
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockResolvedValue(null);
+    renderScreen();
+
+    await waitFor(() => expect(mockGetDeliveryProof).toHaveBeenCalled());
+    expect(screen.queryByText('ไม่มีสิทธิ์')).toBeNull();
+    expect(screen.queryByTestId('pod-error-card')).toBeNull();
+    expect(screen.queryByTestId('pod-card')).toBeNull();
+  });
+
+  it('opens the full-screen viewer when the thumbnail is tapped, and closes it from the close action', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockResolvedValue(PROOF);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-thumbnail-button')).toBeTruthy());
+    expect(screen.queryByTestId('pod-viewer-image')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('pod-thumbnail-button'));
+    await waitFor(() => expect(screen.getByTestId('pod-viewer-image')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('pod-viewer-close'));
+    await waitFor(() => expect(screen.queryByTestId('pod-viewer-image')).toBeNull());
+  });
+
+  it('shows an inline placeholder, not a full-screen error, when the signed URL image fails to load', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockResolvedValue(PROOF);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-thumbnail')).toBeTruthy());
+    fireEvent(screen.getByTestId('pod-thumbnail'), 'error');
+
+    await waitFor(() => expect(screen.getByText('โหลดรูปไม่สำเร็จ')).toBeTruthy());
+    expect(screen.queryByTestId('pod-thumbnail')).toBeNull();
+    // The rest of the screen is unaffected.
+    expect(screen.getByTestId('screen-order-detail')).toBeTruthy();
+  });
+
+  it('never leaves the full-screen viewer silently blank when the signed URL fails to load there', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockResolvedValue(PROOF);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-thumbnail-button')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('pod-thumbnail-button'));
+    await waitFor(() => expect(screen.getByTestId('pod-viewer-image')).toBeTruthy());
+
+    fireEvent(screen.getByTestId('pod-viewer-image'), 'error');
+
+    // The viewer stays open (still reachable, not silently dismissed) but no
+    // longer shows a blank/broken image — the same fallback copy the
+    // thumbnail already uses appears in its place. (The thumbnail shares the
+    // same failure state, so the fallback text can appear in both places —
+    // asserting "at least one" is the behavioral claim, not "exactly one".)
+    await waitFor(() => expect(screen.queryByTestId('pod-viewer-image')).toBeNull());
+    expect(screen.getAllByText('โหลดรูปไม่สำเร็จ').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('pod-viewer-close')).toBeTruthy();
+  });
+
+  it('never renders the raw object key or any internal storage detail', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'DELIVERED' });
+    mockGetDeliveryProof.mockResolvedValue(PROOF);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('pod-card')).toBeTruthy());
+    expect(screen.queryByText(/deliveries\//)).toBeNull();
+    expect(screen.queryByText(/proof_photo_path/i)).toBeNull();
+    expect(screen.queryByText(/r2_/i)).toBeNull();
+  });
 });
