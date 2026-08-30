@@ -763,6 +763,42 @@ select test_assert(
 
 \echo '--- G. rider column exposure (HIGH-1 fix): PASS ---'
 
+-- ===========================================================================
+-- H. T4.4 — POD proof_photo_path: no client-side write path (customer or
+--    rider), of any kind. Companion to the read-side coverage in
+--    rider_view_row_isolation_security_test.sql §POD. `deliveries` never
+--    received an update/insert/delete grant for `authenticated` (only
+--    `grant select`, 20260811000011_rls_policies.sql) — the same "no grant
+--    exists at all" shape F8/F9 already prove for payments.state/
+--    orders.state. proof_photo_path is written exclusively by
+--    DeliveryCompletionService under service_role (apps/api).
+-- ===========================================================================
+
+-- H1. CUST_A cannot write proof_photo_path on their OWN order's delivery —
+-- not row-blocked (RLS would even admit the row for other purposes), but
+-- grant-blocked: no UPDATE privilege on `deliveries` exists for
+-- `authenticated` at all.
+select test_assert(
+  test_as_user(:'CUST_A',
+    $stmt$update public.deliveries set proof_photo_path = 'attacker/overwrite.jpg'
+       where id = 'f2000000-0000-0000-0000-000000000001'$stmt$
+  ) like 'BLOCKED%',
+  'H1. A customer cannot write deliveries.proof_photo_path on their own order — no grant exists at all'
+);
+
+-- H2. The delivery's OWN assigned rider cannot write it directly either —
+-- confirms this is a full client lockout (API/service_role only), not a
+-- customer-specific restriction that a rider's session could route around.
+select test_assert(
+  test_as_user(:'RIDER_A',
+    $stmt$update public.deliveries set proof_photo_path = 'attacker/overwrite.jpg'
+       where id = 'f2000000-0000-0000-0000-000000000001'$stmt$
+  ) like 'BLOCKED%',
+  'H2. The assigned rider cannot write deliveries.proof_photo_path directly either — no grant exists at all'
+);
+
+\echo '--- H. POD proof_photo_path write lockout (T4.4): PASS ---'
+
 \echo ''
 \echo 'All domain invariant assertions passed.'
 \echo ''

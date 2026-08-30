@@ -77,9 +77,14 @@ insert into public.order_item_options (id, order_item_id, group_name_snapshot, o
 values ('a2100000-0000-0000-0000-000000000010', 'a2000000-0000-0000-0000-000000000010',
         'group', 'ORACLEVICTIMOPT', 0);
 
-insert into public.deliveries (id, order_id, state, rider_id, assigned_at)
+-- proof_photo_path carries a distinguishing value too — T4.4 (POD DB
+-- security coverage) reuses this exact victim row to prove RIDER_A cannot
+-- reach RIDER_B's proof photo path, the same way the rest of this file
+-- proves RIDER_A cannot reach the victim's address/phone/item/option.
+insert into public.deliveries (id, order_id, state, rider_id, assigned_at, proof_photo_path)
 values ('f2000000-0000-0000-0000-000000000010', 'a1000000-0000-0000-0000-000000000010',
-        'RIDER_ASSIGNED', 'c1000000-0000-0000-0000-000000000002', now());
+        'RIDER_ASSIGNED', 'c1000000-0000-0000-0000-000000000002', now(),
+        'delivery-proofs/f2000000-0000-0000-0000-000000000010/ORACLE-VICTIM-PROOF.jpg');
 
 insert into public.rider_assignments (delivery_id, rider_id, status)
 values ('f2000000-0000-0000-0000-000000000010', 'c1000000-0000-0000-0000-000000000002', 'ACCEPTED');
@@ -228,6 +233,53 @@ select test_assert(
   ) = 1,
   '12. Merchant access to orders, including money columns, is still unchanged'
 );
+
+-- ===========================================================================
+-- POD — T4.4: rider isolation extended to deliveries.proof_photo_path.
+--
+-- Unlike orders (moved behind rider_order_view for the H-1 fix above),
+-- deliveries is read by riders directly against the base table
+-- (deliveries_select_rider, is_assigned_rider(rider_id)) — an ordinary
+-- row-level policy, not a view, so there is no planner-pushdown/oracle
+-- concern to reproduce here. The property under test is the plain one:
+-- RIDER_A's assignment does not cover this row, so the row — and every
+-- column on it, including proof_photo_path — is invisible outright.
+-- ===========================================================================
+
+-- POD-1. RIDER_A cannot see RIDER_B's delivery row at all, direct against
+-- the base table (not just through a view).
+select test_assert(
+  test_select_count_as_user(:'RIDER_A',
+    $stmt$select count(*) from public.deliveries where id = 'f2000000-0000-0000-0000-000000000010'$stmt$
+  ) = 0,
+  'POD-1. RIDER_A cannot see RIDER_B''s delivery row directly on public.deliveries'
+);
+
+-- POD-2. Same result filtering on the specific victim proof path — RIDER_A
+-- cannot single out that row by guessing/probing its proof_photo_path
+-- either (no row = no column, but asserted explicitly since this is the
+-- exact field T4.4 is scoped to).
+select test_assert(
+  test_select_count_as_user(:'RIDER_A',
+    $stmt$select count(*) from public.deliveries
+       where proof_photo_path = 'delivery-proofs/f2000000-0000-0000-0000-000000000010/ORACLE-VICTIM-PROOF.jpg'$stmt$
+  ) = 0,
+  'POD-2. RIDER_A cannot read RIDER_B''s proof_photo_path via public.deliveries, by id or by value'
+);
+
+-- POD-3. Positive control — RIDER_B, the assigned rider, CAN read their own
+-- delivery's proof_photo_path. Proves POD-1/POD-2 demonstrate isolation,
+-- not a read path that is simply broken for everyone.
+select test_assert(
+  test_select_count_as_user(:'RIDER_B',
+    $stmt$select count(*) from public.deliveries
+       where id = 'f2000000-0000-0000-0000-000000000010'
+         and proof_photo_path = 'delivery-proofs/f2000000-0000-0000-0000-000000000010/ORACLE-VICTIM-PROOF.jpg'$stmt$
+  ) = 1,
+  'POD-3. Control — RIDER_B (the assigned rider) reads their OWN delivery''s proof_photo_path normally'
+);
+
+\echo '--- POD proof_photo_path rider isolation (T4.4): PASS ---'
 
 \echo ''
 \echo 'All rider view row-isolation security assertions passed.'
