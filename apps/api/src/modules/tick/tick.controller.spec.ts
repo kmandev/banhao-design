@@ -2,6 +2,7 @@ import { TickController } from './tick.controller';
 import type { PaymentEventProcessingService } from '../payments/payment-event-processing.service';
 import type { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import type { DispatchService } from '../rider/dispatch.service';
+import type { NoRiderEscalationService } from '../rider/no-rider-escalation.service';
 import type { ProofPhotoRetentionService } from '../rider/proof-photo-retention.service';
 import type { OutboxDispatchService } from '../notifications/outbox-dispatch.service';
 
@@ -9,9 +10,10 @@ import type { OutboxDispatchService } from '../notifications/outbox-dispatch.ser
  * F-2b: `POST /internal/tick` invokes `PaymentEventProcessingService`. Now
  * also invokes `PaymentAttemptExpiryService` (payment-attempt/QR expiry,
  * DEC-029), `DispatchService` (G-2 broadcast dispatch, DEC-020/DEC-037),
+ * `NoRiderEscalationService` (DEC-022 no-rider escalation, Phase H final gap),
  * `ProofPhotoRetentionService` (POD retention, DEC-039), and
  * `OutboxDispatchService` (H-2 outbox notification dispatch, ADR-005/ADR-011).
- * All five services are plain stubs here — their own logic is each one's own
+ * All six services are plain stubs here — their own logic is each one's own
  * `*.spec.ts` file's job. This file proves only the wiring: the tick handler
  * calls every processor and reports what each did, additively to the
  * original `{ accepted: true }` shape.
@@ -30,6 +32,7 @@ describe('TickController', () => {
       failed: 0,
     },
     outboxDispatchResult = { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
+    noRiderEscalationResult = { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
   ) {
     const processPendingEvents = jest.fn().mockResolvedValue(paymentEventsResult);
     const processExpiredAttempts = jest.fn().mockResolvedValue(expiryResult);
@@ -37,12 +40,29 @@ describe('TickController', () => {
     const paymentAttemptExpiry = { processExpiredAttempts } as unknown as PaymentAttemptExpiryService;
     const runDispatchRound = jest.fn().mockResolvedValue(dispatchResult);
     const dispatch = { runDispatchRound } as unknown as DispatchService;
+    const runNoRiderEscalation = jest.fn().mockResolvedValue(noRiderEscalationResult);
+    const noRiderEscalation = { run: runNoRiderEscalation } as unknown as NoRiderEscalationService;
     const run = jest.fn().mockResolvedValue(podRetentionResult);
     const podRetention = { run } as unknown as ProofPhotoRetentionService;
     const dispatchPending = jest.fn().mockResolvedValue(outboxDispatchResult);
     const outboxDispatch = { dispatchPending } as unknown as OutboxDispatchService;
-    const controller = new TickController(paymentEvents, paymentAttemptExpiry, dispatch, podRetention, outboxDispatch);
-    return { controller, processPendingEvents, processExpiredAttempts, runDispatchRound, run, dispatchPending };
+    const controller = new TickController(
+      paymentEvents,
+      paymentAttemptExpiry,
+      dispatch,
+      noRiderEscalation,
+      podRetention,
+      outboxDispatch,
+    );
+    return {
+      controller,
+      processPendingEvents,
+      processExpiredAttempts,
+      runDispatchRound,
+      runNoRiderEscalation,
+      run,
+      dispatchPending,
+    };
   }
 
   it('invokes payment-event processing and reports the outcome, additive to the original shape', async () => {
@@ -56,6 +76,7 @@ describe('TickController', () => {
       paymentEvents: { processed: 2, skipped: 1 },
       paymentAttemptExpiry: { expired: 1, skipped: 0 },
       dispatch: { deliveries: 3, offers: 7, expiredOffers: 2 },
+      noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
       podRetention: {
         enabled: false,
         referencedCandidates: 0,
@@ -103,6 +124,7 @@ describe('TickController', () => {
       'paymentEvents',
       'paymentAttemptExpiry',
       'dispatch',
+      'noRiderEscalation',
       'podRetention',
       'outboxDispatch',
     ]);
@@ -116,6 +138,25 @@ describe('TickController', () => {
     expect(runDispatchRound).toHaveBeenCalledTimes(1);
     expect(runDispatchRound).toHaveBeenCalledWith();
     expect(result.dispatch).toEqual({ deliveries: 3, offers: 7, expiredOffers: 2 });
+  });
+
+  it('runs the no-rider escalation check exactly once per tick, additive to the existing response shape — DEC-022', async () => {
+    const noRiderEscalationResult = { escalated: 2, decisionPointReached: 1, skipped: 3, failed: 0 };
+    const { controller, runNoRiderEscalation } = build(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      noRiderEscalationResult,
+    );
+
+    const result = await controller.handle();
+
+    expect(runNoRiderEscalation).toHaveBeenCalledTimes(1);
+    expect(runNoRiderEscalation).toHaveBeenCalledWith();
+    expect(result.noRiderEscalation).toEqual(noRiderEscalationResult);
+    expect(result.accepted).toBe(true);
   });
 
   it('runs the POD retention pass exactly once per tick — DEC-039, no scheduler of its own', async () => {

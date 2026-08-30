@@ -6,6 +6,10 @@ import { PaymentEventProcessingService } from '../payments/payment-event-process
 import { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import { DispatchService, type DispatchRoundResult } from '../rider/dispatch.service';
 import {
+  NoRiderEscalationService,
+  type NoRiderEscalationResult,
+} from '../rider/no-rider-escalation.service';
+import {
   ProofPhotoRetentionService,
   type ProofPhotoRetentionResult,
 } from '../rider/proof-photo-retention.service';
@@ -22,6 +26,8 @@ export interface TickAcceptedResponse {
   paymentAttemptExpiry: { expired: number; skipped: number };
   /** G-2 — the broadcast dispatch round this tick ran (DEC-020, DEC-037). */
   dispatch: DispatchRoundResult;
+  /** DEC-022 — the no-rider escalation check this tick ran (Phase H final gap). */
+  noRiderEscalation: NoRiderEscalationResult;
   /** DEC-039 — the POD proof-photo retention purge this tick ran. */
   podRetention: ProofPhotoRetentionResult;
   /** H-2 — the outbox notification dispatch round this tick ran (ADR-005, ADR-011). */
@@ -60,6 +66,12 @@ export interface TickAcceptedResponse {
  * itself — this handler has no per-phase try/catch of its own, so a phase
  * that *can* throw would fail every phase after it in the same tick.
  *
+ * `noRiderEscalation` (DEC-022) runs right after `dispatch` — same rider/
+ * delivery domain, same "no scheduler of its own" reasoning, and early enough
+ * that an event it writes this tick is picked up by `outboxDispatch` later in
+ * this same tick rather than waiting for the next one. It follows the same
+ * never-throws contract `NoRiderEscalationService` documents on itself.
+ *
  * `outboxDispatch` (H-2, ADR-005/ADR-011) runs last, additive in the same
  * way, and follows the same never-throws contract `OutboxDispatchService`
  * documents on itself.
@@ -70,6 +82,7 @@ export class TickController {
     private readonly paymentEvents: PaymentEventProcessingService,
     private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
     private readonly dispatch: DispatchService,
+    private readonly noRiderEscalation: NoRiderEscalationService,
     private readonly podRetention: ProofPhotoRetentionService,
     private readonly outboxDispatch: OutboxDispatchService,
   ) {}
@@ -83,8 +96,17 @@ export class TickController {
     const paymentEvents = await this.paymentEvents.processPendingEvents();
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
     const dispatch = await this.dispatch.runDispatchRound();
+    const noRiderEscalation = await this.noRiderEscalation.run();
     const podRetention = await this.podRetention.run();
     const outboxDispatch = await this.outboxDispatch.dispatchPending();
-    return { accepted: true, paymentEvents, paymentAttemptExpiry, dispatch, podRetention, outboxDispatch };
+    return {
+      accepted: true,
+      paymentEvents,
+      paymentAttemptExpiry,
+      dispatch,
+      noRiderEscalation,
+      podRetention,
+      outboxDispatch,
+    };
   }
 }
