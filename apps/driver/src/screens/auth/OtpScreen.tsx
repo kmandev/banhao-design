@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Input, colors, fontFamily, fontSize, spacing } from '@banhao/ui';
+import { Button, Input, driverColors, driverFontSize, fontFamily, spacing } from '@banhao/ui';
 import { verifyOtpSchema } from '@banhao/validation';
 import { Screen } from '../../components/Screen';
 import { useAuth } from '../../hooks/useAuth';
@@ -102,6 +102,7 @@ export function OtpScreen({ route, navigation }: Props) {
 
       <Button
         label="ยืนยัน"
+        size="md"
         onPress={onVerify}
         disabled={!isValid}
         loading={submitting}
@@ -124,6 +125,6 @@ export function OtpScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.xxl, paddingBottom: spacing.lg, gap: spacing.sm },
-  title: { fontSize: fontSize.h2, fontFamily: fontFamily.bold, color: colors.textPrimary },
-  copy: { fontFamily: fontFamily.regular, fontSize: fontSize.lg, color: colors.textMuted },
+  title: { fontSize: driverFontSize.screenTitle, fontFamily: fontFamily.bold, color: driverColors.text.primary },
+  copy: { fontFamily: fontFamily.regular, fontSize: driverFontSize.body, color: driverColors.text.meta },
 });

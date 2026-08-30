@@ -153,6 +153,94 @@ export const sizes = {
   avatarLg: 72,
 } as const;
 
+/**
+ * Driver app semantic tokens — T2.1, `docs/design/BANHAO Driver App
+ * Redesign.dc.html` §D. 33 semantic tokens in total: 17 map straight onto an
+ * existing `colors` value (named in each comment below), 16 are new tints and
+ * shades the redesign introduces. Strictly additive: `colors` above is
+ * unchanged, and nothing here is used by the customer app.
+ */
+export const driverColors = {
+  action: {
+    primary: colors.primaryPressed, // existing — resting primary fill (5.07:1 on white, passes AA; colors.primary fails at 3.68:1)
+    primaryPressed: '#8F3116', // new
+  },
+  brand: {
+    accent: colors.primary, // existing
+  },
+  onPrimary: {
+    text: colors.surfaceRaised, // existing
+    muted: '#FBD9C9', // new
+  },
+  state: {
+    online: colors.success, // existing
+    onlineSurface: colors.successSoft, // existing
+    pendingSurface: colors.warningSoft, // existing
+    blockedSurface: colors.surfaceSunken, // existing
+    danger: colors.danger, // existing
+    dangerSurface: '#FBEAEA', // new
+    dangerText: '#B23030', // new
+  },
+  onSuccess: {
+    text: '#0A5C3F', // new
+    body: '#25453A', // new
+    meta: '#4A6B5C', // new
+  },
+  onDanger: {
+    body: '#8F3A3A', // new
+  },
+  border: {
+    default: colors.border, // existing
+    strong: colors.borderStrong, // existing
+    success: '#C8E3D6', // new
+    pending: '#F0DFC4', // new
+    neutral: '#C9BFB4', // new
+    danger: '#F0C9C9', // new
+  },
+  text: {
+    primary: colors.textPrimary, // existing
+    secondary: '#4A4038', // new
+    meta: colors.textMuted, // existing
+    faint: colors.textSubtle, // existing
+    inactive: '#8F7F70', // new
+  },
+  surface: {
+    app: colors.surface, // existing
+    card: colors.surfaceRaised, // existing
+    inset: colors.surfaceAlt, // existing
+    inverse: colors.shellDark, // existing
+  },
+  divider: {
+    card: '#F0EAE1', // new
+    hairline: '#F5F0E9', // new
+  },
+} as const;
+
+/**
+ * Driver app type scale — T2.1, same source as `driverColors` above. The
+ * shared `fontSize` tops out at 13px body, tuned for a phone held still
+ * indoors; the driver app steps every role up and never renders below
+ * 12.5px, because it is read one-handed, outdoors, in a hurry.
+ */
+export const driverFontSize = {
+  /** Privacy note, caption — floor. */
+  caption: 12.5,
+  /** Supporting copy, mono metadata. */
+  supporting: 13.5,
+  /** Body, secondary button label, list row. */
+  body: 17,
+  /** Primary button label. */
+  primaryButtonLabel: 20,
+  /** Card title, empty/error headline. */
+  cardTitle: 21,
+  /** State headline (e.g. กำลังรับงาน). */
+  stateHeadline: 24,
+  /** Screen title. */
+  screenTitle: 26,
+  /** Countdown — mono. */
+  countdown: 30,
+} as const;
+
 export const theme = {
   colors,
   spacing,
@@ -162,6 +250,8 @@ export const theme = {
   fontFamily,
   shadows,
   sizes,
+  driverColors,
+  driverFontSize,
 } as const;
 
 export type Theme = typeof theme;

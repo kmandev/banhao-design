@@ -1,8 +1,13 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { Button, colors, fontFamily, fontSize, radius, spacing } from '@banhao/ui';
+import { Button, driverColors, driverFontSize, fontFamily, spacing } from '@banhao/ui';
+import { ConnectionBanner } from '../components/ConnectionBanner';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorState } from '../components/ErrorState';
+import { LivePill } from '../components/LivePill';
+import { OfferCard } from '../components/OfferCard';
 import { Screen } from '../components/Screen';
+import { Toast } from '../components/Toast';
 import { useRiderOfferInbox } from '../hooks/useRiderOfferInbox';
-import type { RiderOfferSummary } from '../domain/riderOffer';
 
 /**
  * G-7.1 — the rider's offer inbox (V1.1 §9, `rider_assignment_attempts`).
@@ -26,36 +31,44 @@ export function OfferInboxScreen() {
   const { view, refresh, busyOfferId, actionError, acceptOffer, declineOffer } = useRiderOfferInbox();
 
   return (
-    <Screen scroll testID="screen-offer-inbox">
+    <Screen
+      scroll
+      testID="screen-offer-inbox"
+      footer={<Toast message={actionError} testID="offer-action-error" />}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>งานที่เสนอ</Text>
         <Button label="รีเฟรช" variant="ghost" onPress={refresh} testID="button-refresh-offers" />
       </View>
 
-      {actionError ? (
-        <Text style={styles.actionError} testID="offer-action-error">
-          {actionError}
-        </Text>
-      ) : null}
-
       {view.status === 'loading' ? (
         <View style={styles.centred} testID="offer-inbox-loading">
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={driverColors.action.primary} />
           <Text style={styles.muted}>กำลังโหลดรายการงาน…</Text>
         </View>
       ) : null}
 
       {view.status === 'error' ? (
-        <View style={styles.centred} testID="offer-inbox-error">
-          <Text style={styles.errorTitle}>โหลดรายการงานไม่สำเร็จ</Text>
-          <Text style={styles.muted}>{view.message}</Text>
-          <Button label="ลองอีกครั้ง" onPress={refresh} testID="button-retry-offers" />
-        </View>
+        <>
+          {/* Same failed-read state as the ErrorState below it — not a
+              separately-detected "offline" condition; no connectivity
+              library is added (Redesign §D, ConnectionBanner). */}
+          <ConnectionBanner visible testID="offer-inbox-connection-banner" />
+          <ErrorState
+            testID="offer-inbox-error"
+            headline="โหลดรายการงานไม่สำเร็จ"
+            detail="ตรวจสัญญาณอินเทอร์เน็ต แล้วกดลองอีกครั้ง"
+            serverMessage={view.message}
+            onRetry={refresh}
+            retryTestID="button-retry-offers"
+          />
+        </>
       ) : null}
 
       {view.status === 'ready' && view.offers.length === 0 ? (
-        <View style={styles.centred} testID="offer-inbox-empty">
-          <Text style={styles.muted}>ยังไม่มีงาน</Text>
+        <View testID="offer-inbox-empty" style={styles.emptyWrap}>
+          <EmptyState icon="📭" headline="ยังไม่มีงาน" detail="เมื่อมีงานใหม่เข้ามา ระบบจะแสดงที่หน้านี้ทันที" />
+          <LivePill />
         </View>
       ) : null}
 
@@ -71,68 +84,16 @@ export function OfferInboxScreen() {
               onDecline={() => void declineOffer(offer.offerId)}
             />
           ))}
+          <LivePill label="อัปเดตอยู่ · ตรวจงานใหม่ทุก 15 วินาที" />
         </View>
       ) : null}
     </Screen>
   );
 }
 
-function OfferCard({
-  offer,
-  busy,
-  disabled,
-  onAccept,
-  onDecline,
-}: {
-  offer: RiderOfferSummary;
-  busy: boolean;
-  disabled: boolean;
-  onAccept: () => void;
-  onDecline: () => void;
-}) {
-  return (
-    <View style={styles.card} testID={`offer-card-${offer.offerId}`}>
-      <Text style={styles.cardTitle}>งานรอบที่ {offer.roundNo}</Text>
-      <Text style={styles.cardDetail}>เสนอเมื่อ {formatTimestamp(offer.offeredAt)}</Text>
-      <Text style={styles.cardDetail}>
-        {offer.expiresAt ? `หมดเวลารับ ${formatTimestamp(offer.expiresAt)}` : 'ไม่ระบุเวลาหมดอายุ'}
-      </Text>
-
-      <View style={styles.cardActions}>
-        <Button
-          label="ปฏิเสธ"
-          variant="secondary"
-          loading={busy}
-          disabled={disabled}
-          onPress={onDecline}
-          testID={`button-decline-${offer.offerId}`}
-        />
-        <Button
-          label="รับงาน"
-          loading={busy}
-          disabled={disabled}
-          onPress={onAccept}
-          testID={`button-accept-${offer.offerId}`}
-        />
-      </View>
-    </View>
-  );
-}
-
-/**
- * Absolute local time — same convention `HomeScreen`'s `formatRecordedAt`
- * uses, for the same reason (DQ-G7-03): no relative "N นาทีที่แล้ว" that would
- * imply a freshness judgement this screen doesn't make.
- */
-function formatTimestamp(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleString('th-TH');
-}
-
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.xl, paddingBottom: spacing.sm, gap: spacing.sm },
-  title: { fontSize: fontSize.h2, fontFamily: fontFamily.bold, color: colors.textPrimary },
+  title: { fontSize: driverFontSize.screenTitle, fontFamily: fontFamily.bold, color: driverColors.text.primary },
   centred: {
     flex: 1,
     alignItems: 'center',
@@ -140,24 +101,12 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.xl,
   },
-  muted: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted, textAlign: 'center' },
-  errorTitle: { fontFamily: fontFamily.semibold, fontSize: fontSize.xl, color: colors.textPrimary },
-  actionError: {
-    fontFamily: fontFamily.medium,
-    fontSize: fontSize.md,
-    color: colors.danger,
-    paddingHorizontal: spacing.xs,
+  muted: {
+    fontFamily: fontFamily.regular,
+    fontSize: driverFontSize.body,
+    color: driverColors.text.meta,
+    textAlign: 'center',
   },
+  emptyWrap: { gap: spacing.lg },
   list: { gap: spacing.md },
-  card: {
-    gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceRaised,
-  },
-  cardTitle: { fontFamily: fontFamily.semibold, fontSize: fontSize.lg, color: colors.textPrimary },
-  cardDetail: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
-  cardActions: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.xs },
 });

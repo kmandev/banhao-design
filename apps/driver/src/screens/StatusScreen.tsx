@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, colors, fontFamily, fontSize, spacing } from '@banhao/ui';
+import { Button, driverColors, driverFontSize, fontFamily, spacing } from '@banhao/ui';
 import { Screen } from '../components/Screen';
-import { StatusStrip, type StatusStripVariant } from '../components/StatusStrip';
+import { StateCard, type StateCardVariant } from '../components/StateCard';
 import type { RiderStatus } from '../domain/riderProfile';
 
 /**
@@ -43,7 +43,7 @@ export type GateStatus = RiderStatus | null;
  * in `blocked` because nothing is in flight for it — but the resolution path
  * is BQ-022's, not this app's, which is exactly what DQ-G7-01 asks about.
  */
-export function statusStripVariant(status: GateStatus): StatusStripVariant {
+export function statusStripVariant(status: GateStatus): StateCardVariant {
   switch (status) {
     case 'REGISTERED':
     case 'DOCUMENTS_SUBMITTED':
@@ -75,6 +75,12 @@ const STATUS_DETAIL: Record<NonNullable<GateStatus>, string> = {
 
 const NO_RIDER_DETAIL = 'บัญชีนี้ยังไม่ได้ลงทะเบียนเป็นไรเดอร์';
 
+/** R-02a/b headline text — the two DEC-UX-006 variants this screen ever wears. */
+const VARIANT_HEADLINE: Record<'pending' | 'blocked', string> = {
+  pending: 'รอตรวจสอบ',
+  blocked: 'ยังรับงานไม่ได้',
+};
+
 export function StatusScreen({
   status,
   fullName,
@@ -86,6 +92,7 @@ export function StatusScreen({
   onSignOut: () => void;
 }) {
   const detail = status ? STATUS_DETAIL[status] : NO_RIDER_DETAIL;
+  const variant = statusStripVariant(status);
 
   return (
     <Screen scroll testID="screen-status">
@@ -94,7 +101,12 @@ export function StatusScreen({
         {fullName ? <Text style={styles.name}>{fullName}</Text> : null}
       </View>
 
-      <StatusStrip variant={statusStripVariant(status)} detail={detail} />
+      <StateCard
+        variant={variant}
+        headline={VARIANT_HEADLINE[variant as 'pending' | 'blocked']}
+        detail={detail}
+        testID="rider-status-card"
+      />
 
       <Text style={styles.note}>
         เมื่อบัญชีได้รับอนุมัติแล้ว ปุ่มเปิดรับงานจะปรากฏบนหน้านี้
@@ -111,12 +123,12 @@ export function StatusScreen({
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.xl, paddingBottom: spacing.sm, gap: spacing.xs },
-  title: { fontSize: fontSize.h2, fontFamily: fontFamily.bold, color: colors.textPrimary },
-  name: { fontFamily: fontFamily.regular, fontSize: fontSize.lg, color: colors.textMuted },
+  title: { fontSize: driverFontSize.screenTitle, fontFamily: fontFamily.bold, color: driverColors.text.primary },
+  name: { fontFamily: fontFamily.regular, fontSize: driverFontSize.body, color: driverColors.text.meta },
   note: {
     fontFamily: fontFamily.regular,
-    fontSize: fontSize.md,
-    color: colors.textSubtle,
+    fontSize: driverFontSize.supporting,
+    color: driverColors.text.faint,
     paddingHorizontal: spacing.xs,
   },
 });

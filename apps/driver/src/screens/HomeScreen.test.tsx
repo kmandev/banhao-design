@@ -56,6 +56,7 @@ function bind(overrides: {
   capturePosition?: jest.Mock;
   reportPosition?: jest.Mock;
   getOwnAvailability?: jest.Mock;
+  listPendingOffers?: jest.Mock;
 }) {
   const setOnline =
     overrides.setOnline ??
@@ -82,6 +83,8 @@ function bind(overrides: {
     overrides.getOwnAvailability ??
     jest.fn(async () => overrides.availability ?? OFFLINE);
 
+  const listPendingOffers = overrides.listPendingOffers ?? jest.fn(async () => []);
+
   Object.assign(repositories, {
     riderProfile: {
       getOwnProfile: overrides.profile ?? (async () => APPROVED_PROFILE),
@@ -89,9 +92,10 @@ function bind(overrides: {
     availability: { getOwnAvailability, setOnline },
     location: { reportPosition },
     deviceLocation: { capturePosition },
+    offers: { listPendingOffers },
   });
 
-  return { setOnline, capturePosition, reportPosition, getOwnAvailability };
+  return { setOnline, capturePosition, reportPosition, getOwnAvailability, listPendingOffers };
 }
 
 function renderHome() {
@@ -395,6 +399,82 @@ describe('HomeScreen — the rider is told about their recorded position', () =>
     await waitFor(() =>
       expect(textOf(screen.getByTestId('location-state'))).toContain('ตำแหน่งล่าสุดที่ระบบบันทึกไว้'),
     );
+  });
+});
+
+describe('HomeScreen — T2.4 / DG-05 offer count badge', () => {
+  const OFFER = {
+    offerId: 'attempt-1',
+    deliveryId: 'delivery-1',
+    roundNo: 1,
+    offeredAt: '2026-08-25T05:00:00Z',
+    expiresAt: '2026-08-25T05:01:00Z',
+    outcome: 'PENDING',
+  };
+
+  it('shows the badge with the correct count when there are pending offers', async () => {
+    bind({ availability: OFFLINE, listPendingOffers: jest.fn(async () => [OFFER, OFFER]) });
+
+    renderHome();
+
+    await waitFor(() => expect(screen.getByTestId('button-view-offers-badge')).toBeTruthy());
+    expect(screen.getByText('2')).toBeTruthy();
+    expect(screen.getByText('2 งานรอการตอบรับ')).toBeTruthy();
+  });
+
+  it('omits the badge at zero, per DG-05, and shows the neutral subtitle instead', async () => {
+    bind({ availability: OFFLINE, listPendingOffers: jest.fn(async () => []) });
+
+    renderHome();
+
+    await waitFor(() => expect(screen.getByText('ไม่มีงานรอการตอบรับ')).toBeTruthy());
+    expect(screen.queryByTestId('button-view-offers-badge')).toBeNull();
+  });
+
+  it('shows no badge and no subtitle while the count is not yet known, and does not touch Home\'s own error state', async () => {
+    bind({
+      availability: OFFLINE,
+      listPendingOffers: jest.fn(async () => {
+        throw new Error('network request failed');
+      }),
+    });
+
+    renderHome();
+
+    await waitFor(() => expect(screen.getByTestId('button-view-offers')).toBeTruthy());
+    expect(screen.queryByTestId('button-view-offers-badge')).toBeNull();
+    // The count read failing must never render Home's or the availability
+    // panel's error state — it is informational only.
+    expect(screen.queryByTestId('home-error')).toBeNull();
+    expect(screen.queryByTestId('availability-error')).toBeNull();
+  });
+
+  it('does not poll — a single read on focus, no interval, even while the screen stays mounted', async () => {
+    jest.useFakeTimers();
+    const { listPendingOffers } = bind({ availability: OFFLINE, listPendingOffers: jest.fn(async () => [OFFER]) });
+
+    renderHome();
+    await waitFor(() => expect(listPendingOffers).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      jest.advanceTimersByTime(60_000);
+    });
+
+    expect(listPendingOffers).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it('the offer row still navigates to OfferInbox regardless of the badge', async () => {
+    bind({ availability: OFFLINE, listPendingOffers: jest.fn(async () => [OFFER]) });
+
+    renderHome();
+    await waitFor(() => expect(screen.getByTestId('button-view-offers-badge')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('button-view-offers'));
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith('OfferInbox');
   });
 });
 

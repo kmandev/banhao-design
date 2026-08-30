@@ -1,11 +1,14 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, colors, fontFamily, fontSize, spacing } from '@banhao/ui';
+import { Button, driverColors, driverFontSize, fontFamily, radius, spacing } from '@banhao/ui';
+import { ErrorState } from '../components/ErrorState';
+import { ListRow } from '../components/ListRow';
 import { Screen } from '../components/Screen';
-import { StatusStrip } from '../components/StatusStrip';
+import { StateCard } from '../components/StateCard';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { useAuth } from '../hooks/useAuth';
+import { useHomeOfferCount } from '../hooks/useHomeOfferCount';
 import { useRiderAvailability } from '../hooks/useRiderAvailability';
 import { isApproved } from '../domain/riderProfile';
 import { repositories } from '../repositories';
@@ -30,14 +33,18 @@ type Nav = NativeStackNavigationProp<RiderStackParamList>;
  * without inventing a formula.
  *
  * No assigned-order or delivery detail either: this screen only **links** to
- * the two screens that own those reads. `RiderOfferInboxRepository` (G6.4) is
- * consumed by `OfferInboxScreen` (G-7.1); `RiderDeliveryRepository` and
+ * the two screens that own those reads. `RiderDeliveryRepository` and
  * `RiderOrderViewRepository` (G6.3) are consumed by `ActiveDeliveryScreen`
- * (G-7.2). Neither is imported here, so Home makes no extra read.
+ * (G-7.2) — neither is imported here, so the งานที่กำลังทำ row carries no
+ * badge or count of its own.
  *
- * The งานที่กำลังทำ row carries no badge or count — that would need a read
- * Home does not make (DG-05 in the Driver App redesign, still an open
- * recommendation rather than an approved one).
+ * **T2.4 / DG-05.** `RiderOfferInboxRepository` (G6.4) *is* now read here too
+ * — `useHomeOfferCount` calls its `listPendingOffers()` once per Home focus,
+ * purely for the งานที่เสนอ row's informational count badge. This is
+ * DG-05's own approved recommendation, not a second poller: no timer, no
+ * interval, and it reuses the exact query `OfferInboxScreen` already runs
+ * rather than adding a new read path. A failed count read renders no badge
+ * — it never becomes a Home-level error state.
  *
  * ## The approval gate
  *
@@ -58,11 +65,15 @@ export function HomeScreen() {
   // no screen to show it on, and no reason to query for it.
   const availability = useRiderAvailability(approved);
 
+  // T2.4 / DG-05 — informational only, one read per focus, no timer. Same
+  // approved-gate as availability above.
+  const offerCount = useHomeOfferCount(approved);
+
   if (profileState.status === 'loading') {
     return (
       <Screen testID="screen-home">
         <View style={styles.centred} testID="home-loading">
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={driverColors.action.primary} />
           <Text style={styles.muted}>กำลังโหลดสถานะไรเดอร์…</Text>
         </View>
       </Screen>
@@ -74,11 +85,14 @@ export function HomeScreen() {
     // approved rider something false about their own account.
     return (
       <Screen testID="screen-home">
-        <View style={styles.centred} testID="home-error">
-          <Text style={styles.errorTitle}>โหลดสถานะไรเดอร์ไม่สำเร็จ</Text>
-          <Text style={styles.muted}>{profileState.message}</Text>
-          <Button label="ลองอีกครั้ง" onPress={profileState.reload} testID="button-retry-profile" />
-        </View>
+        <ErrorState
+          testID="home-error"
+          headline="โหลดสถานะไรเดอร์ไม่สำเร็จ"
+          detail="ตรวจการเชื่อมต่ออินเทอร์เน็ต แล้วลองอีกครั้ง"
+          serverMessage={profileState.message}
+          onRetry={profileState.reload}
+          retryTestID="button-retry-profile"
+        />
       </Screen>
     );
   }
@@ -96,32 +110,42 @@ export function HomeScreen() {
   return (
     <Screen scroll testID="screen-home">
       <View style={styles.header}>
-        <Text style={styles.title}>หน้าหลัก</Text>
-        <Text style={styles.name}>{profile?.fullName}</Text>
+        <View>
+          <Text style={styles.title}>หน้าหลัก</Text>
+          <Text style={styles.name}>{profile?.fullName}</Text>
+        </View>
+        <Pressable
+          style={styles.refreshButton}
+          onPress={() => {
+            profileState.reload();
+            availability.refresh();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="รีเฟรชสถานะ"
+          testID="button-refresh"
+        >
+          <Text style={styles.refreshGlyph}>↻</Text>
+        </Pressable>
       </View>
 
       <AvailabilityPanel controller={availability} />
 
-      <Button
-        label="งานที่กำลังทำ"
+      <ListRow
+        icon="🛵"
+        title="งานที่กำลังทำ"
         onPress={() => navigation.navigate('ActiveDelivery')}
+        trailing="›"
         testID="button-view-active-delivery"
       />
 
-      <Button
-        label="งานที่เสนอ"
+      <ListRow
+        icon="📋"
+        title="งานที่เสนอ"
+        subtitle={offerSubtitle(offerCount)}
         onPress={() => navigation.navigate('OfferInbox')}
+        trailing="›"
+        badge={offerCount !== null && offerCount > 0 ? offerCount : undefined}
         testID="button-view-offers"
-      />
-
-      <Button
-        label="รีเฟรชสถานะ"
-        variant="ghost"
-        onPress={() => {
-          profileState.reload();
-          availability.refresh();
-        }}
-        testID="button-refresh"
       />
 
       <Button label="ออกจากระบบ" variant="secondary" onPress={() => void signOut()} testID="button-sign-out" />
@@ -140,7 +164,7 @@ function AvailabilityPanel({
   if (view.status === 'loading') {
     return (
       <View style={styles.centred} testID="availability-loading">
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={driverColors.action.primary} />
         <Text style={styles.muted}>กำลังโหลดสถานะรับงาน…</Text>
       </View>
     );
@@ -148,11 +172,13 @@ function AvailabilityPanel({
 
   if (view.status === 'error') {
     return (
-      <View style={styles.centred} testID="availability-error">
-        <Text style={styles.errorTitle}>โหลดสถานะรับงานไม่สำเร็จ</Text>
-        <Text style={styles.muted}>{view.message}</Text>
-        <Button label="ลองอีกครั้ง" onPress={controller.refresh} testID="button-retry-availability" />
-      </View>
+      <ErrorState
+        testID="availability-error"
+        headline="โหลดสถานะรับงานไม่สำเร็จ"
+        serverMessage={view.message}
+        onRetry={controller.refresh}
+        retryTestID="button-retry-availability"
+      />
     );
   }
 
@@ -172,9 +198,22 @@ function AvailabilityPanel({
         'เปิดรับงานอยู่ แต่ยังไม่มีตำแหน่งล่าสุด — กดรีเฟรชสถานะ'
     : 'ยังไม่ได้เปิดรับงาน จะไม่มีงานใหม่ส่งมา';
 
+  const action = isOnline ? (
+    <Button
+      label="ปิดรับงาน"
+      variant="secondary"
+      size="lg"
+      loading={busy}
+      onPress={() => void goOffline()}
+      testID="button-go-offline"
+    />
+  ) : (
+    <Button label="เปิดรับงาน" size="lg" loading={busy} onPress={() => void goOnline()} testID="button-go-online" />
+  );
+
   return (
     <View style={styles.panel} testID="availability-panel">
-      <StatusStrip variant={isOnline ? 'online' : 'offline'} detail={detail} />
+      <StateCard variant={isOnline ? 'online' : 'offline'} headline={isOnline ? 'กำลังรับงาน' : 'ปิดรับงาน'} detail={detail} action={action} busy={busy} />
 
       <Text style={styles.locationNote} testID="location-state">
         {hasPosition
@@ -182,27 +221,12 @@ function AvailabilityPanel({
           : 'ระบบยังไม่มีตำแหน่งของคุณ'}
       </Text>
 
-      {isOnline ? (
-        <Button
-          label="ปิดรับงาน"
-          variant="secondary"
-          loading={busy}
-          onPress={() => void goOffline()}
-          testID="button-go-offline"
-        />
-      ) : (
-        <Button
-          label="เปิดรับงาน"
-          loading={busy}
-          onPress={() => void goOnline()}
-          testID="button-go-online"
-        />
-      )}
-
       {actionError ? (
-        <Text style={styles.actionError} testID="availability-action-error">
-          {actionError}
-        </Text>
+        <View style={styles.actionErrorBox}>
+          <Text style={styles.actionError} testID="availability-action-error">
+            {actionError}
+          </Text>
+        </View>
       ) : null}
 
       <Text style={styles.privacyNote}>
@@ -210,6 +234,16 @@ function AvailabilityPanel({
       </Text>
     </View>
   );
+}
+
+/**
+ * T2.4 / DG-05 — the offer row's subtitle. `null` (not yet known, or the
+ * read failed) renders no subtitle at all rather than asserting a count that
+ * might be wrong; `0` and `>0` are both real, distinct answers.
+ */
+function offerSubtitle(count: number | null): string | undefined {
+  if (count === null) return undefined;
+  return count > 0 ? `${count} งานรอการตอบรับ` : 'ไม่มีงานรอการตอบรับ';
 }
 
 /**
@@ -226,35 +260,58 @@ function formatRecordedAt(iso: string): string {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.xl, paddingBottom: spacing.sm, gap: spacing.xs },
-  title: { fontSize: fontSize.h2, fontFamily: fontFamily.bold, color: colors.textPrimary },
-  name: { fontFamily: fontFamily.regular, fontSize: fontSize.lg, color: colors.textMuted },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.sm,
+  },
+  title: { fontSize: driverFontSize.screenTitle, fontFamily: fontFamily.bold, color: driverColors.text.primary },
+  name: { fontFamily: fontFamily.regular, fontSize: driverFontSize.body, color: driverColors.text.meta },
+  refreshButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: driverColors.border.default,
+    backgroundColor: driverColors.surface.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshGlyph: { fontFamily: fontFamily.regular, fontSize: driverFontSize.cardTitle, color: driverColors.text.primary },
 
   panel: { gap: spacing.md },
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md },
   muted: {
     fontFamily: fontFamily.regular,
-    fontSize: fontSize.md,
-    color: colors.textMuted,
+    fontSize: driverFontSize.body,
+    color: driverColors.text.meta,
     textAlign: 'center',
   },
-  errorTitle: { fontFamily: fontFamily.semibold, fontSize: fontSize.xl, color: colors.textPrimary },
   locationNote: {
     fontFamily: fontFamily.regular,
-    fontSize: fontSize.md,
-    color: colors.textMuted,
+    fontSize: driverFontSize.supporting,
+    color: driverColors.text.meta,
     paddingHorizontal: spacing.xs,
+  },
+  actionErrorBox: {
+    backgroundColor: driverColors.state.dangerSurface,
+    borderWidth: 1,
+    borderColor: driverColors.border.danger,
+    borderRadius: radius.lg,
+    padding: spacing.md,
   },
   actionError: {
     fontFamily: fontFamily.medium,
-    fontSize: fontSize.md,
-    color: colors.danger,
-    paddingHorizontal: spacing.xs,
+    fontSize: driverFontSize.supporting,
+    color: driverColors.onDanger.body,
   },
   privacyNote: {
     fontFamily: fontFamily.regular,
-    fontSize: fontSize.sm,
-    color: colors.textSubtle,
+    fontSize: driverFontSize.caption,
+    color: driverColors.text.faint,
     paddingHorizontal: spacing.xs,
   },
 });

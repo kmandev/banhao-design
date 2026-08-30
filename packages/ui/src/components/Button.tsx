@@ -11,10 +11,30 @@ import { colors, fontFamily, fontSize, radius, sizes, spacing } from '../theme/t
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 
+/**
+ * Touch-target override — driver app (T2.1, Driver App Redesign §D
+ * "Touch targets and spacing"): `lg` 60px the one primary action per screen,
+ * `md` 56px secondary/destructive-adjacent, `sm` 52px low-emphasis. `sm`
+ * equals the existing default height, so it exists for callers that want to
+ * name the size explicitly rather than rely on the default.
+ */
+export type ButtonSize = 'sm' | 'md' | 'lg';
+
+const SIZE_HEIGHT: Record<ButtonSize, number> = {
+  sm: sizes.buttonHeight,
+  md: 56,
+  lg: 60,
+};
+
 export interface ButtonProps {
   label: string;
   onPress?: () => void;
   variant?: ButtonVariant;
+  /**
+   * Touch-target height. Omitted by default so every existing caller keeps
+   * today's height (`sizes.buttonHeight`, 52) exactly — see `ButtonSize`.
+   */
+  size?: ButtonSize;
   disabled?: boolean;
   loading?: boolean;
   /** Rendered before the label, e.g. the emoji glyphs the design uses. */
@@ -34,6 +54,7 @@ export function Button({
   label,
   onPress,
   variant = 'primary',
+  size,
   disabled = false,
   loading = false,
   icon,
@@ -56,6 +77,10 @@ export function Button({
         styles.base,
         styles[variant],
         fullWidth && styles.fullWidth,
+        // Omitted entirely when `size` is unset, so the base minHeight from
+        // `styles.base` (sizes.buttonHeight) is the only one ever applied —
+        // today's default is untouched.
+        size ? { minHeight: SIZE_HEIGHT[size] } : null,
         pressed && !isInactive && styles[`${variant}Pressed` as const],
         isInactive && styles.disabled,
         style,
