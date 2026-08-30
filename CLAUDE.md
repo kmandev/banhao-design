@@ -1,7 +1,9 @@
 # CLAUDE.md — BANHAO project state
 
 Orientation file for AI agents. Written 2026-08-10, updated 2026-08-12 (Phase A /
-A-1) after the Application Architecture V1.1 approval.
+A-1) after the Application Architecture V1.1 approval; reconciled 2026-08-30
+(D-7) to the actual repository state after Phases B–D, E (foundation), and G
+(rider/delivery, incl. G7 proof-of-delivery) work landed.
 
 > **Authoritative for application implementation:**
 > [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
@@ -73,8 +75,13 @@ main @ 14289652                   ← YOU ARE HERE — everything below is merge
 `feature/supabase-customer-auth` still exist remotely but are now fully contained
 in `main`. **Branch new work from `main`.**
 
-`e471ec1d` is the **database checkpoint** — the commit V1.1 was reviewed against
-and the point at which the schema is LOCKED.
+`e471ec1d` is the **database checkpoint** — the commit V1.1 was reviewed against.
+Three further migrations have since been merged on top of that checkpoint as
+part of Phase C/E/G work (catalog availability visibility, the order creation
+function, and the rider release/reconciliation invariant — see §7), bringing
+the total to 19. The **table/RLS design itself is still the one V1.1 reviewed**
+— see §10 for the still-current "do not add a table/RLS policy/RPC without an
+explicit instruction" rule.
 
 ## 4. Completed work
 
@@ -98,7 +105,11 @@ and the point at which the schema is LOCKED.
 | EVENT-018 | Supabase Migration v1 — 11 new migrations (16 total), 40 tables, 60/60 assertions pass |
 | EVENT-019 | Migration set merged to `main` at `e471ec1d`; applied to `banhao-dev`. **Database V1 LOCKED** |
 | EVENT-020 | Application Architecture V1.1 — 12 `DEC-APP` decisions, 9 phases + F′, **APPROVED** |
-| **EVENT-021** | **Phase A / A-1 — stale documentation reconciled to V1.1; ADR-001…012 recorded `ACCEPTED`** (this update) |
+| EVENT-021 | Phase A / A-1 — stale documentation reconciled to V1.1; ADR-001…012 recorded `ACCEPTED` |
+| EVENT-022 | Phases B–D and Phase E order foundation built: identity/address APIs, catalog read path, cart/checkout, order creation |
+| EVENT-023 | Phase G rider/delivery work: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, proof-of-delivery (driver capture, storage, customer read) |
+| EVENT-024 | 3 further migrations merged after the `e471ec1d` checkpoint (catalog availability visibility, order creation function, rider release/reconciliation invariant) — see §3 and §7 |
+| **EVENT-025** | **D-7 — `CLAUDE.md` reconciled to actual repository state (migration count, app/API implementation status, G7 status)** (this update) |
 
 ## 5. Current implementation status
 
@@ -109,13 +120,23 @@ and the point at which the schema is LOCKED.
 | Design tokens & components | DONE — `packages/ui` |
 | Supabase Auth (Phone OTP) | **Configured live**; app-side flow written |
 | `profiles` + RLS | **DONE and live-verified** |
-| Mock repositories | DONE — everything except auth/profiles is mock-backed |
-| NestJS API | Foundation only — `/health`, `/api/v1/me` |
-| Merchant / Driver / Admin apps | **Not started** (shells only) |
-| Orders, payments, dispatch, settlement | **Not started — deliberately** |
+| Mock repositories | Customer app now reads several domains (catalog, cart, orders, delivery proof) from the real API — remaining unconverted areas are still mock-backed |
+| NestJS API | Beyond `/health`, `/api/v1/me`: implemented modules for identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (`NullPaymentProvider`), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage |
+| Merchant app | **Still a shell** — `App.tsx` only proves the shared packages resolve and the API is reachable; no ordering/cart/checkout/map UI |
+| Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
+| Admin app | **Still a shell** — default Next.js scaffold (`layout.tsx` / `page.tsx`), no admin UI |
+| Orders | Implemented in the API (creation, pricing, controller/service) and consumed by the Customer app — not the full nine-state lifecycle claimed complete, see Phase table in §9 |
+| Payments | `NullPaymentProvider` implemented (service, controller, webhook simulator, attempt-expiry, event processing) — no real provider (still blocked, see §10) |
+| Dispatch / delivery | Implemented in the API's rider module (broadcast dispatch, pickup/en-route/arrival/completion transitions, release + reconciliation) and the Driver app's delivery flow |
+| Proof of delivery (G7) | Implemented end-to-end: driver camera capture → client-side compression + EXIF strip → presigned upload to a private R2 bucket → server-side 2 MB size enforcement → signed download URL → Customer app proof read API and viewer. Retention/purge mechanism exists, **default OFF**. See §9/§10 for phase status |
+| Settlement | **Not started** — still hard-locked, see §9/§10 |
 
-**No business logic exists.** No order creation, payment integration, dispatch,
-or settlement. That is intentional, not an omission.
+**This is implemented functionality, not a verified-complete business flow.**
+The presence of these modules and screens means the corresponding code exists
+and has unit/integration test coverage where noted (§4, §9) — it does not by
+itself mean the full order → payment → dispatch → delivery lifecycle has been
+walked end-to-end against the live system the way the Customer App's auth flow
+was (§8). Treat "implemented" and "verified live" as separate claims.
 
 **The business rules are written down, and their P0 decisions are approved**
 (EVENT-014, **DEC-016…DEC-032**). The seven business documents tag every rule
@@ -148,8 +169,10 @@ Three `T0` technical questions block backend work: TQ-008, TQ-011, TQ-012.
 
 **The database is designed AND implemented as migrations** (EVENT-016 design →
 EVENT-017 DEC-033/034 lock → EVENT-018 migration). **16 migration files, 40
-tables, merged to `main` at `e471ec1d` and applied to `banhao-dev` — the schema
-is LOCKED.** Verified by two Docker-based test
+tables, merged to `main` at `e471ec1d` and applied to `banhao-dev`** — this was
+the schema V1.1 was reviewed against. **3 further migrations have since been
+merged** (EVENT-023/024) for Phase C/E/G needs, bringing the current total to
+**19 migration files**. Verified by two Docker-based test
 suites: **60/60 assertions pass**, including the rider race condition proven
 with two genuinely concurrent `psql` processes (see
 `docs/DATABASE_MIGRATION_V1_REPORT.md`). The live `profiles` RLS pattern
@@ -184,8 +207,13 @@ packages/
   ui/src/components/          Button, primitives, domain components
   types/ validation/ config/ api-client/
 
-apps/api/src/                 NestJS: guards, modules, PaymentProvider abstraction
-supabase/migrations/          3 migrations (extensions, profiles+roles, RLS hardening)
+apps/api/src/                 NestJS: guards, identity, merchant/catalog, cart, orders
+                               (incl. delivery-proof), payments (NullPaymentProvider),
+                               rider/delivery, storage
+apps/driver/                  Status/availability, offer inbox, active delivery,
+                               proof camera/review/upload; screens + repositories, tested
+apps/merchant/, apps/admin/   Still shells — see §5
+supabase/migrations/          19 migration files (16 at the `e471ec1d` checkpoint + 3 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -210,9 +238,11 @@ docs/OPEN_TECHNICAL_QUESTIONS.md  TQ-001…TQ-016 — read before backend work
 
 docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-033/034)
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
-docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations, 40 tables, 60/60 tests pass
+docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          16 migrations — LOCKED, do not edit or add
+supabase/migrations/*.sql          19 migrations (16 at checkpoint + 3 since) — do not
+                                    edit an existing file; do not add a new one without
+                                    an explicit instruction (see §10)
 ```
 
 ## 7. Database / Supabase status
@@ -226,7 +256,7 @@ supabase/migrations/*.sql          16 migrations — LOCKED, do not edit or add
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
-| Migrations | **All 16 applied live · 0 pending · schema LOCKED at `e471ec1d`** |
+| Migrations | **19 applied live · 0 pending** (16 at the `e471ec1d` V1.1 checkpoint + 3 merged since for Phase C/E/G) |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -294,16 +324,22 @@ this file summarises it.
 
 | Phase | What | State |
 |---|---|---|
-| **A** | Foundation hardening — docs, error envelope + `correlationId`, webhook raw body, `worker.ts`, `/internal/tick`, deploy workflows, Sentry | **IN PROGRESS** |
-| **B** | Identity & capability resolution — DEC-APP-004, membership-based guards | Next |
-| **C** | Catalog & merchant read path — replaces the customer app's mocks | |
-| **D** | Cart | |
-| **E** | Order — nine ACCEPTED states plus `CANCELLED`, as commands | |
-| **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | |
-| **G** | Rider & delivery — depends on E, **not** F | |
-| **H** | Notification — outbox via the tick | |
-| **I** | Admin operations | |
-| **F′** | Real payment provider — externally blocked; may land any time after F | |
+| **A** | Foundation hardening — docs, error envelope + `correlationId`, webhook raw body, `worker.ts`, `/internal/tick`, deploy workflows, Sentry | Implemented in earlier events |
+| **B** | Identity & capability resolution — DEC-APP-004, membership-based guards | Implemented — identity/address APIs built (EVENT-022) |
+| **C** | Catalog & merchant read path — replaces the customer app's mocks | Implemented — Customer app catalog integration built (EVENT-022) |
+| **D** | Cart | Implemented — cart/checkout validation built (EVENT-022) |
+| **E** | Order — nine ACCEPTED states plus `CANCELLED`, as commands | Order foundation + API built (EVENT-022); full lifecycle coverage not independently re-verified in this update |
+| **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | `NullPaymentProvider` module implemented (service, controller, webhook simulator, attempt-expiry, event processing) in the API; ledger-balances-to-zero property not independently re-verified in this update |
+| **G** | Rider & delivery — depends on E, **not** F | Substantial implementation: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, and the G7 proof-of-delivery flow (driver capture → compressed/EXIF-stripped upload → private R2 storage → signed download → customer read UI), all with test coverage (EVENT-023). Full-phase completion not independently re-verified in this update |
+| **H** | Notification — outbox via the tick | Not evidenced as started |
+| **I** | Admin operations | Not started — Admin app is still a shell (§5) |
+| **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
+
+**Current branch context:** this branch (`feature/g7-driver-availability`) is
+mid-Phase-G work (driver availability, delivery, and proof-of-delivery). The
+table above reflects what commit history and the file tree evidence as
+implemented, not a fresh end-to-end verification of every phase — see the
+caveat in §5.
 
 **Phase A local validation gate — do not skip, do not reorder:**
 implementation → local build → local tests → API starts in Docker locally →
@@ -324,7 +360,8 @@ Running alongside, not blocking:
    can type Thai (the Simulator cannot).
 
 **Do not start Phase F′ or any settlement work** (settlement needs six deferred
-tables and a Product Owner decision). **Do not touch the database.**
+tables and a Product Owner decision). **Do not touch the database** beyond a
+migration explicitly instructed for the current phase — see §10.
 
 ## 10. Decisions and constraints
 
@@ -373,10 +410,12 @@ tables and a Product Owner decision). **Do not touch the database.**
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **16 migrations are merged and the schema is LOCKED at `e471ec1d`.** Read
-  `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near them. Do not add a
-  table, view, RLS policy, RPC, or migration, and never run `supabase db push`
-  or `supabase link`, without an explicit instruction.
+- **19 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 3 since for Phase C/E/G — see §3/§7). Read
+  `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
+  edit an existing migration, and do not add a table, view, RLS policy, RPC, or
+  new migration, and never run `supabase db push` or `supabase link`, without
+  an explicit instruction.
 - **Do not weaken the two structural safeguards** in the deployed schema: the
   rider views' `security_barrier = true` (load-bearing, not cosmetic) and
   `release_rider_assignment()`'s `SECURITY INVOKER` + `service_role`-only
@@ -405,5 +444,8 @@ that they are built **in phase order, one phase at a time**, not opportunistical
 
 - Build only the current phase. Do not start the next one early.
 - **Still hard-locked:** Phase F′ (real payment provider) and settlement.
-- **Still hard-locked:** the database. No migration, no schema change.
+- **Still hard-locked:** the database, except where phase work has needed a
+  new migration under explicit instruction (3 have been merged since the
+  `e471ec1d` checkpoint — see §3/§7/§10 above). No opportunistic migration or
+  schema change outside that.
 - Merchant's approved target is **Next.js web**, not Expo (DEC-APP-003).
