@@ -752,3 +752,61 @@ describe('PaymentEventProcessingService.processPendingEvents', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 });
+
+describe('PaymentEventProcessingService — H-3 PaymentSucceeded outbox event', () => {
+  it('writes CUSTOMER + MERCHANT recipients with the correct aggregate and event_type, only on the guarded-UPDATE winner', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent(), error: null }, // claim
+      { data: paymentRow(), error: null }, // payments select
+      { data: null, error: null }, // payment_events.payment_id backfill
+      { data: ATTEMPT_ROW, error: null }, // payment_attempts select
+      { data: { id: 'txn-1' }, error: null }, // payment_transactions insert
+      { data: null, error: null }, // payments -> SUCCESS
+      { data: null, error: null }, // payment_attempts -> SUCCESS
+      { data: { id: ORDER_ID, customer_id: 'customer-1', restaurant_id: 'restaurant-1' }, error: null }, // orders -> PAID
+      { data: null, error: null }, // order_status_history insert
+      { data: { merchant_id: 'merchant-1' }, error: null }, // restaurants (merchant owner)
+      { data: { owner_user_id: 'merchant-owner-1' }, error: null }, // merchants (owner)
+      { data: null, error: null }, // outbox insert
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    await service.processOne(EVENT_ID);
+
+    const outboxInsert = calls.find((c) => c.table === 'outbox');
+    expect(outboxInsert?.payload).toMatchObject({
+      aggregate_type: 'order',
+      aggregate_id: ORDER_ID,
+      event_type: 'PaymentSucceeded',
+    });
+    const recipients = (outboxInsert?.payload as { payload: { recipients: unknown[] } }).payload.recipients;
+    expect(recipients).toEqual([
+      { recipientId: 'customer-1', recipientType: 'CUSTOMER' },
+      { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+    ]);
+  });
+
+  it('a self-heal retry (order already correctly PAID from an earlier run) writes no second outbox event', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent(), error: null }, // claim
+      { data: paymentRow({ state: 'SUCCESS' }), error: null }, // payments select — already SUCCESS
+      { data: null, error: null }, // payment_events.payment_id backfill
+      { data: ATTEMPT_ROW, error: null }, // payment_attempts select
+      { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } }, // payment_transactions insert — already recorded
+      { data: { provider_transaction_id: PROVIDER_EVENT_ID }, error: null }, // earliest transaction read — same event, self-heal branch
+      { data: null, error: null }, // payments -> SUCCESS (no-op, already SUCCESS)
+      { data: null, error: null }, // payment_attempts -> SUCCESS (no-op)
+      { data: null, error: null }, // orders -> PAID guarded UPDATE: 0 rows, already PAID
+      { data: { id: ORDER_ID, state: 'PAID' }, error: null }, // currentOrder read
+      { data: { id: 'history-1' }, error: null }, // order_status_history existence check — already present
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    await service.processOne(EVENT_ID);
+
+    // The guarded `orders` UPDATE never matched (already PAID), so
+    // `completeSuccessSideEffects`'s success branch — the only place the
+    // PaymentSucceeded outbox write happens — never ran.
+    expect(calls.find((c) => c.table === 'outbox')).toBeUndefined();
+  });
+});

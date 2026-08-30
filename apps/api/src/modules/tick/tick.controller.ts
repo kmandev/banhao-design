@@ -9,6 +9,10 @@ import {
   ProofPhotoRetentionService,
   type ProofPhotoRetentionResult,
 } from '../rider/proof-photo-retention.service';
+import {
+  OutboxDispatchService,
+  type OutboxDispatchResult,
+} from '../notifications/outbox-dispatch.service';
 
 export interface TickAcceptedResponse {
   accepted: true;
@@ -20,6 +24,8 @@ export interface TickAcceptedResponse {
   dispatch: DispatchRoundResult;
   /** DEC-039 — the POD proof-photo retention purge this tick ran. */
   podRetention: ProofPhotoRetentionResult;
+  /** H-2 — the outbox notification dispatch round this tick ran (ADR-005, ADR-011). */
+  outboxDispatch: OutboxDispatchResult;
 }
 
 /**
@@ -48,11 +54,15 @@ export interface TickAcceptedResponse {
  * shares nothing with them — a dispatch round reads and writes only delivery-
  * domain tables (DEC-018).
  *
- * `podRetention` (DEC-039) runs last, for the same "no scheduler of its own"
+ * `podRetention` (DEC-039) runs next, for the same "no scheduler of its own"
  * reason as `dispatch`. It is additive in exactly the same way and follows
  * the same never-throws contract `ProofPhotoRetentionService` documents on
  * itself — this handler has no per-phase try/catch of its own, so a phase
  * that *can* throw would fail every phase after it in the same tick.
+ *
+ * `outboxDispatch` (H-2, ADR-005/ADR-011) runs last, additive in the same
+ * way, and follows the same never-throws contract `OutboxDispatchService`
+ * documents on itself.
  */
 @Controller('internal/tick')
 export class TickController {
@@ -61,6 +71,7 @@ export class TickController {
     private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
     private readonly dispatch: DispatchService,
     private readonly podRetention: ProofPhotoRetentionService,
+    private readonly outboxDispatch: OutboxDispatchService,
   ) {}
 
   @Public()
@@ -73,6 +84,7 @@ export class TickController {
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
     const dispatch = await this.dispatch.runDispatchRound();
     const podRetention = await this.podRetention.run();
-    return { accepted: true, paymentEvents, paymentAttemptExpiry, dispatch, podRetention };
+    const outboxDispatch = await this.outboxDispatch.dispatchPending();
+    return { accepted: true, paymentEvents, paymentAttemptExpiry, dispatch, podRetention, outboxDispatch };
   }
 }

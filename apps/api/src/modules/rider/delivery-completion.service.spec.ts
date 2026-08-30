@@ -272,11 +272,17 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
 
     await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
+    // `orders` is last: H-3's OrderDelivered notification does a read-only
+    // recipient lookup after the tail finishes (the actual order WRITE
+    // still goes exclusively through the mocked `orders.completeDelivery`
+    // above, never `supabase.admin` directly). Degrades to "not found" here
+    // since no queued result was supplied for it.
     expect(calls.map((call) => call.table)).toEqual([
       'deliveries',
       'delivery_status_history',
       'rider_assignments',
       'rider_availability',
+      'orders',
     ]);
   });
 
@@ -877,5 +883,48 @@ describe('DeliveryCompletionService — server-side proof photo size limit (G7.4
     await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'NOT_FOUND');
     expect(getObjectSize).not.toHaveBeenCalled();
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('DeliveryCompletionService — H-3 OrderDelivered outbox event', () => {
+  it('writes CUSTOMER + MERCHANT recipients with the correct aggregate and event_type', async () => {
+    const { supabase, calls } = supabaseStub([
+      ...HAPPY_PATH,
+      { data: { customer_id: 'customer-1', restaurant_id: 'restaurant-1' }, error: null }, // orders (recipients)
+      { data: { merchant_id: 'merchant-1' }, error: null }, // restaurants (merchant owner)
+      { data: { owner_user_id: 'merchant-owner-1' }, error: null }, // merchants (owner)
+      OK, // outbox insert
+    ]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const outboxInsert = calls.find((c) => c.table === 'outbox');
+    expect(outboxInsert?.payload).toMatchObject({
+      aggregate_type: 'delivery',
+      aggregate_id: DELIVERY_ID,
+      event_type: 'OrderDelivered',
+    });
+    const recipients = (outboxInsert?.payload as { payload: { recipients: unknown[] } }).payload.recipients;
+    expect(recipients).toEqual([
+      { recipientId: 'customer-1', recipientType: 'CUSTOMER' },
+      { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+    ]);
+  });
+
+  it('a repair (delivery already DELIVERED, claimCompletion loses) writes no outbox event — only the guarded winner does', async () => {
+    const { supabase, calls } = supabaseStub([
+      CLAIM_NO_MATCH, // claimCompletion: 0 rows
+      deliveryRow('DELIVERED'), // readDelivery — already DELIVERED, still ours
+      ASSIGNMENT_CLOSED,
+      SLOT_RELEASED,
+    ]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    expect(calls.find((c) => c.table === 'outbox')).toBeUndefined();
   });
 });

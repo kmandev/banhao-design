@@ -3,16 +3,18 @@ import type { PaymentEventProcessingService } from '../payments/payment-event-pr
 import type { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import type { DispatchService } from '../rider/dispatch.service';
 import type { ProofPhotoRetentionService } from '../rider/proof-photo-retention.service';
+import type { OutboxDispatchService } from '../notifications/outbox-dispatch.service';
 
 /**
  * F-2b: `POST /internal/tick` invokes `PaymentEventProcessingService`. Now
  * also invokes `PaymentAttemptExpiryService` (payment-attempt/QR expiry,
- * DEC-029), `DispatchService` (G-2 broadcast dispatch, DEC-020/DEC-037), and
- * `ProofPhotoRetentionService` (POD retention, DEC-039). All four services
- * are plain stubs here — their own logic is each one's own `*.spec.ts` file's
- * job. This file proves only the wiring: the tick handler calls every
- * processor and reports what each did, additively to the original
- * `{ accepted: true }` shape.
+ * DEC-029), `DispatchService` (G-2 broadcast dispatch, DEC-020/DEC-037),
+ * `ProofPhotoRetentionService` (POD retention, DEC-039), and
+ * `OutboxDispatchService` (H-2 outbox notification dispatch, ADR-005/ADR-011).
+ * All five services are plain stubs here — their own logic is each one's own
+ * `*.spec.ts` file's job. This file proves only the wiring: the tick handler
+ * calls every processor and reports what each did, additively to the
+ * original `{ accepted: true }` shape.
  */
 describe('TickController', () => {
   function build(
@@ -27,6 +29,7 @@ describe('TickController', () => {
       skipped: 0,
       failed: 0,
     },
+    outboxDispatchResult = { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
   ) {
     const processPendingEvents = jest.fn().mockResolvedValue(paymentEventsResult);
     const processExpiredAttempts = jest.fn().mockResolvedValue(expiryResult);
@@ -36,8 +39,10 @@ describe('TickController', () => {
     const dispatch = { runDispatchRound } as unknown as DispatchService;
     const run = jest.fn().mockResolvedValue(podRetentionResult);
     const podRetention = { run } as unknown as ProofPhotoRetentionService;
-    const controller = new TickController(paymentEvents, paymentAttemptExpiry, dispatch, podRetention);
-    return { controller, processPendingEvents, processExpiredAttempts, runDispatchRound, run };
+    const dispatchPending = jest.fn().mockResolvedValue(outboxDispatchResult);
+    const outboxDispatch = { dispatchPending } as unknown as OutboxDispatchService;
+    const controller = new TickController(paymentEvents, paymentAttemptExpiry, dispatch, podRetention, outboxDispatch);
+    return { controller, processPendingEvents, processExpiredAttempts, runDispatchRound, run, dispatchPending };
   }
 
   it('invokes payment-event processing and reports the outcome, additive to the original shape', async () => {
@@ -59,6 +64,7 @@ describe('TickController', () => {
         skipped: 0,
         failed: 0,
       },
+      outboxDispatch: { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
     });
   });
 
@@ -98,6 +104,7 @@ describe('TickController', () => {
       'paymentAttemptExpiry',
       'dispatch',
       'podRetention',
+      'outboxDispatch',
     ]);
   });
 
@@ -127,5 +134,17 @@ describe('TickController', () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledWith();
     expect(result.podRetention).toEqual(podRetentionResult);
+  });
+
+  it('runs the outbox dispatch pass exactly once per tick, additive to the existing response shape — H-2', async () => {
+    const outboxDispatchResult = { claimed: 5, dispatched: 4, skipped: 1, failed: 0 };
+    const { controller, dispatchPending } = build(undefined, undefined, undefined, undefined, outboxDispatchResult);
+
+    const result = await controller.handle();
+
+    expect(dispatchPending).toHaveBeenCalledTimes(1);
+    expect(dispatchPending).toHaveBeenCalledWith();
+    expect(result.outboxDispatch).toEqual(outboxDispatchResult);
+    expect(result.accepted).toBe(true);
   });
 });

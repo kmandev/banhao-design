@@ -21,6 +21,7 @@ import { mockAddressRepository } from './mockAddresses';
 import { supabaseOrderDetailRepository } from './supabaseOrderDetail';
 import { supabaseOrderHistoryRepository } from './supabaseOrderHistory';
 import { apiDeliveryProofRepository } from './apiDeliveryProof';
+import { apiNotificationRepository } from './apiNotifications';
 import type {
   CartValidationRepository,
   DeliveryProofRepository,
@@ -50,6 +51,7 @@ export {
   createApiOrderCreationRepository,
 } from './apiOrderCreation';
 export { apiAddressRepository, createApiAddressRepository } from './apiAddresses';
+export { apiNotificationRepository, createApiNotificationRepository } from './apiNotifications';
 export { mockAddressRepository, createMockAddressRepository } from './mockAddresses';
 export {
   supabaseOrderDetailRepository,
@@ -89,6 +91,7 @@ export const mockOrderRepository: OrderRepository = {
 
 export const mockNotificationRepository: NotificationRepository = {
   listNotifications: (): Promise<AppNotification[]> => delay(mockNotifications),
+  markNotificationRead: (): Promise<void> => delay(undefined),
 };
 
 /**
@@ -151,8 +154,12 @@ export const mockDeliveryProofRepository: DeliveryProofRepository = {
  * mints a short-lived signed R2 URL server-side, so — unlike order detail —
  * this goes through the API rather than a direct Supabase read.
  *
- * Notifications remain mock-backed: they are later-phase work this task does
- * not touch.
+ * **Notifications are live** — Phase H-5A. `GET /api/v1/me/notifications` /
+ * `PATCH /api/v1/me/notifications/:id` are customer-scoped the same way
+ * addresses are (ownership is a query filter server-side, backed by the
+ * unchanged `notifications_select_own`/`notifications_update_own` RLS
+ * policies) — `apiNotificationRepository` maps the real rows into the same
+ * `AppNotification` shape the mock always returned.
  */
 export const repositories: Repositories = {
   catalog: supabaseCatalogRepository,
@@ -162,7 +169,7 @@ export const repositories: Repositories = {
   orders: supabaseOrderHistoryRepository,
   orderDetail: supabaseOrderDetailRepository,
   deliveryProof: apiDeliveryProofRepository,
-  notifications: mockNotificationRepository,
+  notifications: apiNotificationRepository,
   addresses: apiAddressRepository,
 };
 

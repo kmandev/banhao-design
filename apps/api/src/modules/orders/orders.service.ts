@@ -21,11 +21,19 @@ interface CreateOrderRow {
   state: string;
 }
 
-/** The columns a transition's diagnostic read needs after a guarded UPDATE finds 0 rows. */
+/** The columns a transition's diagnostic read needs after a guarded UPDATE finds 0 rows — also what a successful transition's own outbox write needs to resolve recipients. */
 interface OrderDiagnosisRow {
   id: string;
   restaurant_id: string;
   state: string;
+  customer_id: string;
+}
+
+/** H-3 locked recipient shape — `outbox.payload.recipients[]`. Duplicated per module, matching `isUniqueViolation`'s own established precedent in this codebase rather than a shared cross-module resolver. */
+type RecipientType = 'CUSTOMER' | 'MERCHANT' | 'RIDER' | 'OPERATOR';
+interface OutboxRecipient {
+  recipientId: string;
+  recipientType: RecipientType;
 }
 
 /** `orders`, the columns creating this order's `deliveries` row needs. */
@@ -35,6 +43,7 @@ interface OrderDeliverySnapshotRow {
   state: string;
   delivery_lat: number | null;
   delivery_lng: number | null;
+  customer_id: string;
 }
 
 /** `restaurants`, the pickup coordinates a delivery is created with. */
@@ -186,6 +195,24 @@ export class OrdersService {
       throw new DomainError('INTERNAL_ERROR', { message: 'Order creation returned no result' });
     }
 
+    // H-3 — Phase H notification contract (ADR-005). NOT part of the atomic
+    // `create_order()` transaction: that function is a migration-owned,
+    // `SECURITY INVOKER` boundary the schema lock forbids touching, so an
+    // outbox row for it cannot be literally atomic without a migration. This
+    // is the same accepted limitation `ensureDeliveryForAcceptedOrder`'s own
+    // header already documents for the `deliveries` INSERT below — a
+    // best-effort follow-up statement, not a second transaction. A crash
+    // between `create_order()` committing and this insert would silently
+    // lose the `OrderCreated` notification; nothing self-heals it, because
+    // nothing marks an order as "still needs its outbox row." Flagged, not
+    // hidden — see the H-3 final report.
+    const merchantOwnerId = await this.resolveMerchantOwnerId(restaurantId);
+    const orderCreatedRecipients: OutboxRecipient[] = [{ recipientId: customerId, recipientType: 'CUSTOMER' }];
+    if (merchantOwnerId) {
+      orderCreatedRecipients.push({ recipientId: merchantOwnerId, recipientType: 'MERCHANT' });
+    }
+    await this.writeOutboxEvent('order', row.order_id, 'OrderCreated', orderCreatedRecipients);
+
     return { orderId: row.order_id, orderNumber: row.order_number, state: row.state };
   }
 
@@ -250,7 +277,14 @@ export class OrdersService {
 
     let transitioned: OrderTransitionResponse;
     try {
-      transitioned = await this.merchantTransition(user, orderId, 'PAID', 'MERCHANT_ACCEPTED', 'accepted_at');
+      transitioned = await this.merchantTransition(
+        user,
+        orderId,
+        'PAID',
+        'MERCHANT_ACCEPTED',
+        'accepted_at',
+        'MerchantAcceptedOrder',
+      );
     } catch (cause) {
       // Self-heal only. The original failure is what the caller must see, so
       // a repair attempt that itself fails is logged and swallowed rather
@@ -282,7 +316,7 @@ export class OrdersService {
 
   /** `PREPARING → READY_FOR_PICKUP`. */
   async markReady(user: AuthenticatedUser, orderId: string): Promise<OrderTransitionResponse> {
-    return this.merchantTransition(user, orderId, 'PREPARING', 'READY_FOR_PICKUP', 'ready_at');
+    return this.merchantTransition(user, orderId, 'PREPARING', 'READY_FOR_PICKUP', 'ready_at', 'OrderReady');
   }
 
   /**
@@ -342,6 +376,7 @@ export class OrdersService {
     fromState: string,
     toState: string,
     timestampColumn: string | null,
+    outboxEventType?: string,
   ): Promise<OrderTransitionResponse> {
     const restaurantIds = user.capabilities.merchant.map((m) => m.restaurantId);
     if (restaurantIds.length === 0) {
@@ -359,7 +394,7 @@ export class OrdersService {
       .eq('id', orderId)
       .eq('state', fromState)
       .in('restaurant_id', restaurantIds)
-      .select('id, restaurant_id, state')
+      .select('id, restaurant_id, state, customer_id')
       .maybeSingle<OrderDiagnosisRow>();
 
     if (error) {
@@ -372,7 +407,167 @@ export class OrdersService {
 
     await this.writeHistory(orderId, fromState, toState, 'MERCHANT', user.id);
 
+    // H-3 — fires only on the guarded-UPDATE winner's own request, exactly
+    // like `writeHistory` above: a retry that finds the order already moved
+    // matches 0 rows and never reaches here, so a state transition is never
+    // double-notified merely because a caller retried it.
+    if (outboxEventType) {
+      await this.writeOrderTransitionOutboxEvent(outboxEventType, data);
+    }
+
     return { orderId: data.id, state: data.state };
+  }
+
+  /**
+   * H-3 — recipient resolution for the two `merchantTransition` outcomes that
+   * are canonical notification events (`MerchantAcceptedOrder`,
+   * `OrderReady`). CUSTOMER and MERCHANT are always attempted; RIDER is
+   * added only for `OrderReady`, and only when `deliveries.rider_id` is
+   * already set at this point — `MerchantAcceptedOrder` fires at the exact
+   * moment `ensureDeliveryForAcceptedOrder` creates the delivery as
+   * `RIDER_SEARCHING` with `rider_id` still null, so a rider recipient never
+   * exists there structurally, not merely by omission.
+   */
+  private async writeOrderTransitionOutboxEvent(eventType: string, data: OrderDiagnosisRow): Promise<void> {
+    const recipients = await this.resolveEventRecipients(data, ['CUSTOMER', 'MERCHANT']);
+
+    if (eventType === 'OrderReady') {
+      const riderProfileId = await this.resolveAssignedRiderProfileId(data.id);
+      if (riderProfileId) {
+        recipients.push({ recipientId: riderProfileId, recipientType: 'RIDER' });
+      }
+    }
+
+    await this.writeOutboxEvent('order', data.id, eventType, recipients);
+  }
+
+  /** CUSTOMER from the order row already in hand; MERCHANT via the restaurant's owning merchant — H-3's locked resolution model. */
+  private async resolveEventRecipients(
+    data: { customer_id: string; restaurant_id: string },
+    roles: RecipientType[],
+  ): Promise<OutboxRecipient[]> {
+    const recipients: OutboxRecipient[] = [];
+
+    if (roles.includes('CUSTOMER')) {
+      recipients.push({ recipientId: data.customer_id, recipientType: 'CUSTOMER' });
+    }
+
+    if (roles.includes('MERCHANT')) {
+      const ownerId = await this.resolveMerchantOwnerId(data.restaurant_id);
+      if (ownerId) {
+        recipients.push({ recipientId: ownerId, recipientType: 'MERCHANT' });
+      }
+    }
+
+    return recipients;
+  }
+
+  /**
+   * `restaurants.merchant_id -> merchants.owner_user_id` — the "existing
+   * authoritative merchant owner identity already available through the
+   * order/restaurant relationship" the H-3 contract names, read the same way
+   * `ensureDeliveryForAcceptedOrder` already reads `restaurants` directly
+   * (this module already crosses into that table; this is the same
+   * relationship, one hop further). Never `restaurant_members` — H-3
+   * deliberately does not notify every staff member, only the owner.
+   * Returns `null` (never throws) on any read failure or missing row: a
+   * missing merchant identity means this recipient is omitted, not that the
+   * whole event fails to write.
+   */
+  private async resolveMerchantOwnerId(restaurantId: string): Promise<string | null> {
+    const { data: restaurant, error: restaurantError } = await this.supabase.admin
+      .from('restaurants')
+      .select('merchant_id')
+      .eq('id', restaurantId)
+      .maybeSingle<{ merchant_id: string }>();
+
+    if (restaurantError || !restaurant) {
+      this.logger.error(
+        `Merchant-owner resolution: restaurants read failed for ${restaurantId}: ${restaurantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    const { data: merchant, error: merchantError } = await this.supabase.admin
+      .from('merchants')
+      .select('owner_user_id')
+      .eq('id', restaurant.merchant_id)
+      .maybeSingle<{ owner_user_id: string }>();
+
+    if (merchantError || !merchant) {
+      this.logger.error(
+        `Merchant-owner resolution: merchants read failed for restaurant ${restaurantId}: ${merchantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    return merchant.owner_user_id;
+  }
+
+  /**
+   * `deliveries.rider_id -> riders.user_id` for the order's current delivery,
+   * if any. `deliveries.rider_id` is the schema's own documented authority on
+   * who is delivering an order right now — never `rider_assignments`, which
+   * the H-3 contract explicitly rules out as a substitute. Returns `null`
+   * (never throws) when no delivery exists yet, no rider is assigned yet, or
+   * either read fails — every case means "omit RIDER", not "fail the event".
+   */
+  private async resolveAssignedRiderProfileId(orderId: string): Promise<string | null> {
+    const { data: delivery, error: deliveryError } = await this.supabase.admin
+      .from('deliveries')
+      .select('rider_id')
+      .eq('order_id', orderId)
+      .maybeSingle<{ rider_id: string | null }>();
+
+    if (deliveryError || !delivery?.rider_id) {
+      return null;
+    }
+
+    const { data: rider, error: riderError } = await this.supabase.admin
+      .from('riders')
+      .select('user_id')
+      .eq('id', delivery.rider_id)
+      .maybeSingle<{ user_id: string }>();
+
+    if (riderError || !rider) {
+      this.logger.error(
+        `Rider-profile resolution failed for order ${orderId} (rider ${delivery.rider_id}): ${riderError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    return rider.user_id;
+  }
+
+  /**
+   * The outbox write itself — ADR-005. Best-effort: logged and swallowed on
+   * failure, never thrown, matching `ProofPhotoRetentionService.writeAuditRecord`'s
+   * own "a failed write does not undo the purge that already happened"
+   * discipline. The state transition this follows has already succeeded and
+   * already been reported to its caller; a lost notification must never turn
+   * that into a client-visible 500. An empty `recipients` array (no
+   * authoritative recipient existed) still writes the row — an event with no
+   * resolvable recipient is not an error, and `OutboxDispatchService`
+   * (H-2) already handles zero valid recipients as a normal, empty dispatch.
+   */
+  private async writeOutboxEvent(
+    aggregateType: 'order' | 'delivery',
+    aggregateId: string,
+    eventType: string,
+    recipients: OutboxRecipient[],
+  ): Promise<void> {
+    const { error } = await this.supabase.admin.from('outbox').insert({
+      aggregate_type: aggregateType,
+      aggregate_id: aggregateId,
+      event_type: eventType,
+      payload: { recipients },
+    });
+
+    if (error) {
+      this.logger.error(
+        `outbox insert failed for ${eventType} (${aggregateType} ${aggregateId}): ${error.message}`,
+      );
+    }
   }
 
   /**
@@ -417,7 +612,7 @@ export class OrdersService {
 
     const { data: order, error: orderError } = await this.supabase.admin
       .from('orders')
-      .select('id, restaurant_id, state, delivery_lat, delivery_lng')
+      .select('id, restaurant_id, state, delivery_lat, delivery_lng, customer_id')
       .eq('id', orderId)
       .maybeSingle<OrderDeliverySnapshotRow>();
 
@@ -439,24 +634,28 @@ export class OrdersService {
       this.failDeliveryCreation(orderId, `restaurant read failed: ${restaurantError.message}`);
     }
 
-    const { error: insertError } = await this.supabase.admin.from('deliveries').insert({
-      order_id: order.id,
-      state: 'RIDER_SEARCHING',
-      // Pickup is the restaurant's own location; dropoff is the order's
-      // snapshot, never a live read of `addresses` — the order is the
-      // authority for where it is going (§8's snapshot discipline), and the
-      // address may since have been edited or archived.
-      pickup_lat: restaurant?.lat ?? null,
-      pickup_lng: restaurant?.lng ?? null,
-      dropoff_lat: order.delivery_lat,
-      dropoff_lng: order.delivery_lng,
-      // Explicitly null, not omitted: BQ-029/DEC-023 keep the rider earnings
-      // formula OPEN and the column's own migration comment forbids
-      // inventing a default. Writing the null deliberately records that no
-      // amount was computed, rather than leaving a reader to wonder whether
-      // one was forgotten.
-      rider_earning_satang: null,
-    });
+    const { data: insertedDelivery, error: insertError } = await this.supabase.admin
+      .from('deliveries')
+      .insert({
+        order_id: order.id,
+        state: 'RIDER_SEARCHING',
+        // Pickup is the restaurant's own location; dropoff is the order's
+        // snapshot, never a live read of `addresses` — the order is the
+        // authority for where it is going (§8's snapshot discipline), and the
+        // address may since have been edited or archived.
+        pickup_lat: restaurant?.lat ?? null,
+        pickup_lng: restaurant?.lng ?? null,
+        dropoff_lat: order.delivery_lat,
+        dropoff_lng: order.delivery_lng,
+        // Explicitly null, not omitted: BQ-029/DEC-023 keep the rider earnings
+        // formula OPEN and the column's own migration comment forbids
+        // inventing a default. Writing the null deliberately records that no
+        // amount was computed, rather than leaving a reader to wonder whether
+        // one was forgotten.
+        rider_earning_satang: null,
+      })
+      .select('id')
+      .maybeSingle<{ id: string }>();
 
     if (insertError) {
       // `deliveries_order_id_key` is the sole authority on whether this order
@@ -469,6 +668,16 @@ export class OrdersService {
         return;
       }
       this.failDeliveryCreation(orderId, `deliveries insert failed: ${insertError.message}`);
+    }
+
+    // H-3 — RiderSearchStarted, CUSTOMER only. Fires only when THIS call is
+    // the one that genuinely created the delivery row (the unique-violation
+    // branch above already returned for a concurrent/retried creation), so a
+    // retry of `acceptOrder` never double-notifies.
+    if (insertedDelivery) {
+      await this.writeOutboxEvent('delivery', insertedDelivery.id, 'RiderSearchStarted', [
+        { recipientId: order.customer_id, recipientType: 'CUSTOMER' },
+      ]);
     }
   }
 
@@ -494,7 +703,7 @@ export class OrdersService {
       .update(patch)
       .eq('id', orderId)
       .eq('state', fromState)
-      .select('id, restaurant_id, state')
+      .select('id, restaurant_id, state, customer_id')
       .maybeSingle<OrderDiagnosisRow>();
 
     if (error) {
@@ -529,7 +738,7 @@ export class OrdersService {
       .eq('id', orderId)
       .eq('customer_id', user.id)
       .in('state', CUSTOMER_CANCELLABLE_STATES)
-      .select('id, restaurant_id, state')
+      .select('id, restaurant_id, state, customer_id')
       .maybeSingle<OrderDiagnosisRow>();
 
     if (error) {
@@ -556,7 +765,7 @@ export class OrdersService {
       .update({ state: 'CANCELLED', cancelled_at: new Date().toISOString() })
       .eq('id', orderId)
       .in('state', OPERATOR_CANCELLABLE_STATES)
-      .select('id, restaurant_id, state')
+      .select('id, restaurant_id, state, customer_id')
       .maybeSingle<OrderDiagnosisRow>();
 
     if (error) {
@@ -589,7 +798,7 @@ export class OrdersService {
   ): Promise<DomainError> {
     const { data } = await this.supabase.admin
       .from('orders')
-      .select('id, restaurant_id, state')
+      .select('id, restaurant_id, state, customer_id')
       .eq('id', orderId)
       .maybeSingle<OrderDiagnosisRow>();
 

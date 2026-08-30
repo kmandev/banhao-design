@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
   Card,
@@ -15,6 +16,30 @@ import { repositories } from '../repositories';
 /** 17 แจ้งเตือน. */
 export function NotificationsScreen() {
   const state = useAsyncData(() => repositories.notifications.listNotifications());
+
+  // H-5B — locally-confirmed reads, layered over `state.data` rather than a
+  // copy of it: the list itself still comes straight from the load, so a
+  // `reload()` after a real change is never fighting stale local state, and
+  // there is no render where this lags behind a fresh `state.data` (which a
+  // `useEffect`-synced copy would produce for one frame on every load).
+  const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
+
+  /**
+   * Marks read only once the API confirms it — a failure leaves `readIds`
+   * untouched, which is what "preserve current visual state" means here: an
+   * already-unread card just stays unread, no revert to invent and no new
+   * failure UX (H-5B's product lock: no toast/global error system for this
+   * action).
+   */
+  async function handlePress(id: string, alreadyRead: boolean): Promise<void> {
+    if (alreadyRead) return;
+    try {
+      await repositories.notifications.markNotificationRead(id);
+      setReadIds((current) => new Set(current).add(id));
+    } catch {
+      // Swallowed deliberately — see the function's own comment above.
+    }
+  }
 
   return (
     <Screen scroll testID="screen-notifications">
@@ -40,19 +65,27 @@ export function NotificationsScreen() {
           testID="state-notifications-empty"
         />
       ) : (
-        state.data.map((n) => (
-          <Card key={n.id} style={[styles.card, !n.read && styles.cardUnread]}>
-            <View style={styles.row}>
-              <Text style={styles.glyph}>{n.glyph}</Text>
-              <View style={styles.body}>
-                <Text style={styles.title}>{n.title}</Text>
-                <Text style={styles.text}>{n.body}</Text>
-                <Text style={styles.time}>{n.time}</Text>
+        state.data.map((n) => {
+          const read = n.read || readIds.has(n.id);
+          return (
+            <Card
+              key={n.id}
+              onPress={() => void handlePress(n.id, read)}
+              testID={`notification-card-${n.id}`}
+              style={[styles.card, !read && styles.cardUnread]}
+            >
+              <View style={styles.row}>
+                <Text style={styles.glyph}>{n.glyph}</Text>
+                <View style={styles.body}>
+                  <Text style={styles.title}>{n.title}</Text>
+                  <Text style={styles.text}>{n.body}</Text>
+                  <Text style={styles.time}>{n.time}</Text>
+                </View>
+                {!read ? <View style={styles.dot} accessibilityLabel="ยังไม่ได้อ่าน" /> : null}
               </View>
-              {!n.read ? <View style={styles.dot} accessibilityLabel="ยังไม่ได้อ่าน" /> : null}
-            </View>
-          </Card>
-        ))
+            </Card>
+          );
+        })
       )}
     </Screen>
   );

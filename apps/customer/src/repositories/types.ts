@@ -160,6 +160,8 @@ export interface OrderDetailRepository {
 
 export interface NotificationRepository {
   listNotifications(): Promise<AppNotification[]>;
+  /** Marks one notification read (H-5A). `id` is `AppNotification.id`. */
+  markNotificationRead(id: string): Promise<void>;
 }
 
 /**

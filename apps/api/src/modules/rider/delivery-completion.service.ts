@@ -23,6 +23,13 @@ interface OrderStateRow {
   state: string;
 }
 
+/** H-3 locked recipient shape — `outbox.payload.recipients[]`. Duplicated per module, matching `isUniqueViolation`'s own established precedent in this codebase rather than a shared cross-module resolver. */
+type RecipientType = 'CUSTOMER' | 'MERCHANT' | 'RIDER' | 'OPERATOR';
+interface OutboxRecipient {
+  recipientId: string;
+  recipientType: RecipientType;
+}
+
 /** `rider_availability`, the two columns the slot CAS reads back. */
 interface RiderAvailabilityRow {
   rider_id: string;
@@ -215,6 +222,12 @@ export class DeliveryCompletionService {
     // Everything from here is "finish the tail", never "decide whether the
     // delivery transition happened".
     await this.finishTail(user, delivery, riderId);
+
+    // H-3 — OrderDelivered, CUSTOMER + MERCHANT. Fires only on this branch —
+    // the guarded `claimCompletion` UPDATE actually winning — never from
+    // `repairCompletion`, which finishes the tail for a delivery an earlier
+    // request already moved (and already notified).
+    await this.writeOrderDeliveredOutboxEvent(delivery);
 
     return this.response(delivery, riderId);
   }
@@ -693,5 +706,77 @@ export class DeliveryCompletionService {
       deliveredAt: delivery.delivered_at,
       riderId,
     };
+  }
+
+  /**
+   * H-3 — `OrderDelivered`, CUSTOMER + MERCHANT. Reads `orders`/`restaurants`/
+   * `merchants` directly — this service already reads `orders` directly
+   * (`orderIsAlreadyDelivered`), and the H-3 contract calls for the same
+   * order/restaurant/merchant-owner relationship. Never throws: a
+   * resolution or write failure is logged and swallowed — the delivery has
+   * already completed and already been reported to the rider.
+   */
+  private async writeOrderDeliveredOutboxEvent(delivery: DeliveryRow): Promise<void> {
+    const { data: order, error: orderError } = await this.supabase.admin
+      .from('orders')
+      .select('customer_id, restaurant_id')
+      .eq('id', delivery.order_id)
+      .maybeSingle<{ customer_id: string; restaurant_id: string }>();
+
+    if (orderError || !order) {
+      this.logger.error(
+        `OrderDelivered recipient resolution: orders read failed for delivery ${delivery.id}: ${orderError?.message ?? 'not found'}`,
+      );
+      return;
+    }
+
+    const recipients: OutboxRecipient[] = [{ recipientId: order.customer_id, recipientType: 'CUSTOMER' }];
+
+    const merchantOwnerId = await this.resolveMerchantOwnerId(order.restaurant_id);
+    if (merchantOwnerId) {
+      recipients.push({ recipientId: merchantOwnerId, recipientType: 'MERCHANT' });
+    }
+
+    const { error } = await this.supabase.admin.from('outbox').insert({
+      aggregate_type: 'delivery',
+      aggregate_id: delivery.id,
+      event_type: 'OrderDelivered',
+      payload: { recipients },
+    });
+
+    if (error) {
+      this.logger.error(`outbox insert failed for OrderDelivered (delivery ${delivery.id}): ${error.message}`);
+    }
+  }
+
+  /** `restaurants.merchant_id -> merchants.owner_user_id`. */
+  private async resolveMerchantOwnerId(restaurantId: string): Promise<string | null> {
+    const { data: restaurant, error: restaurantError } = await this.supabase.admin
+      .from('restaurants')
+      .select('merchant_id')
+      .eq('id', restaurantId)
+      .maybeSingle<{ merchant_id: string }>();
+
+    if (restaurantError || !restaurant) {
+      this.logger.error(
+        `Merchant-owner resolution: restaurants read failed for ${restaurantId}: ${restaurantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    const { data: merchant, error: merchantError } = await this.supabase.admin
+      .from('merchants')
+      .select('owner_user_id')
+      .eq('id', restaurant.merchant_id)
+      .maybeSingle<{ owner_user_id: string }>();
+
+    if (merchantError || !merchant) {
+      this.logger.error(
+        `Merchant-owner resolution: merchants read failed for restaurant ${restaurantId}: ${merchantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    return merchant.owner_user_id;
   }
 }

@@ -48,6 +48,46 @@ const OWNED_ADDRESS: Address = {
 
 const FEES = { deliveryFeeSatang: 1500, serviceFeeSatang: 500 };
 
+/**
+ * `.from()` after `create_order()` succeeds — the OrderCreated outbox write
+ * (H-3), which reads `restaurants`/`merchants` to resolve the MERCHANT
+ * recipient and inserts into `outbox`. Same chainable-stub shape as
+ * `ordersTableStub` below: every call it does not have a queued result for
+ * degrades to `{ data: null, error: null }` (a harmless "not found"/no-op),
+ * never a crash — `resolveMerchantOwnerId` and `writeOutboxEvent` are both
+ * written to tolerate exactly that.
+ */
+function outboxAwareFromStub(results: Result[] = []) {
+  const calls: Recorded[] = [];
+  let index = 0;
+
+  const nextResult = (): Result => results[index++] ?? { data: null, error: null };
+
+  const from = jest.fn((table: string) => {
+    const call: Recorded = { table, op: 'select', eq: {}, in: {} };
+    calls.push(call);
+
+    const builder: Record<string, unknown> = {
+      select: () => builder,
+      insert(payload: Record<string, unknown>) {
+        call.op = 'insert';
+        call.payload = payload;
+        return builder;
+      },
+      eq(column: string, value: unknown) {
+        call.eq[column] = value;
+        return builder;
+      },
+      maybeSingle: () => Promise.resolve(nextResult()),
+      then: (resolve: (r: Result) => unknown) => Promise.resolve(nextResult()).then(resolve),
+    };
+
+    return builder;
+  });
+
+  return { from, calls };
+}
+
 function buildService(options?: {
   cartResult?: CartValidationResult | (() => Promise<CartValidationResult>);
   addressResult?: Address | null;
@@ -71,7 +111,7 @@ function buildService(options?: {
       error: null,
     },
   );
-  const fromSpy = jest.fn();
+  const { from: fromSpy, calls: fromCalls } = outboxAwareFromStub();
 
   const supabase = { admin: { rpc, from: fromSpy } } as unknown as SupabaseService;
   const cart = { validate: cartValidate } as unknown as CartService;
@@ -80,7 +120,7 @@ function buildService(options?: {
 
   const subject = new OrdersService(supabase, cart, addresses, pricing);
 
-  return { subject, cartValidate, addressesGetOwned, pricingResolve, rpc, fromSpy };
+  return { subject, cartValidate, addressesGetOwned, pricingResolve, rpc, fromSpy, fromCalls };
 }
 
 describe('OrdersService.create — cart', () => {
@@ -230,12 +270,24 @@ describe('OrdersService.create — create_order call contract', () => {
     });
   });
 
-  it('never writes through supabase.admin.from — create_order is the only write path', async () => {
-    const { subject, fromSpy } = buildService();
+  it('never writes order data through supabase.admin.from — create_order is the only write path for the order itself; H-3 adds only the OrderCreated outbox follow-up', async () => {
+    const { subject, fromCalls } = buildService();
 
     await subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' });
 
-    expect(fromSpy).not.toHaveBeenCalled();
+    // No order/order_items/order_item_options write ever happens outside the
+    // atomic create_order() RPC — that invariant is unchanged. `.from()` is
+    // now called, but only for H-3's best-effort OrderCreated notification
+    // follow-up (restaurants/merchants read, outbox insert), never for order
+    // data itself.
+    for (const table of ['orders', 'order_items', 'order_item_options']) {
+      expect(fromCalls.some((c) => c.table === table)).toBe(false);
+    }
+    // The stub's `restaurants` read defaults to "not found", so
+    // `resolveMerchantOwnerId` short-circuits before ever reaching
+    // `merchants` — the outbox row still writes, with only CUSTOMER
+    // resolved.
+    expect(fromCalls.map((c) => c.table).sort()).toEqual(['outbox', 'restaurants']);
   });
 
   it('maps a successful create_order row to orderId/orderNumber/state', async () => {
@@ -686,13 +738,21 @@ describe('OrdersService.cancelOrder — operator', () => {
  * Phase G foundation — `acceptOrder` also creates the order's `deliveries`
  * row (`RIDER_SEARCHING`), and repairs a missing one on retry.
  *
- * Call order for a successful accept: guarded `orders` UPDATE → history
- * insert → `orders` read → `restaurants` read → `deliveries` insert.
+ * Call order for a successful accept (H-3 adds the two outbox segments):
+ * guarded `orders` UPDATE → history insert → [MerchantAcceptedOrder outbox:
+ * `restaurants` read → `merchants` read → `outbox` insert] → `orders` read →
+ * `restaurants` read → `deliveries` insert → [RiderSearchStarted outbox:
+ * `outbox` insert, only when a delivery was genuinely created].
  */
 const RESTAURANT_LAT = 15.123456;
 const RESTAURANT_LNG = 105.123456;
 const DELIVERY_LAT = 15.222222;
 const DELIVERY_LNG = 105.222222;
+
+/** H-3 — the MerchantAcceptedOrder outbox segment that now precedes `ensureDeliveryForAcceptedOrder`'s own reads on every successful `acceptOrder` call. */
+const MERCHANT_OWNER_LOOKUP = { data: { merchant_id: 'merchant-1' }, error: null };
+const MERCHANT_OWNER = { data: { owner_user_id: 'merchant-owner-1' }, error: null };
+const MERCHANT_ACCEPTED_OUTBOX_SEGMENT = [MERCHANT_OWNER_LOOKUP, MERCHANT_OWNER, { data: null, error: null }];
 
 /** The `orders` row `ensureDeliveryForAcceptedOrder` reads back. */
 function deliverySnapshot(state = 'MERCHANT_ACCEPTED', restaurantId = RESTAURANT_A) {
@@ -727,9 +787,11 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     const { subject, calls } = buildTransitionService([
       updatedRow('MERCHANT_ACCEPTED'),
       NO_ERROR, // order_status_history
+      ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       RESTAURANT_PICKUP,
       NO_ERROR, // deliveries insert
+      NO_ERROR, // RiderSearchStarted outbox insert
     ]);
 
     const result = await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
@@ -745,8 +807,10 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     const { subject, calls } = buildTransitionService([
       updatedRow('MERCHANT_ACCEPTED'),
       NO_ERROR,
+      ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       RESTAURANT_PICKUP,
+      NO_ERROR,
       NO_ERROR,
     ]);
 
@@ -761,8 +825,10 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     const { subject, calls } = buildTransitionService([
       updatedRow('MERCHANT_ACCEPTED'),
       NO_ERROR,
+      ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       RESTAURANT_PICKUP,
+      NO_ERROR,
       NO_ERROR,
     ]);
 
@@ -779,8 +845,10 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     const { subject, calls } = buildTransitionService([
       updatedRow('MERCHANT_ACCEPTED'),
       NO_ERROR,
+      ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       { data: { lat: null, lng: null }, error: null },
+      NO_ERROR,
       NO_ERROR,
     ]);
 
@@ -796,8 +864,10 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     const { subject, calls } = buildTransitionService([
       updatedRow('MERCHANT_ACCEPTED'),
       NO_ERROR,
+      ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       RESTAURANT_PICKUP,
+      NO_ERROR,
       NO_ERROR,
     ]);
 
@@ -816,11 +886,15 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     ]) {
       expect(calls.find((c) => c.table === table)).toBeUndefined();
     }
-    // Only these four tables are touched at all.
+    // Only these tables are touched at all — H-3 adds `merchants` and
+    // `outbox` (the MerchantAcceptedOrder and RiderSearchStarted
+    // notification writes), never a money/ledger/settlement table.
     expect([...new Set(calls.map((c) => c.table))].sort()).toEqual([
       'deliveries',
+      'merchants',
       'order_status_history',
       'orders',
+      'outbox',
       'restaurants',
     ]);
   });
@@ -829,6 +903,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     const { subject } = buildTransitionService([
       updatedRow('MERCHANT_ACCEPTED'),
       NO_ERROR,
+      ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       RESTAURANT_PICKUP,
       { data: null, error: { message: 'connection reset' } },
@@ -887,6 +962,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
     const { subject, calls } = buildTransitionService([
       updatedRow('MERCHANT_ACCEPTED'), // this caller won the orders transition
       NO_ERROR,
+      ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       RESTAURANT_PICKUP,
       // ...but lost the deliveries race to a concurrent healer.
@@ -988,5 +1064,153 @@ describe('OrdersService — atomic guarded update (no SELECT-then-UPDATE)', () =
     await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
       code: 'INTERNAL_ERROR',
     });
+  });
+});
+
+/** The shape of every `outbox.insert(...)` call body this service writes — see `writeOutboxEvent`. */
+interface OutboxInsertBody {
+  aggregate_type: string;
+  aggregate_id: string;
+  event_type: string;
+  payload: { recipients: { recipientId: string; recipientType: string }[] };
+}
+
+describe('OrdersService — H-3 outbox events', () => {
+  const ACCEPTED_ROW = {
+    data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'MERCHANT_ACCEPTED', customer_id: 'customer-1' },
+    error: null,
+  };
+  const READY_ROW = {
+    data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'READY_FOR_PICKUP', customer_id: 'customer-1' },
+    error: null,
+  };
+
+  it('OrderCreated: writes CUSTOMER + MERCHANT recipients with the correct aggregate and event_type', async () => {
+    const { from, calls } = outboxAwareFromStub([
+      { data: { merchant_id: 'merchant-1' }, error: null }, // restaurants (merchant owner)
+      { data: { owner_user_id: 'merchant-owner-1' }, error: null }, // merchants (owner)
+      { data: null, error: null }, // outbox insert
+    ]);
+    const rpc = jest
+      .fn()
+      .mockResolvedValue({ data: [{ order_id: 'order-42', order_number: 'BH-1', state: 'CREATED' }], error: null });
+    const supabase = { admin: { rpc, from } } as unknown as SupabaseService;
+    const cart = { validate: jest.fn().mockResolvedValue(VALID_CART) } as unknown as CartService;
+    const addresses = { getOwned: jest.fn().mockResolvedValue(OWNED_ADDRESS) } as unknown as AddressesService;
+    const pricing = { resolveOrderFees: jest.fn().mockReturnValue(FEES) } as unknown as OrderPricingService;
+    const subject = new OrdersService(supabase, cart, addresses, pricing);
+
+    await subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' });
+
+    const outboxInsert = calls.find((c) => c.table === 'outbox');
+    const body = outboxInsert?.payload as OutboxInsertBody | undefined;
+    expect(body).toMatchObject({
+      aggregate_type: 'order',
+      aggregate_id: 'order-42',
+      event_type: 'OrderCreated',
+    });
+    expect(body?.payload.recipients).toEqual([
+      { recipientId: CUSTOMER_ID, recipientType: 'CUSTOMER' },
+      { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+    ]);
+  });
+
+  it('MerchantAcceptedOrder: CUSTOMER only — never RIDER, since no delivery has a rider yet at this transition', async () => {
+    const { supabase, calls } = ordersTableStub([
+      ACCEPTED_ROW, // guarded UPDATE
+      { data: null, error: null }, // order_status_history
+      { data: { merchant_id: 'merchant-1' }, error: null }, // restaurants (merchant owner)
+      { data: { owner_user_id: 'merchant-owner-1' }, error: null }, // merchants (owner)
+      { data: null, error: null }, // outbox insert (MerchantAcceptedOrder)
+      { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'MERCHANT_ACCEPTED', delivery_lat: null, delivery_lng: null, customer_id: 'customer-1' }, error: null }, // ensureDelivery order read
+      { data: { lat: null, lng: null }, error: null }, // restaurants (pickup coords)
+      { data: { id: 'delivery-1' }, error: null }, // deliveries insert
+      { data: null, error: null }, // outbox insert (RiderSearchStarted)
+    ]);
+    const cart = {} as unknown as CartService;
+    const addresses = {} as unknown as AddressesService;
+    const pricing = {} as unknown as OrderPricingService;
+    const subject = new OrdersService(supabase, cart, addresses, pricing);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    const outboxInserts = calls.filter((c) => c.table === 'outbox');
+    const merchantAcceptedEvent = outboxInserts
+      .map((c) => c.payload as unknown as OutboxInsertBody)
+      .find((body) => body.event_type === 'MerchantAcceptedOrder');
+    expect(merchantAcceptedEvent).toMatchObject({
+      aggregate_type: 'order',
+      aggregate_id: ORDER_ID,
+      event_type: 'MerchantAcceptedOrder',
+    });
+    const recipients = merchantAcceptedEvent?.payload.recipients ?? [];
+    expect(recipients).toEqual([
+      { recipientId: 'customer-1', recipientType: 'CUSTOMER' },
+      { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+    ]);
+    expect(recipients.some((r) => r.recipientType === 'RIDER')).toBe(false);
+  });
+
+  it('OrderReady: adds RIDER only when deliveries.rider_id is already set for this order', async () => {
+    const { supabase, calls } = ordersTableStub([
+      READY_ROW, // guarded UPDATE
+      { data: null, error: null }, // order_status_history
+      { data: { merchant_id: 'merchant-1' }, error: null }, // restaurants (merchant owner)
+      { data: { owner_user_id: 'merchant-owner-1' }, error: null }, // merchants (owner)
+      { data: { rider_id: 'rider-row-1' }, error: null }, // deliveries (assigned rider lookup)
+      { data: { user_id: 'rider-profile-1' }, error: null }, // riders (profile id)
+      { data: null, error: null }, // outbox insert (OrderReady)
+    ]);
+    const cart = {} as unknown as CartService;
+    const addresses = {} as unknown as AddressesService;
+    const pricing = {} as unknown as OrderPricingService;
+    const subject = new OrdersService(supabase, cart, addresses, pricing);
+
+    await subject.markReady(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    const outboxInsert = calls.find((c) => c.table === 'outbox');
+    const body = outboxInsert?.payload as OutboxInsertBody | undefined;
+    expect(body).toMatchObject({
+      aggregate_type: 'order',
+      aggregate_id: ORDER_ID,
+      event_type: 'OrderReady',
+    });
+    expect(body?.payload.recipients).toEqual([
+      { recipientId: 'customer-1', recipientType: 'CUSTOMER' },
+      { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+      { recipientId: 'rider-profile-1', recipientType: 'RIDER' },
+    ]);
+  });
+
+  it('OrderReady: omits RIDER entirely (never a null/fake recipient) when no rider is assigned yet', async () => {
+    const { supabase, calls } = ordersTableStub([
+      READY_ROW,
+      { data: null, error: null },
+      { data: { merchant_id: 'merchant-1' }, error: null },
+      { data: { owner_user_id: 'merchant-owner-1' }, error: null },
+      { data: { rider_id: null }, error: null }, // deliveries row exists but no rider yet
+      { data: null, error: null }, // outbox insert
+    ]);
+    const cart = {} as unknown as CartService;
+    const addresses = {} as unknown as AddressesService;
+    const pricing = {} as unknown as OrderPricingService;
+    const subject = new OrdersService(supabase, cart, addresses, pricing);
+
+    await subject.markReady(merchantUser(RESTAURANT_A), ORDER_ID);
+
+    const outboxInsert = calls.find((c) => c.table === 'outbox');
+    const body = outboxInsert?.payload as OutboxInsertBody | undefined;
+    expect(body?.payload.recipients.map((r) => r.recipientType)).toEqual(['CUSTOMER', 'MERCHANT']);
+  });
+
+  it('a failed merchantTransition (guarded UPDATE matches 0 rows) writes no outbox event at all', async () => {
+    const { subject, calls } = buildTransitionService([
+      { data: null, error: null }, // guarded UPDATE: 0 rows
+      { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'CREATED', customer_id: 'customer-1' }, error: null }, // diagnostic read
+    ]);
+
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toThrow();
+
+    expect(calls.find((c) => c.table === 'outbox')).toBeUndefined();
   });
 });

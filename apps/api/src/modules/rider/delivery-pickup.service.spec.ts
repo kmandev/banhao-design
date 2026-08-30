@@ -454,7 +454,7 @@ describe('DeliveryPickupService — rider identity', () => {
 });
 
 describe('DeliveryPickupService — table isolation', () => {
-  it('touches only deliveries and delivery_status_history directly — order writes go exclusively through OrdersService, never a direct orders table call', async () => {
+  it('writes only deliveries and delivery_status_history directly — order WRITES go exclusively through OrdersService, never a direct orders table write; H-3 adds a direct, read-only orders lookup for the OrderPickedUp notification', async () => {
     const { supabase, calls } = supabaseStub([CLAIM_OK, OK]);
     const pickupOrder = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'PICKED_UP' });
     const orders = ordersStub(pickupOrder);
@@ -462,7 +462,13 @@ describe('DeliveryPickupService — table isolation', () => {
     await new DeliveryPickupService(supabase, orders).pickup(riderUser(), DELIVERY_ID);
 
     const tables = [...new Set(calls.map((c) => c.table))].sort();
-    expect(tables).toEqual(['deliveries', 'delivery_status_history']);
+    // `orders` now appears — a read-only lookup for OrderPickedUp's
+    // recipients (H-3), degrading gracefully to "not found" here since no
+    // queued result was supplied for it. No order WRITE happens directly:
+    // that stays exclusively `OrdersService.pickupOrder`'s (the mocked
+    // `orders.pickupOrder` above), never a call through `supabase.admin`.
+    expect(tables).toEqual(['deliveries', 'delivery_status_history', 'orders']);
+    expect(calls.find((c) => c.table === 'orders')?.op).toBe('select');
 
     for (const call of calls) {
       const keys = Object.keys(call.payload ?? {});
@@ -505,5 +511,47 @@ describe('DeliveryPickupService — table isolation', () => {
     expect(orderCalls).toHaveLength(1);
     expect(orderCalls[0]?.op).toBe('select');
     expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+  });
+});
+
+describe('DeliveryPickupService — H-3 OrderPickedUp outbox event', () => {
+  it('writes CUSTOMER + MERCHANT recipients with the correct aggregate and event_type', async () => {
+    const { supabase, calls } = supabaseStub([
+      CLAIM_OK, // claimPickup — the guarded UPDATE winner
+      OK, // delivery_status_history insert
+      { data: { customer_id: 'customer-1', restaurant_id: 'restaurant-1' }, error: null }, // orders (recipients)
+      { data: { merchant_id: 'merchant-1' }, error: null }, // restaurants (merchant owner)
+      { data: { owner_user_id: 'merchant-owner-1' }, error: null }, // merchants (owner)
+      OK, // outbox insert
+    ]);
+    const pickupOrder = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'PICKED_UP' });
+    const orders = ordersStub(pickupOrder);
+
+    await new DeliveryPickupService(supabase, orders).pickup(riderUser(), DELIVERY_ID);
+
+    const outboxInsert = calls.find((c) => c.table === 'outbox');
+    expect(outboxInsert?.payload).toMatchObject({
+      aggregate_type: 'delivery',
+      aggregate_id: DELIVERY_ID,
+      event_type: 'OrderPickedUp',
+    });
+    const recipients = (outboxInsert?.payload as { payload: { recipients: unknown[] } }).payload.recipients;
+    expect(recipients).toEqual([
+      { recipientId: 'customer-1', recipientType: 'CUSTOMER' },
+      { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+    ]);
+  });
+
+  it('a repair (delivery already PICKED_UP, claimPickup loses) writes no outbox event — only the guarded winner does', async () => {
+    const { supabase, calls } = supabaseStub([
+      CLAIM_NO_MATCH, // claimPickup: 0 rows
+      { data: { id: DELIVERY_ID, state: 'PICKED_UP', rider_id: RIDER_ID, order_id: ORDER_ID }, error: null }, // readDelivery — already PICKED_UP, still ours
+    ]);
+    const pickupOrder = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'PICKED_UP' });
+    const orders = ordersStub(pickupOrder);
+
+    await new DeliveryPickupService(supabase, orders).pickup(riderUser(), DELIVERY_ID);
+
+    expect(calls.find((c) => c.table === 'outbox')).toBeUndefined();
   });
 });

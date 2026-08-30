@@ -19,6 +19,14 @@ interface ClaimedDeliveryRow {
   id: string;
   state: string;
   rider_id: string | null;
+  order_id: string;
+}
+
+/** H-3 locked recipient shape — `outbox.payload.recipients[]`. Duplicated per module, matching `isUniqueViolation`'s own established precedent in this codebase rather than a shared cross-module resolver. */
+type RecipientType = 'CUSTOMER' | 'MERCHANT' | 'RIDER' | 'OPERATOR';
+interface OutboxRecipient {
+  recipientId: string;
+  recipientType: RecipientType;
 }
 
 /** `deliveries`, one delivery a rider is already engaged with. */
@@ -140,6 +148,12 @@ export class OfferAcceptanceService {
     }
 
     await this.recordAssignment(delivery.id, riderId, offer.id);
+
+    // H-3 — RiderAssigned, CUSTOMER + MERCHANT + RIDER. Fires only on THIS
+    // branch — the guarded `claimDelivery` UPDATE actually winning — never
+    // from the `alreadyHoldsThisDelivery` repair branch above, which reuses
+    // an assignment an earlier request already won and notified.
+    await this.writeRiderAssignedOutboxEvent(delivery, riderId);
 
     return { deliveryId: delivery.id, state: delivery.state, riderId };
   }
@@ -424,7 +438,7 @@ export class OfferAcceptanceService {
       .eq('id', deliveryId)
       .in('state', [...DISPATCHABLE_DELIVERY_STATES])
       .is('rider_id', null)
-      .select('id, state, rider_id')
+      .select('id, state, rider_id, order_id')
       .maybeSingle<ClaimedDeliveryRow>();
 
     if (error) {
@@ -489,6 +503,102 @@ export class OfferAcceptanceService {
     if (siblingError) {
       this.logger.error(`Sibling offer supersede failed for delivery ${deliveryId}: ${siblingError.message}`);
     }
+  }
+
+  /**
+   * H-3 — `RiderAssigned`, CUSTOMER + MERCHANT + RIDER. Reads `orders`/
+   * `restaurants`/`merchants`/`riders` directly: this module already reads
+   * `deliveries` freely, and the H-3 contract explicitly calls for the
+   * order/restaurant/merchant-owner relationship and `deliveries.rider_id`
+   * (never `rider_assignments`) as the recipient sources. Never throws — a
+   * resolution or write failure is logged and swallowed, matching
+   * `releaseRiderSlot`'s own precedent: the assignment has already
+   * succeeded and already been reported to the rider, and a lost
+   * notification must not turn that into a failed accept.
+   */
+  private async writeRiderAssignedOutboxEvent(delivery: ClaimedDeliveryRow, riderId: string): Promise<void> {
+    const { data: order, error: orderError } = await this.supabase.admin
+      .from('orders')
+      .select('customer_id, restaurant_id')
+      .eq('id', delivery.order_id)
+      .maybeSingle<{ customer_id: string; restaurant_id: string }>();
+
+    if (orderError || !order) {
+      this.logger.error(
+        `RiderAssigned recipient resolution: orders read failed for delivery ${delivery.id}: ${orderError?.message ?? 'not found'}`,
+      );
+      return;
+    }
+
+    const recipients: OutboxRecipient[] = [{ recipientId: order.customer_id, recipientType: 'CUSTOMER' }];
+
+    const merchantOwnerId = await this.resolveMerchantOwnerId(order.restaurant_id);
+    if (merchantOwnerId) {
+      recipients.push({ recipientId: merchantOwnerId, recipientType: 'MERCHANT' });
+    }
+
+    const riderProfileId = await this.resolveRiderProfileId(riderId);
+    if (riderProfileId) {
+      recipients.push({ recipientId: riderProfileId, recipientType: 'RIDER' });
+    }
+
+    const { error } = await this.supabase.admin.from('outbox').insert({
+      aggregate_type: 'delivery',
+      aggregate_id: delivery.id,
+      event_type: 'RiderAssigned',
+      payload: { recipients },
+    });
+
+    if (error) {
+      this.logger.error(`outbox insert failed for RiderAssigned (delivery ${delivery.id}): ${error.message}`);
+    }
+  }
+
+  /** `restaurants.merchant_id -> merchants.owner_user_id`. */
+  private async resolveMerchantOwnerId(restaurantId: string): Promise<string | null> {
+    const { data: restaurant, error: restaurantError } = await this.supabase.admin
+      .from('restaurants')
+      .select('merchant_id')
+      .eq('id', restaurantId)
+      .maybeSingle<{ merchant_id: string }>();
+
+    if (restaurantError || !restaurant) {
+      this.logger.error(
+        `Merchant-owner resolution: restaurants read failed for ${restaurantId}: ${restaurantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    const { data: merchant, error: merchantError } = await this.supabase.admin
+      .from('merchants')
+      .select('owner_user_id')
+      .eq('id', restaurant.merchant_id)
+      .maybeSingle<{ owner_user_id: string }>();
+
+    if (merchantError || !merchant) {
+      this.logger.error(
+        `Merchant-owner resolution: merchants read failed for restaurant ${restaurantId}: ${merchantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    return merchant.owner_user_id;
+  }
+
+  /** `riders.id -> riders.user_id` — the rider's own profile id, for the RIDER recipient. */
+  private async resolveRiderProfileId(riderId: string): Promise<string | null> {
+    const { data, error } = await this.supabase.admin
+      .from('riders')
+      .select('user_id')
+      .eq('id', riderId)
+      .maybeSingle<{ user_id: string }>();
+
+    if (error || !data) {
+      this.logger.error(`Rider-profile resolution failed for rider ${riderId}: ${error?.message ?? 'not found'}`);
+      return null;
+    }
+
+    return data.user_id;
   }
 }
 

@@ -114,9 +114,18 @@ const LIVE_OFFER = {
 const CLAIMED_SLOT = { data: { rider_id: RIDER_ID, active_delivery_count: 1 }, error: null };
 const SLOT_TAKEN: Result = { data: null, error: null };
 const ASSIGNED_DELIVERY = {
-  data: { id: DELIVERY_ID, state: 'RIDER_ASSIGNED', rider_id: RIDER_ID },
+  data: { id: DELIVERY_ID, state: 'RIDER_ASSIGNED', rider_id: RIDER_ID, order_id: 'order-1' },
   error: null,
 };
+
+/** H-3 — the RiderAssigned outbox segment: `orders` → `restaurants` → `merchants` → `riders` → `outbox` insert. */
+const RIDER_ASSIGNED_OUTBOX_SEGMENT = [
+  { data: { customer_id: 'customer-1', restaurant_id: 'restaurant-1' }, error: null },
+  { data: { merchant_id: 'merchant-1' }, error: null },
+  { data: { owner_user_id: 'merchant-owner-1' }, error: null },
+  { data: { user_id: 'rider-profile-1' }, error: null },
+  { data: null, error: null },
+];
 const OK: Result = { data: null, error: null };
 
 async function expectDomainError(promise: Promise<unknown>, code: string): Promise<void> {
@@ -473,7 +482,7 @@ describe('OfferAcceptanceService — crash windows', () => {
 });
 
 describe('OfferAcceptanceService — isolation', () => {
-  it('touches no payment, ledger, refund, reconciliation, settlement or order table', async () => {
+  it('touches no payment, ledger, refund, reconciliation or settlement table — H-3 adds only orders/restaurants/merchants/riders reads and an outbox write, for the RiderAssigned notification', async () => {
     const { supabase, calls } = supabaseStub([
       { data: LIVE_OFFER, error: null },
       CLAIMED_SLOT,
@@ -481,16 +490,28 @@ describe('OfferAcceptanceService — isolation', () => {
       OK,
       OK,
       OK,
+      ...RIDER_ASSIGNED_OUTBOX_SEGMENT,
     ]);
 
     await new OfferAcceptanceService(supabase).acceptOffer(riderUser(), OFFER_ID);
 
-    expect([...new Set(calls.map((c) => c.table))].sort()).toEqual([
-      'deliveries',
-      'rider_assignment_attempts',
-      'rider_assignments',
-      'rider_availability',
-    ]);
+    for (const table of [
+      'payments',
+      'payment_attempts',
+      'payment_events',
+      'payment_transactions',
+      'refunds',
+      'reconciliation_cases',
+      'ledger_entries',
+      'ledger_entry_groups',
+      'settlements',
+    ]) {
+      expect(calls.find((c) => c.table === table)).toBeUndefined();
+    }
+
+    expect([...new Set(calls.map((c) => c.table))].sort()).toEqual(
+      ['deliveries', 'merchants', 'orders', 'outbox', 'restaurants', 'rider_assignment_attempts', 'rider_assignments', 'rider_availability', 'riders'].sort(),
+    );
   });
 
   it('writes no money: rider_earning_satang is never in any payload', async () => {
@@ -726,5 +747,50 @@ describe('OfferAcceptanceService — declining an offer (Phase G-6.2, V1.1 §7)'
       expect(keys).toEqual(['outcome']);
       expect(keys.some((k) => /satang|earning|commission|ledger|settlement|refund/i.test(k))).toBe(false);
     }
+  });
+});
+
+describe('OfferAcceptanceService — H-3 RiderAssigned outbox event', () => {
+  it('writes CUSTOMER + MERCHANT + RIDER recipients with the correct aggregate and event_type', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: LIVE_OFFER, error: null },
+      CLAIMED_SLOT,
+      ASSIGNED_DELIVERY,
+      OK,
+      OK,
+      OK,
+      ...RIDER_ASSIGNED_OUTBOX_SEGMENT,
+    ]);
+
+    await new OfferAcceptanceService(supabase).acceptOffer(riderUser(), OFFER_ID);
+
+    const outboxInsert = calls.find((c) => c.table === 'outbox');
+    expect(outboxInsert?.payload).toMatchObject({
+      aggregate_type: 'delivery',
+      aggregate_id: DELIVERY_ID,
+      event_type: 'RiderAssigned',
+    });
+    const recipients = (outboxInsert?.payload as { payload: { recipients: unknown[] } }).payload.recipients;
+    expect(recipients).toEqual([
+      { recipientId: 'customer-1', recipientType: 'CUSTOMER' },
+      { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+      { recipientId: 'rider-profile-1', recipientType: 'RIDER' },
+    ]);
+  });
+
+  it('a crash-window repair (alreadyHoldsThisDelivery) writes no second outbox event — only the guarded claimDelivery winner does', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: LIVE_OFFER, error: null },
+      { data: null, error: null }, // claimRiderSlot: 0 -> 1 CAS fails, slot already taken
+      { data: [{ id: DELIVERY_ID, state: 'RIDER_ASSIGNED' }], error: null }, // diagnoseBusyRider: this rider already holds it
+      OK, // recordAssignment: rider_assignments insert (already present, tolerated)
+      OK, // offer -> ACCEPTED (no-op, already ACCEPTED)
+      OK, // siblings -> SUPERSEDED
+    ]);
+
+    const result = await new OfferAcceptanceService(supabase).acceptOffer(riderUser(), OFFER_ID);
+
+    expect(result.state).toBe('RIDER_ASSIGNED');
+    expect(calls.find((c) => c.table === 'outbox')).toBeUndefined();
   });
 });

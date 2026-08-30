@@ -441,8 +441,8 @@ export class PaymentEventProcessingService {
       .update({ state: 'PAID', paid_at: now })
       .eq('id', payment.order_id)
       .eq('state', 'PENDING_PAYMENT')
-      .select('id')
-      .maybeSingle<{ id: string }>();
+      .select('id, customer_id, restaurant_id')
+      .maybeSingle<{ id: string; customer_id: string; restaurant_id: string }>();
 
     if (orderError) {
       throw new Error(`orders PAID transition failed: ${orderError.message}`);
@@ -450,6 +450,10 @@ export class PaymentEventProcessingService {
 
     if (transitionedOrder) {
       await this.writeOrderHistory(payment.order_id);
+      // H-3 — fires only on the guarded-UPDATE winner (this branch), so a
+      // self-heal retry of this same event (the earlier-run-already-recorded
+      // path a few lines up) never reaches here and never double-notifies.
+      await this.writePaymentSucceededOutboxEvent(transitionedOrder);
       return;
     }
 
@@ -548,6 +552,81 @@ export class PaymentEventProcessingService {
       throw new Error(`reconciliation_cases insert failed (${kind}): ${error.message}`);
     }
   }
+
+  /**
+   * H-3 — `PaymentSucceeded`, CUSTOMER + MERCHANT. Reads `restaurants`/
+   * `merchants` directly, extending this service's own already-established
+   * precedent of reading/writing `orders` directly from the payments module
+   * (see `completeSuccessSideEffects` above) one relationship further, per
+   * the H-3 contract's explicit instruction to use the existing order/
+   * restaurant/merchant-owner relationship. Never throws: a resolution
+   * failure omits that recipient, and a total failure to write the outbox
+   * row is logged and swallowed — the payment has already succeeded and
+   * already been reported; a lost notification must never turn that into a
+   * failed webhook-processing attempt (which would also mean expensive
+   * event-claim churn on retry).
+   */
+  private async writePaymentSucceededOutboxEvent(order: {
+    id: string;
+    customer_id: string;
+    restaurant_id: string;
+  }): Promise<void> {
+    const recipients: OutboxRecipient[] = [{ recipientId: order.customer_id, recipientType: 'CUSTOMER' }];
+
+    const merchantOwnerId = await this.resolveMerchantOwnerId(order.restaurant_id);
+    if (merchantOwnerId) {
+      recipients.push({ recipientId: merchantOwnerId, recipientType: 'MERCHANT' });
+    }
+
+    const { error } = await this.supabase.admin.from('outbox').insert({
+      aggregate_type: 'order',
+      aggregate_id: order.id,
+      event_type: 'PaymentSucceeded',
+      payload: { recipients },
+    });
+
+    if (error) {
+      this.logger.error(`outbox insert failed for PaymentSucceeded (order ${order.id}): ${error.message}`);
+    }
+  }
+
+  /** `restaurants.merchant_id -> merchants.owner_user_id` — see `writePaymentSucceededOutboxEvent`'s own comment on why this module reads these tables directly. */
+  private async resolveMerchantOwnerId(restaurantId: string): Promise<string | null> {
+    const { data: restaurant, error: restaurantError } = await this.supabase.admin
+      .from('restaurants')
+      .select('merchant_id')
+      .eq('id', restaurantId)
+      .maybeSingle<{ merchant_id: string }>();
+
+    if (restaurantError || !restaurant) {
+      this.logger.error(
+        `Merchant-owner resolution: restaurants read failed for ${restaurantId}: ${restaurantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    const { data: merchant, error: merchantError } = await this.supabase.admin
+      .from('merchants')
+      .select('owner_user_id')
+      .eq('id', restaurant.merchant_id)
+      .maybeSingle<{ owner_user_id: string }>();
+
+    if (merchantError || !merchant) {
+      this.logger.error(
+        `Merchant-owner resolution: merchants read failed for restaurant ${restaurantId}: ${merchantError?.message ?? 'not found'}`,
+      );
+      return null;
+    }
+
+    return merchant.owner_user_id;
+  }
+}
+
+/** H-3 locked recipient shape — `outbox.payload.recipients[]`. Duplicated per module, matching `isUniqueViolation`'s own established precedent in this codebase rather than a shared cross-module resolver. */
+type RecipientType = 'CUSTOMER' | 'MERCHANT' | 'RIDER' | 'OPERATOR';
+interface OutboxRecipient {
+  recipientId: string;
+  recipientType: RecipientType;
 }
 
 function readString(payload: unknown, key: string): string | undefined {
