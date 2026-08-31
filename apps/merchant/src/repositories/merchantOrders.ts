@@ -48,8 +48,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ApiClient } from '@banhao/api-client';
 import type { OrderTransitionResponse } from '@banhao/validation';
 import type { MerchantOrderSummary } from '../domain/order';
+import type { MerchantOrderDetail } from '../domain/orderDetail';
 import type { OrderActionCommand } from '../lib/orderBoardDisplay';
-import { fetchRestaurantOrders, toMerchantOrderSummary } from '../data/orderQueries';
+import { fetchOrderDetail, fetchRestaurantOrders, toMerchantOrderDetail, toMerchantOrderSummary } from '../data/orderQueries';
 import { apiClient as defaultApiClient } from '../lib/apiClient';
 
 export interface MerchantOrdersRepository {
@@ -80,6 +81,16 @@ export interface MerchantOrdersRepository {
    * (see `useOrderActions`), so nothing here is written into board state.
    */
   transitionOrder(orderId: string, command: OrderActionCommand): Promise<OrderTransitionResponse>;
+
+  /**
+   * One order's full detail (M-04) — items, options, money, recipient and
+   * status history — scoped to `restaurantId` as an application-level guard
+   * alongside RLS (`fetchOrderDetail`'s own doc comment). Client → Supabase
+   * directly, same as `listRestaurantOrders`: DEC-APP-008 puts this read
+   * client-side, and all four source tables already carry a merchant SELECT
+   * policy. No NestJS endpoint exists for this and none should be added.
+   */
+  getOrderDetail(orderId: string, restaurantId: string): Promise<MerchantOrderDetail>;
 }
 
 export function createMerchantOrdersRepository(
@@ -99,5 +110,10 @@ export function createMerchantOrdersRepository(
       apiClient.request<OrderTransitionResponse>(`/api/v1/orders/${orderId}/${command}`, {
         method: 'POST',
       }),
+
+    getOrderDetail: async (orderId: string, restaurantId: string) => {
+      const row = await fetchOrderDetail(client, orderId, restaurantId);
+      return toMerchantOrderDetail(row);
+    },
   };
 }

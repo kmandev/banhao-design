@@ -221,3 +221,93 @@ describe('OrderCard — action failure', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// M-04 — the informational region as the detail-open affordance. `onAction`
+// and its button are untouched by any test below: opening a detail must
+// never fire a transition (design M04-D10 / F-06).
+// ---------------------------------------------------------------------------
+
+describe('OrderCard — onOpenDetail omitted (M-2.6/M-2.7 shape, unchanged)', () => {
+  it('renders the informational region as a plain, non-interactive wrapper', () => {
+    render(<OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={jest.fn()} />);
+    // Exactly one button — the action button. No second (info) button exists.
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'รับออเดอร์' })).toBeInTheDocument();
+  });
+
+  it('READY_FOR_PICKUP still renders zero buttons — the existing M-2.6 contract', () => {
+    render(
+      <OrderCard order={order({ id: '1', state: 'READY_FOR_PICKUP', readyAt: '2026-08-31T04:38:00.000Z' })} now={NOW} />,
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('OrderCard — onOpenDetail wired', () => {
+  it('renders the informational region as a button that opens this order', () => {
+    const onOpenDetail = jest.fn();
+    const subject = order({ id: '1', state: 'PAID' });
+    render(<OrderCard order={subject} now={NOW} onAction={jest.fn()} onOpenDetail={onOpenDetail} />);
+
+    const openButton = screen.getByRole('button', { name: /เปิดรายละเอียด/ });
+    fireEvent.click(openButton);
+
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    expect(onOpenDetail).toHaveBeenCalledWith(subject);
+  });
+
+  it('opens READY_FOR_PICKUP too — a merchant can open detail from any of the three columns', () => {
+    const onOpenDetail = jest.fn();
+    const subject = order({ id: '1', state: 'READY_FOR_PICKUP', readyAt: '2026-08-31T04:38:00.000Z' });
+    render(<OrderCard order={subject} now={NOW} onOpenDetail={onOpenDetail} />);
+
+    expect(screen.getByRole('button', { name: /เปิดรายละเอียด/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /เปิดรายละเอียด/ }));
+    expect(onOpenDetail).toHaveBeenCalledWith(subject);
+  });
+
+  it('clicking the action button does not open the panel, and clicking the info region does not fire the action', () => {
+    const onOpenDetail = jest.fn();
+    const onAction = jest.fn();
+    render(
+      <OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={onAction} onOpenDetail={onOpenDetail} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onOpenDetail).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /เปิดรายละเอียด/ }));
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledTimes(1); // unchanged
+  });
+
+  it('is enabled and openable even for the expired PAID card, whose action button stays disabled', () => {
+    const onOpenDetail = jest.fn();
+    render(
+      <OrderCard
+        order={order({ id: '1', state: 'PAID', placedAt: new Date(NOW - 400_000).toISOString() })}
+        now={NOW}
+        onAction={jest.fn()}
+        onOpenDetail={onOpenDetail}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /เปิดรายละเอียด/ }));
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the selected card aria-expanded and gives it the ring border', () => {
+    render(
+      <OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onOpenDetail={jest.fn()} isSelected />,
+    );
+    expect(screen.getByRole('button', { name: /เปิดรายละเอียด/ })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('is not aria-expanded when not selected', () => {
+    render(<OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onOpenDetail={jest.fn()} />);
+    expect(screen.getByRole('button', { name: /เปิดรายละเอียด/ })).toHaveAttribute('aria-expanded', 'false');
+  });
+});

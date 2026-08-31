@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOrderBoard } from '../hooks/useOrderBoard';
 import { useOrderActions } from '../hooks/useOrderActions';
 import { useOrderAlerts } from '../hooks/useOrderAlerts';
 import type { MerchantOrderRealtimeStatus } from '../hooks/useOrderRealtime';
+import type { MerchantOrderSummary } from '../domain/order';
 import { BOARD_COLUMNS, groupOrdersByColumn, type BoardColumnId } from '../lib/orderBoardDisplay';
 import { OrderCard } from './OrderCard';
+import { OrderDetailPanel } from './OrderDetailPanel';
 
 /**
  * The Order Board (M-2.6) — design
@@ -56,6 +58,24 @@ import { OrderCard } from './OrderCard';
  * reuses this component's own `useOrderBoard`/`useOrderRealtime` state
  * (`orders`, `realtimeStatus`) via `useOrderAlerts` — no second Realtime
  * subscription, no second data fetch, exactly the seam M-03's brief requires.
+ *
+ * ## Order detail panel (M-04)
+ *
+ * `selectedOrderId` is owned here, not in `OrderCard` or `OrderDetailPanel`:
+ * `OrderCard` stays presentational (M-2.7's own rule) and the panel receives
+ * only the already-selected order, never a raw id it would have to resolve
+ * itself. `selectedOrder` is looked up by id in this component's own
+ * `orders` array on every render — never stored separately — so a Realtime
+ * event that changes that order produces a new object automatically, and an
+ * order that leaves the array (only possible via a restaurant switch, since
+ * orders cannot be deleted) makes `selectedOrder` resolve to `null` and the
+ * panel close itself, with no separate "is this still in scope" check
+ * needed. `restaurantId` changing also explicitly clears the selection and
+ * returns focus to the board — see the effect below.
+ *
+ * No second Realtime subscription and no direct Supabase read happen here:
+ * `OrderDetailPanel` → `useOrderDetail` fetches through the same
+ * `repositories.merchantOrders` seam `useOrderBoard` already uses.
  */
 
 function isDegraded(status: MerchantOrderRealtimeStatus): boolean {
@@ -375,8 +395,54 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
   // subscription, no second fetch. See the module doc comment.
   const alerts = useOrderAlerts(orders, now);
 
+  // M-04. See the module doc comment for why `selectedOrder` is a lookup,
+  // never a second piece of stored order state.
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const selectedOrder = selectedOrderId ? (orders.find((o) => o.id === selectedOrderId) ?? null) : null;
+
+  /** The element that opened the panel — focus returns here on close (design §06). */
+  const openerRef = useRef<HTMLElement | null>(null);
+  /** Fallback focus target when the opener is gone (its order left the board via a restaurant switch). */
+  const boardContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleOpenDetail = useCallback((order: MerchantOrderSummary) => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedOrderId(order.id);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedOrderId(null);
+    const opener = openerRef.current;
+    openerRef.current = null;
+    if (opener && document.contains(opener)) {
+      opener.focus();
+    } else {
+      boardContainerRef.current?.focus();
+    }
+  }, []);
+
+  // A restaurant switch is the only way a selected order can leave board
+  // scope (orders cannot be deleted) — close the panel explicitly rather
+  // than relying solely on `selectedOrder` resolving to `null`, so focus is
+  // deliberately returned to the board instead of being left wherever it was.
+  useEffect(() => {
+    setSelectedOrderId(null);
+    openerRef.current = null;
+  }, [restaurantId]);
+
+  // Body scroll is locked while the panel is open, released on close or
+  // unmount (design §04 "SCROLL": "the board behind it does not [scroll]").
+  useEffect(() => {
+    if (!selectedOrderId) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, [selectedOrderId]);
+
   return (
-    <div>
+    <div ref={boardContainerRef} tabIndex={-1} style={{ position: 'relative', outline: 'none' }}>
       <style>{`
         .banhao-board-skeleton-block {
           background: linear-gradient(90deg, #F4EDE3 25%, #FAF5EE 50%, #F4EDE3 75%);
@@ -558,6 +624,8 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
                           onAction={actions.runAction}
                           pending={actions.isPending(order)}
                           actionError={actions.errorFor(order)}
+                          onOpenDetail={handleOpenDetail}
+                          isSelected={order.id === selectedOrderId}
                         />
                       ))
                     )}
@@ -568,6 +636,8 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
           </div>
         </div>
       )}
+
+      <OrderDetailPanel order={selectedOrder} now={now} onClose={handleCloseDetail} />
     </div>
   );
 }

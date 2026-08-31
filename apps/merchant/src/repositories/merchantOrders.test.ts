@@ -273,3 +273,182 @@ describe('transitionOrder — endpoint contract', () => {
     await expect(subject.transitionOrder('order-1', 'accept')).rejects.toBe(failure);
   });
 });
+
+// ---------------------------------------------------------------------------
+// M-04 — getOrderDetail. A separate, minimal stub: `fetchOrderDetail`'s
+// chain ends in `.single()`, which `supabaseStub` above (built for the board
+// read's `.returns()` ending) does not model. RLS itself — whether a
+// cross-restaurant order can actually be read — is not something a mocked
+// client can prove; these tests assert the *application-level* scope this
+// repository is responsible for (M-04's "restaurant isolation" requirement
+// alongside, never instead of, RLS).
+// ---------------------------------------------------------------------------
+
+interface DetailRecorded {
+  table: string;
+  select: string[];
+  eq: Record<string, unknown>;
+  order: { column: string; options: unknown }[];
+}
+
+function detailStub(result: Result) {
+  const calls: DetailRecorded[] = [];
+
+  const client = {
+    from(table: string) {
+      const call: DetailRecorded = { table, select: [], eq: {}, order: [] };
+      calls.push(call);
+
+      const builder = {
+        select(columns: string) {
+          call.select.push(columns);
+          return builder;
+        },
+        eq(column: string, value: unknown) {
+          call.eq[column] = value;
+          return builder;
+        },
+        order(column: string, options: unknown) {
+          call.order.push({ column, options });
+          return builder;
+        },
+        single() {
+          return Promise.resolve(result);
+        },
+      };
+
+      return builder;
+    },
+  };
+
+  return { client: client as unknown as SupabaseClient, calls };
+}
+
+const ORDER_DETAIL_ROW = {
+  id: 'order-1',
+  order_number: 'BH-20260831-0001',
+  state: 'PAID',
+  restaurant_id: 'rest-1',
+  recipient_name_snapshot: 'สมชาย ใจดี',
+  recipient_phone_snapshot: '+66812345678',
+  delivery_address_snapshot: '88/12 หมู่ 4',
+  delivery_landmark: null,
+  payment_method: 'ONLINE',
+  subtotal_satang: 17500,
+  delivery_fee_satang: 2000,
+  service_fee_satang: 1000,
+  discount_satang: 0,
+  grand_total_satang: 20500,
+  placed_at: '2026-08-31T09:00:00Z',
+  accepted_at: null,
+  ready_at: null,
+  picked_up_at: null,
+  order_items: [
+    {
+      id: 'item-1',
+      item_name_snapshot: 'ข้าวผัดกะเพราหมูสับ',
+      quantity: 2,
+      unit_price_satang: 5500,
+      line_total_satang: 11000,
+      note: null,
+      order_item_options: [
+        { id: 'opt-1', group_name_snapshot: 'ความเผ็ด', option_name_snapshot: 'เผ็ดมาก', price_delta_satang: 0 },
+      ],
+    },
+  ],
+  order_status_history: [
+    { id: 'hist-1', to_state: 'CREATED', actor_type: 'SYSTEM', reason: null, occurred_at: '2026-08-31T08:59:00Z' },
+    { id: 'hist-2', to_state: 'PAID', actor_type: 'WEBHOOK', reason: null, occurred_at: '2026-08-31T09:00:00Z' },
+  ],
+};
+
+describe('getOrderDetail — table, columns, and scope', () => {
+  it('queries only orders, with no request body/API call involved', async () => {
+    const { client, calls } = detailStub({ data: ORDER_DETAIL_ROW, error: null });
+    const subject = createMerchantOrdersRepository(client);
+    await subject.getOrderDetail('order-1', 'rest-1');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.table).toBe('orders');
+  });
+
+  it('scopes to both the requested order id and the caller restaurant', async () => {
+    const { client, calls } = detailStub({ data: ORDER_DETAIL_ROW, error: null });
+    const subject = createMerchantOrdersRepository(client);
+    await subject.getOrderDetail('order-1', 'rest-1');
+
+    expect(calls[0]!.eq).toEqual({ id: 'order-1', restaurant_id: 'rest-1' });
+  });
+
+  it('embeds order_items, order_item_options and order_status_history — no select(*)', async () => {
+    const { client, calls } = detailStub({ data: ORDER_DETAIL_ROW, error: null });
+    const subject = createMerchantOrdersRepository(client);
+    await subject.getOrderDetail('order-1', 'rest-1');
+
+    const selected = calls[0]!.select.join(' ');
+    expect(selected).not.toMatch(/(^|[^_a-z])\*/);
+    expect(selected).toMatch(/order_items/);
+    expect(selected).toMatch(/order_item_options/);
+    expect(selected).toMatch(/order_status_history/);
+  });
+
+  it('never applies a client-side customer_id/user_id filter — restaurant scope plus RLS is the boundary', async () => {
+    const { client, calls } = detailStub({ data: ORDER_DETAIL_ROW, error: null });
+    const subject = createMerchantOrdersRepository(client);
+    await subject.getOrderDetail('order-1', 'rest-1');
+
+    expect(calls[0]!.eq).not.toHaveProperty('customer_id');
+    expect(calls[0]!.eq).not.toHaveProperty('user_id');
+  });
+
+  it('a different restaurantId scopes the query to that restaurant instead — the application-level isolation guard', async () => {
+    const { client, calls } = detailStub({ data: ORDER_DETAIL_ROW, error: null });
+    const subject = createMerchantOrdersRepository(client);
+    await subject.getOrderDetail('order-1', 'rest-other');
+
+    expect(calls[0]!.eq).toEqual({ id: 'order-1', restaurant_id: 'rest-other' });
+  });
+});
+
+describe('getOrderDetail — mapping and results', () => {
+  it('maps the order, items, options and history into MerchantOrderDetail', async () => {
+    const { client } = detailStub({ data: ORDER_DETAIL_ROW, error: null });
+    const subject = createMerchantOrdersRepository(client);
+    const result = await subject.getOrderDetail('order-1', 'rest-1');
+
+    expect(result.orderId).toBe('order-1');
+    expect(result.recipientPhoneSnapshot).toBe('+66812345678');
+    expect(result.items).toEqual([
+      {
+        id: 'item-1',
+        nameSnapshot: 'ข้าวผัดกะเพราหมูสับ',
+        quantity: 2,
+        unitPriceSatang: 5500,
+        lineTotalSatang: 11000,
+        note: null,
+        options: [
+          { id: 'opt-1', groupNameSnapshot: 'ความเผ็ด', optionNameSnapshot: 'เผ็ดมาก', priceDeltaSatang: 0 },
+        ],
+      },
+    ]);
+    expect(result.statusHistory).toEqual([
+      { id: 'hist-1', toState: 'CREATED', actorType: 'SYSTEM', reason: null, occurredAt: '2026-08-31T08:59:00Z' },
+      { id: 'hist-2', toState: 'PAID', actorType: 'WEBHOOK', reason: null, occurredAt: '2026-08-31T09:00:00Z' },
+    ]);
+  });
+
+  it('does not carry a state field — the panel reads state from the live board row, never this fetch', async () => {
+    const { client } = detailStub({ data: ORDER_DETAIL_ROW, error: null });
+    const subject = createMerchantOrdersRepository(client);
+    const result = await subject.getOrderDetail('order-1', 'rest-1');
+
+    expect(result).not.toHaveProperty('state');
+  });
+
+  it('throws on a query error — a card the merchant just clicked must never resolve to nothing silently', async () => {
+    const { client } = detailStub({ data: null, error: { message: 'PGRST116' } });
+    const subject = createMerchantOrdersRepository(client);
+
+    await expect(subject.getOrderDetail('order-1', 'rest-1')).rejects.toThrow('PGRST116');
+  });
+});

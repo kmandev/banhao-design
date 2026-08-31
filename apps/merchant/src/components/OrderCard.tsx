@@ -50,9 +50,20 @@ import {
  * `recipientPhoneSnapshot` is deliberately never read here — the design's
  * §07 decision log marks phone-on-the-card-face "NOT DECIDED... treated as
  * an M-04 order-detail concern."
+ *
+ * ## Opening the detail panel (M-04)
+ *
+ * `onOpenDetail`, wrapping the informational rows only — order number,
+ * chip/code, recipient name, total/time — never the action button below
+ * them, which stays a sibling (design M04-D10: "no nested-button markup and
+ * no propagation to stop in the first place"). Omitted → those rows render
+ * as a plain (non-interactive) wrapper, exactly as before M-04, so every
+ * existing test that never passes it keeps its "zero buttons" assertions
+ * (e.g. `READY_FOR_PICKUP`'s status-only render) true unchanged.
  */
 
-const CHIP_STYLES: Record<ChipTone, { background: string; color: string }> = {
+/** Exported so `OrderDetailPanel` (M-04) renders "the same chip vocabulary as the card" (design §01/§02) rather than a second copy of it. */
+export const CHIP_STYLES: Record<ChipTone, { background: string; color: string }> = {
   new: { background: '#FDEEE7', color: '#C2431F' },
   warning: { background: '#FDF3E6', color: '#8A6412' },
   expired: { background: '#FBEAEA', color: '#B32B2B' },
@@ -88,9 +99,21 @@ export interface OrderCardProps {
   pending?: boolean;
   /** Thai copy for this card's last failed command, or `null`/omitted when there is none. */
   actionError?: string | null;
+  /** Opens this order's M-04 detail panel. Omitted → the informational rows render inert; see the module doc comment. */
+  onOpenDetail?: (order: MerchantOrderSummary) => void;
+  /** True while this card's detail panel is open — reuses the new-arrival ring rather than a second highlight (design §02 "SELECTED CARD"). */
+  isSelected?: boolean;
 }
 
-export function OrderCard({ order, now, onAction, pending = false, actionError = null }: OrderCardProps) {
+export function OrderCard({
+  order,
+  now,
+  onAction,
+  pending = false,
+  actionError = null,
+  onOpenDetail,
+  isSelected = false,
+}: OrderCardProps) {
   const presentation = presentOrderCard(order, now);
   if (!presentation) return null;
 
@@ -104,9 +127,50 @@ export function OrderCard({ order, now, onAction, pending = false, actionError =
 
   const cardBorder = presentation.isExpired
     ? EXPIRED_BORDER
-    : presentation.isNewArrival
+    : presentation.isNewArrival || isSelected
       ? NEW_ARRIVAL_BORDER
       : CARD_BORDER;
+
+  const infoContent = (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, fontWeight: 600 }}>
+          #{order.orderNumber}
+        </div>
+        <div
+          aria-live="polite"
+          style={{
+            fontFamily: "'IBM Plex Mono',monospace",
+            fontSize: 12.5,
+            fontWeight: 600,
+            padding: '4px 9px',
+            borderRadius: 9,
+            ...timerStyle,
+          }}
+        >
+          {presentation.timerLabel}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 9px', borderRadius: 8, ...chipStyle }}>
+          {presentation.chipLabel}
+        </div>
+        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5, color: '#A2968A' }}>
+          {presentation.stateCode}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.55 }}>{order.recipientNameSnapshot}</div>
+
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 17, fontWeight: 600 }}>
+          {formatBahtFixed(order.grandTotalSatang)}
+        </div>
+        <div style={{ fontSize: 11.5, color: '#7A6E64' }}>{presentation.timeLine}</div>
+      </div>
+    </>
+  );
 
   return (
     <div
@@ -145,42 +209,35 @@ export function OrderCard({ order, now, onAction, pending = false, actionError =
       ) : null}
 
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 14, fontWeight: 600 }}>
-            #{order.orderNumber}
-          </div>
-          <div
-            aria-live="polite"
+        {onOpenDetail ? (
+          <button
+            type="button"
+            data-testid={`order-card-open-${order.id}`}
+            onClick={() => onOpenDetail(order)}
+            aria-expanded={isSelected}
+            aria-label={`เปิดรายละเอียด ออเดอร์ #${order.orderNumber}`}
             style={{
-              fontFamily: "'IBM Plex Mono',monospace",
-              fontSize: 12.5,
-              fontWeight: 600,
-              padding: '4px 9px',
-              borderRadius: 9,
-              ...timerStyle,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              width: '100%',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              margin: 0,
+              font: 'inherit',
+              color: 'inherit',
+              textAlign: 'left',
+              cursor: 'pointer',
             }}
           >
-            {presentation.timerLabel}
+            {infoContent}
+          </button>
+        ) : (
+          <div data-testid={`order-card-open-${order.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {infoContent}
           </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 11.5, fontWeight: 600, padding: '4px 9px', borderRadius: 8, ...chipStyle }}>
-            {presentation.chipLabel}
-          </div>
-          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5, color: '#A2968A' }}>
-            {presentation.stateCode}
-          </div>
-        </div>
-
-        <div style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.55 }}>{order.recipientNameSnapshot}</div>
-
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 17, fontWeight: 600 }}>
-            {formatBahtFixed(order.grandTotalSatang)}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#7A6E64' }}>{presentation.timeLine}</div>
-        </div>
+        )}
 
         {/*
           Failure of this card's last command. `role="alert"` so a merchant
