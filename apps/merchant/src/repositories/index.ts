@@ -13,7 +13,12 @@
  * M-1 needed exactly one repository — restaurant membership, for
  * authorization and restaurant selection. M-2.3 adds the Order Board's
  * initial-fetch repository alongside it (the Realtime subscription half is
- * M-2.4, not yet bound here).
+ * M-2.4, not bound here). M-2.7 adds the board's three transition commands
+ * to that same repository rather than a third binding — see
+ * `merchantOrders.ts` on why its read and write halves share one module.
+ *
+ * `createMerchantOrdersRepository` takes the API client as an optional second
+ * argument defaulting to the app's own; only tests pass it explicitly.
  */
 
 import { supabase } from '../lib/supabase';

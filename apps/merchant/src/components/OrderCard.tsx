@@ -8,33 +8,44 @@ import {
   presentOrderCard,
   type ActionStyle,
   type ChipTone,
+  type OrderActionCommand,
   type TimerTone,
 } from '../lib/orderBoardDisplay';
 
 /**
- * One order-board card (M-2.6) — design
+ * One order-board card (M-2.6 visuals, M-2.7 behaviour) — design
  * `docs/design/BANHAO M-2.6 Merchant Order Board.dc.html` §01/§02.
  *
  * Reads only `MerchantOrderSummary` (M-2.2) plus `now` (the render-time
  * clock the parent board passes down, never a timer this component owns).
  * `presentOrderCard` (`../lib/orderBoardDisplay`) does every derivation —
- * this component is rendering only.
+ * this component is rendering only. It holds no state of its own: `pending`
+ * and `actionError` are props, owned by `useOrderActions` above it, so the
+ * card stays a pure function of the board's state.
  *
- * ## The primary action is a real, disabled control — never wired
+ * ## The primary action, and what happens when nobody is listening
  *
- * M-2.6 is the board UI, not the accept/start/ready mutations (M-3/M-4/M-5
- * own those). The button below is a semantic `<button>` with
- * `disabled` set and no `onClick` — visually it matches the design's
- * enabled styling exactly (colour is not conditioned on the HTML disabled
- * state), but it cannot be activated and performs nothing. This is the
- * safest reading of the M-2.6 brief's repeated "do not implement
- * accept/start/ready mutations": the affordance is rendered faithfully,
- * the mutation is not.
+ * M-2.7 wires the three merchant commands. The button is enabled only when
+ * this card genuinely has a command to issue **and** a handler was supplied:
+ *
+ * - `onAction` omitted → the button renders disabled. This is the card's
+ *   contract, not a leftover: a card with no handler has nothing to invoke,
+ *   and rendering it live would be an affordance that silently does nothing.
+ *   M-2.6's tests exercise exactly this shape and continue to pass unchanged.
+ * - `actionCommand === null` → disabled regardless of the handler. Two cards
+ *   do this, both deliberately: an **expired** `PAID` card, whose
+ *   `ติดต่อผู้ดูแลระบบ` action has no endpoint because BQ-013 is still `OPEN`
+ *   (the design's §07 log renders it disabled "because the expiry rule is
+ *   undecided... not because rejection occurred"), and `READY_FOR_PICKUP`,
+ *   which is not a `<button>` at all.
+ * - `pending` → disabled while the command is unresolved, which is what stops
+ *   a double press. See `useOrderActions` for why "unresolved" outlasts the
+ *   HTTP response.
  *
  * The `READY_FOR_PICKUP` column is different by design, not by this
  * component's choice: "The waiting strip is a status, not a button — it is
  * not tappable" (§01 anatomy). That one renders as a plain status region,
- * not a `<button>` at all.
+ * not a `<button>` at all — M-2.7 does not change this.
  *
  * `recipientPhoneSnapshot` is deliberately never read here — the design's
  * §07 decision log marks phone-on-the-card-face "NOT DECIDED... treated as
@@ -71,15 +82,25 @@ export interface OrderCardProps {
   order: MerchantOrderSummary;
   /** Render-time clock, in ms — see the module doc comment on why this is not a timer this component owns. */
   now: number;
+  /** Issues this card's command. Omitted → the action renders disabled; see the module doc comment. */
+  onAction?: (order: MerchantOrderSummary, command: OrderActionCommand) => void;
+  /** True while a command for this card is unresolved. Owned by `useOrderActions`, never by this component. */
+  pending?: boolean;
+  /** Thai copy for this card's last failed command, or `null`/omitted when there is none. */
+  actionError?: string | null;
 }
 
-export function OrderCard({ order, now }: OrderCardProps) {
+export function OrderCard({ order, now, onAction, pending = false, actionError = null }: OrderCardProps) {
   const presentation = presentOrderCard(order, now);
   if (!presentation) return null;
 
   const chipStyle = CHIP_STYLES[presentation.chipTone];
   const timerStyle = TIMER_STYLES[presentation.timerTone];
   const actionStyle = ACTION_STYLES[presentation.actionStyle];
+
+  const command = presentation.actionCommand;
+  const actionable = command !== null && onAction !== undefined;
+  const disabled = !actionable || pending;
 
   const cardBorder = presentation.isExpired
     ? EXPIRED_BORDER
@@ -161,32 +182,84 @@ export function OrderCard({ order, now }: OrderCardProps) {
           <div style={{ fontSize: 11.5, color: '#7A6E64' }}>{presentation.timeLine}</div>
         </div>
 
+        {/*
+          Failure of this card's last command. `role="alert"` so a merchant
+          who pressed the button and looked away is told, rather than having
+          to notice a line of text appear. Sits above the action because the
+          action is the retry — see `orderActionErrorMessage` for the copy's
+          DESIGN CHOICE provenance.
+        */}
+        {actionError ? (
+          <div
+            role="alert"
+            data-testid={`order-action-error-${order.id}`}
+            style={{
+              fontSize: 12.5,
+              lineHeight: 1.6,
+              color: '#B32B2B',
+              background: '#FBEAEA',
+              borderRadius: 10,
+              padding: '8px 10px',
+            }}
+          >
+            {actionError}
+          </div>
+        ) : null}
+
         {presentation.actionKind === 'button' ? (
           <button
             type="button"
-            disabled
-            aria-label={`${presentation.actionLabel} — ยังไม่เปิดใช้งานในหน้านี้`}
+            disabled={disabled}
+            aria-busy={pending}
+            // Only explain the disabling when it is *this card's* permanent
+            // condition. A pending button is already announced by aria-busy,
+            // and an unwired one is a harness/contract case, not something to
+            // narrate to a merchant.
+            aria-label={
+              command === null ? `${presentation.actionLabel} — ยังไม่เปิดใช้งานในหน้านี้` : presentation.actionLabel
+            }
+            onClick={actionable && !pending ? () => onAction(order, command) : undefined}
+            className="banhao-order-action"
             style={{
-              height: 52,
+              // Tablet raises this to 56px via `--banhao-action-height`, set
+              // by OrderBoard's media query. The literal here is the desktop
+              // value and the standalone fallback — see OrderBoard.tsx.
+              height: 'var(--banhao-action-height, 52px)',
               borderRadius: 13,
               border: 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: 8,
               fontSize: 15,
               fontWeight: 600,
               width: '100%',
-              cursor: 'not-allowed',
+              cursor: disabled ? 'not-allowed' : 'pointer',
               ...actionStyle,
             }}
           >
+            {pending ? (
+              <span
+                aria-hidden
+                className="banhao-order-action-spinner"
+                style={{
+                  width: 15,
+                  height: 15,
+                  borderRadius: '50%',
+                  border: '2.5px solid rgba(255,255,255,.35)',
+                  borderTopColor: 'currentColor',
+                  display: 'inline-block',
+                  flex: '0 0 auto',
+                }}
+              />
+            ) : null}
             {presentation.actionLabel}
           </button>
         ) : (
           <div
             role="status"
             style={{
-              height: 52,
+              height: 'var(--banhao-action-height, 52px)',
               borderRadius: 13,
               display: 'flex',
               alignItems: 'center',

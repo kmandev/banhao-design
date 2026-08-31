@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { MerchantOrderSummary } from '../domain/order';
 import type { UseOrderBoard } from '../hooks/useOrderBoard';
+import { repositories } from '../repositories';
 import { OrderBoard } from './OrderBoard';
 
 /**
@@ -255,5 +256,207 @@ describe('OrderBoard — no data-layer or Realtime duplication', () => {
   it('goes through useOrderBoard, not a second repository', () => {
     expect(code).not.toMatch(/from '\.\.\/repositories'/);
     expect(code).toMatch(/from '\.\.\/hooks\/useOrderBoard'/);
+  });
+
+  // M-2.7 — the same discipline for the write path.
+  it('issues commands through the useOrderActions seam, never its own fetch', () => {
+    expect(code).toMatch(/from '\.\.\/hooks\/useOrderActions'/);
+    expect(code).not.toMatch(/fetch\(/);
+    expect(code).not.toMatch(/apiClient/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M-2.7 — board ↔ action integration.
+//
+// `useOrderActions` runs for real here; only the repository underneath it is
+// mocked. That is the point: these tests prove a click travels
+// OrderCard → OrderBoard → useOrderActions → repository, and — critically —
+// that a *successful* command does not move the card. Only `useOrderBoard`
+// (i.e. Realtime) may do that.
+// ---------------------------------------------------------------------------
+
+jest.mock('../repositories', () => ({
+  repositories: {
+    merchantOrders: {
+      listRestaurantOrders: jest.fn(),
+      transitionOrder: jest.fn(),
+    },
+  },
+}));
+
+const transitionOrder = repositories.merchantOrders.transitionOrder as jest.Mock;
+
+describe('OrderBoard — order actions (M-2.7)', () => {
+  beforeEach(() => {
+    transitionOrder.mockReset();
+    transitionOrder.mockResolvedValue({ orderId: 'o1', state: 'MERCHANT_ACCEPTED' });
+  });
+
+  it('routes a card action to the repository with the order id and command', async () => {
+    mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledWith('o1', 'accept'));
+  });
+
+  it.each([
+    ['MERCHANT_ACCEPTED', 'เริ่มทำอาหาร', 'start-preparing'],
+    ['PREPARING', 'อาหารพร้อม', 'mark-ready'],
+  ] as const)('routes the %s action as %s', async (state, label, command) => {
+    mockUseOrderBoard.mockReturnValue(
+      boardState({ orders: [order({ id: 'o1', state, acceptedAt: new Date(Date.now() - 120_000).toISOString() })] }),
+    );
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    fireEvent.click(screen.getByRole('button', { name: label }));
+
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledWith('o1', command));
+  });
+
+  it('does not move the card on a successful command — Realtime remains authoritative', async () => {
+    mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
+
+    // The board state the component was given still says PAID, so the card
+    // must still be the PAID card. Nothing may promote it locally.
+    expect(screen.getByTestId('order-card-o1')).toHaveAttribute('data-state', 'PAID');
+    expect(screen.getByRole('button', { name: 'รับออเดอร์' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'เริ่มทำอาหาร' })).not.toBeInTheDocument();
+  });
+
+  it('moves the card only when the board reports the new state', async () => {
+    mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
+    const view = render(<OrderBoard restaurantId="rest-a" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
+
+    // Realtime lands: useOrderBoard now reports MERCHANT_ACCEPTED.
+    mockUseOrderBoard.mockReturnValue(
+      boardState({
+        orders: [
+          order({ id: 'o1', state: 'MERCHANT_ACCEPTED', acceptedAt: new Date(Date.now() - 1000).toISOString() }),
+        ],
+      }),
+    );
+    view.rerender(<OrderBoard restaurantId="rest-a" />);
+
+    expect(screen.getByTestId('order-card-o1')).toHaveAttribute('data-state', 'MERCHANT_ACCEPTED');
+    // ...and the pending state resolves with it, leaving the next command live.
+    const next = screen.getByRole('button', { name: 'เริ่มทำอาหาร' });
+    expect(next).toBeEnabled();
+    expect(next).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('issues one request for a double click on the same card', async () => {
+    let release!: (value: unknown) => void;
+    transitionOrder.mockReturnValue(new Promise((res) => {
+      release = res;
+    }));
+
+    mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    const button = screen.getByRole('button', { name: 'รับออเดอร์' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      release({ orderId: 'o1', state: 'MERCHANT_ACCEPTED' });
+    });
+  });
+
+  it('leaves other cards interactive while one is pending', async () => {
+    let release!: (value: unknown) => void;
+    transitionOrder.mockReturnValue(new Promise((res) => {
+      release = res;
+    }));
+
+    mockUseOrderBoard.mockReturnValue(
+      boardState({
+        orders: [
+          order({ id: 'o1', state: 'PAID', placedAt: new Date(Date.now() - 60_000).toISOString() }),
+          order({ id: 'o2', state: 'PAID', placedAt: new Date(Date.now() - 90_000).toISOString() }),
+        ],
+      }),
+    );
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    const [first, second] = screen.getAllByRole('button', { name: 'รับออเดอร์' });
+    fireEvent.click(first!);
+
+    await waitFor(() => expect(first!).toBeDisabled());
+    expect(second!).toBeEnabled();
+    expect(second!).toHaveAttribute('aria-busy', 'false');
+
+    await act(async () => {
+      release({ orderId: 'o1', state: 'MERCHANT_ACCEPTED' });
+    });
+  });
+
+  it('surfaces a failure inline, keeps the card, and allows a retry', async () => {
+    transitionOrder.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'INVALID_TRANSITION' }));
+
+    mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('order-action-error-o1')).toHaveTextContent(
+        'ออเดอร์นี้ถูกเปลี่ยนสถานะไปแล้ว · กระดานจะอัปเดตเอง',
+      ),
+    );
+
+    // The board is intact — one failed command never blanks it.
+    expect(screen.getByTestId('order-card-o1')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'ใหม่ · รอตอบรับ' })).toBeInTheDocument();
+
+    // ...and the action is live again.
+    const retry = screen.getByRole('button', { name: 'รับออเดอร์' });
+    expect(retry).toBeEnabled();
+
+    transitionOrder.mockResolvedValue({ orderId: 'o1', state: 'MERCHANT_ACCEPTED' });
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(2));
+  });
+
+  it('never issues a command for a READY_FOR_PICKUP card', () => {
+    mockUseOrderBoard.mockReturnValue(
+      boardState({
+        orders: [order({ id: 'o1', state: 'READY_FOR_PICKUP', readyAt: new Date(Date.now() - 60_000).toISOString() })],
+      }),
+    );
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    fireEvent.click(screen.getByTestId('order-card-o1'));
+    expect(transitionOrder).not.toHaveBeenCalled();
+  });
+
+  it('scopes every command to the order it was issued from, never a sibling', async () => {
+    mockUseOrderBoard.mockReturnValue(
+      boardState({
+        orders: [
+          order({ id: 'o1', state: 'PAID', placedAt: new Date(Date.now() - 60_000).toISOString() }),
+          order({ id: 'o2', state: 'PAID', placedAt: new Date(Date.now() - 90_000).toISOString() }),
+        ],
+      }),
+    );
+    render(<OrderBoard restaurantId="rest-a" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'รับออเดอร์' })[1]!);
+
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
+    expect(transitionOrder).toHaveBeenCalledWith('o2', 'accept');
   });
 });

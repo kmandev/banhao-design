@@ -220,9 +220,34 @@ export function isRecentArrival(placedAtIso: string, nowMs: number): boolean {
 
 export type ChipTone = 'new' | 'warning' | 'expired' | 'cooking' | 'ready';
 export type TimerTone = 'ok' | 'warning' | 'expired' | 'neutral';
-/** `'button'` — a real, disabled `<button>` (M-3/M-4/M-5 will wire it). `'status'` — the design's non-tappable waiting strip, not a button at all. */
+/** `'button'` — a real `<button>`. `'status'` — the design's non-tappable waiting strip, not a button at all. */
 export type ActionKind = 'button' | 'status';
 export type ActionStyle = 'primary' | 'dark' | 'off' | 'waiting';
+
+/**
+ * The merchant command a card's primary action issues (M-2.7). These are the
+ * three `POST /api/v1/orders/:id/...` transition endpoints that already exist
+ * and are `@Roles('MERCHANT')`-gated — the value is the URL segment itself, so
+ * this union cannot drift from the route without failing the repository tests.
+ *
+ * **`null` is a first-class answer**, and the two cards that return it are not
+ * oversights:
+ *
+ * - An **expired** `PAID` card. Its action is `ติดต่อผู้ดูแลระบบ`, for which no
+ *   endpoint exists and none should be invented — BQ-013 (accept-window expiry
+ *   behaviour) is still `OPEN`, and the design's §07 decision log renders the
+ *   button disabled precisely "because the expiry rule is undecided... not
+ *   because rejection occurred". Wiring it would be inventing product policy.
+ * - A **`READY_FOR_PICKUP`** card, which has no merchant action at all
+ *   (`actionKind: 'status'`, design §01: "not tappable").
+ *
+ * This is deliberately a *presentation* concern rather than a state machine:
+ * it decides which button to render and what it would call, never whether the
+ * call is legal. That remains the server's guarded conditional `UPDATE`
+ * (ADR-003) — the same division `apps/driver/src/repositories/riderDeliveryActions.ts`
+ * documents for the rider commands.
+ */
+export type OrderActionCommand = 'accept' | 'start-preparing' | 'mark-ready';
 
 export interface OrderCardPresentation {
   chipLabel: string;
@@ -235,6 +260,8 @@ export interface OrderCardPresentation {
   actionLabel: string;
   actionKind: ActionKind;
   actionStyle: ActionStyle;
+  /** The command this card's action issues, or `null` when it issues none — see `OrderActionCommand`. */
+  actionCommand: OrderActionCommand | null;
   isNewArrival: boolean;
   isExpired: boolean;
 }
@@ -244,15 +271,34 @@ function paidCardPresentation(order: MerchantOrderSummary, nowMs: number): Order
   const clock = formatClockTime(order.placedAt) ?? '--:--';
   const elapsed = formatElapsedShort(elapsedSeconds(order.placedAt, nowMs));
 
-  const byPhase: Record<CountdownPhase, Pick<OrderCardPresentation, 'chipLabel' | 'chipTone' | 'timerTone' | 'actionLabel' | 'actionStyle'>> = {
-    normal: { chipLabel: 'ใหม่ · รอตอบรับ', chipTone: 'new', timerTone: 'ok', actionLabel: 'รับออเดอร์', actionStyle: 'primary' },
-    warning: { chipLabel: 'ใกล้หมดเวลา', chipTone: 'warning', timerTone: 'warning', actionLabel: 'รับออเดอร์', actionStyle: 'primary' },
+  const byPhase: Record<
+    CountdownPhase,
+    Pick<OrderCardPresentation, 'chipLabel' | 'chipTone' | 'timerTone' | 'actionLabel' | 'actionStyle' | 'actionCommand'>
+  > = {
+    normal: {
+      chipLabel: 'ใหม่ · รอตอบรับ',
+      chipTone: 'new',
+      timerTone: 'ok',
+      actionLabel: 'รับออเดอร์',
+      actionStyle: 'primary',
+      actionCommand: 'accept',
+    },
+    warning: {
+      chipLabel: 'ใกล้หมดเวลา',
+      chipTone: 'warning',
+      timerTone: 'warning',
+      actionLabel: 'รับออเดอร์',
+      actionStyle: 'primary',
+      actionCommand: 'accept',
+    },
     expired: {
       chipLabel: 'หมดเวลาตอบรับ',
       chipTone: 'expired',
       timerTone: 'expired',
       actionLabel: 'ติดต่อผู้ดูแลระบบ',
       actionStyle: 'off',
+      // No endpoint, deliberately — BQ-013 is OPEN. See `OrderActionCommand`.
+      actionCommand: null,
     },
   };
 
@@ -279,6 +325,7 @@ function merchantAcceptedCardPresentation(order: MerchantOrderSummary): OrderCar
     actionLabel: 'เริ่มทำอาหาร',
     actionKind: 'button',
     actionStyle: 'dark',
+    actionCommand: 'start-preparing',
     isNewArrival: false,
     isExpired: false,
   };
@@ -297,6 +344,7 @@ function preparingCardPresentation(order: MerchantOrderSummary, nowMs: number): 
     actionLabel: 'อาหารพร้อม',
     actionKind: 'button',
     actionStyle: 'dark',
+    actionCommand: 'mark-ready',
     isNewArrival: false,
     isExpired: false,
   };
@@ -318,6 +366,7 @@ function readyForPickupCardPresentation(order: MerchantOrderSummary, nowMs: numb
     actionLabel: 'รอไรเดอร์มารับ',
     actionKind: 'status',
     actionStyle: 'waiting',
+    actionCommand: null,
     isNewArrival: false,
     isExpired: false,
   };
@@ -336,5 +385,56 @@ export function presentOrderCard(order: MerchantOrderSummary, nowMs: number): Or
       return readyForPickupCardPresentation(order, nowMs);
     default:
       return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mutation failure copy — M-2.7. DESIGN CHOICE, not SPECIFIED.
+//
+// The M-2.6 design specifies no per-card mutation-failure treatment, because
+// M-2.6 had no mutations to fail; its §07 methodology explicitly permits an
+// implementer to make this class of call (it did exactly that for the loading
+// skeleton, the board error copy and the support reference code) rather than
+// requiring a new canvas. This is the smallest such choice: a short Thai
+// sentence beside the action that failed, and the button left usable so the
+// merchant can simply press it again.
+//
+// Copy is written to the same register the design already uses for the
+// board-level error ("โหลดออเดอร์ไม่สำเร็จ ... ถ้ายังไม่ได้ ให้ติดต่อผู้ดูแลระบบ"):
+// what happened, in Thai, no HTTP status, no error class, no stack.
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves a failed transition into merchant-facing Thai.
+ *
+ * Branches on `ApiClientError.code`, **never** on `message` — the shared client
+ * documents `message` as a developer-facing string that falls back to the code
+ * and "must never be relied on for anything a user sees". The code is read
+ * structurally (a `code` string property) rather than via `instanceof
+ * ApiClientError` so that this stays a pure function of the module's own
+ * making, testable without constructing a real client error.
+ *
+ * `INVALID_TRANSITION` gets its own sentence because it is the one failure a
+ * correct, unlucky merchant will actually meet: someone else moved the order
+ * (an operator, or this same merchant on a second tablet) between the board
+ * rendering and the button being pressed. Telling them the board is about to
+ * correct itself is more useful than "failed", and it is true — the authoritative
+ * state arrives over Realtime regardless of this call's outcome.
+ */
+export function orderActionErrorMessage(cause: unknown): string {
+  const code = typeof cause === 'object' && cause !== null && 'code' in cause ? (cause as { code: unknown }).code : null;
+
+  switch (code) {
+    case 'INVALID_TRANSITION':
+      return 'ออเดอร์นี้ถูกเปลี่ยนสถานะไปแล้ว · กระดานจะอัปเดตเอง';
+    case 'NOT_RESTAURANT_MEMBER':
+    case 'FORBIDDEN':
+      return 'ไม่มีสิทธิ์จัดการออเดอร์นี้ · ติดต่อผู้ดูแลระบบ';
+    case 'NOT_FOUND':
+      return 'ไม่พบออเดอร์นี้ · กระดานจะอัปเดตเอง';
+    case 'UNAUTHORIZED':
+      return 'เซสชันหมดอายุ · เข้าสู่ระบบใหม่อีกครั้ง';
+    default:
+      return 'ทำรายการไม่สำเร็จ · ลองอีกครั้ง';
   }
 }

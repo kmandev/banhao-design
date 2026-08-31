@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useOrderBoard } from '../hooks/useOrderBoard';
+import { useOrderActions } from '../hooks/useOrderActions';
 import type { MerchantOrderRealtimeStatus } from '../hooks/useOrderRealtime';
 import { BOARD_COLUMNS, groupOrdersByColumn, type BoardColumnId } from '../lib/orderBoardDisplay';
 import { OrderCard } from './OrderCard';
@@ -244,6 +245,10 @@ export interface OrderBoardProps {
 
 export function OrderBoard({ restaurantId }: OrderBoardProps) {
   const { orders, loading, error, realtimeStatus, refetch } = useOrderBoard(restaurantId);
+  // M-2.7. Per-card, never global: `isPending`/`errorFor` are asked about one
+  // order at a time, so a command on one card leaves every other card fully
+  // interactive and never draws a board-wide overlay.
+  const actions = useOrderActions();
   const [trayExpanded, setTrayExpanded] = useState(false);
   // Read once per render — not a ticking clock. See the module doc comment.
   const now = Date.now();
@@ -272,8 +277,26 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
         }
         .banhao-board-ready-toggle { display: none; }
         .banhao-board-ready-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+        .banhao-order-action-spinner { animation: banhao-board-spin .9s linear infinite; }
         @media (max-width: 1024px) {
           .banhao-board-columns { grid-template-columns: repeat(2, 1fr); }
+          /*
+            Design §05 (SPECIFIED): "Touch targets rise to 56px throughout"
+            at the 768–1024px tablet breakpoint, matching the design's own
+            tablet card markup (56px) against its desktop board markup (52px).
+            Carried as a custom property rather than a height rule because
+            OrderCard sets its height inline, and an inline style wins over a
+            stylesheet declaration — the variable is the one channel that can
+            reach it. Cards rendered outside this board keep the 52px fallback.
+
+            Note for review: the design is internally inconsistent about the
+            desktop value — §01 anatomy and the §06 accessibility list both say
+            56px on desktop too, while the §02 desktop board markup renders
+            52px. This follows the markup, which is what M-2.6 implemented and
+            what was visually verified. Resolving that is a design question,
+            not an M-2.7 decision, and is reported rather than settled here.
+          */
+          .banhao-board-columns { --banhao-action-height: 56px; }
           .banhao-board-column--ready {
             grid-column: 1 / -1;
             border-radius: 18px;
@@ -401,7 +424,16 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
                         </div>
                       </div>
                     ) : (
-                      columnOrders.map((order) => <OrderCard key={order.id} order={order} now={now} />)
+                      columnOrders.map((order) => (
+                        <OrderCard
+                          key={order.id}
+                          order={order}
+                          now={now}
+                          onAction={actions.runAction}
+                          pending={actions.isPending(order)}
+                          actionError={actions.errorFor(order)}
+                        />
+                      ))
                     )}
                   </div>
                 </div>

@@ -187,3 +187,89 @@ describe('listRestaurantOrders — mapping and results', () => {
     await expect(subject.listRestaurantOrders('rest-1')).rejects.toThrow('network error');
   });
 });
+
+// ---------------------------------------------------------------------------
+// M-2.7 — the three merchant transition commands.
+//
+// These assert the *wire contract* against the real controller
+// (`apps/api/src/modules/orders/orders.controller.ts`): a wrong verb, a
+// mistyped path segment, an invented request body, or an accidental direct
+// Supabase write fails here rather than only in a live check. The API client
+// is stubbed at its single `request` seam — the same level M-2.3's tests stub
+// the Supabase query builder.
+// ---------------------------------------------------------------------------
+
+interface RecordedRequest {
+  path: string;
+  init: RequestInit;
+}
+
+function apiStub(outcome: { resolve: unknown } | { reject: unknown }) {
+  const requests: RecordedRequest[] = [];
+
+  const client = {
+    request(path: string, init: RequestInit = {}) {
+      requests.push({ path, init });
+      return 'reject' in outcome ? Promise.reject(outcome.reject) : Promise.resolve(outcome.resolve);
+    },
+  };
+
+  return { client: client as unknown as Parameters<typeof createMerchantOrdersRepository>[1], requests };
+}
+
+function commandRepo(outcome: { resolve: unknown } | { reject: unknown }) {
+  // A Supabase stub that would throw if touched: a command must never reach it.
+  const { client: supabase, calls } = supabaseStub({ data: null, error: { message: 'must not be called' } });
+  const { client: api, requests } = apiStub(outcome);
+  return { subject: createMerchantOrdersRepository(supabase, api), requests, supabaseCalls: calls };
+}
+
+const TRANSITION_OK = { orderId: 'order-1', state: 'MERCHANT_ACCEPTED' };
+
+describe('transitionOrder — endpoint contract', () => {
+  it.each([
+    ['accept', '/api/v1/orders/order-1/accept'],
+    ['start-preparing', '/api/v1/orders/order-1/start-preparing'],
+    ['mark-ready', '/api/v1/orders/order-1/mark-ready'],
+  ] as const)('%s posts to %s', async (command, expectedPath) => {
+    const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
+    await subject.transitionOrder('order-1', command);
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.path).toBe(expectedPath);
+    expect(requests[0]!.init.method).toBe('POST');
+  });
+
+  it('sends no request body — none of the three endpoints declares one', async () => {
+    const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
+    await subject.transitionOrder('order-1', 'accept');
+
+    expect(requests[0]!.init.body).toBeUndefined();
+  });
+
+  it('url-scopes the command to the order it was given', async () => {
+    const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
+    await subject.transitionOrder('order-99', 'mark-ready');
+
+    expect(requests[0]!.path).toBe('/api/v1/orders/order-99/mark-ready');
+  });
+
+  it('returns the server transition response unchanged', async () => {
+    const { subject } = commandRepo({ resolve: TRANSITION_OK });
+    await expect(subject.transitionOrder('order-1', 'accept')).resolves.toEqual(TRANSITION_OK);
+  });
+
+  it('never writes through Supabase — authenticated holds no update grant on orders', async () => {
+    const { subject, supabaseCalls } = commandRepo({ resolve: TRANSITION_OK });
+    await subject.transitionOrder('order-1', 'accept');
+
+    expect(supabaseCalls).toHaveLength(0);
+  });
+
+  it('propagates the API error intact so callers can branch on code, not message', async () => {
+    const failure = Object.assign(new Error('invalid transition'), { code: 'INVALID_TRANSITION', status: 409 });
+    const { subject } = commandRepo({ reject: failure });
+
+    await expect(subject.transitionOrder('order-1', 'accept')).rejects.toBe(failure);
+  });
+});

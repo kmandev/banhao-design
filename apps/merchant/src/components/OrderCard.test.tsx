@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { MerchantOrderSummary } from '../domain/order';
 import { OrderCard } from './OrderCard';
 
@@ -98,5 +98,126 @@ describe('OrderCard — READY_FOR_PICKUP', () => {
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('รอไรเดอร์มารับ');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M-2.7 — action wiring. The tests above deliberately pass no `onAction` and
+// assert the unwired card still renders a disabled control; the tests below
+// supply one. Both are real contracts: a card with no handler must never look
+// pressable.
+// ---------------------------------------------------------------------------
+
+describe('OrderCard — wired actions', () => {
+  it.each([
+    ['PAID', 'รับออเดอร์', 'accept'],
+    ['MERCHANT_ACCEPTED', 'เริ่มทำอาหาร', 'start-preparing'],
+    ['PREPARING', 'อาหารพร้อม', 'mark-ready'],
+  ] as const)('%s renders an enabled %s that issues %s', (state, label, command) => {
+    const onAction = jest.fn();
+    const subject = order({ id: '1', state, acceptedAt: '2026-08-31T04:39:00.000Z' });
+    render(<OrderCard order={subject} now={NOW} onAction={onAction} />);
+
+    const button = screen.getByRole('button', { name: label });
+    expect(button).toBeEnabled();
+
+    fireEvent.click(button);
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith(subject, command);
+  });
+
+  it('never wires the expired card — BQ-013 is open and there is no endpoint', () => {
+    const onAction = jest.fn();
+    render(
+      <OrderCard
+        order={order({ id: '1', state: 'PAID', placedAt: new Date(NOW - 400_000).toISOString() })}
+        now={NOW}
+        onAction={onAction}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ });
+    expect(button).toBeDisabled();
+
+    fireEvent.click(button);
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps READY_FOR_PICKUP a non-tappable status even when a handler is supplied', () => {
+    const onAction = jest.fn();
+    render(
+      <OrderCard
+        order={order({ id: '1', state: 'READY_FOR_PICKUP', readyAt: '2026-08-31T04:38:00.000Z' })}
+        now={NOW}
+        onAction={onAction}
+      />,
+    );
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(onAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrderCard — pending', () => {
+  it('disables the action and marks it busy while pending', () => {
+    render(<OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={jest.fn()} pending />);
+
+    const button = screen.getByRole('button', { name: 'รับออเดอร์' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('does not issue a second command while pending', () => {
+    const onAction = jest.fn();
+    render(<OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={onAction} pending />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps the design label while pending rather than substituting copy', () => {
+    render(<OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={jest.fn()} pending />);
+    expect(screen.getByRole('button', { name: 'รับออเดอร์' })).toBeInTheDocument();
+  });
+
+  it('is not busy when not pending', () => {
+    render(<OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={jest.fn()} />);
+    expect(screen.getByRole('button', { name: 'รับออเดอร์' })).toHaveAttribute('aria-busy', 'false');
+  });
+});
+
+describe('OrderCard — action failure', () => {
+  it('shows the message as an alert and leaves the action pressable for a retry', () => {
+    const onAction = jest.fn();
+    render(
+      <OrderCard
+        order={order({ id: '1', state: 'PAID' })}
+        now={NOW}
+        onAction={onAction}
+        actionError="ทำรายการไม่สำเร็จ · ลองอีกครั้ง"
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('ทำรายการไม่สำเร็จ · ลองอีกครั้ง');
+
+    const button = screen.getByRole('button', { name: 'รับออเดอร์' });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the card and its order data visible when a command failed', () => {
+    render(
+      <OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={jest.fn()} actionError="ล้มเหลว" />,
+    );
+
+    expect(screen.getByText('#BH-20260831-0007')).toBeInTheDocument();
+    expect(screen.getByText('คุณสมชาย ใจดี')).toBeInTheDocument();
+    expect(screen.getByText('฿185.00')).toBeInTheDocument();
+  });
+
+  it('renders no alert when there is no failure', () => {
+    render(<OrderCard order={order({ id: '1', state: 'PAID' })} now={NOW} onAction={jest.fn()} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
