@@ -1,0 +1,44 @@
+-- BANHAO — Phase M-2.1: enable Supabase Realtime for public.orders
+--
+-- 1. WHY. The Merchant Order Board (M2-RT-001, APPROVED) is an initial fetch
+--    plus a Supabase Realtime subscription plus a fallback refetch. Realtime
+--    is required by the authoritative Merchant architecture and UX
+--    specification — a merchant must see a new paid order appear without
+--    reloading the board. A table only emits `postgres_changes` if it is a
+--    member of the `supabase_realtime` publication; `public.orders` is not
+--    one yet. This migration adds it, and does nothing else.
+--
+-- 2. AUTHORIZATION IS UNCHANGED. Merchant access to an order row remains
+--    enforced exactly where it already is: the `orders_select_merchant`
+--    policy in 20260811000011_rls_policies.sql, `using
+--    (public.is_restaurant_member(restaurant_id))`. Supabase Realtime
+--    evaluates that same SELECT policy per subscriber before delivering a
+--    change, so a merchant receives changes only for orders belonging to a
+--    restaurant they are a member of. This migration does not touch
+--    `is_restaurant_member()`, any policy, any grant, or the `orders` schema.
+--
+-- 3. THE PUBLICATION IS NOT AN AUTHORIZATION BOUNDARY. Publication
+--    membership decides only *which tables can emit change events at all* —
+--    it is a transport switch, not a permission. It grants nobody a row they
+--    could not already `select`. Never reason about who may see an order by
+--    reasoning about this publication; the RLS policies above are the
+--    security boundary, and they stay the only one (M2-SCOPE-001). The
+--    client-side `restaurant_id` Realtime filter is likewise an
+--    optimization, never a control.
+--
+-- 4. `order_status_history` IS DELIBERATELY NOT ADDED. The M-2 Board reads
+--    only from `orders` (M2-DATA-001, APPROVED) and reconciles by
+--    `order.id` against current row state; it does not consume the history
+--    table. Adding it would publish change traffic no subscriber reads.
+--    It is deferred to the future order detail panel, where it can be added
+--    by its own migration if that panel actually needs it.
+--
+-- REPLICA IDENTITY: intentionally left at the PostgreSQL default. Default
+-- replica identity is the primary key, and `public.orders` has one
+-- (`id uuid primary key`, 20260811000005_order_domain.sql), so UPDATE and
+-- DELETE events carry the identifying key the Board needs. `REPLICA IDENTITY
+-- FULL` is NOT set: it would put every old column value of every order —
+-- including the recipient name/phone and address snapshots — into the WAL
+-- and the change payload, for old values the Board never reads.
+
+alter publication supabase_realtime add table public.orders;

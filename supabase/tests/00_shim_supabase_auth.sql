@@ -10,6 +10,9 @@
 --   - an `auth` schema with a `users` table (profiles.id references it)
 --   - `auth.uid()` reading the JWT subject from a GUC, exactly as Supabase does
 --   - the `anon`, `authenticated`, and `service_role` database roles
+--   - the `supabase_realtime` publication every Supabase project is
+--     bootstrapped with (empty here — migrations add their own tables to it,
+--     same as on the real platform)
 
 create schema if not exists auth;
 
@@ -67,6 +70,19 @@ $$;
 grant usage on schema public to anon, authenticated, service_role;
 grant usage on schema auth to anon, authenticated, service_role;
 grant select on auth.users to authenticated, service_role;
+
+-- Supabase provisions an empty `supabase_realtime` publication on every
+-- project; migrations then add specific tables to it (e.g.
+-- 20260831000001_orders_realtime_publication.sql). Vanilla PostgreSQL has no
+-- such publication, so it is created here, empty, exactly as the platform
+-- would hand it to a fresh project — no table is added by this shim.
+do $$
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+end
+$$;
 
 -- Reproduce Supabase's permissive default: every table created in `public`
 -- afterwards automatically grants ALL to anon and authenticated, leaving RLS

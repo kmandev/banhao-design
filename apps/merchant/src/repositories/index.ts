@@ -10,10 +10,10 @@
  * `MerchantRestaurantRepository` interface directly rather than through this
  * object, the same way apps/driver's tests do.
  *
- * M-1 needs exactly one repository — restaurant membership, for
- * authorization and restaurant selection. An order repository is explicitly
- * out of scope for this phase (see the M-1 brief's "DO NOT IMPLEMENT" list);
- * it will get its own binding here in M-2.
+ * M-1 needed exactly one repository — restaurant membership, for
+ * authorization and restaurant selection. M-2.3 adds the Order Board's
+ * initial-fetch repository alongside it (the Realtime subscription half is
+ * M-2.4, not yet bound here).
  */
 
 import { supabase } from '../lib/supabase';
@@ -21,13 +21,17 @@ import {
   createMerchantRestaurantRepository,
   type MerchantRestaurantRepository,
 } from './merchantRestaurant';
+import { createMerchantOrdersRepository, type MerchantOrdersRepository } from './merchantOrders';
 
 export * from './merchantRestaurant';
+export * from './merchantOrders';
 
 export interface Repositories {
   merchantRestaurant: MerchantRestaurantRepository;
+  merchantOrders: MerchantOrdersRepository;
 }
 
 export const repositories: Repositories = {
   merchantRestaurant: createMerchantRestaurantRepository(supabase),
+  merchantOrders: createMerchantOrdersRepository(supabase),
 };
