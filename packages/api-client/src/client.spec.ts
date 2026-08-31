@@ -193,4 +193,58 @@ describe('ApiClient', () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/health');
   });
+
+  // Regression — found by M-2.7's live browser verification, where every
+  // Merchant write failed with `TypeError: Illegal invocation` before a
+  // request was sent. A browser's `fetch` is a `Window` method and rejects any
+  // other receiver; the client stores it and calls it as `this.fetchImpl(...)`,
+  // so it must be bound to the global. Only the Merchant app surfaced this: it
+  // is the sole browser consumer of this client.
+  it('calls the global fetch with the global as receiver, not the client instance', async () => {
+    const original = globalThis.fetch;
+    const seenThis: unknown[] = [];
+    // A receiver-checking stand-in for the browser's Window.fetch.
+    const strictFetch = function (this: unknown) {
+      seenThis.push(this);
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      return Promise.resolve(jsonResponse({ success: true, data: { status: 'ok' } }));
+    };
+    globalThis.fetch = strictFetch as unknown as typeof fetch;
+
+    try {
+      // No `fetch` option — this is the path that picks up the global.
+      const client = new ApiClient({ baseUrl: 'http://api.test' });
+      await expect(client.health()).resolves.toEqual({ status: 'ok' });
+      expect(seenThis).toEqual([globalThis]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  // Regression — the guard on the bind above. Every app constructs this client
+  // at module scope, including under jsdom, where there is no global fetch;
+  // binding unconditionally threw on import and broke suites that never make a
+  // request.
+  it('constructs without throwing when the environment has no global fetch', () => {
+    const original = globalThis.fetch;
+    // @ts-expect-error — deliberately modelling a jsdom-like environment.
+    delete globalThis.fetch;
+
+    try {
+      expect(() => new ApiClient({ baseUrl: 'http://api.test' })).not.toThrow();
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it('leaves an injected fetch unbound, so tests keep their own receiver', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ success: true, data: { status: 'ok' } }));
+
+    const client = new ApiClient({ baseUrl: 'http://api.test', fetch: fetchMock });
+    await client.health();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

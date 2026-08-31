@@ -54,7 +54,29 @@ export class ApiClient {
   constructor(options: ApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.getAccessToken = options.getAccessToken;
-    this.fetchImpl = options.fetch ?? globalThis.fetch;
+    // Binding the global is load-bearing, not defensive style. A browser's
+    // `fetch` is a method of `Window` and throws
+    // `TypeError: Illegal invocation` when invoked with any other receiver —
+    // and `this.fetchImpl(...)` below calls it with the ApiClient instance as
+    // the receiver. Without the bind, every browser call through this client
+    // fails before a request is ever sent.
+    //
+    // This went unnoticed until the Merchant app (M-2.7) became the first
+    // consumer to actually call a write endpoint from a browser: the Customer
+    // and Driver apps are React Native, whose `fetch` polyfill is a plain
+    // function with no receiver check, and tests inject their own
+    // `options.fetch`, which is likewise unbound. An injected fetch is left
+    // exactly as given — binding is only ever applied to the global.
+    //
+    // The `typeof` guard matters: this class is constructed at module scope by
+    // every app's `lib/apiClient.ts`, including under jsdom, where
+    // `globalThis.fetch` is undefined. Binding unconditionally would throw
+    // there at import time and take down suites that never make a request.
+    // When there is no global fetch, the original behaviour is kept exactly:
+    // store the undefined and let the failure surface at call time.
+    const globalFetch = globalThis.fetch;
+    this.fetchImpl =
+      options.fetch ?? (typeof globalFetch === 'function' ? globalFetch.bind(globalThis) : globalFetch);
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
