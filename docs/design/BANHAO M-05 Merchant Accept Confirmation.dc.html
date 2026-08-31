@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}
+  a:hover{color:#C2431F}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<div style="max-width:1520px;margin:0 auto;padding:48px 40px 140px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:0 0 auto">M</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">M-05 — ACCEPT CONFIRMATION</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · design artifact for <span style="font-family:'IBM Plex Mono',monospace">docs/design/</span> · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1060px">
+    Screen M-05 <span style="font-family:'IBM Plex Mono',monospace">ยืนยันรับออเดอร์ (พร้อมเวลาทำอาหาร)</span> — the confirmation step that opens when a merchant presses <span style="font-family:'IBM Plex Mono',monospace">รับออเดอร์</span> on an M-2.6 board card, and closes by issuing the existing accept command.
+    Read against the shipped merchant app, the orders module and the deployed schema at <span style="font-family:'IBM Plex Mono',monospace">ac2c88c5</span>.
+    M-05 introduces no order state, no new endpoint, no new navigation and no notification system. It does require one contract extension and one schema field, both documented in §14 as constraints for implementation — not performed here. In-product copy is Thai; all annotation is English.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="17">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- ============ 00 · SCOPE ============ -->
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — SCOPE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">One decision, taken before the command is sent</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:860px;margin-bottom:20px">M-05 is a step inside an existing flow, not a screen a merchant navigates to. It sits between the press of <span style="font-family:'IBM Plex Mono',monospace">รับออเดอร์</span> and <span style="font-family:'IBM Plex Mono',monospace">useOrderActions.runAction(order,&nbsp;'accept')</span>, and its only product job is to make the merchant name a preparation time before the order leaves the <span style="font-family:'IBM Plex Mono',monospace">ออเดอร์ใหม่</span> column.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#0F8B5F;margin-bottom:14px">IN SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ inScope }}" as="i" hint-placeholder-count="8">
+          <div style="font-size:13.5px;line-height:1.65;color:#3D342C">{{ i }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #EFCFCF;background:#FDF6F5;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#B32B2B;margin-bottom:14px">OUT OF SCOPE FOR M-05</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ outScope }}" as="o" hint-placeholder-count="9">
+          <div style="font-size:13.5px;line-height:1.65;color:#5A4E42">{{ o }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 01 · FLOW ============ -->
+  <div id="s1" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — USER FLOW</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The dialog never changes the order's state</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:860px;margin-bottom:22px">Every step below already exists except the two marked <span style="color:#C2431F;font-weight:600">NEW</span>. The card moves columns at step 8 and at no earlier point: the server performs the guarded transition, Realtime reports it, and <span style="font-family:'IBM Plex Mono',monospace">useOrderBoard</span> re-renders. Nothing in M-05 writes board state.</div>
+
+  <div style="display:flex;flex-direction:column;gap:2px">
+    <sc-for list="{{ flow }}" as="f" hint-placeholder-count="9">
+      <div style="display:flex;align-items:stretch;gap:0">
+        <div style="width:52px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#A2968A">{{ f.n }}</div>
+        <div style="flex:1;border-radius:14px;border:1px solid {{ f.border }};background:{{ f.bg }};padding:14px 18px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+          <div style="font-size:15px;font-weight:600;line-height:1.55">{{ f.step }}</div>
+          <div style="font-size:12.5px;color:#7A6E64;line-height:1.6;flex:1;min-width:240px">{{ f.note }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;{{ f.tagStyle }}">{{ f.tag }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 02 · DESKTOP ============ -->
+  <div id="s2" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — STATE A</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Desktop · ≥1024px · centred dialog over the board</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:860px;margin-bottom:22px">M-05 is a <strong>modal dialog</strong>, 480px, centred — the smallest overlay that can own the keyboard for a required choice. It reuses M-04's scrim (<span style="font-family:'IBM Plex Mono',monospace">rgba(31,26,22,.32)</span>), focus trap and Escape behaviour verbatim, and no other overlay paradigm is introduced. It is not the M-04 drawer: the drawer is a reading surface a merchant leaves open while the board keeps moving, and this is a two-second decision that must not be left open. The originating card keeps the 2px orange ring so the dialog's subject is unambiguous, and the board behind it stays legible so an arriving order is still visible.</div>
+
+  <div style="width:1360px;max-width:100%;border-radius:22px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.07);position:relative">
+    <div style="height:72px;background:#fff;border-bottom:1px solid #EAE1D6;display:flex;align-items:center;gap:16px;padding:0 24px">
+      <div style="width:38px;height:38px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700">ฮ</div>
+      <div>
+        <div style="font-size:17px;font-weight:700;line-height:1.4">ร้านตามสั่งป้าสมร</div>
+        <div style="font-size:12px;color:#7A6E64">เปิดรับออเดอร์ · วันนี้ 11:42</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13.5px;font-weight:600;color:#5A4E42">
+        <span style="width:9px;height:9px;border-radius:50%;background:#0F8B5F"></span>เชื่อมต่ออยู่
+      </div>
+      <div style="display:flex;align-items:center;height:44px;padding:0 16px;border-radius:12px;border:1px solid #E9E0D5;font-size:13.5px;font-weight:600;color:#5A4E42">ออเดอร์วันนี้ 24</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:20px;align-items:start;min-height:640px">
+      <sc-for list="{{ boardColumns }}" as="col" hint-placeholder-count="3">
+        <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;overflow:hidden">
+          <div style="height:4px;background:{{ col.accent }}"></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #F1E9DE">
+            <div style="font-size:15.5px;font-weight:700">{{ col.title }}</div>
+            <div style="min-width:26px;height:26px;padding:0 8px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;{{ col.badge }}">{{ col.count }}</div>
+          </div>
+          <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
+            <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="2">
+              <div style="border-radius:16px;background:#fff;padding:14px;display:flex;flex-direction:column;gap:9px;{{ c.shell }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">{{ c.num }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:9px;{{ c.timerStyle }}">{{ c.timer }}</div>
+                </div>
+                <div style="font-size:15.5px;font-weight:600;line-height:1.55">{{ c.name }}</div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">{{ c.total }}</div>
+                  <div style="font-size:11.5px;color:#7A6E64">{{ c.time }}</div>
+                </div>
+                <div style="height:52px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;{{ c.actionStyle }}">{{ c.action }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="position:absolute;inset:72px 0 0 0;background:rgba(31,26,22,.32);display:flex;align-items:center;justify-content:center;padding:24px">
+
+      <div style="width:480px;background:#FBF7F1;border-radius:22px;border:1px solid #E2D8CB;box-shadow:0 24px 64px rgba(31,26,22,.28);overflow:hidden">
+        <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:18px 20px;display:flex;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:19px;font-weight:700;line-height:1.5">รับออเดอร์ <span style="font-family:'IBM Plex Mono',monospace">#ORD-10245</span></div>
+            <div style="font-size:13px;color:#7A6E64;margin-top:4px;line-height:1.6">คุณสมชาย ใจดี · <span style="font-family:'IBM Plex Mono',monospace">฿248.00</span> · 3 รายการ</div>
+          </div>
+          <div style="width:44px;height:44px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;color:#5A4E42;flex:0 0 auto">✕</div>
+        </div>
+
+        <div style="padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;height:40px;padding:0 14px;border-radius:12px;background:#EAF6EF">
+            <div style="font-size:13px;font-weight:600;color:#0F6C4C">เหลือเวลาตอบรับ</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#0F8B5F">02:14</div>
+          </div>
+
+          <div>
+            <div style="font-size:15px;font-weight:600;margin-bottom:4px">ใช้เวลาทำอาหารประมาณ</div>
+            <div style="font-size:12.5px;color:#7A6E64;line-height:1.65">เลือกเวลาก่อนจึงจะยืนยันได้ · ลูกค้าจะเห็นเวลานี้</div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px">
+              <sc-for list="{{ presets }}" as="p" hint-placeholder-count="5">
+                <div style="height:56px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;{{ p.style }}">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;line-height:1.1">{{ p.n }}</div>
+                  <div style="font-size:11px;line-height:1.2">นาที</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="border-radius:14px;background:#FDF3E6;border:1px solid #F0DFC4;padding:13px 15px;font-size:13px;line-height:1.7;color:#5A4E42">ยืนยันแล้วออเดอร์จะย้ายไปคอลัมน์ <strong>กำลังทำ</strong> และลูกค้าจะเห็นว่า <strong>ร้านใช้เวลาทำอาหารประมาณ 20 นาที</strong></div>
+
+          <div style="display:flex;gap:10px">
+            <div style="width:132px;height:52px;border-radius:13px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+            <div style="flex:1;height:52px;border-radius:13px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">ยืนยันรับออเดอร์</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px">
+    <sc-for list="{{ desktopNotes }}" as="d" hint-placeholder-count="3">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px">
+        <div style="font-size:14.5px;font-weight:700;margin-bottom:8px">{{ d.title }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ d.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 03 · TABLET ============ -->
+  <div id="s3" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — STATE B</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Tablet · 768–1024px · same dialog, thumb-sized</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:860px;margin-bottom:22px">Same component, three parameter changes: the dialog is <span style="font-family:'IBM Plex Mono',monospace">min(92vw, 560px)</span>, every target rises to the board's existing tablet height (<span style="font-family:'IBM Plex Mono',monospace">--banhao-action-height: 56px</span>, and 64px for the presets so a chip is never smaller than the button that opened it), and the five presets wrap to a 3+2 grid rather than shrinking to 60px-wide taps. The dialog is not converted to a bottom sheet: a sheet costs vertical travel from a merchant's hand to the primary action, and the board's own tablet layout is two columns plus a tray, so a centred dialog stays clear of the tray.</div>
+
+  <div style="width:900px;max-width:100%;border-radius:22px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.07);position:relative">
+    <div style="height:64px;background:#fff;border-bottom:1px solid #EAE1D6;display:flex;align-items:center;gap:14px;padding:0 20px">
+      <div style="width:34px;height:34px;border-radius:11px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700">ฮ</div>
+      <div style="font-size:16px;font-weight:700">ร้านตามสั่งป้าสมร</div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13px;font-weight:600;color:#5A4E42"><span style="width:9px;height:9px;border-radius:50%;background:#0F8B5F"></span>เชื่อมต่ออยู่</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:18px;min-height:600px">
+      <sc-for list="{{ tabletColumns }}" as="col" hint-placeholder-count="2">
+        <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;overflow:hidden">
+          <div style="height:4px;background:{{ col.accent }}"></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid #F1E9DE">
+            <div style="font-size:15px;font-weight:700">{{ col.title }}</div>
+            <div style="min-width:26px;height:26px;padding:0 8px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;{{ col.badge }}">{{ col.count }}</div>
+          </div>
+          <div style="padding:13px;display:flex;flex-direction:column;gap:11px">
+            <sc-for list="{{ col.cards }}" as="c" hint-placeholder-count="1">
+              <div style="border-radius:16px;background:#fff;padding:13px;display:flex;flex-direction:column;gap:9px;{{ c.shell }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">{{ c.num }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:9px;{{ c.timerStyle }}">{{ c.timer }}</div>
+                </div>
+                <div style="font-size:15px;font-weight:600">{{ c.name }}</div>
+                <div style="height:56px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;{{ c.actionStyle }}">{{ c.action }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="position:absolute;inset:64px 0 0 0;background:rgba(31,26,22,.32);display:flex;align-items:center;justify-content:center;padding:20px">
+      <div style="width:560px;max-width:92%;background:#FBF7F1;border-radius:22px;border:1px solid #E2D8CB;box-shadow:0 24px 64px rgba(31,26,22,.28);overflow:hidden">
+        <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:18px 20px;display:flex;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:20px;font-weight:700;line-height:1.5">รับออเดอร์ <span style="font-family:'IBM Plex Mono',monospace">#ORD-10247</span></div>
+            <div style="font-size:13.5px;color:#7A6E64;margin-top:4px">คุณมานี รักดี · <span style="font-family:'IBM Plex Mono',monospace">฿185.00</span> · 2 รายการ</div>
+          </div>
+          <div style="width:56px;height:56px;border-radius:14px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;color:#5A4E42;flex:0 0 auto">✕</div>
+        </div>
+        <div style="padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;height:44px;padding:0 14px;border-radius:12px;background:#EAF6EF">
+            <div style="font-size:13.5px;font-weight:600;color:#0F6C4C">เหลือเวลาตอบรับ</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;color:#0F8B5F">01:38</div>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:4px">ใช้เวลาทำอาหารประมาณ</div>
+            <div style="font-size:13px;color:#7A6E64;line-height:1.65">เลือกเวลาก่อนจึงจะยืนยันได้ · ลูกค้าจะเห็นเวลานี้</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
+              <sc-for list="{{ tabletPresets }}" as="p" hint-placeholder-count="5">
+                <div style="height:64px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;{{ p.style }}">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:21px;font-weight:600;line-height:1.1">{{ p.n }}</div>
+                  <div style="font-size:11.5px;line-height:1.2">นาที</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="border-radius:14px;background:#FDF3E6;border:1px solid #F0DFC4;padding:13px 15px;font-size:13.5px;line-height:1.7;color:#5A4E42">ยืนยันแล้วออเดอร์จะย้ายไปคอลัมน์ <strong>กำลังทำ</strong> และลูกค้าจะเห็นว่า <strong>ร้านใช้เวลาทำอาหารประมาณ 30 นาที</strong></div>
+          <div style="display:flex;gap:12px">
+            <div style="width:150px;height:56px;border-radius:13px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:15.5px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+            <div style="flex:1;height:56px;border-radius:13px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15.5px;font-weight:600">ยืนยันรับออเดอร์</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 04 · PREP-TIME STATES ============ -->
+  <div id="s4" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — PREP-TIME SELECTION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Five fixed presets, nothing preselected</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:860px;margin-bottom:22px">A single-select radio group, not five buttons: one press sets the value and one more press confirms. Nothing is preselected, so the group opens with no <span style="font-family:'IBM Plex Mono',monospace">aria-checked</span> option and the confirm button disabled — a merchant cannot accept an order without having answered. There is no free-number field in MVP.</div>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <sc-for list="{{ presetStates }}" as="s" hint-placeholder-count="5">
+      <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:18px 20px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+        <div style="width:200px;flex:0 0 auto">
+          <div style="font-size:14.5px;font-weight:700">{{ s.name }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#A2968A;margin-top:3px">{{ s.token }}</div>
+        </div>
+        <div style="height:56px;min-width:92px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0 18px;{{ s.style }}">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;line-height:1.1">20</div>
+          <div style="font-size:11px;line-height:1.2">นาที</div>
+        </div>
+        <div style="flex:1;min-width:300px;font-size:13px;line-height:1.7;color:#5A4E42">{{ s.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 05 · CONFIRMATION / LOADING / ERROR ============ -->
+  <div id="s5" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — CONFIRMATION, LOADING, FAILURE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Four states of the same dialog</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:860px;margin-bottom:22px">The dialog stays mounted through the whole mutation. It does not close optimistically, it does not report success itself, and a failure leaves it open with the merchant's selection intact — the retry is the same button, pressed again.</div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px">
+
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#F3ECE2;padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:7px;background:#EFE7DC;color:#7A6E64">A · UNANSWERED</div>
+        <div style="font-size:13px;color:#5A4E42">opens here · confirm disabled</div>
+      </div>
+      <div style="background:#FBF7F1;border-radius:18px;border:1px solid #E2D8CB;overflow:hidden">
+        <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:15px 17px;font-size:17px;font-weight:700">รับออเดอร์ <span style="font-family:'IBM Plex Mono',monospace">#ORD-10245</span></div>
+        <div style="padding:16px 17px;display:flex;flex-direction:column;gap:13px">
+          <div style="font-size:14.5px;font-weight:600">ใช้เวลาทำอาหารประมาณ</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:7px">
+            <sc-for list="{{ presetsEmpty }}" as="p" hint-placeholder-count="5">
+              <div style="height:52px;border-radius:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;{{ p.style }}">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">{{ p.n }}</div>
+                <div style="font-size:10.5px">นาที</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12.5px;color:#8A6412;background:#FDF3E6;border-radius:11px;padding:9px 12px;line-height:1.6">เลือกเวลาก่อนจึงจะยืนยันได้</div>
+          <div style="display:flex;gap:9px">
+            <div style="width:110px;height:48px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+            <div style="flex:1;height:48px;border-radius:12px;background:#EFE7DC;color:#B0A294;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600">ยืนยันรับออเดอร์</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#F3ECE2;padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:7px;background:#EAF6EF;color:#0F8B5F">B · ARMED</div>
+        <div style="font-size:13px;color:#5A4E42">20 นาที chosen · confirm live</div>
+      </div>
+      <div style="background:#FBF7F1;border-radius:18px;border:1px solid #E2D8CB;overflow:hidden">
+        <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:15px 17px;font-size:17px;font-weight:700">รับออเดอร์ <span style="font-family:'IBM Plex Mono',monospace">#ORD-10245</span></div>
+        <div style="padding:16px 17px;display:flex;flex-direction:column;gap:13px">
+          <div style="font-size:14.5px;font-weight:600">ใช้เวลาทำอาหารประมาณ</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:7px">
+            <sc-for list="{{ presetsArmed }}" as="p" hint-placeholder-count="5">
+              <div style="height:52px;border-radius:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;{{ p.style }}">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">{{ p.n }}</div>
+                <div style="font-size:10.5px">นาที</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12.5px;color:#5A4E42;background:#FDF3E6;border:1px solid #F0DFC4;border-radius:11px;padding:9px 12px;line-height:1.65">ลูกค้าจะเห็นว่า <strong>ร้านใช้เวลาทำอาหารประมาณ 20 นาที</strong></div>
+          <div style="display:flex;gap:9px">
+            <div style="width:110px;height:48px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+            <div style="flex:1;height:48px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600">ยืนยันรับออเดอร์</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#F3ECE2;padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:7px;background:#FDF3E6;color:#8A6412">C · IN FLIGHT</div>
+        <div style="font-size:13px;color:#5A4E42">whole dialog inert, nothing closed</div>
+      </div>
+      <div style="background:#FBF7F1;border-radius:18px;border:1px solid #E2D8CB;overflow:hidden">
+        <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:15px 17px;font-size:17px;font-weight:700;color:#8B7F73">รับออเดอร์ <span style="font-family:'IBM Plex Mono',monospace">#ORD-10245</span></div>
+        <div style="padding:16px 17px;display:flex;flex-direction:column;gap:13px">
+          <div style="font-size:14.5px;font-weight:600;color:#8B7F73">ใช้เวลาทำอาหารประมาณ</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:7px">
+            <sc-for list="{{ presetsBusy }}" as="p" hint-placeholder-count="5">
+              <div style="height:52px;border-radius:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;{{ p.style }}">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">{{ p.n }}</div>
+                <div style="font-size:10.5px">นาที</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12.5px;color:#7A6E64;background:#F2EBE1;border-radius:11px;padding:9px 12px;line-height:1.65">รอระบบยืนยัน · ออเดอร์จะย้ายไปคอลัมน์ <strong>กำลังทำ</strong> เมื่อระบบยืนยันแล้ว</div>
+          <div style="display:flex;gap:9px">
+            <div style="width:110px;height:48px;border-radius:12px;border:1px solid #EFE7DC;background:#F7F2EA;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;color:#B0A294">ยกเลิก</div>
+            <div style="flex:1;height:48px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;gap:9px;font-size:14.5px;font-weight:600">
+              <span style="width:15px;height:15px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:currentColor;display:inline-block;animation:spin 1s linear infinite"></span>
+              กำลังส่งให้ระบบ…
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-radius:20px;border:1px solid #EFCFCF;background:#F7EBE9;padding:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:7px;background:#FBEAEA;color:#B32B2B">D · FAILED</div>
+        <div style="font-size:13px;color:#5A4E42">order still PAID · selection kept · retry in place</div>
+      </div>
+      <div style="background:#FBF7F1;border-radius:18px;border:1px solid #E2D8CB;overflow:hidden">
+        <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:15px 17px;font-size:17px;font-weight:700">รับออเดอร์ <span style="font-family:'IBM Plex Mono',monospace">#ORD-10245</span></div>
+        <div style="padding:16px 17px;display:flex;flex-direction:column;gap:13px">
+          <div style="font-size:14.5px;font-weight:600">ใช้เวลาทำอาหารประมาณ</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:7px">
+            <sc-for list="{{ presetsArmed }}" as="p" hint-placeholder-count="5">
+              <div style="height:52px;border-radius:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;{{ p.style }}">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">{{ p.n }}</div>
+                <div style="font-size:10.5px">นาที</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12.5px;color:#B32B2B;background:#FBEAEA;border-radius:11px;padding:10px 12px;line-height:1.7">
+            <div style="font-weight:600">ส่งคำสั่งไม่สำเร็จ · ลองอีกครั้ง</div>
+            <div style="margin-top:3px">ออเดอร์ยังอยู่ที่ <strong>ออเดอร์ใหม่</strong> และยังไม่ถูกรับ</div>
+          </div>
+          <div style="display:flex;gap:9px">
+            <div style="width:110px;height:48px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+            <div style="flex:1;height:48px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14.5px;font-weight:600">ยืนยันรับออเดอร์</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:20px">
+    <sc-for list="{{ errorRules }}" as="e" hint-placeholder-count="4">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:#B32B2B;margin-bottom:7px">{{ e.code }}</div>
+        <div style="font-size:14px;font-weight:600;line-height:1.6;margin-bottom:6px">{{ e.copy }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ e.behaviour }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 06 · ACCEPT WINDOW ============ -->
+  <div id="s6" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — THE 3-MINUTE ACCEPT WINDOW</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Four phases, one existing function</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The phases come from <span style="font-family:'IBM Plex Mono',monospace">acceptWindowState(placedAt, now)</span> as already shipped — <span style="font-family:'IBM Plex Mono',monospace">MERCHANT_ACCEPT_WINDOW_SECONDS = 180</span>, warning at ≤ 60s, expired at 0. M-05 renders the same three values in a dialog-scale strip and adds no timer of its own. <strong>BQ-013 is untouched:</strong> nothing here auto-rejects, auto-refunds, cancels, or decides what happens at 3:00 — the strip only reports the clock the board already shows.</div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+    <sc-for list="{{ windowPhases }}" as="w" hint-placeholder-count="4">
+      <div style="border-radius:20px;border:1px solid {{ w.border }};background:#fff;overflow:hidden;display:flex;flex-direction:column">
+        <div style="padding:14px 16px;border-bottom:1px solid #F1E9DE">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#A2968A">{{ w.phase }}</div>
+          <div style="font-size:15px;font-weight:700;margin-top:3px">{{ w.title }}</div>
+        </div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:11px;flex:1">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;height:40px;padding:0 13px;border-radius:12px;{{ w.stripStyle }}">
+            <div style="font-size:12.5px;font-weight:600">{{ w.stripLabel }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:14.5px;font-weight:600">{{ w.clock }}</div>
+          </div>
+          <div style="height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;{{ w.ctaStyle }}">{{ w.cta }}</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ w.note }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;border-radius:18px;border:1px solid #EFCFCF;background:#FDF6F5;padding:20px 22px;max-width:1040px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px">Expiry while the dialog is open</div>
+    <div style="font-size:13.5px;line-height:1.8;color:#5A4E42">If the window reaches 0 with M-05 open, the dialog switches to the expired body in place: the preset group and the confirm button are removed (not merely disabled — there is nothing to confirm), the existing board copy <span style="font-family:'IBM Plex Mono',monospace">หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ</span> is shown verbatim, and the only remaining control is <span style="font-family:'IBM Plex Mono',monospace">ปิด</span>. Focus moves to that button and the change is announced. An accept already in flight when the clock hits 0 is <strong>not</strong> cancelled client-side: the server's guarded <span style="font-family:'IBM Plex Mono',monospace">WHERE state = 'PAID'</span> is the only authority on whether it lands, and BQ-013 has not defined an expiry rule for the server to enforce.</div>
+  </div>
+
+  <!-- ============ 07 · ACCESSIBILITY ============ -->
+  <div id="s7" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — ACCESSIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The M-04 bar, applied to a decision instead of a document</div>
+
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <sc-for list="{{ a11y }}" as="a" hint-placeholder-count="12">
+      <div style="display:grid;grid-template-columns:210px 1fr;gap:20px;padding:15px 20px;border-bottom:1px solid #F1E9DE">
+        <div style="font-size:13.5px;font-weight:700;line-height:1.6">{{ a.topic }}</div>
+        <div style="font-size:13.5px;line-height:1.75;color:#5A4E42">{{ a.rule }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px 22px;max-width:1040px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:10px">Focus order, top to bottom</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <sc-for list="{{ focusOrder }}" as="f" hint-placeholder-count="6">
+        <div style="font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:11px;background:#F6F0E7;border:1px solid #EAE1D6;color:#3D342C">{{ f }}</div>
+      </sc-for>
+    </div>
+    <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:12px">The radio group is one tab stop, not five: <kbd style="font-family:'IBM Plex Mono',monospace">Tab</kbd> enters it at the checked option (or the first option when none is checked), arrow keys move and select within it, and <kbd style="font-family:'IBM Plex Mono',monospace">Tab</kbd> leaves. That is what makes the whole interaction three keystrokes — <kbd style="font-family:'IBM Plex Mono',monospace">Tab</kbd>, <kbd style="font-family:'IBM Plex Mono',monospace">→</kbd>, <kbd style="font-family:'IBM Plex Mono',monospace">Enter</kbd> — for a merchant who never touches the mouse during service.</div>
+  </div>
+
+  <!-- ============ 08 · CUSTOMER VISIBILITY ============ -->
+  <div id="s8" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — CUSTOMER VISIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">One line on C-14, no new screen</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:880px;margin-bottom:22px">
+    C-14 <span style="font-family:'IBM Plex Mono',monospace">ติดตามออเดอร์</span> already exists and already renders the state headline as the largest text on screen, above the order number, shop and total. The prep time is a <strong>caption directly under that headline</strong> — the one place a customer is already looking, on the screen UX-SPEC calls "the customer's home for the next 30 minutes". No second screen, no card, no ETA arithmetic.
+  </div>
+
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start">
+    <div style="border-radius:34px;border:1px solid #E2D8CB;background:#fff;padding:14px;box-shadow:0 10px 40px rgba(31,26,22,.08)">
+      <div style="border-radius:24px;background:#FBF7F1;overflow:hidden">
+        <div style="height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A6E64"><span>11:44</span><span>▮▮▮</span></div>
+        <div style="padding:14px 16px 22px;display:flex;flex-direction:column;gap:12px">
+          <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;padding:18px">
+            <div style="font-size:25px;font-weight:700;line-height:1.45">ร้านรับออเดอร์แล้ว</div>
+            <div style="font-size:14.5px;color:#5A4E42;line-height:1.7;margin-top:6px">ร้านใช้เวลาทำอาหารประมาณ <strong>20 นาที</strong></div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#A2968A;margin-top:10px">#ORD-10245</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px">
+              <div style="font-size:15px;font-weight:600">ร้านตามสั่งป้าสมร</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700">฿248.00</div>
+            </div>
+          </div>
+          <div style="font-size:12.5px;font-weight:600;letter-spacing:.1em;color:#A2968A;padding-left:4px">สถานะออเดอร์</div>
+          <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+            <sc-for list="{{ trackingSteps }}" as="t" hint-placeholder-count="3">
+              <div style="display:flex;align-items:flex-start;gap:12px">
+                <div style="width:12px;height:12px;border-radius:50%;margin-top:5px;flex:0 0 auto;{{ t.dot }}"></div>
+                <div>
+                  <div style="font-size:14.5px;font-weight:600;line-height:1.5;{{ t.text }}">{{ t.label }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#A2968A;margin-top:2px">{{ t.time }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ customerSpec }}" as="c" hint-placeholder-count="7">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:17px 19px">
+          <div style="font-size:12px;font-weight:600;letter-spacing:.12em;color:#A2968A;margin-bottom:7px">{{ c.k }}</div>
+          <div style="font-size:13.5px;line-height:1.75;color:#3D342C">{{ c.v }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ============ 09 · RIDER ============ -->
+  <div id="s9" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — RIDER VISIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Deferred, and stated as deferred</div>
+  <div style="border-radius:20px;border:1px solid #F0DFC4;background:#FDF3E6;padding:22px 24px;max-width:1040px">
+    <div style="font-size:14px;font-weight:700;letter-spacing:.1em;color:#8A6412;margin-bottom:12px">M05-DEFER-01 — RIDER PREP-TIME VISIBILITY</div>
+    <div style="font-size:14px;line-height:1.85;color:#4A4038">
+      Prep time would plainly be useful to a rider deciding when to leave for the shop, and the natural home is the existing job surface fed by <span style="font-family:'IBM Plex Mono',monospace">rider_order_view</span> — the same view that already projects <span style="font-family:'IBM Plex Mono',monospace">o.accepted_at</span>. It is not designed here, for one concrete reason: exposing the field to riders means adding a column to a deployed database <em>view</em>, which is a migration, and the database is LOCKED at 16/16. There is no rider surface that can display the value today without one.
+      <div style="height:12px"></div>
+      <strong>Decision:</strong> future integration. No rider screen, no rider copy, no rider navigation, and no rider state transition is designed or implied by M-05. When the per-order prep field lands (§14), a one-line follow-up can add it to <span style="font-family:'IBM Plex Mono',monospace">rider_order_view</span> and to the existing job card — but that is a separate brief with its own product decision about whether a rider should see an estimate that may already be stale.
+    </div>
+  </div>
+
+  <!-- ============ 10 · ANATOMY ============ -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — COMPONENT ANATOMY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Six parts, all built from existing tokens</div>
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:grid;grid-template-columns:56px 210px 1fr 250px;gap:16px;padding:13px 20px;background:#F6F0E7;border-bottom:1px solid #EAE1D6;font-size:11.5px;font-weight:600;letter-spacing:.12em;color:#A2968A">
+      <div>#</div><div>PART</div><div>SPEC</div><div>REUSED FROM</div>
+    </div>
+    <sc-for list="{{ anatomy }}" as="p" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:56px 210px 1fr 250px;gap:16px;padding:15px 20px;border-bottom:1px solid #F1E9DE;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#A2968A">{{ p.n }}</div>
+        <div style="font-size:13.5px;font-weight:600;line-height:1.6">{{ p.part }}</div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ p.spec }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.75;color:#7A6E64">{{ p.from }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 11 · INTERACTION RULES ============ -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — INTERACTION RULES &amp; DECISION LOG</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What M-05 decides, and why</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="14">
+      <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:18px 20px">
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:7px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:#E4572E">{{ d.id }}</div>
+          <div style="font-size:15px;font-weight:700;line-height:1.5">{{ d.title }}</div>
+        </div>
+        <div style="font-size:13.5px;line-height:1.8;color:#5A4E42">{{ d.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 12 · COPY ============ -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — COPY SPECIFICATION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every string in M-05</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:860px;margin-bottom:20px">Thai, second person where a person is addressed, no technical token ever shown. Strings marked <span style="font-family:'IBM Plex Mono',monospace">existing</span> are already in the shipped app or the UX spec and are reused verbatim rather than rewritten.</div>
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:grid;grid-template-columns:230px 1fr 120px;gap:16px;padding:13px 20px;background:#F6F0E7;border-bottom:1px solid #EAE1D6;font-size:11.5px;font-weight:600;letter-spacing:.12em;color:#A2968A">
+      <div>SLOT</div><div>COPY</div><div>SOURCE</div>
+    </div>
+    <sc-for list="{{ copy }}" as="c" hint-placeholder-count="16">
+      <div style="display:grid;grid-template-columns:230px 1fr 120px;gap:16px;padding:13px 20px;border-bottom:1px solid #F1E9DE;align-items:baseline">
+        <div style="font-size:13px;font-weight:600;line-height:1.6;color:#3D342C">{{ c.slot }}</div>
+        <div style="font-size:14px;line-height:1.7">{{ c.text }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:{{ c.color }}">{{ c.src }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 13 · OPEN ============ -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — NOT DECIDED / DEFERRED</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Questions this design refuses to answer</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:880px;margin-bottom:22px">None of the following is resolved by M-05, and none of them blocks building it. Each is written as a question for the Product Owner, in the form the existing <span style="font-family:'IBM Plex Mono',monospace">OPEN_BUSINESS_QUESTIONS.md</span> uses.</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ open }}" as="q" hint-placeholder-count="9">
+      <div style="border-radius:18px;border:1px solid {{ q.border }};background:{{ q.bg }};padding:18px 20px">
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:7px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:{{ q.idColor }}">{{ q.id }}</div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:.12em;padding:3px 9px;border-radius:7px;{{ q.statusStyle }}">{{ q.status }}</div>
+          <div style="font-size:15px;font-weight:700;line-height:1.5">{{ q.title }}</div>
+        </div>
+        <div style="font-size:13.5px;line-height:1.8;color:#5A4E42">{{ q.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 14 · IMPLEMENTATION ============ -->
+  <div id="s14" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">14 — IMPLEMENTATION NOTES &amp; ARCHITECTURAL CONSTRAINTS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What M-05 will need, stated as constraints</div>
+  <div style="border-radius:18px;border:1px solid #EFCFCF;background:#FDF6F5;padding:16px 18px;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1040px;margin-bottom:22px">
+    <strong>These are constraints on a future implementation, not instructions to implement now.</strong> No source file, migration, endpoint, RLS policy or Supabase object was created or modified for this design. Unlike M-04, M-05 <em>cannot</em> be built with zero backend change: prep time is a new fact about an order, and no column, request body or response field carries it today.
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ constraints }}" as="c" hint-placeholder-count="10">
+      <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:18px 20px">
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:7px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:#0F8B5F">{{ c.id }}</div>
+          <div style="font-size:15px;font-weight:700;line-height:1.5">{{ c.title }}</div>
+        </div>
+        <div style="font-size:13.5px;line-height:1.8;color:#5A4E42">{{ c.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 15 · REVIEW ============ -->
+  <div id="s15" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">15 — FINAL REVIEW</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Checked against the authoritative documents</div>
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:grid;grid-template-columns:270px 110px 1fr;gap:16px;padding:13px 20px;background:#F6F0E7;border-bottom:1px solid #EAE1D6;font-size:11.5px;font-weight:600;letter-spacing:.12em;color:#A2968A">
+      <div>CHECK</div><div>RESULT</div><div>EVIDENCE</div>
+    </div>
+    <sc-for list="{{ review }}" as="r" hint-placeholder-count="10">
+      <div style="display:grid;grid-template-columns:270px 110px 1fr;gap:16px;padding:14px 20px;border-bottom:1px solid #F1E9DE;align-items:start">
+        <div style="font-size:13.5px;font-weight:600;line-height:1.6">{{ r.check }}</div>
+        <div style="font-size:11px;font-weight:600;letter-spacing:.1em;padding:4px 9px;border-radius:7px;justify-self:start;{{ r.style }}">{{ r.result }}</div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ r.evidence }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:36px;border-radius:20px;border:1px solid #E2D8CB;background:#F6F0E7;padding:24px 26px;max-width:1040px">
+    <div style="font-size:15px;font-weight:700;letter-spacing:.1em;margin-bottom:14px">M-05 DESIGN STATUS</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <sc-for list="{{ status }}" as="s" hint-placeholder-count="9">
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:16px;font-size:13.5px;line-height:1.75">
+          <div style="font-weight:600;color:#5A4E42">{{ s.k }}</div>
+          <div style="color:#3D342C">{{ s.v }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  renderVals() {
+    const chipUnsel = 'border:1px solid #E9E0D5;background:#fff;color:#3D342C';
+    const chipSel = 'border:2px solid #E4572E;background:#FDEEE7;color:#C2431F';
+    const chipFocus = 'border:1px solid #E9E0D5;background:#fff;color:#3D342C;box-shadow:0 0 0 3px rgba(228,87,46,.32)';
+    const chipDis = 'border:1px solid #EFE7DC;background:#F7F2EA;color:#B0A294';
+    const chipSelDis = 'border:2px solid #E9C6B8;background:#FBF1EC;color:#C79C8B';
+    const mk = (styles) => [10, 20, 30, 45, 60].map((n, i) => ({ n, style: styles[i] }));
+
+    return {
+      nav: [
+        { href: '#s0', label: '00 Scope' },
+        { href: '#s1', label: '01 Flow' },
+        { href: '#s2', label: '02 Desktop' },
+        { href: '#s3', label: '03 Tablet' },
+        { href: '#s4', label: '04 Prep-time states' },
+        { href: '#s5', label: '05 Confirm · load · error' },
+        { href: '#s6', label: '06 Accept window' },
+        { href: '#s7', label: '07 Accessibility' },
+        { href: '#s8', label: '08 Customer' },
+        { href: '#s9', label: '09 Rider' },
+        { href: '#s10', label: '10 Anatomy' },
+        { href: '#s11', label: '11 Rules & decisions' },
+        { href: '#s12', label: '12 Copy' },
+        { href: '#s13', label: '13 Not decided' },
+        { href: '#s14', label: '14 Implementation' },
+        { href: '#s15', label: '15 Review' },
+      ],
+
+      inScope: [
+        'The confirmation step that opens on รับออเดอร์ from a PAID card, and closes by issuing the existing accept command.',
+        'Required prep-time selection from five fixed presets — 10 / 20 / 30 / 45 / 60 นาที — with nothing preselected.',
+        'Unselected, selected, focus, and disabled/in-flight rendering of the preset group.',
+        'Confirm, cancel, in-flight and failure states of the dialog, with retry in place.',
+        'Behaviour across all four phases of the existing 3-minute accept window, including expiry while open.',
+        'Desktop (≥1024px) and tablet (768–1024px) layouts, keyboard, focus trap and screen-reader specification.',
+        'The minimum customer-facing presentation of the selected prep time, on the existing C-14 tracking screen.',
+        'A written rider-visibility decision (deferred) and the architectural constraints implementation will inherit.',
+      ],
+      outScope: [
+        'Reject — M-06. Not designed, not referenced as an affordance, not present in this dialog.',
+        'Cancel and refund of any kind.',
+        'BQ-013 — what happens at 3:00. No auto-reject, no auto-refund, no timeout policy is proposed.',
+        'Any new order state. PAID → MERCHANT_ACCEPTED is unchanged and remains the only transition.',
+        'Editing prep time after acceptance, or a merchant-side "running late" update.',
+        'Any new notification system, push, sound or channel. M-03 arrival alerting is untouched.',
+        'Redesign of the M-2.6 board, the M-04 detail panel, or the customer app beyond one caption line.',
+        'A new rider workflow, rider screen, or rider navigation.',
+        'Free-number prep-time entry, per-item timing, or a per-restaurant preset configuration screen.',
+      ],
+
+      flow: [
+        { n: '1', step: 'Order is PAID and sits in ออเดอร์ใหม่', note: 'Card renders รับออเดอร์; the 3-minute countdown is already running from placed_at.', tag: 'EXISTING', tagStyle: 'background:#F2EBE1;color:#8B7F73', bg: '#fff', border: '#EAE1D6' },
+        { n: '2', step: 'Merchant presses รับออเดอร์', note: 'The press no longer calls runAction directly — it opens M-05 and nothing else happens.', tag: 'CHANGED', tagStyle: 'background:#FDEEE7;color:#C2431F', bg: '#FFFDFB', border: '#F0DFC4' },
+        { n: '3', step: 'M-05 opens over the board', note: 'Scrim, focus trap, order identity in the title, live accept-window strip. Order state: still PAID.', tag: 'NEW', tagStyle: 'background:#FDEEE7;color:#C2431F', bg: '#FFFDFB', border: '#F0DFC4' },
+        { n: '4', step: 'Merchant chooses a prep time', note: 'One of five presets. Confirm stays disabled until this happens. Order state: still PAID.', tag: 'NEW', tagStyle: 'background:#FDEEE7;color:#C2431F', bg: '#FFFDFB', border: '#F0DFC4' },
+        { n: '5', step: 'Merchant presses ยืนยันรับออเดอร์', note: 'The dialog goes inert and busy. It does not close and does not report success.', tag: 'NEW', tagStyle: 'background:#FDEEE7;color:#C2431F', bg: '#FFFDFB', border: '#F0DFC4' },
+        { n: '6', step: 'The existing accept command is sent, now carrying the prep time', note: 'POST /api/v1/orders/:id/accept — same route, same verb, one new body field. Duplicate-submission protection is the one already in useOrderActions.', tag: 'EXTENDED', tagStyle: 'background:#FDF3E6;color:#8A6412', bg: '#fff', border: '#EAE1D6' },
+        { n: '7', step: 'Server performs the guarded UPDATE … WHERE state = \'PAID\'', note: 'PAID → MERCHANT_ACCEPTED, history row, MerchantAcceptedOrder outbox, delivery row. Unchanged except that it also persists the prep time.', tag: 'EXTENDED', tagStyle: 'background:#FDF3E6;color:#8A6412', bg: '#fff', border: '#EAE1D6' },
+        { n: '8', step: 'Realtime reports the new state; the board re-renders', note: 'useOrderRealtime → useOrderBoard. This is the only moment the card moves to กำลังทำ. M-05 closes when its order is no longer PAID.', tag: 'EXISTING', tagStyle: 'background:#F2EBE1;color:#8B7F73', bg: '#fff', border: '#EAE1D6' },
+        { n: '9', step: 'Customer\'s C-14 shows the estimate', note: 'ร้านรับออเดอร์แล้ว · ร้านใช้เวลาทำอาหารประมาณ 20 นาที — read from the order row on the customer\'s next read of it.', tag: 'NEW', tagStyle: 'background:#FDEEE7;color:#C2431F', bg: '#FFFDFB', border: '#F0DFC4' },
+      ],
+
+      boardColumns: [
+        {
+          title: 'ออเดอร์ใหม่', count: '2', accent: '#E4572E', badge: 'background:#FDEEE7;color:#C2431F',
+          cards: [
+            { num: '#ORD-10245', timer: '02:14', timerStyle: 'background:#EAF6EF;color:#0F8B5F', name: 'คุณสมชาย ใจดี', total: '฿248.00', time: '11:42', action: 'รับออเดอร์', actionStyle: 'background:#E4572E;color:#fff', shell: 'border:2px solid #E4572E;box-shadow:0 4px 16px rgba(228,87,46,.14)' },
+            { num: '#ORD-10246', timer: '00:48', timerStyle: 'background:#FDF3E6;color:#B98418', name: 'คุณอารีย์ พรหมมา', total: '฿96.00', time: '11:43', action: 'รับออเดอร์', actionStyle: 'background:#E4572E;color:#fff', shell: 'border:1px solid #EAE1D6' },
+          ],
+        },
+        {
+          title: 'กำลังทำ', count: '3', accent: '#E8B84B', badge: 'background:#FBF1DC;color:#9A7810',
+          cards: [
+            { num: '#ORD-10241', timer: '8 นาที', timerStyle: 'background:#F2EBE1;color:#8B7F73', name: 'คุณวิภา ทองสุข', total: '฿172.00', time: '11:34', action: 'อาหารพร้อมแล้ว', actionStyle: 'background:#1F1A16;color:#fff', shell: 'border:1px solid #EAE1D6' },
+            { num: '#ORD-10239', timer: '14 นาที', timerStyle: 'background:#F2EBE1;color:#8B7F73', name: 'คุณเอกชัย ศรีสุข', total: '฿310.00', time: '11:28', action: 'อาหารพร้อมแล้ว', actionStyle: 'background:#1F1A16;color:#fff', shell: 'border:1px solid #EAE1D6' },
+          ],
+        },
+        {
+          title: 'พร้อมให้ไรเดอร์รับ', count: '1', accent: '#0F8B5F', badge: 'background:#EAF6EF;color:#0F8B5F',
+          cards: [
+            { num: '#ORD-10236', timer: '3 นาที', timerStyle: 'background:#F2EBE1;color:#8B7F73', name: 'คุณนภา จันทร์เพ็ญ', total: '฿128.00', time: '11:21', action: 'รอไรเดอร์มารับ', actionStyle: 'background:#F7F2EA;color:#7A6E64;border:1px dashed #DDD2C4', shell: 'border:1px solid #EAE1D6' },
+          ],
+        },
+      ],
+
+      tabletColumns: [
+        {
+          title: 'ออเดอร์ใหม่', count: '2', accent: '#E4572E', badge: 'background:#FDEEE7;color:#C2431F',
+          cards: [
+            { num: '#ORD-10247', timer: '01:38', timerStyle: 'background:#EAF6EF;color:#0F8B5F', name: 'คุณมานี รักดี', action: 'รับออเดอร์', actionStyle: 'background:#E4572E;color:#fff', shell: 'border:2px solid #E4572E' },
+            { num: '#ORD-10248', timer: '02:51', timerStyle: 'background:#EAF6EF;color:#0F8B5F', name: 'คุณกิตติ แสงทอง', action: 'รับออเดอร์', actionStyle: 'background:#E4572E;color:#fff', shell: 'border:1px solid #EAE1D6' },
+          ],
+        },
+        {
+          title: 'กำลังทำ', count: '2', accent: '#E8B84B', badge: 'background:#FBF1DC;color:#9A7810',
+          cards: [
+            { num: '#ORD-10243', timer: '6 นาที', timerStyle: 'background:#F2EBE1;color:#8B7F73', name: 'คุณสุดา ปัญญา', action: 'อาหารพร้อมแล้ว', actionStyle: 'background:#1F1A16;color:#fff', shell: 'border:1px solid #EAE1D6' },
+          ],
+        },
+      ],
+
+      presets: mk([chipUnsel, chipSel, chipUnsel, chipUnsel, chipUnsel]),
+      tabletPresets: mk([chipUnsel, chipUnsel, chipSel, chipUnsel, chipUnsel]),
+      presetsEmpty: mk([chipUnsel, chipUnsel, chipUnsel, chipUnsel, chipUnsel]),
+      presetsArmed: mk([chipUnsel, chipSel, chipUnsel, chipUnsel, chipUnsel]),
+      presetsBusy: mk([chipDis, chipSelDis, chipDis, chipDis, chipDis]),
+
+      presetStates: [
+        { name: 'Unselected', token: 'border #E9E0D5 · bg #fff', style: chipUnsel, note: 'The resting state of all five when the dialog opens. aria-checked="false"; the group has no checked option, which is the honest representation of "not answered yet".' },
+        { name: 'Selected', token: 'border 2px #E4572E · bg #FDEEE7', style: chipSel, note: 'The same orange ring the board uses for a new arrival and a selected card — the merchant already reads that ring as "this one". Colour is never the only signal: the summary line below the group restates the chosen number in words.' },
+        { name: 'Focus (keyboard)', token: 'ring 3px rgba(228,87,46,.32)', style: chipFocus, note: 'Visible focus ring outside the border, so a focused-but-unselected chip is distinguishable from a selected one. Focus is never suppressed; :focus-visible only, matching the rest of the merchant app.' },
+        { name: 'Disabled (in flight)', token: 'border #EFE7DC · bg #F7F2EA', style: chipDis, note: 'While the accept command is unresolved every chip is disabled — the value has already been sent and changing it would be a lie. Not removed, so the layout does not jump.' },
+        { name: 'Selected + disabled', token: 'border 2px #E9C6B8 · bg #FBF1EC', style: chipSelDis, note: 'The chosen value stays legible through the whole in-flight period, because it is the fact the merchant is waiting on. On failure it returns to full Selected, unchanged.' },
+      ],
+
+      desktopNotes: [
+        { title: 'Why a dialog, not the M-04 drawer', body: 'The drawer is for reading while the board keeps moving; M-05 is a required answer under a 3-minute clock. A modal owns focus, closes on Escape, and is gone in two seconds. Reusing the drawer would mean an overlay that invites being left open.' },
+        { title: 'Why not inline in the card', body: 'A board card is roughly 300px wide in a three-column layout. Five presets plus a summary and two buttons inside it would either shrink targets below the 44px floor or reflow the column while other cards are arriving. It also cannot trap focus.' },
+        { title: 'What stays visible behind', body: 'The board, dimmed by the existing scrim. A merchant confirming one order can still see the next arrive, which is the same reason M-04 does not navigate away. The originating card keeps its 2px orange ring.' },
+      ],
+
+      errorRules: [
+        { code: 'NETWORK / TIMEOUT', copy: 'ส่งคำสั่งไม่สำเร็จ · ลองอีกครั้ง', behaviour: 'Dialog stays open, selection kept, confirm re-enabled. The order remains PAID — nothing is fabricated. Retry is the same button; the existing duplicate-submission guard in useOrderActions still applies.' },
+        { code: 'INVALID_TRANSITION', copy: 'ออเดอร์นี้ถูกดำเนินการไปแล้ว', behaviour: 'Someone or something already moved this order. The prep-time group and confirm are removed and the only control is ปิด — retrying cannot succeed. Realtime will move the card; M-05 does not.' },
+        { code: 'NOT_RESTAURANT_MEMBER', copy: 'บัญชีนี้ไม่มีสิทธิ์รับออเดอร์ของร้านนี้', behaviour: 'An authorization answer, not a transient failure. Confirm is not re-enabled; ปิด only. This is unchanged from M-2.7 — the server re-derives capability on every command.' },
+        { code: 'MESSAGE PROVENANCE', copy: 'orderActionErrorMessage(cause)', behaviour: 'M-05 does not write a second error vocabulary. The message body is the existing mapper\'s output, rendered inside the dialog instead of on the card, with one added sentence stating the order is still in ออเดอร์ใหม่.' },
+      ],
+
+      windowPhases: [
+        { phase: 'normal · >60s', title: 'ปกติ', border: '#EAE1D6', stripStyle: 'background:#EAF6EF;color:#0F8B5F', stripLabel: 'เหลือเวลาตอบรับ', clock: '02:14', cta: 'ยืนยันรับออเดอร์', ctaStyle: 'background:#E4572E;color:#fff', note: 'Green strip, matching the card timer tone. No urgency language — the merchant has time to read the order.' },
+        { phase: 'warning · ≤60s', title: 'ใกล้หมดเวลา', border: '#F0DFC4', stripStyle: 'background:#FDF3E6;color:#B98418', stripLabel: 'เหลือเวลาตอบรับ', clock: '00:47', cta: 'ยืนยันรับออเดอร์', ctaStyle: 'background:#E4572E;color:#fff', note: 'Amber, same threshold the card already uses. The dialog does not change shape and does not preselect a prep time to "help" — the merchant still chooses.' },
+        { phase: 'warning · ≤15s', title: 'เหลือไม่ถึง 15 วินาที', border: '#EFCFCF', stripStyle: 'background:#FBEAEA;color:#D93A3A', stripLabel: 'เหลือเวลาตอบรับ', clock: '00:11', cta: 'ยืนยันรับออเดอร์', ctaStyle: 'background:#E4572E;color:#fff', note: 'Red strip only. Presentation-level emphasis within the existing warning phase; it introduces no new phase, no new rule and no new behaviour. Nothing is disabled.' },
+        { phase: 'expired · 0', title: 'หมดเวลาตอบรับ', border: '#EFCFCF', stripStyle: 'background:#FBEAEA;color:#B32B2B', stripLabel: 'หมดเวลาตอบรับ', clock: '00:00', cta: 'ปิด', ctaStyle: 'border:1px solid #E9E0D5;background:#fff;color:#5A4E42', note: 'No preset group, no confirm CTA. The existing ติดต่อผู้ดูแลระบบ copy stands, and BQ-013 stays open — nothing is auto-rejected here.' },
+      ],
+
+      a11y: [
+        { topic: 'Dialog semantics', rule: 'role="dialog" aria-modal="true", labelled by the title (รับออเดอร์ #ORD-10245) and described by the summary line, so a screen-reader user hears which order and what will happen on confirm.' },
+        { topic: 'Focus on open', rule: 'Focus moves to the first preset, not the dialog container and not the confirm button — the first thing to do is choose. The originating card is remembered as the return target.' },
+        { topic: 'Focus trap', rule: 'Tab and Shift+Tab cycle within the dialog only, same implementation M-04 establishes. Nothing behind the scrim is reachable by keyboard or pointer.' },
+        { topic: 'Focus on close', rule: 'Returns to the รับออเดอร์ button of the originating card in every path — cancel, Escape, backdrop, failure-close. If the card has left the board (Realtime moved it), focus falls back to the ออเดอร์ใหม่ column heading.' },
+        { topic: 'Escape', rule: 'Closes the dialog and discards the selection while idle. During an in-flight accept, Escape is ignored: the command cannot be recalled, and closing would hide the only surface reporting it.' },
+        { topic: 'Backdrop click', rule: 'Same as Escape — closes while idle, ignored in flight. Consistent with M-04.' },
+        { topic: 'Preset group', rule: 'role="radiogroup" with aria-labelledby pointing at ใช้เวลาทำอาหารประมาณ; each preset is role="radio" with aria-checked. Arrow keys move and select; Space selects; the group is a single tab stop.' },
+        { topic: 'Enter / Space', rule: 'Space selects within the group. Enter on a preset selects it and does NOT submit — a required decision must never be one keystroke from an accidental commit. Enter on the confirm button submits.' },
+        { topic: 'Confirm button', rule: 'aria-disabled while no prep time is chosen (kept focusable, so a keyboard user can reach it and hear why), aria-describedby the เลือกเวลาก่อนจึงจะยืนยันได้ hint, aria-busy while in flight.' },
+        { topic: 'Selection announcement', rule: 'The radio state change announces natively (20 นาที, เลือกแล้ว). The summary line is aria-live="polite" so the consequence sentence — ลูกค้าจะเห็นว่า… — is heard once the value settles, not on every arrow press.' },
+        { topic: 'Loading announcement', rule: 'aria-busy on the dialog plus a polite live region reading กำลังส่งให้ระบบ… Not assertive: the merchant initiated it and nothing is wrong.' },
+        { topic: 'Error announcement', rule: 'role="alert" on the failure block, matching the card\'s existing action-error treatment, so a merchant who looked away is told rather than having to notice text appear.' },
+        { topic: 'Countdown announcement', rule: 'The strip is aria-live="off" and updates silently; a per-second live region would make the dialog unusable with a screen reader. The single phase change into หมดเวลาตอบรับ is announced politely.' },
+        { topic: 'Touch targets', rule: 'Presets 56px desktop / 64px tablet; buttons 52px / 56px via the existing --banhao-action-height; close 44px / 56px. Nothing on this surface is hover-only.' },
+        { topic: 'Contrast', rule: 'All body and label text on cream or white meets AA. The known platform issue stands and is not introduced here: white on #E4572E measures 3.68:1 (UX-FINDING-02) — M-05 reuses the shipped primary button as-is rather than fixing it locally, so the fix stays one decision in one place.' },
+      ],
+
+      focusOrder: ['1 · preset 10', '(group: ← → move)', '2 · ยกเลิก', '3 · ยืนยันรับออเดอร์', '4 · ปิด (✕)', 'wrap to 1'],
+
+      anatomy: [
+        { n: '1', part: 'Scrim', spec: 'rgba(31,26,22,.32) over the board, below the header. Click to dismiss while idle.', from: 'M-04 detail panel' },
+        { n: '2', part: 'Dialog shell', spec: '480px desktop / min(92vw,560px) tablet · radius 22 · #FBF7F1 · border #E2D8CB · shadow 0 24px 64px rgba(31,26,22,.28).', from: 'M-04 drawer surface' },
+        { n: '3', part: 'Identity header', spec: 'White band, border-bottom #EAE1D6. Title รับออเดอร์ + mono order number; sub-line recipient · total · item count. 44/56px close button.', from: 'M-04 panel header' },
+        { n: '4', part: 'Accept-window strip', spec: '40/44px, radius 12, tone by phase (green / amber / red). Label + mono clock. Reads acceptWindowState; owns no timer.', from: 'M-2.6 card timer tones' },
+        { n: '5', part: 'Prep-time radiogroup', spec: 'Label + hint + 5 presets. 5-across desktop (56px tall), 3+2 tablet (64px). Radius 14. Selected = 2px #E4572E on #FDEEE7.', from: 'new · card ring + chip palette' },
+        { n: '6', part: 'Consequence summary', spec: 'radius 14 on #FDF3E6 / border #F0DFC4. States the column the order moves to and the exact sentence the customer will see. aria-live polite.', from: 'M-04 annotation panel treatment' },
+        { n: '7', part: 'Failure block', spec: 'role="alert" · #FBEAEA / #B32B2B · radius 11. Existing message + one sentence confirming the order is still ออเดอร์ใหม่.', from: 'OrderCard action error' },
+        { n: '8', part: 'Action row', spec: 'ยกเลิก (110–150px, white, border #E9E0D5) + ยืนยันรับออเดอร์ (fills, #E4572E, white, spinner in flight). Heights from --banhao-action-height.', from: 'OrderCard primary action' },
+      ],
+
+      decisions: [
+        { id: 'M05-D01', title: 'M-05 is a modal dialog, not a drawer, sheet, inline expansion or route', body: 'It is the smallest overlay that can own the keyboard for a required choice, and it reuses M-04\'s scrim, focus trap and Escape behaviour rather than inventing a second overlay paradigm. No navigation architecture changes: there is no URL state, no route and no history entry, exactly as M-04 decided for the detail panel.' },
+        { id: 'M05-D02', title: 'The trigger is the card\'s รับออเดอร์ button, and only that', body: 'The button\'s onAction contract is unchanged in shape; what changes is that the board opens M-05 instead of calling runAction. The M-04 detail panel remains a read-only surface with no accept action, so it is not a second trigger. If an accept action is later added there, it must open this same dialog rather than call accept directly.' },
+        { id: 'M05-D03', title: 'Nothing is preselected, and confirm is disabled until a choice exists', body: 'A preselected 20 นาที would be answered by inaction, which is the same as not asking. The disabled confirm is kept focusable with aria-disabled so a keyboard user can reach it and be told why, rather than finding a control that silently is not there.' },
+        { id: 'M05-D04', title: 'Enter on a preset selects; it does not submit', body: 'Accepting an order commits the kitchen. One deliberate keystroke separates choosing from committing. The keyboard path is still three presses — Tab, arrow, Enter on confirm.' },
+        { id: 'M05-D05', title: 'The dialog stays open through the mutation and reports nothing about success', body: 'It goes inert and busy at press, and closes only when its order is no longer PAID — i.e. when Realtime says so. This is the same honesty rule M-2.7 wrote into useOrderActions: the pending state resolves when the fact becomes true, not when HTTP returns. A merchant never sees a success message the server has not earned.' },
+        { id: 'M05-D06', title: 'The board is the only thing that moves the card', body: 'M-05 writes no board state, applies no mutation response, and never renders MERCHANT_ACCEPTED itself. If the request succeeds and Realtime never arrives, the dialog stays busy and the existing reconnect banner plus useOrderBoard\'s resubscribe/visibility re-read heal it — no timer is added here, matching M-2.7.' },
+        { id: 'M05-D07', title: 'Failure keeps the dialog, the selection, and the merchant\'s place', body: 'Retry is the same button. The order remains PAID and the copy says so explicitly, because "it failed" and "did my order get accepted?" are different questions and the merchant is asking the second one. Only INVALID_TRANSITION and NOT_RESTAURANT_MEMBER remove the confirm button, because retrying those cannot succeed.' },
+        { id: 'M05-D08', title: 'The accept-window strip reports; it does not enforce', body: 'Phase and remaining seconds come from the shipped acceptWindowState. M-05 adds no timeout behaviour, no auto-close, no auto-reject and no client-side cancellation of an in-flight accept at 0. BQ-013 remains OPEN and untouched.' },
+        { id: 'M05-D09', title: 'A ≤15s red treatment is presentation, not a new phase', body: 'The card already turns amber at ≤60s. Below 15s the strip alone turns red. No new phase enters acceptWindowState, no behaviour changes, and nothing is disabled — it is emphasis inside an existing state.' },
+        { id: 'M05-D10', title: 'Expiry while open replaces the body rather than disabling it', body: 'There is nothing to confirm once the window has closed, so the group and CTA are removed rather than greyed. The existing board copy หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ is reused verbatim, and ปิด is the only control.' },
+        { id: 'M05-D11', title: 'Presets are a radiogroup, one tab stop, five options', body: 'Five buttons would be five tab stops and would let a merchant "select" twice with no single answer. A radiogroup expresses "exactly one, required" natively to assistive technology, which is precisely the product rule.' },
+        { id: 'M05-D12', title: 'Tablet changes three parameters, not the pattern', body: 'Width min(92vw,560px), targets to the existing 56px tablet decision (64px presets), 3+2 preset grid. Not a bottom sheet: it would add hand travel to the primary action and collide with the board\'s existing tablet bottom tray.' },
+        { id: 'M05-D13', title: 'Customer sees the value on C-14 and nowhere new', body: 'One caption directly under the existing state headline, present from MERCHANT_ACCEPTED onward. No countdown, no ETA, no arithmetic — an estimate stated as an estimate, in the merchant\'s own words.' },
+        { id: 'M05-D14', title: 'Rider visibility is deferred in writing, not improvised', body: 'The only clean home is rider_order_view, and adding a column to a deployed view is a migration against a LOCKED database. Recorded as M05-DEFER-01 rather than designed around.' },
+      ],
+
+      copy: [
+        { slot: 'Dialog title', text: 'รับออเดอร์ #ORD-10245', src: 'new', color: '#C2431F' },
+        { slot: 'Dialog sub-line', text: 'คุณสมชาย ใจดี · ฿248.00 · 3 รายการ', src: 'new', color: '#C2431F' },
+        { slot: 'Accept-window label', text: 'เหลือเวลาตอบรับ', src: 'new', color: '#C2431F' },
+        { slot: 'Prep-time group label', text: 'ใช้เวลาทำอาหารประมาณ', src: 'new', color: '#C2431F' },
+        { slot: 'Prep-time hint', text: 'เลือกเวลาก่อนจึงจะยืนยันได้ · ลูกค้าจะเห็นเวลานี้', src: 'new', color: '#C2431F' },
+        { slot: 'Preset labels', text: '10 นาที · 20 นาที · 30 นาที · 45 นาที · 60 นาที', src: 'new', color: '#C2431F' },
+        { slot: 'Consequence summary', text: 'ยืนยันแล้วออเดอร์จะย้ายไปคอลัมน์ กำลังทำ และลูกค้าจะเห็นว่า ร้านใช้เวลาทำอาหารประมาณ 20 นาที', src: 'new', color: '#C2431F' },
+        { slot: 'Primary CTA', text: 'ยืนยันรับออเดอร์', src: 'new', color: '#C2431F' },
+        { slot: 'Secondary CTA', text: 'ยกเลิก', src: 'new', color: '#C2431F' },
+        { slot: 'In-flight CTA', text: 'กำลังส่งให้ระบบ…', src: 'new', color: '#C2431F' },
+        { slot: 'In-flight note', text: 'รอระบบยืนยัน · ออเดอร์จะย้ายไปคอลัมน์ กำลังทำ เมื่อระบบยืนยันแล้ว', src: 'new', color: '#C2431F' },
+        { slot: 'Failure headline', text: 'ส่งคำสั่งไม่สำเร็จ · ลองอีกครั้ง', src: 'existing', color: '#0F8B5F' },
+        { slot: 'Failure reassurance', text: 'ออเดอร์ยังอยู่ที่ ออเดอร์ใหม่ และยังไม่ถูกรับ', src: 'new', color: '#C2431F' },
+        { slot: 'Already-actioned failure', text: 'ออเดอร์นี้ถูกดำเนินการไปแล้ว', src: 'existing', color: '#0F8B5F' },
+        { slot: 'Expired body', text: 'หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ', src: 'existing', color: '#0F8B5F' },
+        { slot: 'Expired CTA', text: 'ปิด', src: 'new', color: '#C2431F' },
+        { slot: 'Customer caption (C-14)', text: 'ร้านใช้เวลาทำอาหารประมาณ 20 นาที', src: 'new', color: '#C2431F' },
+        { slot: 'Customer state headline', text: 'ร้านรับออเดอร์แล้ว', src: 'existing', color: '#0F8B5F' },
+      ],
+
+      trackingSteps: [
+        { label: 'ร้านรับออเดอร์แล้ว', time: '11:43', dot: 'background:#E4572E', text: 'color:#1F1A16' },
+        { label: 'ชำระเงินแล้ว', time: '11:42', dot: 'background:#CFC4B6', text: 'color:#7A6E64' },
+      ],
+
+      customerSpec: [
+        { k: 'SCREEN', v: 'C-14 ติดตามออเดอร์ (OrderTrackingScreen) — existing, MUST-scope, already shipped. No new screen, no new route, no redesign.' },
+        { k: 'PLACEMENT', v: 'A caption inside the existing summary Card, directly under the state headline and above the order number. It sits with the state because it qualifies the state.' },
+        { k: 'VALUE SHOWN', v: 'The merchant\'s selected per-order prep time, exactly as chosen — 20 นาที, never a computed range, never a clock time, never a countdown, and never restaurants.avg_prep_minutes.' },
+        { k: 'COPY', v: 'ร้านใช้เวลาทำอาหารประมาณ 20 นาที — "ประมาณ" is load-bearing: it is a kitchen\'s estimate, and the customer app must not present it as a promise.' },
+        { k: 'WHEN IT APPEARS', v: 'From MERCHANT_ACCEPTED onward, on the customer\'s next read of the order. It is not a push and not a notification — the caption simply exists once the value does. The customer app has no Realtime subscription today, so "immediately after acceptance" means "on next load", and stating otherwise would be inventing behaviour.' },
+        { k: 'WHEN IT DISAPPEARS', v: 'NOT DECIDED — see M05-Q-03. A candidate is "once the order is READY_FOR_PICKUP", but nothing authoritative says so and M-05 does not decide it.' },
+        { k: 'DATA PATH', v: 'The customer already reads the order row under RLS via repositories.orderDetail.getOrder. Once the per-order field exists on orders, the existing customer SELECT policy carries it — no new endpoint, no new policy, one added column in the projection.' },
+        { k: 'NOT INTRODUCED', v: 'No ETA. UX-SPEC and the customer catalog mappers are explicit that an ETA is never derived from prep data (catalogMappers "never derives an ETA from avg_prep_minutes"); prep time plus delivery time is not an arrival estimate and must not be presented as one.' },
+      ],
+
+      open: [
+        { id: 'BQ-013', status: 'OPEN — UNCHANGED', title: 'What happens at 3:00', body: 'Carried forward untouched. M-05 renders the countdown and removes its own CTA at 0; it proposes no expiry rule, no auto-reject, no auto-refund and no escalation. Any of those remains a Product Owner decision.', border: '#EFCFCF', bg: '#FDF6F5', idColor: '#B32B2B', statusStyle: 'background:#FBEAEA;color:#B32B2B' },
+        { id: 'M05-Q-01', status: 'NOT DECIDED', title: 'Are the five presets fixed platform-wide, or per-restaurant configuration?', body: 'The locked decision fixes the five values for MVP. Whether a noodle shop and a grill shop should eventually get different sets is unanswered, and the answer changes whether the values are a constant or a settings row. Nothing in M-05 depends on it; a settings screen is out of scope.', border: '#F0DFC4', bg: '#FDF3E6', idColor: '#8A6412', statusStyle: 'background:#FBF1DC;color:#8A6412' },
+        { id: 'M05-Q-02', status: 'NOT DECIDED', title: 'Can a merchant revise the prep time after accepting?', body: 'Kitchens run late. There is no "running late" action anywhere in the merchant catalog and none is designed here. If the answer is yes, it is a new merchant action with its own customer-facing consequence — a separate brief.', border: '#F0DFC4', bg: '#FDF3E6', idColor: '#8A6412', statusStyle: 'background:#FBF1DC;color:#8A6412' },
+        { id: 'M05-Q-03', status: 'NOT DECIDED', title: 'How long does the customer-facing prep caption stay on C-14?', body: 'Showing "ประมาณ 20 นาที" while the food is already with a rider is misleading. A retirement rule is needed — most likely at READY_FOR_PICKUP — but no authoritative document states one, so M-05 does not pick.', border: '#F0DFC4', bg: '#FDF3E6', idColor: '#8A6412', statusStyle: 'background:#FBF1DC;color:#8A6412' },
+        { id: 'M05-Q-04', status: 'NOT DECIDED', title: 'Does prep time feed dispatch timing?', body: 'DEC-020 broadcasts at MERCHANT_ACCEPTED and DEC-037 fixes the 60s rider window; a known prep time makes "dispatch later for a 60-minute order" thinkable. That is a dispatch-policy change, not a UI one, and M-05 neither assumes nor proposes it.', border: '#F0DFC4', bg: '#FDF3E6', idColor: '#8A6412', statusStyle: 'background:#FBF1DC;color:#8A6412' },
+        { id: 'M05-Q-05', status: 'NOT DECIDED', title: 'Is the selected prep time an operational metric?', body: 'Selected-vs-actual (accepted_at → ready_at) is the obvious merchant-quality measure and both timestamps already exist. No reporting surface is designed here and none should be inferred.', border: '#F0DFC4', bg: '#FDF3E6', idColor: '#8A6412', statusStyle: 'background:#FBF1DC;color:#8A6412' },
+        { id: 'M05-DEFER-01', status: 'DEFERRED', title: 'Rider-facing prep time', body: 'Future integration. See §09 — the only clean surface is rider_order_view and reaching it needs a migration against a LOCKED database.', border: '#EAE1D6', bg: '#fff', idColor: '#7A6E64', statusStyle: 'background:#F2EBE1;color:#8B7F73' },
+        { id: 'M05-DEFER-02', status: 'DEFERRED', title: 'Prep time on the M-04 detail panel and on the กำลังทำ card', body: 'Once the value exists, both surfaces could show it, and the กำลังทำ card\'s elapsed-minutes timer could be read against it. Deliberately not designed: M-05\'s brief is the accept step, and adding it would edit two shipped designs on speculation.', border: '#EAE1D6', bg: '#fff', idColor: '#7A6E64', statusStyle: 'background:#F2EBE1;color:#8B7F73' },
+        { id: 'UX-Q-011 / 012', status: 'OPEN — INHERITED', title: 'Rider identity on detail · reference-number format', body: 'Raised by M-04, unchanged by M-05. Neither blocks this design.', border: '#EAE1D6', bg: '#fff', idColor: '#7A6E64', statusStyle: 'background:#F2EBE1;color:#8B7F73' },
+      ],
+
+      constraints: [
+        { id: 'M05-C01', title: 'The accept endpoint currently takes no body', body: 'POST /api/v1/orders/:id/accept is declared with no DTO, and merchantOrders.transitionOrder deliberately sends no body for any of the three commands — its comment states that sending {} would be inventing a request shape the controller does not declare. M-05 requires that contract to be extended with a prep-time field. It is the first of the three commands to carry a body, so the shared one-method transitionOrder signature will have to change shape or accept gains its own call path.' },
+        { id: 'M05-C02', title: 'A new per-order prep-time field is required', body: 'No column on orders carries this today. The deployed order row has accepted_at, ready_at and picked_up_at and nothing about preparation. The value is chosen per order at accept time, so it belongs on orders, alongside accepted_at, and is written in the same guarded UPDATE that sets it.' },
+        { id: 'M05-C03', title: 'restaurants.avg_prep_minutes MUST NOT be reused', body: 'It exists (20260811000002_merchant_domain.sql) and it is restaurant-level catalogue data, nullable, surfaced to the customer app\'s shop model. It is not a per-order fact and it is not the merchant\'s answer for this order. The customer app already carries a test asserting it never derives an ETA from it. Writing the M-05 value into it, or reading it as a default for the presets, would be a defect.' },
+        { id: 'M05-C04', title: 'The guarded transition must stay guarded', body: 'The UPDATE keeps its WHERE state = \'PAID\' predicate (ADR-003) and prep time is set in that same statement — never in a second write, and never before the state check. An accept that loses the guard must not have written a prep time.' },
+        { id: 'M05-C05', title: 'No new endpoint unless discovery proves one is needed', body: 'Extend POST /:id/accept. A separate "set prep time" call would create a window in which an order is accepted with no prep time, which contradicts "required when accepting".' },
+        { id: 'M05-C06', title: 'Authorization is unchanged', body: 'Roles(\'MERCHANT\') plus the service-layer restaurant-membership check stay exactly as they are. The client sends no restaurant id and gains no new authorization responsibility; prep time is data, not a capability.' },
+        { id: 'M05-C07', title: 'Realtime remains board truth', body: 'The mutation response is still discarded. useOrderActions\' rule — the response is never applied to board state — is unchanged, and M-05\'s close condition reads board state rather than the response.' },
+        { id: 'M05-C08', title: 'Duplicate-submission protection must remain intact', body: 'The pendingRef guard in useOrderActions, keyed on order id + state, is what stops a double press today and must keep doing so with the dialog in front of it. M-05\'s own inert in-flight state is a second, visual layer — not a replacement.' },
+        { id: 'M05-C09', title: 'Customer read path needs no new policy', body: 'The customer already reads their own order row under RLS. A new column on orders is covered by the existing SELECT policy; only the client-side projection needs the field added. No new endpoint, no new policy.' },
+        { id: 'M05-C10', title: 'Nothing here authorises a migration', body: 'The database is LOCKED at 16/16 applied migrations. M05-C02 describes a required field; creating it is a separate, explicitly authorised piece of work with its own review.' },
+      ],
+
+      review: [
+        { check: 'M-05 numbering', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'UX-SPEC-V1 merchant catalog: "M-05 | Accept confirmation (with prep-time entry) | ⚠ wireframe | MUST". The superseded Product Architecture Kanban naming is not used anywhere in this canvas.' },
+        { check: 'Order state machine', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'PAID → MERCHANT_ACCEPTED only. No new state, no new transition, no change to the CHECK constraint in 20260811000005_order_domain.sql.' },
+        { check: '3-minute accept window', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'MERCHANT_ACCEPT_WINDOW_SECONDS = 180 with warning at one third; §06 renders exactly those phases and adds no timer, no threshold and no behaviour.' },
+        { check: 'BQ-013 untouched', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'Listed as OPEN in §13. No auto-reject, auto-refund or timeout policy appears in any state, and the expired dialog reuses the existing ติดต่อผู้ดูแลระบบ copy.' },
+        { check: 'Reject out of scope', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'No reject affordance in any frame. ยกเลิก closes the dialog and is labelled as such — it is not a rejection and does not call any endpoint.' },
+        { check: 'Realtime source of truth', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'M05-D05/D06. No local fabrication of MERCHANT_ACCEPTED; the dialog closes on board state, not on the mutation response.' },
+        { check: 'Prep-time semantics', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'Per-order, chosen at accept, customer-visible, distinct from restaurants.avg_prep_minutes (M05-C03). Never presented as an ETA or an arrival time.' },
+        { check: 'Tablet behaviour', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'UX-SPEC §"Tablet consideration" and the shipped --banhao-action-height 56px are both honoured; no hover-only affordance exists on this surface.' },
+        { check: 'Accessibility bar', result: 'CONSISTENT', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'M-04\'s focus trap, Escape and focus-return rules are reused; §07 adds the radiogroup, busy and alert semantics the decision needs.' },
+        { check: 'Backend impact vs M-04', result: 'DIFFERENT', style: 'background:#FDF3E6;color:#8A6412', evidence: 'M-04 needed no backend change. M-05 cannot be built without extending the accept contract and adding one order field — stated as constraints (§14), not performed. This is a real difference from the M-04 precedent and should be read as one.' },
+        { check: 'Customer app copy', result: 'ADDITIVE', style: 'background:#FDF3E6;color:#8A6412', evidence: 'ร้านรับออเดอร์แล้ว is the approved MERCHANT_ACCEPTED customer wording in UX-SPEC §10 and is unchanged; the prep caption is a new line beneath it, not a replacement.' },
+        { check: 'Contradiction found', result: 'NONE', style: 'background:#EAF6EF;color:#0F8B5F', evidence: 'No conflict was found between the locked M-05 decisions, UX-SPEC-V1, UX-DESIGN-HANDOFF-V1, the M-2.6 and M-04 designs, the architecture and the open-questions log. Two tensions are recorded rather than resolved: the customer app has no Realtime path, so "customer-visible immediately" means "on next read" (§08); and rider visibility has no reachable surface (§09).' },
+      ],
+
+      status: [
+        { k: 'Design file created', v: 'Yes' },
+        { k: 'Exact file path', v: 'docs/design/BANHAO M-05 Merchant Accept Confirmation.dc.html — delivered in this project as "BANHAO M-05 Merchant Accept Confirmation.dc.html"; not written into the repository.' },
+        { k: 'Product assumptions used', v: 'The sixteen locked decisions in the commission, plus: the trigger is the board card button (M-04 panel is read-only); presets are platform-fixed for MVP (M05-Q-01); C-14 is the customer surface; the ≤15s red strip is presentation only.' },
+        { k: 'NOT DECIDED items', v: 'M05-Q-01 preset configurability · M05-Q-02 post-accept revision · M05-Q-03 caption retirement · M05-Q-04 dispatch timing · M05-Q-05 prep-time metric. Deferred: M05-DEFER-01 rider visibility · M05-DEFER-02 prep time on M-04 / กำลังทำ card. BQ-013 remains OPEN and unchanged.' },
+        { k: 'Contradictions found', v: 'None. Two tensions recorded, not resolved — see §15.' },
+        { k: 'Implementation performed', v: 'No' },
+        { k: 'API changes', v: 'No — one contract extension is documented as a constraint (M05-C01)' },
+        { k: 'DB changes', v: 'No — one required field is documented as a constraint (M05-C02); no migration written' },
+        { k: 'Git commit / push', v: 'No / No' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
