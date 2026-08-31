@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}
+  a:hover{color:#C2431F}
+  @keyframes shimmer{0%{background-position:-320px 0}100%{background-position:320px 0}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes softpulse{0%,100%{box-shadow:0 0 0 0 rgba(228,87,46,.30)}50%{box-shadow:0 0 0 8px rgba(228,87,46,0)}}
+</style>
+</helmet>
+
+<div style="max-width:1520px;margin:0 auto;padding:48px 40px 140px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:0 0 auto">M</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">M-2.6A — MERCHANT ORDER BOARD UI</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · design artifact for <span style="font-family:'IBM Plex Mono',monospace">docs/design/</span> · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1000px">
+    Screen M-03 <span style="font-family:'IBM Plex Mono',monospace">ออเดอร์วันนี้</span> — the three-column live board a merchant keeps open during service.
+    Sourced from BANHAO-UX-SPEC-V1 §6 and BANHAO-APP-ARCHITECTURE-V1; built on the existing M-2.2 domain type, M-2.3 repository, M-2.4 <span style="font-family:'IBM Plex Mono',monospace">useOrderRealtime</span> and M-2.5 <span style="font-family:'IBM Plex Mono',monospace">useOrderBoard</span>.
+    No backend field, state, or business rule is introduced. In-product copy is Thai exactly as specified; all annotation is English.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="7">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- ============ 1 · ORDER CARD ============ -->
+  <div id="s1" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — ORDER CARD</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The card is the whole product</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:760px;margin-bottom:24px">Every field on the card face maps to one property of <span style="font-family:'IBM Plex Mono',monospace">MerchantOrderSummary</span>. Reading order is number → status → customer → total → time → action, so a merchant scanning a column top-to-bottom answers "which one, how urgent, what do I press" in that order.</div>
+
+  <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start">
+
+    <div style="width:360px;border-radius:22px;border:1px solid #EAE1D6;background:#fff;padding:24px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#A2968A;margin-bottom:14px">ANATOMY</div>
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;box-shadow:0 4px 14px rgba(31,26,22,.06);padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;letter-spacing:.03em">#ORD-10245</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;padding:5px 10px;border-radius:9px;background:#EAF6EF;color:#0F8B5F">2:14</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:12px;font-weight:600;padding:4px 9px;border-radius:8px;background:#FDEEE7;color:#C2431F">ใหม่ · รอตอบรับ</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A">PAID</div>
+        </div>
+        <div style="font-size:17px;font-weight:600;line-height:1.55">คุณสมชาย ใจดี</div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600">฿185.00</div>
+          <div style="font-size:12.5px;color:#7A6E64">11:42 · 46 วินาทีที่แล้ว</div>
+        </div>
+        <div style="height:56px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">รับออเดอร์</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:18px">
+        <sc-for list="{{ anatomy }}" as="a" hint-placeholder-count="6">
+          <div style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.6">
+            <div style="width:150px;flex:0 0 150px;font-family:'IBM Plex Mono',monospace;color:#7A6E64">{{ a.field }}</div>
+            <div style="color:#5A4E42">{{ a.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:640px;border-radius:22px;border:1px solid #EAE1D6;background:#fff;padding:24px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#A2968A;margin-bottom:16px">VARIANTS — one per column state, plus arrival and timeout</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <sc-for list="{{ variants }}" as="v" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#A2968A">{{ v.caption }}</div>
+            <div style="border-radius:16px;background:#fff;padding:14px;display:flex;flex-direction:column;gap:10px;{{ v.shell }}">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">{{ v.num }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:9px;{{ v.timerStyle }}">{{ v.timer }}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                <div style="font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;{{ v.chipStyle }}">{{ v.chip }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#A2968A">{{ v.code }}</div>
+              </div>
+              <div style="font-size:15.5px;font-weight:600;line-height:1.55">{{ v.name }}</div>
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">{{ v.total }}</div>
+                <div style="font-size:11.5px;color:#7A6E64">{{ v.time }}</div>
+              </div>
+              <div style="height:52px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;text-align:center;line-height:1.4;padding:0 10px;{{ v.actionStyle }}">{{ v.action }}</div>
+            </div>
+            <div style="font-size:12px;line-height:1.6;color:#7A6E64">{{ v.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2 · STATE A — DESKTOP BOARD ============ -->
+  <div id="s2" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — STATE A</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Desktop board · &gt;1024px</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:760px;margin-bottom:22px">Three columns, equal width, each scrolling independently so a long <span style="font-family:'IBM Plex Mono',monospace">กำลังทำ</span> column never pushes new orders out of view. The header carries restaurant scope (DEC-UX-005) and the sound affordance; nothing else competes with the columns.</div>
+
+  <div style="width:1360px;max-width:100%;border-radius:22px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.07)">
+    <div style="height:72px;background:#fff;border-bottom:1px solid #EAE1D6;display:flex;align-items:center;gap:16px;padding:0 24px">
+      <div style="width:38px;height:38px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700">ฮ</div>
+      <div>
+        <div style="font-size:17px;font-weight:700;line-height:1.4">ร้านตามสั่งป้าสมร</div>
+        <div style="font-size:12px;color:#7A6E64">เปิดรับออเดอร์ · วันนี้ 11:42</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13.5px;font-weight:600;color:#5A4E42">
+        <span style="width:9px;height:9px;border-radius:50%;background:#0F8B5F"></span>เชื่อมต่ออยู่
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:12px;border:1px solid #E9E0D5;font-size:13.5px;font-weight:600;color:#1F1A16">🔔 เสียงแจ้งเตือน · เปิด</div>
+      <div style="display:flex;align-items:center;height:44px;padding:0 16px;border-radius:12px;border:1px solid #E9E0D5;font-size:13.5px;font-weight:600;color:#5A4E42">ออเดอร์วันนี้ 24</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:20px;align-items:start">
+      <sc-for list="{{ columns }}" as="col" hint-placeholder-count="3">
+        <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;overflow:hidden">
+          <div style="height:4px;background:{{ col.accent }}"></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #F1E9DE">
+            <div style="font-size:15.5px;font-weight:700">{{ col.title }}</div>
+            <div style="min-width:26px;height:26px;padding:0 8px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;{{ col.badge }}">{{ col.count }}</div>
+            <div style="flex:1"></div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#A2968A;text-align:right;line-height:1.5">{{ col.states }}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;padding:14px">
+            <sc-for list="{{ col.orders }}" as="o" hint-placeholder-count="2">
+              <div style="border-radius:16px;background:#fff;padding:14px;display:flex;flex-direction:column;gap:10px;{{ o.shell }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">{{ o.num }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:9px;{{ o.timerStyle }}">{{ o.timer }}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                  <div style="font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;{{ o.chipStyle }}">{{ o.chip }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#A2968A">{{ o.code }}</div>
+                </div>
+                <div style="font-size:15.5px;font-weight:600;line-height:1.55">{{ o.name }}</div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">{{ o.total }}</div>
+                  <div style="font-size:11.5px;color:#7A6E64">{{ o.time }}</div>
+                </div>
+                <div style="height:52px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;{{ o.actionStyle }}">{{ o.action }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:16px">
+    <sc-for list="{{ boardNotes }}" as="b" hint-placeholder-count="4">
+      <div style="flex:1;min-width:280px;border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 18px">
+        <div style="font-size:13.5px;font-weight:700;margin-bottom:6px">{{ b.title }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ b.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ 3 · ARRIVAL / COUNTDOWN / TIMEOUT ============ -->
+  <div id="s3" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — STATES C · G · H</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Arrival, countdown, timeout</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:820px;margin-bottom:22px">Three moments on the same card. Arrival must be noticed from across a kitchen; the countdown must be legible without being read; the timeout must stop the merchant without moving the order.</div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+
+    <div style="border-radius:22px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#A2968A">STATE C · NEW ORDER ARRIVAL</div>
+      <div style="font-size:18px;font-weight:700;margin:6px 0 16px">เพิ่งเข้ามา</div>
+      <div style="border-radius:18px;border:2px solid #E4572E;background:#FFF9F6;padding:0;overflow:hidden;animation:softpulse 2s ease-out infinite">
+        <div style="background:#E4572E;color:#fff;padding:7px 14px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:8px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#fff"></span>ออเดอร์ใหม่ · เพิ่งเข้ามา 12 วินาที
+        </div>
+        <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">#ORD-10251</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:9px;background:#EAF6EF;color:#0F8B5F">2:48</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px">
+            <div style="font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;background:#FDEEE7;color:#C2431F">ใหม่ · รอตอบรับ</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#A2968A">PAID</div>
+          </div>
+          <div style="font-size:15.5px;font-weight:600;line-height:1.55">คุณอารีย์ พงษ์สุข</div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">฿240.00</div>
+            <div style="font-size:11.5px;color:#7A6E64">11:44 · 12 วินาทีที่แล้ว</div>
+          </div>
+          <div style="height:52px;border-radius:13px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">รับออเดอร์</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;font-size:12.5px;line-height:1.65;color:#5A4E42">
+        <div>Card inserts at the top of column 1, ring pulses for 30s, then settles to the standard card.</div>
+        <div>Audible alert repeats until the card is opened or accepted — the header bell is the merchant-visible control for it, not a new notification system.</div>
+        <div>Tab title reflects the waiting count for a tablet parked on another tab.</div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        <div style="padding:8px 12px;border-radius:10px;background:#1F1A16;color:#fff;font-size:12px;font-family:'IBM Plex Mono',monospace">(2) ออเดอร์วันนี้ — BANHAO</div>
+        <div style="padding:8px 12px;border-radius:10px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:12px;color:#5A4E42">🔔 เสียงดังซ้ำจนกว่าจะเปิดออเดอร์</div>
+      </div>
+    </div>
+
+    <div style="border-radius:22px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#A2968A">STATE G · ACCEPTANCE COUNTDOWN</div>
+      <div style="font-size:18px;font-weight:700;margin:6px 0 16px">3 นาที · แจ้งเตือนช่วงท้าย</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <sc-for list="{{ countdownSteps }}" as="c" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:16px;border:1px solid #EFE7DC;background:#FDFBF8">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;padding:8px 14px;border-radius:12px;{{ c.style }}">{{ c.mmss }}</div>
+            <div style="flex:1">
+              <div style="font-size:13.5px;font-weight:600">{{ c.label }}</div>
+              <div style="font-size:12px;color:#7A6E64;line-height:1.6;margin-top:2px">{{ c.note }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:16px;padding:14px 16px;border-radius:14px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:12.5px;line-height:1.7;color:#5A4E42">
+        The window value comes from configuration (DEC-031), not from the card. The chip renders <span style="font-family:'IBM Plex Mono',monospace">mm:ss</span> in Mono at a fixed width so digits do not shift, and switches to warning colour in the final third — accompanied by the word <span style="font-family:'IBM Plex Mono',monospace">ใกล้หมดเวลา</span>, never colour alone.
+      </div>
+    </div>
+
+    <div style="border-radius:22px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#A2968A">STATE H · ACCEPTANCE TIMEOUT</div>
+      <div style="font-size:18px;font-weight:700;margin:6px 0 16px">หมดเวลาตอบรับ</div>
+      <div style="border-radius:18px;border:1px solid #EFCFCF;background:#fff;overflow:hidden">
+        <div style="background:#FBEAEA;color:#B32B2B;padding:9px 14px;font-size:12.5px;font-weight:700">หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ</div>
+        <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">#ORD-10238</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:9px;background:#FBEAEA;color:#D93A3A">0:00</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px">
+            <div style="font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;background:#FDEEE7;color:#C2431F">ใหม่ · รอตอบรับ</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#A2968A">PAID</div>
+          </div>
+          <div style="font-size:15.5px;font-weight:600;line-height:1.55">คุณวิไล ศรีสุข</div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600">฿96.00</div>
+            <div style="font-size:11.5px;color:#7A6E64">11:38 · 6 นาทีที่แล้ว</div>
+          </div>
+          <div style="height:52px;border-radius:13px;background:#EFE7DC;color:#B0A294;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">รับออเดอร์</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;font-size:12.5px;line-height:1.65;color:#5A4E42">
+        <div><b>The order does not move.</b> It stays in column 1, in <span style="font-family:'IBM Plex Mono',monospace">PAID</span>, counted in the column badge.</div>
+        <div>The primary action renders disabled because the expiry rule is undecided (BQ-013) — not because rejection occurred. No automatic transition, no rejection, no dialog.</div>
+        <div>If BQ-013 later permits late acceptance, the same card re-enables the button with no other change. If it resolves to auto-cancel, the card is simply removed by the state stream.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 4 · SYSTEM STATES ============ -->
+  <div id="s4" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — STATES B · D · E · F</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Empty, reconnecting, loading, error</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:820px;margin-bottom:22px">All four keep the board frame and the column headers in place, so the merchant never loses the sense of where they are. Only the column bodies change.</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px">
+
+    <div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">STATE B — Empty board</div>
+      <div style="border-radius:20px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px;align-items:start">
+          <sc-for list="{{ emptyCols }}" as="e" hint-placeholder-count="3">
+            <div style="border-radius:16px;background:#fff;border:1px solid #EAE1D6;overflow:hidden;min-height:220px">
+              <div style="height:4px;background:{{ e.accent }}"></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #F1E9DE">
+                <div style="font-size:13.5px;font-weight:700">{{ e.title }}</div>
+                <div style="min-width:24px;height:24px;padding:0 7px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;background:#F2EBE1;color:#8B7F73">0</div>
+              </div>
+              <div style="padding:34px 16px;text-align:center">
+                <div style="font-size:13.5px;font-weight:600;color:#7A6E64;line-height:1.6">{{ e.empty }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:10px">Column 1 uses the specified copy <span style="font-family:'IBM Plex Mono',monospace">ยังไม่มีออเดอร์ใหม่</span>. Columns 2 and 3 state their own emptiness plainly. No illustration, no card, no call to action — an empty board during service is a normal condition, not a problem to solve.</div>
+    </div>
+
+    <div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">STATE D — Realtime reconnecting</div>
+      <div style="border-radius:20px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden">
+        <div style="background:#FDF3E6;border-bottom:1px solid #F0DFC4;padding:12px 18px;display:flex;align-items:center;gap:12px">
+          <span style="width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(185,132,24,.3);border-top-color:#B98418;animation:spin .9s linear infinite;display:inline-block;flex:0 0 auto"></span>
+          <div style="font-size:14px;font-weight:700;color:#8A6412">การเชื่อมต่อหลุด · กำลังเชื่อมต่อใหม่</div>
+          <div style="flex:1"></div>
+          <div style="font-size:12px;color:#8A6412;font-family:'IBM Plex Mono',monospace">อัปเดตล่าสุด 11:41</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px;align-items:start;opacity:.72">
+          <sc-for list="{{ emptyCols }}" as="e" hint-placeholder-count="3">
+            <div style="border-radius:16px;background:#fff;border:1px solid #EAE1D6;overflow:hidden;min-height:180px">
+              <div style="height:4px;background:{{ e.accent }}"></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #F1E9DE">
+                <div style="font-size:13.5px;font-weight:700">{{ e.title }}</div>
+              </div>
+              <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+                <div style="height:64px;border-radius:12px;background:#F6F0E7"></div>
+                <div style="height:64px;border-radius:12px;background:#F6F0E7"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:10px">The banner is persistent, sits above the columns, and pushes them down rather than covering a card. Existing cards stay visible and readable but are visibly stale — the timestamp says how stale. Action buttons remain enabled; a failed command surfaces its own inline error. No offline mode is invented.</div>
+    </div>
+
+    <div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">STATE E — Initial loading</div>
+      <div style="border-radius:20px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px;align-items:start">
+          <sc-for list="{{ emptyCols }}" as="e" hint-placeholder-count="3">
+            <div style="border-radius:16px;background:#fff;border:1px solid #EAE1D6;overflow:hidden;min-height:220px">
+              <div style="height:4px;background:{{ e.accent }}"></div>
+              <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #F1E9DE">
+                <div style="font-size:13.5px;font-weight:700">{{ e.title }}</div>
+              </div>
+              <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+                <div style="height:80px;border-radius:12px;background:linear-gradient(90deg,#F4EDE3 25%,#FAF5EE 50%,#F4EDE3 75%);background-size:320px 100%;animation:shimmer 1.3s linear infinite"></div>
+                <div style="height:80px;border-radius:12px;background:linear-gradient(90deg,#F4EDE3 25%,#FAF5EE 50%,#F4EDE3 75%);background-size:320px 100%;animation:shimmer 1.3s linear infinite"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:0 16px 18px;display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;color:#7A6E64">
+          <span style="width:14px;height:14px;border-radius:50%;border:2.5px solid #E2D8CB;border-top-color:#E4572E;animation:spin .9s linear infinite;display:inline-block"></span>กำลังโหลดออเดอร์
+        </div>
+      </div>
+      <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:10px">Two skeleton blocks per column and one line of text. The column headers render immediately with no count badge, so the board's shape is established before the data lands.</div>
+    </div>
+
+    <div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">STATE F — Fetch error</div>
+      <div style="border-radius:20px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;min-height:296px;display:flex;align-items:center;justify-content:center;padding:40px 24px">
+        <div style="max-width:420px;text-align:center">
+          <div style="width:52px;height:52px;border-radius:16px;background:#FBEAEA;color:#D93A3A;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;margin:0 auto 16px">!</div>
+          <div style="font-size:19px;font-weight:700;line-height:1.5">โหลดออเดอร์ไม่สำเร็จ</div>
+          <div style="font-size:14px;color:#5A4E42;line-height:1.7;margin-top:8px">ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง ถ้ายังไม่ได้ ให้ติดต่อผู้ดูแลระบบ</div>
+          <div style="display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+            <div style="height:56px;padding:0 26px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;font-size:16px;font-weight:600">ลองใหม่อีกครั้ง</div>
+            <div style="height:56px;padding:0 24px;border-radius:16px;border:1.5px solid #1F1A16;display:flex;align-items:center;font-size:15px;font-weight:600">ติดต่อผู้ดูแลระบบ</div>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A;margin-top:16px">เวลา 11:42 · รหัสอ้างอิง BRD-4F2</div>
+        </div>
+      </div>
+      <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:10px">Full-board replacement, because a failed fetch means no column can be trusted. The reference code is for a support call, not a technical message — no stack, no HTTP status, no repository name.</div>
+    </div>
+  </div>
+
+  <!-- ============ 5 · TABLET ============ -->
+  <div id="s5" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — STATE I</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Tablet · 768–1024px</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:820px;margin-bottom:22px">Two columns keep the two states that require a merchant decision. <span style="font-family:'IBM Plex Mono',monospace">พร้อมให้ไรเดอร์รับ</span> has no merchant action, so it becomes a bottom tray: always visible as a summary bar with its count, expandable to a half-height sheet listing the cards. Touch targets rise to 56px throughout.</div>
+
+  <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+    <div style="width:1000px;max-width:100%;border-radius:22px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.07)">
+      <div style="height:64px;background:#fff;border-bottom:1px solid #EAE1D6;display:flex;align-items:center;gap:14px;padding:0 20px">
+        <div style="width:36px;height:36px;border-radius:11px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700">ฮ</div>
+        <div style="font-size:16px;font-weight:700">ร้านตามสั่งป้าสมร</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-radius:12px;border:1px solid #E9E0D5;font-size:13px;font-weight:600;color:#5A4E42"><span style="width:9px;height:9px;border-radius:50%;background:#0F8B5F"></span>เชื่อมต่ออยู่</div>
+        <div style="height:44px;padding:0 14px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;font-size:13px;font-weight:600">🔔 เปิด</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px 16px 0;align-items:start">
+        <sc-for list="{{ tabletCols }}" as="col" hint-placeholder-count="2">
+          <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;overflow:hidden">
+            <div style="height:4px;background:{{ col.accent }}"></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #F1E9DE">
+              <div style="font-size:16px;font-weight:700">{{ col.title }}</div>
+              <div style="min-width:28px;height:28px;padding:0 9px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;{{ col.badge }}">{{ col.count }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;padding:14px">
+              <sc-for list="{{ col.orders }}" as="o" hint-placeholder-count="2">
+                <div style="border-radius:16px;background:#fff;padding:16px;display:flex;flex-direction:column;gap:10px;{{ o.shell }}">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600">{{ o.num }}</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600;padding:5px 10px;border-radius:9px;{{ o.timerStyle }}">{{ o.timer }}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <div style="font-size:12px;font-weight:600;padding:4px 9px;border-radius:8px;{{ o.chipStyle }}">{{ o.chip }}</div>
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A">{{ o.code }}</div>
+                  </div>
+                  <div style="font-size:16.5px;font-weight:600;line-height:1.55">{{ o.name }}</div>
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                    <div style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600">{{ o.total }}</div>
+                    <div style="font-size:12.5px;color:#7A6E64">{{ o.time }}</div>
+                  </div>
+                  <div style="height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;{{ o.actionStyle }}">{{ o.action }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="padding:16px">
+        <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;box-shadow:0 -8px 30px rgba(31,26,22,.10);overflow:hidden">
+          <div style="height:4px;background:#0F8B5F"></div>
+          <div style="height:64px;display:flex;align-items:center;gap:12px;padding:0 18px">
+            <div style="font-size:16px;font-weight:700">พร้อมให้ไรเดอร์รับ</div>
+            <div style="min-width:28px;height:28px;padding:0 9px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;background:#EAF6EF;color:#0F8B5F">2</div>
+            <div style="font-size:13px;color:#7A6E64">รอไรเดอร์มารับ · ไม่ต้องกดอะไร</div>
+            <div style="flex:1"></div>
+            <div style="height:48px;padding:0 20px;border-radius:14px;border:1.5px solid #1F1A16;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600">เปิดดู ▲</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width:400px;flex:1;min-width:340px;border-radius:22px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#A2968A;margin-bottom:14px">TRAY EXPANDED</div>
+      <div style="border-radius:18px;border:1px solid #EAE1D6;background:#FBF7F1;overflow:hidden">
+        <div style="height:4px;background:#0F8B5F"></div>
+        <div style="height:58px;display:flex;align-items:center;gap:10px;padding:0 16px;background:#fff;border-bottom:1px solid #F1E9DE">
+          <div style="font-size:15px;font-weight:700">พร้อมให้ไรเดอร์รับ</div>
+          <div style="min-width:26px;height:26px;padding:0 8px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;background:#EAF6EF;color:#0F8B5F">2</div>
+          <div style="flex:1"></div>
+          <div style="font-size:14px;font-weight:600;color:#7A6E64">ปิด ▼</div>
+        </div>
+        <div style="display:flex;gap:12px;padding:14px;overflow:hidden">
+          <sc-for list="{{ trayOrders }}" as="o" hint-placeholder-count="2">
+            <div style="flex:1;border-radius:14px;background:#fff;border:1px solid #EAE1D6;padding:14px;display:flex;flex-direction:column;gap:8px">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">{{ o.num }}</div>
+              <div style="font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:8px;background:#EAF6EF;color:#0F8B5F;align-self:flex-start">รอไรเดอร์มารับ</div>
+              <div style="font-size:14.5px;font-weight:600;line-height:1.55">{{ o.name }}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600">{{ o.total }}</div>
+              <div style="font-size:11.5px;color:#7A6E64">{{ o.time }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:16px;font-size:12.5px;line-height:1.7;color:#5A4E42">
+        <div>The tray bar is always present at 64px, never auto-hides, and always shows its count — the third column stays discoverable without a gesture.</div>
+        <div>Expanded, it covers roughly half the viewport as a horizontally scrolling row and can be dismissed by tapping the bar, the scrim, or any card.</div>
+        <div>It auto-expands once when an order first enters <span style="font-family:'IBM Plex Mono',monospace">READY_FOR_PICKUP</span>, then collapses after 5 seconds.</div>
+        <div>Below 768px the board falls back to a single column with a segmented control across the three states. No separate mobile merchant workflow exists.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 6 · RELATIONSHIPS ============ -->
+  <div id="s6" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — COMPONENT / STATE RELATIONSHIPS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 22px">What renders what</div>
+
+  <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:grid;grid-template-columns:200px 150px 1fr 1fr;gap:0;background:#F6F0E7;padding:12px 20px;font-size:11.5px;font-weight:700;letter-spacing:.1em;color:#7A6E64">
+      <div>COMPONENT</div><div>SOURCE</div><div>RENDERS WHEN</div><div>NOTES</div>
+    </div>
+    <sc-for list="{{ relRows }}" as="r" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:200px 150px 1fr 1fr;gap:0;padding:13px 20px;border-top:1px solid #F1E9DE;font-size:12.5px;line-height:1.65;align-items:start">
+        <div style="font-weight:600">{{ r.comp }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ r.source }}</div>
+        <div style="color:#5A4E42">{{ r.when }}</div>
+        <div style="color:#7A6E64">{{ r.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:18px">
+    <div style="flex:1;min-width:320px;border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px">State → column mapping</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{ mapRows }}" as="m" hint-placeholder-count="8">
+          <div style="display:flex;align-items:center;gap:12px;font-size:12.5px">
+            <div style="width:170px;flex:0 0 170px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600">{{ m.state }}</div>
+            <div style="flex:1;color:#5A4E42">{{ m.col }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-width:320px;border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:20px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px">Accessibility commitments</div>
+      <div style="display:flex;flex-direction:column;gap:9px;font-size:12.5px;line-height:1.7;color:#5A4E42">
+        <sc-for list="{{ a11y }}" as="x" hint-placeholder-count="6">
+          <div>{{ x }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 7 · DESIGN DECISIONS ============ -->
+  <div id="s7" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — DESIGN DECISIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 8px">Specified · Design choice · Not decided</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:820px;margin-bottom:22px">Everything below is classified so review can separate "this follows the spec" from "the designer chose this" from "nobody has answered this yet". Nothing in the third group has been turned into an implementation assumption.</div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="12">
+      <div style="display:flex;gap:16px;align-items:flex-start;border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 18px">
+        <div style="flex:0 0 auto;font-size:10.5px;font-weight:700;letter-spacing:.1em;padding:6px 10px;border-radius:8px;{{ d.tagStyle }}">{{ d.tag }}</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;line-height:1.5">{{ d.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:5px">{{ d.body }}</div>
+        </div>
+        <div style="flex:0 0 130px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A;text-align:right;line-height:1.6">{{ d.ref }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:28px;padding:18px 20px;border-radius:18px;background:#1F1A16;color:#F6F0E7;font-size:13px;line-height:1.8">
+    <div style="font-weight:700;letter-spacing:.12em;font-size:11.5px;color:#C9BCAE;margin-bottom:8px">OUT OF SCOPE FOR M-2.6</div>
+    Order detail panel (M-04), accept confirmation with prep-time entry (M-05), reject workflow and reason dialog (M-06, BQ-013), order history (M-09), menu management (M-11), operating hours (M-12), earnings (M-13), settings and staff (M-14), admin surfaces, notification infrastructure, analytics. The card exposes a tap affordance that M-04 will own; no detail experience is designed here.
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1100}}">
+const MONO = "'IBM Plex Mono',monospace";
+const CD_OK = 'background:#EAF6EF;color:#0F8B5F';
+const CD_WARN = 'background:#FDF3E6;color:#B98418';
+const CD_EXP = 'background:#FBEAEA;color:#D93A3A';
+const CD_NONE = 'background:#F2EBE1;color:#8B7F73';
+const CHIP_NEW = 'background:#FDEEE7;color:#C2431F';
+const CHIP_COOK = 'background:#FBF1DC;color:#9A7810';
+const CHIP_READY = 'background:#EAF6EF;color:#0F8B5F';
+const SHELL = 'border:1px solid #EAE1D6';
+const SHELL_NEW = 'border:2px solid #E4572E;box-shadow:0 4px 16px rgba(228,87,46,.14)';
+const SHELL_EXP = 'border:1px solid #EFCFCF';
+const ACT_PRIMARY = 'background:#E4572E;color:#fff';
+const ACT_DARK = 'background:#1F1A16;color:#fff';
+const ACT_OFF = 'background:#EFE7DC;color:#B0A294';
+const ACT_WAIT = 'background:#F7F2EA;color:#7A6E64;border:1px dashed #DDD2C4';
+
+class Component extends DCLogic {
+  renderVals() {
+    const nav = [
+      {href:'#s1', label:'01 · Order card'},
+      {href:'#s2', label:'02 · Desktop board'},
+      {href:'#s3', label:'03 · Arrival / countdown / timeout'},
+      {href:'#s4', label:'04 · Empty / reconnect / load / error'},
+      {href:'#s5', label:'05 · Tablet'},
+      {href:'#s6', label:'06 · Relationships'},
+      {href:'#s7', label:'07 · Design decisions'},
+    ];
+
+    const anatomy = [
+      {field:'orderNumber', note:'Mono, top-left, the anchor for every verbal reference between merchant, rider and support.'},
+      {field:'state + countdown', note:'Thai label chip plus the raw state code, so status never depends on colour alone.'},
+      {field:'recipientNameSnapshot', note:'Largest text on the card after the total — the merchant calls the customer by name at handoff.'},
+      {field:'grandTotalSatang', note:'Rendered ฿ with two decimals, Mono so columns of totals align vertically.'},
+      {field:'placedAt / acceptedAt / readyAt', note:'One derived line: clock time plus elapsed. Which timestamp is shown depends on the column.'},
+      {field:'(primary action)', note:'One button, 56px, full card width. Never two competing actions on a card face.'},
+    ];
+
+    const variants = [
+      {caption:'COLUMN 1 · PAID', num:'#ORD-10245', timer:'2:14', timerStyle:CD_OK, chip:'ใหม่ · รอตอบรับ', chipStyle:CHIP_NEW, code:'PAID',
+       name:'คุณสมชาย ใจดี', total:'฿185.00', time:'11:42 · 46 วิ.', action:'รับออเดอร์', actionStyle:ACT_PRIMARY, shell:SHELL,
+       note:'Countdown counts the accept window. Elapsed time is measured from placedAt.'},
+      {caption:'COLUMN 1 · NEAR EXPIRY', num:'#ORD-10241', timer:'0:38', timerStyle:CD_WARN, chip:'ใกล้หมดเวลา', chipStyle:'background:#FDF3E6;color:#8A6412', code:'PAID',
+       name:'คุณนภา ทองคำ', total:'฿310.00', time:'11:40 · 2 นาที', action:'รับออเดอร์', actionStyle:ACT_PRIMARY, shell:'border:1px solid #F0DFC4',
+       note:'Final third of the window: chip turns amber and the word ใกล้หมดเวลา appears.'},
+      {caption:'COLUMN 1 · EXPIRED', num:'#ORD-10238', timer:'0:00', timerStyle:CD_EXP, chip:'หมดเวลาตอบรับ', chipStyle:'background:#FBEAEA;color:#B32B2B', code:'PAID',
+       name:'คุณวิไล ศรีสุข', total:'฿96.00', time:'11:38 · 6 นาที', action:'ติดต่อผู้ดูแลระบบ', actionStyle:ACT_OFF, shell:SHELL_EXP,
+       note:'Order stays put. Action disabled because expiry behaviour is undecided (BQ-013).'},
+      {caption:'COLUMN 2 · MERCHANT_ACCEPTED', num:'#ORD-10243', timer:'รับแล้ว', timerStyle:CD_NONE, chip:'รับแล้ว · ยังไม่เริ่มทำ', chipStyle:CHIP_COOK, code:'MERCHANT_ACCEPTED',
+       name:'คุณธนา แก้วมณี', total:'฿145.00', time:'รับเมื่อ 11:39 · 3 นาที', action:'เริ่มทำอาหาร', actionStyle:ACT_DARK, shell:SHELL,
+       note:'No countdown after acceptance. Elapsed is measured from acceptedAt.'},
+      {caption:'COLUMN 2 · PREPARING', num:'#ORD-10240', timer:'8 นาที', timerStyle:CD_NONE, chip:'กำลังทำอาหาร', chipStyle:CHIP_COOK, code:'PREPARING',
+       name:'คุณเมธี วงศ์ดี', total:'฿220.00', time:'รับเมื่อ 11:34', action:'อาหารพร้อม', actionStyle:ACT_DARK, shell:SHELL,
+       note:'Cooking elapsed is informational, not a deadline — neutral chip, never red.'},
+      {caption:'COLUMN 3 · READY_FOR_PICKUP', num:'#ORD-10236', timer:'4 นาที', timerStyle:CD_NONE, chip:'รอไรเดอร์มารับ', chipStyle:CHIP_READY, code:'READY_FOR_PICKUP',
+       name:'คุณจิรา พรหมมา', total:'฿78.00', time:'พร้อมเมื่อ 11:38', action:'รอไรเดอร์มารับ', actionStyle:ACT_WAIT, shell:SHELL,
+       note:'No merchant action. The waiting strip is a status, not a button — it is not tappable.'},
+    ];
+
+    const c1 = [
+      {num:'#ORD-10251', timer:'2:48', timerStyle:CD_OK, chip:'ออเดอร์ใหม่ · เพิ่งเข้ามา', chipStyle:CHIP_NEW, code:'PAID', name:'คุณอารีย์ พงษ์สุข', total:'฿240.00', time:'11:44 · 12 วิ.', action:'รับออเดอร์', actionStyle:ACT_PRIMARY, shell:SHELL_NEW},
+      {num:'#ORD-10245', timer:'2:14', timerStyle:CD_OK, chip:'ใหม่ · รอตอบรับ', chipStyle:CHIP_NEW, code:'PAID', name:'คุณสมชาย ใจดี', total:'฿185.00', time:'11:42 · 46 วิ.', action:'รับออเดอร์', actionStyle:ACT_PRIMARY, shell:SHELL},
+      {num:'#ORD-10241', timer:'0:38', timerStyle:CD_WARN, chip:'ใกล้หมดเวลา', chipStyle:'background:#FDF3E6;color:#8A6412', code:'PAID', name:'คุณนภา ทองคำ', total:'฿310.00', time:'11:40 · 2 นาที', action:'รับออเดอร์', actionStyle:ACT_PRIMARY, shell:'border:1px solid #F0DFC4'},
+    ];
+    const c2 = [
+      {num:'#ORD-10243', timer:'รับแล้ว', timerStyle:CD_NONE, chip:'รับแล้ว · ยังไม่เริ่มทำ', chipStyle:CHIP_COOK, code:'MERCHANT_ACCEPTED', name:'คุณธนา แก้วมณี', total:'฿145.00', time:'รับเมื่อ 11:39', action:'เริ่มทำอาหาร', actionStyle:ACT_DARK, shell:SHELL},
+      {num:'#ORD-10240', timer:'8 นาที', timerStyle:CD_NONE, chip:'กำลังทำอาหาร', chipStyle:CHIP_COOK, code:'PREPARING', name:'คุณเมธี วงศ์ดี', total:'฿220.00', time:'รับเมื่อ 11:34', action:'อาหารพร้อม', actionStyle:ACT_DARK, shell:SHELL},
+      {num:'#ORD-10239', timer:'11 นาที', timerStyle:CD_NONE, chip:'กำลังทำอาหาร', chipStyle:CHIP_COOK, code:'PREPARING', name:'คุณกิตติ สายทอง', total:'฿410.00', time:'รับเมื่อ 11:31', action:'อาหารพร้อม', actionStyle:ACT_DARK, shell:SHELL},
+    ];
+    const c3 = [
+      {num:'#ORD-10236', timer:'4 นาที', timerStyle:CD_NONE, chip:'รอไรเดอร์มารับ', chipStyle:CHIP_READY, code:'READY_FOR_PICKUP', name:'คุณจิรา พรหมมา', total:'฿78.00', time:'พร้อมเมื่อ 11:38', action:'รอไรเดอร์มารับ', actionStyle:ACT_WAIT, shell:SHELL},
+      {num:'#ORD-10234', timer:'9 นาที', timerStyle:CD_NONE, chip:'รอไรเดอร์มารับ', chipStyle:CHIP_READY, code:'READY_FOR_PICKUP', name:'คุณศิริพร ดวงแก้ว', total:'฿162.00', time:'พร้อมเมื่อ 11:33', action:'รอไรเดอร์มารับ', actionStyle:ACT_WAIT, shell:SHELL},
+    ];
+
+    const columns = [
+      {title:'ใหม่ · รอตอบรับ', count:3, accent:'#E4572E', badge:'background:#FDEEE7;color:#C2431F', states:'PAID', orders:c1},
+      {title:'กำลังทำ', count:3, accent:'#B98418', badge:'background:#FBF1DC;color:#9A7810', states:'MERCHANT_ACCEPTED · PREPARING', orders:c2},
+      {title:'พร้อมให้ไรเดอร์รับ', count:2, accent:'#0F8B5F', badge:'background:#EAF6EF;color:#0F8B5F', states:'READY_FOR_PICKUP', orders:c3},
+    ];
+
+    const tabletCols = [
+      {title:'ใหม่ · รอตอบรับ', count:3, accent:'#E4572E', badge:'background:#FDEEE7;color:#C2431F', orders:c1.slice(0,2)},
+      {title:'กำลังทำ', count:3, accent:'#B98418', badge:'background:#FBF1DC;color:#9A7810', orders:c2.slice(0,2)},
+    ];
+
+    const trayOrders = c3;
+
+    const emptyCols = [
+      {title:'ใหม่ · รอตอบรับ', accent:'#E4572E', empty:'ยังไม่มีออเดอร์ใหม่'},
+      {title:'กำลังทำ', accent:'#B98418', empty:'ไม่มีออเดอร์ที่กำลังทำ'},
+      {title:'พร้อมให้ไรเดอร์รับ', accent:'#0F8B5F', empty:'ไม่มีออเดอร์รอไรเดอร์'},
+    ];
+
+    const boardNotes = [
+      {title:'Column widths are equal and fixed', body:'No column expands on hover or focus. A merchant learns where each state lives and stops reading the headers within a day.'},
+      {title:'Sort is oldest-first inside every column', body:'The card that needs attention soonest sits at the top. A newly arrived order is the exception: it enters at the top of column 1 for 30 seconds, then takes its place in the order.'},
+      {title:'Each column scrolls on its own', body:'A busy กำลังทำ column can never push a waiting order out of sight. Column headers stay pinned while their body scrolls.'},
+      {title:'Movement between columns is a re-render, not an animation', body:'Cards appear and disappear with a 150ms fade. No sliding across the board — motion at that scale is unreadable while cooking.'},
+    ];
+
+    const countdownSteps = [
+      {mmss:'2:48', style:CD_OK, label:'เพิ่งเข้ามา', note:'Normal state. Green chip, no other emphasis on the card beyond the arrival ring.'},
+      {mmss:'0:52', style:CD_WARN, label:'ใกล้หมดเวลา', note:'Final third of the configured window. Amber chip plus the wording change; the card border warms.'},
+      {mmss:'0:00', style:CD_EXP, label:'หมดเวลาตอบรับ', note:'Chip freezes at 0:00 and never counts negative. Card moves to state H.'},
+    ];
+
+    const relRows = [
+      {comp:'OrderBoard', source:'useOrderBoard (M-2.5)', when:'Always — owns the three columns, the loading/error/empty branches and the tablet tray', note:'Reads the board snapshot; renders nothing state-specific itself'},
+      {comp:'OrderColumn', source:'derived, board state', when:'Three per board on desktop, two plus a tray on tablet', note:'Title, count badge, accent rule, empty copy, independent scroll'},
+      {comp:'OrderCard', source:'MerchantOrderSummary (M-2.2)', when:'One per order in PAID, MERCHANT_ACCEPTED, PREPARING, READY_FOR_PICKUP', note:'Four visual variants, resolved from state alone'},
+      {comp:'CountdownChip', source:'placedAt + configured window (DEC-031)', when:'PAID cards only', note:'Three phases: normal, warning, expired; ticks client-side, authority stays server-side'},
+      {comp:'ArrivalTreatment', source:'useOrderRealtime (M-2.4) INSERT', when:'First 30s after a PAID order arrives', note:'Ring, banner, sound trigger, tab count — presentation only'},
+      {comp:'ConnectionBanner', source:'useOrderRealtime channel status', when:'Subscription is not SUBSCRIBED', note:'Persistent, above the columns, carries the last-update timestamp'},
+      {comp:'BoardSkeleton', source:'useOrderBoard loading', when:'Initial fetch only, never on refetch', note:'Two blocks per column plus one line of text'},
+      {comp:'BoardError', source:'useOrderBoard error', when:'Initial fetch fails', note:'Replaces the whole board; retry re-invokes the same query'},
+      {comp:'ReadyTray', source:'viewport 768–1024px', when:'Tablet breakpoint only', note:'Bar always visible; sheet expands over the columns'},
+    ];
+
+    const mapRows = [
+      {state:'PAID', col:'Column 1 · ใหม่ · รอตอบรับ'},
+      {state:'MERCHANT_ACCEPTED', col:'Column 2 · กำลังทำ'},
+      {state:'PREPARING', col:'Column 2 · กำลังทำ'},
+      {state:'READY_FOR_PICKUP', col:'Column 3 · พร้อมให้ไรเดอร์รับ (tablet: tray)'},
+      {state:'PICKED_UP', col:'Removed from the board'},
+      {state:'DELIVERING', col:'Removed from the board'},
+      {state:'DELIVERED', col:'Removed from the board'},
+      {state:'CANCELLED', col:'Removed from the board (no M-2.6 treatment)'},
+    ];
+
+    const a11y = [
+      'Every status is carried by Thai text and the raw state code, never by colour alone; the column accent rule is reinforcement only.',
+      'Body text is 15–17px on the card face; the smallest type is 11.5px and appears only on metadata.',
+      'Thai line-height is 1.55 minimum everywhere so upper and lower vowels never collide.',
+      'Primary actions are 56px tall and full card width on both desktop and tablet; no target is under 44px.',
+      'No hover-only affordance exists anywhere on the board — every action is visible at rest.',
+      'Focus is a 2px #1F1A16 ring with a 2px offset, visible on cream and on white alike.',
+      'The countdown is announced as text to assistive technology at 60s and at 0s, not on every tick.',
+    ];
+
+    const SPEC = 'background:#EAF6EF;color:#0F8B5F';
+    const CHOICE = 'background:#EEF3F8;color:#2E6FB7';
+    const OPEN = 'background:#FDF3E6;color:#8A6412';
+
+    const decisions = [
+      {tag:'SPECIFIED', tagStyle:SPEC, title:'Three columns, fixed membership', body:'PAID / MERCHANT_ACCEPTED + PREPARING / READY_FOR_PICKUP. Orders from PICKED_UP onward leave the board. No fourth column, no history strip, no cancelled lane.', ref:'UX-SPEC §6 · M-03'},
+      {tag:'SPECIFIED', tagStyle:SPEC, title:'One primary action per card', body:'รับออเดอร์ → เริ่มทำอาหาร → อาหารพร้อม, and no action in column 3. Rejection is out of M-2.6 scope entirely.', ref:'UX-SPEC §6'},
+      {tag:'SPECIFIED', tagStyle:SPEC, title:'Accept window renders as a per-card countdown', body:'Warning colour in the final third; at zero the card shows หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ and takes no automatic action.', ref:'UX-SPEC §6 · DEC-031'},
+      {tag:'SPECIFIED', tagStyle:SPEC, title:'Persistent reconnect bar', body:'การเชื่อมต่อหลุด · กำลังเชื่อมต่อใหม่, exact copy, always visible while the subscription is down. Silence is never allowed to look like calm.', ref:'UX-SPEC §6'},
+      {tag:'SPECIFIED', tagStyle:SPEC, title:'Restaurant scope in the header at all times', body:'Static text for single-restaurant membership; an explicit picker only when membership covers more than one. No aggregate view exists.', ref:'DEC-UX-005'},
+      {tag:'SPECIFIED', tagStyle:SPEC, title:'Tablet collapses to two columns plus a bottom tray', body:'พร้อมให้ไรเดอร์รับ becomes the tray; touch targets rise to 56px; no hover-only affordance.', ref:'UX-SPEC §6'},
+      {tag:'DESIGN CHOICE', tagStyle:CHOICE, title:'Card field order and typographic weight', body:'Order number in Mono at the top, then status, customer, total, time, action. Total is Mono so a column of prices aligns. Nothing here is specified beyond "fast scanning".', ref:'M-2.6A'},
+      {tag:'DESIGN CHOICE', tagStyle:CHOICE, title:'Column accent colours', body:'Primary for column 1, gold for column 2, green for column 3 — reinforcement of a text label that already carries the meaning. Chosen from existing design-system semantic colours; no new colour introduced.', ref:'Design System v1.0'},
+      {tag:'DESIGN CHOICE', tagStyle:CHOICE, title:'Arrival treatment: 30-second ring plus banner row', body:'A 2px primary ring with a soft pulse, an arrival banner inside the card, insertion at the top of the column, then settling into sort order. Duration and treatment are a design choice; the requirement to be unmissable is specified.', ref:'M-2.6A'},
+      {tag:'DESIGN CHOICE', tagStyle:CHOICE, title:'Disabled primary action on an expired card', body:'The button renders disabled rather than hidden, so the card keeps its shape and the merchant sees that acceptance is the action that is no longer available. Reversible either way once BQ-013 resolves.', ref:'M-2.6A'},
+      {tag:'DESIGN CHOICE', tagStyle:CHOICE, title:'Independent column scroll and oldest-first sort', body:'Neither is specified. Both follow from the requirement that the most urgent card is always reachable without scrolling past a busy column.', ref:'M-2.6A'},
+      {tag:'DESIGN CHOICE', tagStyle:CHOICE, title:'Error copy and support reference code', body:'โหลดออเดอร์ไม่สำเร็จ with a retry and a support route. The reference code is a display convention for a phone call, not a technical error message and not a new backend field.', ref:'M-2.6A'},
+      {tag:'DESIGN CHOICE', tagStyle:CHOICE, title:'Tray auto-expands once on a new READY_FOR_PICKUP order', body:'Five seconds, then collapse. Makes the tray discoverable on first use without becoming an interruption during service.', ref:'M-2.6A'},
+      {tag:'NOT DECIDED', tagStyle:OPEN, title:'Accept-window expiry behaviour', body:'BQ-013 is open. The design shows the timeout condition and stops. It accommodates late acceptance, auto-cancel, or operator-only resolution without a visual change.', ref:'BQ-013'},
+      {tag:'NOT DECIDED', tagStyle:OPEN, title:'recipientPhoneSnapshot on the card face', body:'The field exists and is merchant-visible under RLS, but the spec does not place it. Treated here as an M-04 order-detail concern; the card face does not show it. Not a product decision.', ref:'M-04'},
+      {tag:'NOT DECIDED', tagStyle:OPEN, title:'Prep-time entry at acceptance', body:'M-05 defines an accept confirmation with prep-time entry. Whether accepting from the board opens that step or commits directly is undecided; the card shows one button and nothing about what follows it.', ref:'M-05'},
+      {tag:'NOT DECIDED', tagStyle:OPEN, title:'Behaviour below 768px', body:'The spec defines desktop and tablet only. A single-column fallback with a segmented control is sketched as a safety net, not proposed as a mobile merchant workflow.', ref:'UX-SPEC §4.2'},
+      {tag:'NOT DECIDED', tagStyle:OPEN, title:'Item lines on the card', body:'MerchantOrderSummary carries no items, so the board shows none. Whether a merchant needs an item count before accepting is an open product question for M-04, not something to infer here.', ref:'M-2.2 · M-04'},
+    ];
+
+    return {nav, anatomy, variants, columns, tabletCols, trayOrders, emptyCols, boardNotes, countdownSteps, relRows, mapRows, a11y, decisions};
+  }
+}
+</script>
+</body>
+</html>
