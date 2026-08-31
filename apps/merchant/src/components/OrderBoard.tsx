@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useOrderBoard } from '../hooks/useOrderBoard';
 import { useOrderActions } from '../hooks/useOrderActions';
+import { useOrderAlerts } from '../hooks/useOrderAlerts';
 import type { MerchantOrderRealtimeStatus } from '../hooks/useOrderRealtime';
 import { BOARD_COLUMNS, groupOrdersByColumn, type BoardColumnId } from '../lib/orderBoardDisplay';
 import { OrderCard } from './OrderCard';
@@ -45,6 +46,16 @@ import { OrderCard } from './OrderCard';
  * Below 768px, the same tablet layout is kept as a floor rather than
  * building an unspecified third layout (§07 marks anything under 768px
  * "NOT DECIDED... a safety net, not a proposed mobile workflow").
+ *
+ * ## Header chrome (M-03)
+ *
+ * The connection pill, sound bell and `ออเดอร์วันนี้ N` badge live in the
+ * design's own board-panel header (§02's `height:72px` bar), not in
+ * `AppShell`'s outer app chrome — `AppShell` already owns the restaurant
+ * identity/switch/logout row, a separate concern. `BoardHeaderBar` below
+ * reuses this component's own `useOrderBoard`/`useOrderRealtime` state
+ * (`orders`, `realtimeStatus`) via `useOrderAlerts` — no second Realtime
+ * subscription, no second data fetch, exactly the seam M-03's brief requires.
  */
 
 function isDegraded(status: MerchantOrderRealtimeStatus): boolean {
@@ -239,6 +250,109 @@ function ConnectionBanner({ tone, text }: { tone: 'reconnecting' | 'error'; text
   );
 }
 
+/**
+ * `● เชื่อมต่ออยู่` / `● กำลังเชื่อมต่อใหม่`, the bell, and `ออเดอร์วันนี้ N` —
+ * design §01/§02's board-panel header, minus the restaurant identity block
+ * `AppShell` already renders. Pure presentation: every value it shows comes
+ * from `useOrderAlerts`'s return and `isDegraded(realtimeStatus)`, both
+ * computed by the caller.
+ */
+function BoardHeaderBar({
+  degraded,
+  soundEnabled,
+  audioBlocked,
+  todayCount,
+  onToggleSound,
+}: {
+  degraded: boolean;
+  soundEnabled: boolean;
+  audioBlocked: boolean;
+  todayCount: number;
+  onToggleSound: () => void;
+}) {
+  const pillColor = degraded ? '#B98418' : '#0F8B5F';
+  const pillLabel = degraded ? 'กำลังเชื่อมต่อใหม่' : 'เชื่อมต่ออยู่';
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 10,
+        flexWrap: 'wrap',
+        padding: '12px 16px',
+        marginBottom: 12,
+        background: '#fff',
+        borderRadius: 16,
+        border: '1px solid #EAE1D6',
+      }}
+    >
+      <div
+        role="status"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          height: 44,
+          padding: '0 14px',
+          borderRadius: 12,
+          border: '1px solid #E9E0D5',
+          fontSize: 13.5,
+          fontWeight: 600,
+          color: '#5A4E42',
+        }}
+      >
+        <span style={{ width: 9, height: 9, borderRadius: '50%', background: pillColor }} aria-hidden />
+        {pillLabel}
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggleSound}
+        aria-pressed={soundEnabled}
+        aria-label={
+          audioBlocked && soundEnabled
+            ? 'เสียงแจ้งเตือน · เบราว์เซอร์บล็อกเสียงไว้ · กดเพื่อลองใหม่'
+            : `เสียงแจ้งเตือน · ${soundEnabled ? 'เปิด' : 'ปิด'}`
+        }
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          height: 44,
+          padding: '0 16px',
+          borderRadius: 12,
+          border: audioBlocked && soundEnabled ? '1px solid #F0C4C4' : '1px solid #E9E0D5',
+          background: audioBlocked && soundEnabled ? '#FBEAEA' : 'none',
+          fontSize: 13.5,
+          fontWeight: 600,
+          color: '#1F1A16',
+          cursor: 'pointer',
+        }}
+      >
+        🔔 เสียงแจ้งเตือน · {soundEnabled ? (audioBlocked ? 'บล็อกอยู่' : 'เปิด') : 'ปิด'}
+      </button>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          height: 44,
+          padding: '0 16px',
+          borderRadius: 12,
+          border: '1px solid #E9E0D5',
+          fontSize: 13.5,
+          fontWeight: 600,
+          color: '#5A4E42',
+        }}
+      >
+        ออเดอร์วันนี้ {todayCount}
+      </div>
+    </div>
+  );
+}
+
 export interface OrderBoardProps {
   restaurantId: string | null;
 }
@@ -256,6 +370,10 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
   const grouped = groupOrdersByColumn(orders);
   const hasAnyOrders = orders.length > 0;
   const degraded = isDegraded(realtimeStatus);
+
+  // M-03. Reuses this component's own `orders`/`now` — no second Realtime
+  // subscription, no second fetch. See the module doc comment.
+  const alerts = useOrderAlerts(orders, now);
 
   return (
     <div>
@@ -307,6 +425,14 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
           .banhao-board-ready-body.is-expanded { display: flex; }
         }
       `}</style>
+
+      <BoardHeaderBar
+        degraded={degraded}
+        soundEnabled={alerts.soundEnabled}
+        audioBlocked={alerts.audioBlocked}
+        todayCount={alerts.todayCount}
+        onToggleSound={alerts.toggleSound}
+      />
 
       {loading ? (
         <div style={{ borderRadius: 20, border: '1px solid #E2D8CB', background: '#F6F0E7', overflow: 'hidden' }}>
