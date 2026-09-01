@@ -609,6 +609,395 @@
         ]
       }
     },
+    "/api/v1/merchant/restaurants/{restaurantId}/menu-categories": {
+      "post": {
+        "operationId": "MenuController_createCategory",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The created category"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of this restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/menu-categories/{categoryId}": {
+      "patch": {
+        "operationId": "MenuController_updateCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The renamed category"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of the owning restaurant"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/menu-categories/{categoryId}/archive": {
+      "post": {
+        "operationId": "MenuController_archiveCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The category, now archived"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of the owning restaurant"
+          },
+          "409": {
+            "description": "The category still holds active items, or is already archived"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/restaurants/{restaurantId}/menu-categories/reorder": {
+      "post": {
+        "operationId": "MenuController_reorderCategories",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many categories were renumbered"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of this restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/restaurants/{restaurantId}/menu-items": {
+      "post": {
+        "operationId": "MenuController_createItem",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The created dish"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of this restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/menu-items/{menuItemId}": {
+      "patch": {
+        "operationId": "MenuController_updateItem",
+        "parameters": [
+          {
+            "name": "menuItemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The updated dish"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of the owning restaurant"
+          },
+          "404": {
+            "description": "Menu item not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/menu-items/{menuItemId}/availability": {
+      "patch": {
+        "operationId": "MenuController_setItemAvailability",
+        "parameters": [
+          {
+            "name": "menuItemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The dish, with its new availability"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of the owning restaurant"
+          },
+          "404": {
+            "description": "Menu item not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/menu-items/{menuItemId}/archive": {
+      "post": {
+        "operationId": "MenuController_archiveItem",
+        "parameters": [
+          {
+            "name": "menuItemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The dish, now archived"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of the owning restaurant"
+          },
+          "409": {
+            "description": "The dish is already archived"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/restaurants/{restaurantId}/menu-items/reorder": {
+      "post": {
+        "operationId": "MenuController_reorderItems",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many dishes were renumbered"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of this restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/menu-items/{menuItemId}/option-groups": {
+      "put": {
+        "operationId": "MenuController_replaceOptionGroups",
+        "parameters": [
+          {
+            "name": "menuItemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many option groups the dish now has"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of the owning restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/restaurants/{restaurantId}/hours": {
+      "put": {
+        "operationId": "RestaurantHoursController_replaceHours",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The saved week, re-read from the database"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of this restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_check",

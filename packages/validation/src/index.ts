@@ -7,3 +7,5 @@ export * from './payment';
 export * from './rider';
 export * from './restaurant-cover';
 export * from './menu-item-image';
+export * from './menu';
+export * from './restaurant-hours';
