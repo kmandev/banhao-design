@@ -7,18 +7,18 @@ import { useRestaurantScope } from '../../hooks/useRestaurantScope';
 import { Spinner } from '../../components/Spinner';
 import { NetworkErrorState } from '../../components/ErrorState';
 import { AppShell } from '../../components/AppShell';
-import { OrderBoard } from '../../components/OrderBoard';
+import { MenuOverview } from '../../components/MenuOverview';
+import { menuCopy } from '../../lib/menuCopy';
 
 /**
- * M-2.6 replaces M-1's placeholder body with the Order Board. Everything
- * above the board — auth gate, restaurant-scope re-validation on every
- * visit, the `/` bounce for a revoked membership — is unchanged from M-1;
- * only what renders once scope is `ready` and a restaurant is selected has
- * changed. `state.currentRestaurantId` is passed straight into `OrderBoard`,
- * the same already-membership-verified value `AppShell` already receives —
- * `OrderBoard` does not re-derive or re-check it.
+ * M-11 — `เมนู`.
+ *
+ * The auth gate, the scope re-validation on every visit and the `/` bounce for
+ * a revoked membership are `dashboard/page.tsx`'s, unchanged: a merchant's
+ * membership can be revoked between visits, and every page that reads
+ * restaurant-scoped data has to re-check rather than trust a stored id.
  */
-export default function DashboardPage() {
+export default function MenuPage() {
   const router = useRouter();
   const { initialising, session } = useAuth();
   const scope = useRestaurantScope(!initialising && session !== null);
@@ -42,24 +42,21 @@ export default function DashboardPage() {
   }
 
   if (state.status !== 'ready' || !state.currentRestaurantId) {
-    return <Spinner label="กำลังโหลดข้อมูลร้าน…" />;
+    return <Spinner label={menuCopy.loading} />;
   }
 
-  // currentRestaurantId is only ever set to an id present in `memberships`
-  // (see useRestaurantScope), so this should always resolve. Fall back
-  // rather than crash if it somehow doesn't.
   const restaurantName =
-    state.memberships.find((m) => m.restaurantId === state.currentRestaurantId)?.restaurantName ??
-    'ร้านค้า';
+    state.memberships.find((membership) => membership.restaurantId === state.currentRestaurantId)
+      ?.restaurantName ?? 'ร้านค้า';
 
   return (
     <AppShell
       restaurantName={restaurantName}
       restaurantCount={state.memberships.length}
       onSwitchRestaurant={() => router.push('/select-restaurant')}
-      activeNav="orders"
+      activeNav="menu"
     >
-      <OrderBoard restaurantId={state.currentRestaurantId} />
+      <MenuOverview restaurantId={state.currentRestaurantId} />
     </AppShell>
   );
 }

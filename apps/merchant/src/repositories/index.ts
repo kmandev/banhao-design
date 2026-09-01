@@ -17,8 +17,11 @@
  * to that same repository rather than a third binding — see
  * `merchantOrders.ts` on why its read and write halves share one module.
  *
- * `createMerchantOrdersRepository` takes the API client as an optional second
- * argument defaulting to the app's own; only tests pass it explicitly.
+ * M-11 and M-12 add two more: `merchantMenu` (the catalog) and
+ * `merchantHours` (the weekly schedule). Both draw the same read/write split
+ * as `merchantOrders` — Supabase under RLS for reads, the API for every write
+ * — and both take the API client as an optional second argument defaulting to
+ * the app's own; only tests pass it explicitly.
  */
 
 import { supabase } from '../lib/supabase';
@@ -27,16 +30,24 @@ import {
   type MerchantRestaurantRepository,
 } from './merchantRestaurant';
 import { createMerchantOrdersRepository, type MerchantOrdersRepository } from './merchantOrders';
+import { createMerchantMenuRepository, type MerchantMenuRepository } from './merchantMenu';
+import { createMerchantHoursRepository, type MerchantHoursRepository } from './merchantHours';
 
 export * from './merchantRestaurant';
 export * from './merchantOrders';
+export * from './merchantMenu';
+export * from './merchantHours';
 
 export interface Repositories {
   merchantRestaurant: MerchantRestaurantRepository;
   merchantOrders: MerchantOrdersRepository;
+  merchantMenu: MerchantMenuRepository;
+  merchantHours: MerchantHoursRepository;
 }
 
 export const repositories: Repositories = {
   merchantRestaurant: createMerchantRestaurantRepository(supabase),
   merchantOrders: createMerchantOrdersRepository(supabase),
+  merchantMenu: createMerchantMenuRepository(supabase),
+  merchantHours: createMerchantHoursRepository(supabase),
 };
