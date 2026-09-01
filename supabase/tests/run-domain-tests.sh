@@ -213,4 +213,18 @@ if grep -q "FAIL" /tmp/banhao-order-creation-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION VERIFICATION PASSED"
+echo "==> Running M-11/M-12 merchant catalog write assertions (20260901000002)"
+docker cp "$REPO_ROOT/supabase/tests/merchant_catalog_write_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/merchant_catalog_write_test.sql 2>&1 | tee /tmp/banhao-merchant-catalog-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> M-11/M-12 merchant catalog write verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-merchant-catalog-out.log; then
+  echo "==> M-11/M-12 merchant catalog write verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE VERIFICATION PASSED"
