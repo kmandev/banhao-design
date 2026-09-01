@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}
+  a:hover{color:#C2431F}
+</style>
+</helmet>
+
+<div style="max-width:1520px;margin:0 auto;padding:48px 40px 140px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:0 0 auto">M</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">M-11 — MENU MANAGEMENT</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · design artifact for <span style="font-family:'IBM Plex Mono',monospace">docs/design/</span> · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1060px">
+    Screen M-11 <span style="font-family:'IBM Plex Mono',monospace">เมนู</span> — the merchant surface for categories, dishes, options and daily availability. Read against the deployed catalog schema, the catalog RLS policies, the merchant API module and the shipped merchant web app at <span style="font-family:'IBM Plex Mono',monospace">ac2c88c5</span> / <span style="font-family:'IBM Plex Mono',monospace">bc6e468e</span>.
+    Availability is the one action designed to cost nothing; everything else is a form. In-product copy is Thai, all annotation is English.
+  </div>
+
+  <div style="margin-top:14px;padding:16px 18px;border-radius:16px;background:#FDF6F5;border:1px solid #EFCFCF;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1060px">
+    <strong style="color:#B32B2B">Numbering collision, recorded not resolved.</strong> The UX specification's screen inventory calls menu management <span style="font-family:'IBM Plex Mono',monospace">M-11</span> and operating hours <span style="font-family:'IBM Plex Mono',monospace">M-12</span>. The API repository already used those two labels for different work: <span style="font-family:'IBM Plex Mono',monospace">restaurant-cover.controller.ts</span> is documented as M-11 and <span style="font-family:'IBM Plex Mono',monospace">menu-item-image.controller.ts</span> as M-12. This artifact uses the UX-specification meaning. The implementation task numbering is a repository convention question, not a design one.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="16">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- 00 SCOPE -->
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — SCOPE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">A catalogue editor, bounded by what the schema already stores</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">Every field designed below is a column that exists in <span style="font-family:'IBM Plex Mono',monospace">20260811000003_catalog_domain.sql</span>. Nothing is designed for a column that does not exist, and no capability is designed that the schema forbids — most importantly, no dish or category is ever deleted, because both tables carry a <span style="font-family:'IBM Plex Mono',monospace">reject_delete()</span> trigger.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#0F8B5F;margin-bottom:14px">IN SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ inScope }}" as="i" hint-placeholder-count="9">
+          <div style="font-size:13.5px;line-height:1.65;color:#3D342C">{{ i }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #EFCFCF;background:#FDF6F5;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#B32B2B;margin-bottom:14px">OUT OF SCOPE FOR M-11</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ outScope }}" as="o" hint-placeholder-count="8">
+          <div style="font-size:13.5px;line-height:1.65;color:#5A4E42">{{ o }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 NAVIGATION -->
+  <div id="s1" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — PLACEMENT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">เมนู is a top-level nav item, and the shell has to grow one</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The shipped <span style="font-family:'IBM Plex Mono',monospace">AppShell.tsx</span> renders a single non-interactive <span style="font-family:'IBM Plex Mono',monospace">แดชบอร์ด</span> label with the comment <em>“order board etc. arrive in M-2+”</em>. The UX specification already fixes the merchant nav as <span style="font-family:'IBM Plex Mono',monospace">ออเดอร์วันนี้ · ประวัติ · เมนู · ร้านของฉัน · ตั้งค่า</span>. M-11 occupies the third slot and M-12 sits under <span style="font-family:'IBM Plex Mono',monospace">ร้านของฉัน</span>. Turning that placeholder into real links is a shell change M-11 depends on; it is specified, not invented.</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:0;overflow:hidden;max-width:1100px">
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid #EAE1D6">
+      <div style="display:flex;flex-direction:column">
+        <span style="font-size:13px;color:#7A6E64;letter-spacing:.08em">BANHAO · ร้านค้า</span>
+        <strong style="font-size:18px">ร้านตามสั่งป้าสมร</strong>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ shellNav }}" as="t" hint-placeholder-count="5">
+          <div style="height:44px;display:flex;align-items:center;padding:0 14px;border-radius:12px;font-size:14px;{{ t.style }}">{{ t.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="padding:14px 22px;font-size:12.5px;color:#7A6E64;line-height:1.7">Active item carries the 600-weight <span style="font-family:'IBM Plex Mono',monospace">#1F1A16</span> treatment already used for <span style="font-family:'IBM Plex Mono',monospace">แดชบอร์ด</span>; inactive items keep <span style="font-family:'IBM Plex Mono',monospace">#7A6E64</span>. Every item is 44px tall, matching <span style="font-family:'IBM Plex Mono',monospace">sizes.touchTarget</span>.</div>
+  </div>
+
+  <!-- 02 DESKTOP OVERVIEW -->
+  <div id="s2" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — STATE A · MENU OVERVIEW</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Desktop · ≥1024px · category sections, one row per dish</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">Categories are section headers rather than tabs, because <span style="font-family:'IBM Plex Mono',monospace">menu_categories.sort_order</span> already defines the order a customer sees in C-07 — the merchant should be looking at the same sequence, not at a filtered view of it. The availability switch is the only control on the row that acts immediately; the row itself opens the edit drawer.</div>
+
+  <div style="width:1360px;max-width:100%;border-radius:22px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.07)">
+    <div style="height:72px;background:#fff;border-bottom:1px solid #EAE1D6;display:flex;align-items:center;gap:16px;padding:0 24px">
+      <div style="width:38px;height:38px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700">ฮ</div>
+      <div>
+        <div style="font-size:17px;font-weight:700;line-height:1.4">ร้านตามสั่งป้าสมร</div>
+        <div style="font-size:12px;color:#7A6E64">เมนู · 18 รายการ · ปิดขายวันนี้ 2 รายการ</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="height:44px;display:flex;align-items:center;padding:0 16px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;font-size:13.5px;font-weight:600;color:#5A4E42">จัดการหมวดหมู่</div>
+      <div style="height:44px;display:flex;align-items:center;padding:0 20px;border-radius:16px;background:#E4572E;color:#fff;font-size:14px;font-weight:600">+ เพิ่มรายการอาหาร</div>
+    </div>
+
+    <div style="padding:22px;display:flex;flex-direction:column;gap:22px">
+      <sc-for list="{{ menuSections }}" as="sec" hint-placeholder-count="3">
+        <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #F1E9DE">
+            <div style="font-size:16px;font-weight:700">{{ sec.title }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:#7A6E64;padding:3px 9px;border-radius:9px;background:#F3EDE4">{{ sec.count }}</div>
+            <div style="flex:1"></div>
+            <div style="font-size:12.5px;color:#7A6E64">{{ sec.note }}</div>
+          </div>
+          <div style="display:flex;flex-direction:column">
+            <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:16px;padding:14px 18px;border-top:1px solid #F6F0E7;{{ it.rowStyle }}">
+                <div style="width:56px;height:56px;border-radius:14px;background:#EFE7DC;display:flex;align-items:center;justify-content:center;font-size:11px;color:#9A8C7E;flex:0 0 auto">{{ it.thumb }}</div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                    <div style="font-size:15.5px;font-weight:600;line-height:1.55">{{ it.name }}</div>
+                    <div style="font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:8px;{{ it.badgeStyle }}">{{ it.badge }}</div>
+                  </div>
+                  <div style="font-size:12.5px;color:#7A6E64;line-height:1.65;margin-top:3px">{{ it.desc }}</div>
+                </div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600;width:110px;text-align:right">{{ it.price }}</div>
+                <div style="width:190px;display:flex;align-items:center;justify-content:flex-end;gap:10px">
+                  <div style="font-size:13px;font-weight:600;{{ it.availTextStyle }}">{{ it.availLabel }}</div>
+                  <div style="width:56px;height:32px;border-radius:16px;padding:3px;box-sizing:border-box;display:flex;{{ it.trackStyle }}">
+                    <div style="width:26px;height:26px;border-radius:13px;background:#fff;box-shadow:0 1px 3px rgba(31,26,22,.25)"></div>
+                  </div>
+                </div>
+                <div style="width:44px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:16px;color:#7A6E64;flex:0 0 auto">⋯</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 03 AVAILABILITY -->
+  <div id="s3" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — AVAILABILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">One tap, no dialog, and it must survive being wrong</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The UX specification is explicit: <em>“<span style="font-family:'IBM Plex Mono',monospace">ปิดขายวันนี้</span> on an item is inline, immediate and reversible, with no dialog — it is the single most frequent merchant action during service and must cost nothing.”</em> The switch therefore writes optimistically and reverts on failure, exactly as <span style="font-family:'IBM Plex Mono',monospace">useOrderActions</span> already handles a failed transition on the board. There is no second availability model to reconcile: <span style="font-family:'IBM Plex Mono',monospace">is_available</span> is the whole state, and <span style="font-family:'IBM Plex Mono',monospace">20260817000001</span> confirmed a sold-out dish stays visible to customers as <span style="font-family:'IBM Plex Mono',monospace">วันนี้หมด</span>.</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+    <sc-for list="{{ availStates }}" as="a" hint-placeholder-count="4">
+      <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:18px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">{{ a.tag }}</div>
+        <div style="font-size:15px;font-weight:700;line-height:1.5">{{ a.title }}</div>
+        <div style="height:36px;border-radius:12px;display:flex;align-items:center;padding:0 12px;font-size:12.5px;font-weight:600;{{ a.chipStyle }}">{{ a.chip }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ a.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 04 ITEM FORM -->
+  <div id="s4" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — STATE B · CREATE &amp; EDIT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">One drawer, two modes, distinguished only by its title and its footer</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The form reuses M-04's 520px right drawer, scrim and focus trap rather than a new overlay paradigm. Create opens empty with <span style="font-family:'IBM Plex Mono',monospace">พร้อมขาย</span> preset on (matching <span style="font-family:'IBM Plex Mono',monospace">is_available default true</span>); edit opens prefilled. Escape and <span style="font-family:'IBM Plex Mono',monospace">ยกเลิก</span> both close, and both raise the discard dialog once the form is dirty. Save is disabled until the form is both valid and dirty, so a merchant who opened a dish to look at it cannot write an identical row.</div>
+
+  <div style="display:grid;grid-template-columns:560px 1fr;gap:24px;align-items:start">
+    <div style="border-radius:22px;border:1px solid #E2D8CB;background:#FBF7F1;overflow:hidden;box-shadow:0 16px 48px rgba(31,26,22,.14)">
+      <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:18px 20px;display:flex;align-items:flex-start;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:19px;font-weight:700;line-height:1.5">แก้ไขรายการอาหาร</div>
+          <div style="font-size:13px;color:#7A6E64;margin-top:4px">ข้าวผัดกุ้ง · แก้ไขล่าสุด 09:14</div>
+        </div>
+        <div style="width:44px;height:44px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;color:#5A4E42;flex:0 0 auto">✕</div>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+        <sc-for list="{{ formFields }}" as="f" hint-placeholder-count="7">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:baseline;gap:6px">
+              <div style="font-size:13px;font-weight:600">{{ f.label }}</div>
+              <div style="font-size:12px;font-weight:600;{{ f.reqStyle }}">{{ f.req }}</div>
+            </div>
+            <div style="min-height:48px;border-radius:12px;border:1px solid {{ f.border }};background:#fff;display:flex;align-items:center;padding:12px 14px;font-size:15px;{{ f.valueStyle }}">{{ f.value }}</div>
+            <div style="font-size:12px;line-height:1.65;{{ f.hintStyle }}">{{ f.hint }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border-top:1px solid #EAE1D6;background:#fff;padding:16px 20px;display:flex;gap:12px">
+        <div style="flex:1;height:52px;border-radius:16px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+        <div style="flex:1.4;height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึก</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ formNotes }}" as="n" hint-placeholder-count="5">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px">
+          <div style="font-size:14.5px;font-weight:700;margin-bottom:6px">{{ n.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ n.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 05 VALIDATION -->
+  <div id="s5" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — VALIDATION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every rule below is a constraint that already exists</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">No length limit, no profanity rule, no minimum price and no duplicate-name check is designed, because the schema declares none and no document asks for one. Client validation mirrors the database and stops there.</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:grid;grid-template-columns:150px 1fr 1.1fr 1fr;gap:0;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>FIELD</div><div>RULE</div><div>SOURCE OF THE RULE</div><div>MESSAGE (THAI, INLINE)</div>
+    </div>
+    <sc-for list="{{ validation }}" as="v" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:150px 1fr 1.1fr 1fr;gap:0;padding:12px 18px;border-top:1px solid #F1E9DE;font-size:13px;line-height:1.65">
+        <div style="font-weight:600">{{ v.field }}</div>
+        <div style="color:#5A4E42">{{ v.rule }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ v.source }}</div>
+        <div style="color:#B32B2B">{{ v.msg }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 06 OPTIONS -->
+  <div id="s6" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — OPTION GROUPS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">min_select / max_select is shown as a rule, not as two numbers</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The schema stores <span style="font-family:'IBM Plex Mono',monospace">min_select</span> and <span style="font-family:'IBM Plex Mono',monospace">max_select</span> precisely so that BQ-009 (single- vs multi-select) stays data rather than schema. A merchant should not be asked to encode that as arithmetic, so the editor offers the three shapes that map onto the pairs the customer app can already render, and writes the numbers underneath. The preset vocabulary is an interpretation and is listed in §14.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+    <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+      <div style="padding:16px 18px;border-bottom:1px solid #F1E9DE;display:flex;align-items:center;gap:10px">
+        <div style="font-size:15.5px;font-weight:700">ตัวเลือกของ “ข้าวผัดกุ้ง”</div>
+        <div style="flex:1"></div>
+        <div style="height:36px;display:flex;align-items:center;padding:0 12px;border-radius:11px;border:1px solid #E9E0D5;font-size:12.5px;font-weight:600;color:#5A4E42">+ เพิ่มกลุ่มตัวเลือก</div>
+      </div>
+      <sc-for list="{{ optionGroups }}" as="g" hint-placeholder-count="2">
+        <div style="padding:16px 18px;border-top:1px solid #F6F0E7">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:14.5px;font-weight:600">{{ g.title }}</div>
+            <div style="font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:8px;background:#F3EDE4;color:#5A4E42">{{ g.rule }}</div>
+            <div style="flex:1"></div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A">{{ g.pair }}</div>
+          </div>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ g.options }}" as="o" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:#FBF7F1;border:1px solid #F1E9DE">
+                <div style="flex:1;font-size:14px;{{ o.labelStyle }}">{{ o.label }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#5A4E42">{{ o.delta }}</div>
+                <div style="font-size:12px;font-weight:600;{{ o.availStyle }}">{{ o.avail }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ optionNotes }}" as="n" hint-placeholder-count="4">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px">
+          <div style="font-size:14.5px;font-weight:700;margin-bottom:6px">{{ n.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ n.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 07 CATEGORIES -->
+  <div id="s7" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — CATEGORIES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Rename and reorder are safe; retiring a category is not</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px"><span style="font-family:'IBM Plex Mono',monospace">menu_categories</span> carries <span style="font-family:'IBM Plex Mono',monospace">name</span>, <span style="font-family:'IBM Plex Mono',monospace">sort_order</span> and <span style="font-family:'IBM Plex Mono',monospace">archived_at</span>, so create, rename and reorder are all representable and are designed. Retiring one is where the schema stops being decisive, and §15 records why.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+    <div style="border-radius:22px;border:1px solid #E2D8CB;background:#FBF7F1;overflow:hidden;box-shadow:0 16px 48px rgba(31,26,22,.12);max-width:480px">
+      <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:18px 20px;font-size:19px;font-weight:700">จัดการหมวดหมู่</div>
+      <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ categories }}" as="c" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:#fff;border:1px solid #EAE1D6">
+            <div style="font-size:16px;color:#A2968A;cursor:grab">⠿</div>
+            <div style="flex:1;font-size:14.5px;font-weight:600">{{ c.name }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7A6E64">{{ c.count }}</div>
+            <div style="width:44px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:14px;color:#7A6E64">✎</div>
+          </div>
+        </sc-for>
+        <div style="height:48px;border-radius:14px;border:1px dashed #D9CDBD;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#7A6E64">+ เพิ่มหมวดหมู่</div>
+      </div>
+      <div style="border-top:1px solid #EAE1D6;background:#fff;padding:16px 20px;display:flex;gap:12px">
+        <div style="flex:1;height:52px;border-radius:16px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+        <div style="flex:1.4;height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึกลำดับ</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ categoryNotes }}" as="n" hint-placeholder-count="4">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px">
+          <div style="font-size:14.5px;font-weight:700;margin-bottom:6px">{{ n.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ n.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 08 REMOVAL -->
+  <div id="s8" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — REMOVAL</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The copy may not promise deletion, because the database refuses it</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px"><span style="font-family:'IBM Plex Mono',monospace">menu_items_reject_delete</span> raises on any DELETE, and <span style="font-family:'IBM Plex Mono',monospace">order_items.menu_item_id</span> is <span style="font-family:'IBM Plex Mono',monospace">on delete set null</span> precisely so history keeps pointing at a real row. Removal is therefore an archive — <span style="font-family:'IBM Plex Mono',monospace">archived_at</span> set — and the dialog says so in the same register the UX specification already applied to addresses: <em>copy must not promise removal</em>. Both destructive paths carry a dialog; availability does not.</div>
+  <div style="display:grid;grid-template-columns:520px 1fr;gap:24px;align-items:start">
+    <div style="border-radius:22px;border:1px solid #E2D8CB;background:#FBF7F1;overflow:hidden;box-shadow:0 24px 64px rgba(31,26,22,.2)">
+      <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:18px 20px">
+        <div style="font-size:19px;font-weight:700">นำ “ยำวุ้นเส้น” ออกจากเมนู</div>
+      </div>
+      <div style="padding:18px 20px;font-size:14px;line-height:1.8;color:#3D342C">
+        รายการนี้จะไม่แสดงในเมนูของลูกค้าอีก และไม่สามารถสั่งได้<br>
+        ออเดอร์ที่สั่งไปแล้วยังคงอยู่ในประวัติตามเดิม<br>
+        <span style="color:#7A6E64">หากต้องการขายอีกครั้ง ให้เพิ่มรายการใหม่</span>
+      </div>
+      <div style="border-top:1px solid #EAE1D6;background:#fff;padding:16px 20px;display:flex;gap:12px">
+        <div style="flex:1;height:52px;border-radius:16px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+        <div style="flex:1.2;height:52px;border-radius:16px;background:#D93A3A;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">นำออกจากเมนู</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ removalNotes }}" as="n" hint-placeholder-count="4">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px">
+          <div style="font-size:14.5px;font-weight:700;margin-bottom:6px">{{ n.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ n.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 09 STATES -->
+  <div id="s9" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — LOADING · EMPTY · ERROR</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Four states the page can be in before it is a menu</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:20px">
+    <sc-for list="{{ pageStates }}" as="s" hint-placeholder-count="4">
+      <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid #F1E9DE;display:flex;align-items:center;gap:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">{{ s.tag }}</div>
+          <div style="font-size:15px;font-weight:700">{{ s.title }}</div>
+        </div>
+        <div style="padding:20px;min-height:150px;background:#FBF7F1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center">
+          <div style="font-size:16px;font-weight:600;{{ s.headStyle }}">{{ s.head }}</div>
+          <div style="font-size:13px;color:#7A6E64;line-height:1.7;max-width:340px">{{ s.sub }}</div>
+          <div style="height:48px;display:flex;align-items:center;padding:0 20px;border-radius:14px;font-size:14px;font-weight:600;{{ s.ctaStyle }}">{{ s.cta }}</div>
+        </div>
+        <div style="padding:14px 18px;font-size:12.5px;line-height:1.7;color:#5A4E42;border-top:1px solid #F1E9DE">{{ s.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 10 MOBILE -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — RESPONSIVE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Below 768px the row breaks in two and the drawer becomes a sheet</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The merchant web app is a Next.js app used on a shop tablet and, occasionally, a phone. The overview keeps the same information at every width; only its arrangement changes. Price and the availability switch stay on one line together because they are the two things a merchant checks mid-service, and the switch keeps its 44px target at every width.</div>
+  <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap">
+    <div style="width:390px;border-radius:26px;border:1px solid #E2D8CB;background:#FBF7F1;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.09)">
+      <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:14px 16px">
+        <div style="font-size:12px;color:#7A6E64;letter-spacing:.08em">BANHAO · ร้านค้า</div>
+        <div style="font-size:17px;font-weight:700;margin-top:2px">เมนู</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+        <div style="height:48px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">+ เพิ่มรายการอาหาร</div>
+        <div style="font-size:13px;font-weight:700;color:#5A4E42;margin-top:4px">อาหารจานเดียว</div>
+        <sc-for list="{{ mobileItems }}" as="m" hint-placeholder-count="3">
+          <div style="border-radius:16px;background:#fff;border:1px solid #EAE1D6;padding:14px;display:flex;flex-direction:column;gap:10px;{{ m.shell }}">
+            <div style="display:flex;gap:12px;align-items:flex-start">
+              <div style="width:48px;height:48px;border-radius:12px;background:#EFE7DC;flex:0 0 auto"></div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:15px;font-weight:600;line-height:1.5">{{ m.name }}</div>
+                <div style="font-size:12px;color:#7A6E64;line-height:1.6;margin-top:2px">{{ m.desc }}</div>
+              </div>
+              <div style="width:44px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;color:#7A6E64;flex:0 0 auto">⋯</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600">{{ m.price }}</div>
+              <div style="flex:1"></div>
+              <div style="font-size:12.5px;font-weight:600;{{ m.availTextStyle }}">{{ m.availLabel }}</div>
+              <div style="width:56px;height:32px;border-radius:16px;padding:3px;box-sizing:border-box;display:flex;{{ m.trackStyle }}">
+                <div style="width:26px;height:26px;border-radius:13px;background:#fff;box-shadow:0 1px 3px rgba(31,26,22,.25)"></div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ responsiveRules }}" as="r" hint-placeholder-count="6">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 18px;display:flex;gap:14px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#A2968A;width:120px;flex:0 0 auto">{{ r.bp }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#3D342C">{{ r.rule }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 11 ACCESSIBILITY -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — ACCESSIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Semantic controls, and one switch that must announce itself</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:grid;grid-template-columns:190px 1fr 1fr;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>CONTROL</div><div>SEMANTICS &amp; KEYBOARD</div><div>STATE COMMUNICATION</div>
+    </div>
+    <sc-for list="{{ a11y }}" as="a" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:190px 1fr 1fr;padding:12px 18px;border-top:1px solid #F1E9DE;font-size:13px;line-height:1.7">
+        <div style="font-weight:600">{{ a.control }}</div>
+        <div style="color:#5A4E42">{{ a.semantics }}</div>
+        <div style="color:#5A4E42">{{ a.state }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 12 DATA CONTRACT -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — DATA CONTRACT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every field on this screen, and where it comes from</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">Reads are direct from Supabase under RLS, per DEC-APP-008 — <span style="font-family:'IBM Plex Mono',monospace">menu_categories_select_member</span> and <span style="font-family:'IBM Plex Mono',monospace">menu_items_select_member</span> already scope a merchant to their own restaurant, so the overview needs no endpoint. Writes are a different story, and §14 is where that lands.</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:grid;grid-template-columns:1fr 1.2fr 130px 1.3fr;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>UI FIELD</div><div>SOURCE</div><div>STATUS</div><div>NOTE</div>
+    </div>
+    <sc-for list="{{ contract }}" as="c" hint-placeholder-count="12">
+      <div style="display:grid;grid-template-columns:1fr 1.2fr 130px 1.3fr;padding:12px 18px;border-top:1px solid #F1E9DE;font-size:13px;line-height:1.7">
+        <div style="font-weight:600">{{ c.ui }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#5A4E42">{{ c.source }}</div>
+        <div><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;{{ c.style }}">{{ c.status }}</span></div>
+        <div style="color:#5A4E42">{{ c.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 13 DECISIONS -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — DESIGN DECISIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">M11-D01 … M11-D12</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="12">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px 20px;display:flex;gap:18px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#E4572E;width:76px;flex:0 0 auto;padding-top:2px">{{ d.id }}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;line-height:1.55">{{ d.title }}</div>
+          <div style="font-size:13px;line-height:1.8;color:#5A4E42;margin-top:5px">{{ d.body }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 14 CONSTRAINTS -->
+  <div id="s14" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">14 — IMPLEMENTATION CONSTRAINTS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">M-11 cannot be built without new write endpoints</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">This is the artifact's single most important finding. <span style="font-family:'IBM Plex Mono',monospace">20260811000003</span> revokes every privilege on all five catalog tables from <span style="font-family:'IBM Plex Mono',monospace">anon</span> and <span style="font-family:'IBM Plex Mono',monospace">authenticated</span>, and <span style="font-family:'IBM Plex Mono',monospace">20260811000011</span> grants back <span style="font-family:'IBM Plex Mono',monospace">select</span> only. A merchant client physically cannot write a dish, a price or an availability flag. The only merchant catalog endpoints that exist are the two image-upload routes. Everything designed above therefore waits on API work that is not performed here.</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ constraints }}" as="c" hint-placeholder-count="9">
+      <div style="border-radius:16px;border:1px solid {{ c.border }};background:{{ c.bg }};padding:16px 20px;display:flex;gap:18px;align-items:flex-start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#B32B2B;width:84px;flex:0 0 auto;padding-top:2px">{{ c.id }}</div>
+        <div style="flex:1;font-size:13.5px;line-height:1.8;color:#3D342C">{{ c.text }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 15 NOT DECIDED -->
+  <div id="s15" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">15 — REQUIRES PRODUCT DECISION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Five things the repository does not answer</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">None of these blocks the rest of the design, and none has been silently chosen. Where a placeholder was needed to draw the screen, the placeholder is named.</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ notDecided }}" as="q" hint-placeholder-count="5">
+      <div style="border-radius:16px;border:1px solid #E8D8B8;background:#FDF9F0;padding:18px 20px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;background:#F0E2C4;color:#7A5A1E">REQUIRES PRODUCT DECISION</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#7A6E64">{{ q.id }}</div>
+        </div>
+        <div style="font-size:15px;font-weight:700;line-height:1.55;margin-top:10px">{{ q.title }}</div>
+        <div style="font-size:13px;line-height:1.8;color:#5A4E42;margin-top:5px">{{ q.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 16 TRACEABILITY -->
+  <div id="s16" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">16 — TRACEABILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What this design was read from</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>SOURCE</div><div>WHAT IT SETTLED</div>
+    </div>
+    <sc-for list="{{ traceability }}" as="t" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;padding:11px 18px;border-top:1px solid #F1E9DE;font-size:12.5px;line-height:1.7">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#3D342C">{{ t.doc }}</div>
+        <div style="color:#5A4E42">{{ t.use }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A;margin-top:44px">ASSUMPTIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 16px">Where the design interpreted rather than read</div>
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:1100px">
+    <sc-for list="{{ assumptions }}" as="a" hint-placeholder-count="6">
+      <div style="border-radius:14px;border:1px solid #EAE1D6;background:#fff;padding:14px 18px;font-size:13.5px;line-height:1.8;color:#3D342C">{{ a }}</div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:44px;padding:18px 20px;border-radius:16px;background:#211B16;color:#F5EFE7;font-size:13.5px;line-height:1.8;max-width:1100px">
+    <strong>Design only.</strong> No React, API, migration, RLS policy or environment file was created or modified for this artifact. The repository was read at <span style="font-family:'IBM Plex Mono',monospace">main</span> / <span style="font-family:'IBM Plex Mono',monospace">bc6e468e</span> and the merchant web app at <span style="font-family:'IBM Plex Mono',monospace">ac2c88c5</span>. Companion artifact: <a href="./BANHAO M-12 Opening Hours.dc.html" style="color:#E4572E">M-12 Opening Hours</a>.
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1100}}">
+const OK = 'background:#E7F4EE;color:#0F6C4C';
+const NEW = 'background:#FDECE6;color:#B23030';
+const WARN = 'background:#FDF3E6;color:#7A5A1E';
+
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      nav: [
+        { label: '00 Scope', href: '#s0' },
+        { label: '01 Placement', href: '#s1' },
+        { label: '02 Overview', href: '#s2' },
+        { label: '03 Availability', href: '#s3' },
+        { label: '04 Create & edit', href: '#s4' },
+        { label: '05 Validation', href: '#s5' },
+        { label: '06 Options', href: '#s6' },
+        { label: '07 Categories', href: '#s7' },
+        { label: '08 Removal', href: '#s8' },
+        { label: '09 Page states', href: '#s9' },
+        { label: '10 Responsive', href: '#s10' },
+        { label: '11 Accessibility', href: '#s11' },
+        { label: '12 Data contract', href: '#s12' },
+        { label: '13 Decisions', href: '#s13' },
+        { label: '14 Constraints', href: '#s14' },
+        { label: '15 Product decisions', href: '#s15' },
+        { label: '16 Traceability', href: '#s16' },
+      ],
+
+      inScope: [
+        'Menu overview: restaurant context, categories in sort order, one row per dish with name, description, price, availability and image.',
+        'Create a dish — every field the schema stores, and only those.',
+        'Edit a dish, prefilled, with dirty tracking and a discard guard.',
+        'Availability: is_available on a dish and on an option, switched inline.',
+        'Option groups and options: title, the select rule, labels, price deltas, per-option availability.',
+        'Categories: create, rename, reorder (sort_order), and the archive question in §15.',
+        'Removal as archive (archived_at) with a confirmation dialog whose copy does not promise deletion.',
+        'Loading, empty, error, saving and success states for the overview and for both forms.',
+        'Desktop, tablet and phone arrangements; accessibility for every control.',
+      ],
+      outScope: [
+        'Hard delete of a dish or a category — both tables reject DELETE at the database level.',
+        'Opening hours and any open/closed state — M-12, and §6 of the brief keeps them separate.',
+        'Restaurant profile, cover image, name and address — M-10.',
+        'Stock counts, per-day scheduling of availability, or auto-reopen at midnight — no column exists.',
+        'Price history, promotions, discounts or set menus — nothing in the schema stores them.',
+        'Bulk import, CSV, duplication of a dish across restaurants.',
+        'Any change to the customer app: C-07 already renders วันนี้หมด (PC-Q-001).',
+        'The API endpoints and validation schemas M-11 needs — named in §14, not written.',
+      ],
+
+      shellNav: [
+        { label: 'ออเดอร์วันนี้', style: 'color:#7A6E64' },
+        { label: 'ประวัติ', style: 'color:#7A6E64' },
+        { label: 'เมนู', style: 'color:#1F1A16;font-weight:600;background:#FDF3E6' },
+        { label: 'ร้านของฉัน', style: 'color:#7A6E64' },
+        { label: 'ตั้งค่า', style: 'color:#7A6E64' },
+      ],
+
+      menuSections: [
+        {
+          title: 'แนะนำ', count: '4 รายการ', note: 'ลำดับที่ 1',
+          items: [
+            { thumb: 'รูป', name: 'ข้าวผัดกุ้ง', desc: 'ข้าวผัดกุ้งสด ไข่ ต้นหอม', price: '฿65.00', badge: '', badgeStyle: 'display:none', price2: '', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', rowStyle: '' },
+            { thumb: 'รูป', name: 'ผัดกะเพราหมูสับ', desc: 'เผ็ดกลาง · ไข่ดาวเพิ่มได้', price: '฿60.00', badge: '3 ตัวเลือก', badgeStyle: 'background:#F3EDE4;color:#5A4E42', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', rowStyle: '' },
+            { thumb: 'ไม่มีรูป', name: 'ยำวุ้นเส้น', desc: '', price: '฿70.00', badge: 'ปิดขายวันนี้', badgeStyle: 'background:#FDF3E6;color:#7A5A1E', availLabel: 'ปิดขายวันนี้', availTextStyle: 'color:#7A6E64', trackStyle: 'background:#E0D6C8;justify-content:flex-start', rowStyle: 'background:#FCFAF6' },
+          ],
+        },
+        {
+          title: 'อาหารจานเดียว', count: '9 รายการ', note: 'ลำดับที่ 2',
+          items: [
+            { thumb: 'รูป', name: 'ข้าวมันไก่', desc: 'น่องไก่ · น้ำจิ้มเต้าเจี้ยว', price: '฿55.00', badge: '', badgeStyle: 'display:none', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', rowStyle: '' },
+            { thumb: 'รูป', name: 'ก๋วยเตี๋ยวหมูน้ำตก', desc: 'เส้นเล็ก เส้นใหญ่ บะหมี่', price: '฿50.00', badge: '2 ตัวเลือก', badgeStyle: 'background:#F3EDE4;color:#5A4E42', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', rowStyle: '' },
+          ],
+        },
+        {
+          title: 'เครื่องดื่ม', count: '5 รายการ', note: 'ลำดับที่ 3',
+          items: [
+            { thumb: 'รูป', name: 'ชาเย็น', desc: '', price: '฿25.00', badge: '', badgeStyle: 'display:none', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', rowStyle: '' },
+            { thumb: 'ไม่มีรูป', name: 'น้ำเปล่า', desc: '', price: '฿10.00', badge: '', badgeStyle: 'display:none', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', rowStyle: '' },
+          ],
+        },
+      ],
+
+      availStates: [
+        { tag: 'A1 · REST', title: 'พร้อมขาย', chip: 'สวิตช์เปิด · เขียว', chipStyle: 'background:#E7F4EE;color:#0F6C4C', body: 'is_available = true. The row reads normally; the switch is the only green element on it.' },
+        { tag: 'A2 · PENDING', title: 'กำลังบันทึก', chip: 'สวิตช์ครึ่งทาง · ทึบลง', chipStyle: 'background:#F3EDE4;color:#5A4E42', body: 'The switch moves at once and dims to 60%; the row stays interactive except for that switch. No spinner overlays the page — the write is one boolean.' },
+        { tag: 'A3 · CLOSED', title: 'ปิดขายวันนี้', chip: 'สวิตช์ปิด · แถวจาง', chipStyle: 'background:#FDF3E6;color:#7A5A1E', body: 'The row background drops to #FCFAF6 and a ปิดขายวันนี้ pill appears. Nothing is hidden — the customer sees วันนี้หมด on C-07 (PC-Q-001).' },
+        { tag: 'A4 · FAILED', title: 'บันทึกไม่สำเร็จ', chip: 'ย้อนกลับ + toast แจ้งเตือน', chipStyle: 'background:#FDECE6;color:#B23030', body: 'The switch returns to its previous position and a toast reads เปลี่ยนสถานะไม่สำเร็จ · ลองอีกครั้ง with a retry. The optimistic write is never left ambiguous.' },
+      ],
+
+      formFields: [
+        { label: 'ชื่อรายการ', req: 'จำเป็น', reqStyle: 'color:#B23030', border: '#E9E0D5', value: 'ข้าวผัดกุ้ง', valueStyle: '', hint: 'text not null. No length limit is declared in the schema, so none is imposed here.', hintStyle: 'color:#7A6E64' },
+        { label: 'รายละเอียด', req: 'ไม่จำเป็น', reqStyle: 'color:#7A6E64', border: '#E9E0D5', value: 'ข้าวผัดกุ้งสด ไข่ ต้นหอม', valueStyle: '', hint: 'description is nullable. Left empty, the customer app simply renders no second line.', hintStyle: 'color:#7A6E64' },
+        { label: 'ราคา', req: 'จำเป็น', reqStyle: 'color:#B23030', border: '#E9E0D5', value: '฿ 65.00', valueStyle: "font-family:'IBM Plex Mono',monospace", hint: 'Entered in บาท, stored as base_price_satang (bigint). Two decimals, ฿ prefixed and never typed by the merchant.', hintStyle: 'color:#7A6E64' },
+        { label: 'หมวดหมู่', req: 'จำเป็น', reqStyle: 'color:#B23030', border: '#E9E0D5', value: 'แนะนำ ▾', valueStyle: '', hint: 'category_id is not null — a dish cannot exist outside a category. If the restaurant has none, the create action routes to the category form first.', hintStyle: 'color:#7A6E64' },
+        { label: 'รูปภาพ', req: 'ไม่จำเป็น', reqStyle: 'color:#7A6E64', border: '#E9E0D5', value: 'เลือกรูป · JPEG, PNG, WebP', valueStyle: 'color:#7A6E64', hint: 'Two-step upload against the existing endpoints: upload-url then complete. Only available in edit mode — the routes are keyed by menuItemId, so a dish must exist first (§14).', hintStyle: 'color:#7A6E64' },
+        { label: 'สถานะการขาย', req: '', reqStyle: 'display:none', border: '#E9E0D5', value: 'พร้อมขาย · สวิตช์เปิด', valueStyle: 'color:#0F6C4C;font-weight:600', hint: 'is_available, default true. Present in the form for completeness; the overview switch remains the fast path.', hintStyle: 'color:#7A6E64' },
+        { label: 'ลำดับในหมวดหมู่', req: 'ไม่จำเป็น', reqStyle: 'color:#7A6E64', border: '#E9E0D5', value: 'ต่อท้ายหมวดหมู่', valueStyle: 'color:#7A6E64', hint: 'sort_order int default 0. Not a number field — a new dish appends, and order is changed by dragging in the overview.', hintStyle: 'color:#7A6E64' },
+      ],
+
+      formNotes: [
+        { title: 'Dirty state and the discard guard', body: 'บันทึก is disabled until the form is valid and something has changed. Closing a dirty form — ✕, ยกเลิก, Escape, or the scrim — raises ปิดหน้าต่างนี้โดยไม่บันทึก? with ยกเลิก / ปิดโดยไม่บันทึก. A clean form closes silently, exactly as M-04 does.' },
+        { title: 'Success', body: 'The drawer closes, the affected row highlights for 1.2s in #FDF3E6, and a toast reads บันทึกแล้ว. On create, the overview scrolls the new row into the visible area of its category and highlights it the same way.' },
+        { title: 'Server failure', body: 'The drawer stays open with everything the merchant typed intact. An inline banner above the footer reads บันทึกไม่สำเร็จ · ลองอีกครั้ง; 403 reads คุณไม่มีสิทธิ์แก้ไขเมนูของร้านนี้ and does not offer a retry, following the error table in the UX specification §17.' },
+        { title: 'Concurrent edit', body: 'menu_items.updated_at exists and moves on every write. Two staff editing the same dish is possible in principle. The design shows แก้ไขล่าสุด in the drawer header, but conflict handling — last-write-wins versus a version check — is unsettled and recorded as M11-Q-04.' },
+        { title: 'Saving', body: 'The footer button becomes กำลังบันทึก… with a 16px spinner, both buttons disable, and the fields become read-only rather than greyed, so the merchant can still read what they submitted.' },
+      ],
+
+      validation: [
+        { field: 'ชื่อรายการ', rule: 'Required, non-empty after trim', source: 'menu_items.name text not null', msg: 'กรอกชื่อรายการ' },
+        { field: 'ราคา', rule: 'Required, numeric, ≥ 0', source: 'base_price_satang bigint check >= 0', msg: 'กรอกราคา' },
+        { field: 'ราคา', rule: 'At most 2 decimal places', source: 'satang is the smallest unit (CON-003)', msg: 'ราคาละเอียดได้ถึงสตางค์เท่านั้น' },
+        { field: 'ราคา', rule: 'Rejects non-digits and negatives at input', source: 'CHECK would fail server-side', msg: 'ราคาต้องไม่ติดลบ' },
+        { field: 'หมวดหมู่', rule: 'Required, must be an active category of this restaurant', source: 'category_id not null, FK to menu_categories', msg: 'เลือกหมวดหมู่' },
+        { field: 'รูปภาพ', rule: 'Content type must be an image the presign accepts', source: 'requestMenuItemImageUploadUrlSchema', msg: 'ไฟล์นี้ใช้ไม่ได้ · ใช้ JPEG, PNG หรือ WebP' },
+        { field: 'ชื่อหมวดหมู่', rule: 'Required, non-empty after trim', source: 'menu_categories.name text not null', msg: 'กรอกชื่อหมวดหมู่' },
+        { field: 'ตัวเลือก', rule: 'Group needs a title and at least one option to be worth saving', source: 'title text not null; no CHECK on emptiness', msg: 'เพิ่มตัวเลือกอย่างน้อย 1 รายการ' },
+      ],
+
+      optionGroups: [
+        {
+          title: 'ระดับความเผ็ด', rule: 'เลือก 1 อย่าง · จำเป็น', pair: 'min 1 / max 1',
+          options: [
+            { label: 'ไม่เผ็ด', delta: '+฿0', avail: 'พร้อมขาย', availStyle: 'color:#0F6C4C', labelStyle: '' },
+            { label: 'เผ็ดกลาง', delta: '+฿0', avail: 'พร้อมขาย', availStyle: 'color:#0F6C4C', labelStyle: '' },
+            { label: 'เผ็ดมาก', delta: '+฿0', avail: 'พร้อมขาย', availStyle: 'color:#0F6C4C', labelStyle: '' },
+          ],
+        },
+        {
+          title: 'เพิ่มเติม', rule: 'เลือกได้หลายอย่าง · ไม่บังคับ', pair: 'min 0 / max 3',
+          options: [
+            { label: 'ไข่ดาว', delta: '+฿10.00', avail: 'พร้อมขาย', availStyle: 'color:#0F6C4C', labelStyle: '' },
+            { label: 'พิเศษ', delta: '+฿15.00', avail: 'พร้อมขาย', availStyle: 'color:#0F6C4C', labelStyle: '' },
+            { label: 'กุ้งเพิ่ม', delta: '+฿30.00', avail: 'วันนี้หมด', availStyle: 'color:#7A6E64', labelStyle: 'color:#9A8C7E' },
+          ],
+        },
+      ],
+
+      optionNotes: [
+        { title: 'Three presets, not two numbers', body: 'เลือก 1 อย่าง · จำเป็น writes min 1 / max 1. เลือก 1 อย่าง · ไม่บังคับ writes min 0 / max 1. เลือกได้หลายอย่าง writes min 0 with a max the merchant sets. The pair is shown in mono beside the rule so an operator can read what was stored.' },
+        { title: 'A required group changes the customer flow', body: 'min_select ≥ 1 means C-08 cannot add the dish to a cart until the group is answered. The editor states that under the preset: ลูกค้าต้องเลือกก่อนสั่ง. This is a description of existing customer behaviour, not a new rule.' },
+        { title: 'Option availability is the same one-tap model', body: 'menu_options.is_available exists and 20260817000001 keeps unavailable options visible to customers. The switch behaves exactly as §03, at option granularity.' },
+        { title: 'What is not designed', body: 'Reordering option groups relative to each other is representable (sort_order) and included. Copying a group between dishes is not — menu_option_groups is keyed to a single menu_item_id and no document asks for it.' },
+      ],
+
+      categories: [
+        { name: 'แนะนำ', count: '4' },
+        { name: 'อาหารจานเดียว', count: '9' },
+        { name: 'กับข้าว', count: '0' },
+        { name: 'เครื่องดื่ม', count: '5' },
+      ],
+
+      categoryNotes: [
+        { title: 'Reorder is a drag, saved once', body: 'sort_order is an int on every row, so reordering rewrites several rows at a time. The dialog therefore has an explicit บันทึกลำดับ rather than saving per drag — one request, one failure to report.' },
+        { title: 'Rename is inline', body: '✎ turns the row into a text input in place. Enter commits, Escape reverts. name is the only editable field: nothing else on menu_categories is merchant-facing.' },
+        { title: 'An empty category is legal and visible', body: 'กับข้าว with 0 items is a real state — a merchant makes the section before filling it. The overview shows the empty section with ยังไม่มีรายการในหมวดหมู่นี้ rather than hiding it, so it does not look lost.' },
+        { title: 'Retiring a category is the unresolved edge', body: 'archived_at exists on menu_categories, but the public policy for menu_items checks only the item and the restaurant — not the category. Archiving a category with active dishes would leave those dishes readable while their section is gone. Recorded as M11-Q-01, not designed around.' },
+      ],
+
+      removalNotes: [
+        { title: 'Wording, precisely', body: 'The action is นำออกจากเมนู, never ลบ. The dialog states three facts: the customer can no longer see or order it, past orders are unaffected, and selling it again means adding it back. No undo is promised, because none exists.' },
+        { title: 'Why history is safe', body: 'order_items snapshots item_name_snapshot and unit_price_satang, and menu_item_id is on delete set null. M-04 already renders those snapshots. An archived dish changes nothing about an order that already happened.' },
+        { title: 'The category case', body: 'A category cannot be removed while it holds dishes: category_id is on delete restrict, and archiving is the open question in §15. The dialog for a non-empty category therefore blocks with ย้ายรายการออกก่อน · หมวดหมู่นี้ยังมี 9 รายการ.' },
+        { title: 'Availability is not removal', body: 'These are different actions with different weights and the design keeps them visually separate: a switch on the row, a red button behind a dialog in the ⋯ menu. ปิดขายวันนี้ never appears in the destructive menu.' },
+      ],
+
+      pageStates: [
+        { tag: 'S1 · LOADING', title: 'กำลังโหลดเมนู', head: 'โครงร่างรายการ 6 แถว', headStyle: 'color:#9A8C7E', sub: 'Skeleton rows at the real row height, matching the M-04 skeleton treatment. The header, both primary actions and the nav render immediately.', cta: '', ctaStyle: 'display:none', note: 'Two queries: menu_categories then menu_items, both direct from Supabase. A category section renders as soon as its items arrive.' },
+        { tag: 'S2 · EMPTY', title: 'ร้านยังไม่มีเมนู', head: 'ยังไม่มีรายการอาหาร', headStyle: '', sub: 'เริ่มจากสร้างหมวดหมู่ เช่น อาหารจานเดียว แล้วเพิ่มรายการอาหารเข้าไป', cta: '+ สร้างหมวดหมู่แรก', ctaStyle: 'background:#E4572E;color:#fff', note: 'The empty state leads with the category, not the dish, because category_id is not null — a first dish is impossible without one.' },
+        { tag: 'S3 · ERROR', title: 'โหลดเมนูไม่สำเร็จ', head: 'โหลดเมนูไม่สำเร็จ', headStyle: 'color:#B23030', sub: 'ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง', cta: 'ลองอีกครั้ง', ctaStyle: 'border:1px solid #E9E0D5;color:#5A4E42', note: 'Reuses ErrorState / NetworkErrorState verbatim, including the existing ลองอีกครั้ง label. 403 shows คุณไม่มีสิทธิ์ดูเมนูของร้านนี้ with no retry.' },
+        { tag: 'S4 · NO CATEGORY', title: 'มีหมวดหมู่ว่าง', head: 'ยังไม่มีรายการในหมวดหมู่นี้', headStyle: 'color:#7A6E64', sub: 'A section that exists but holds nothing keeps its header and its add action, so the merchant can see the structure they built.', cta: '+ เพิ่มรายการในหมวดนี้', ctaStyle: 'border:1px solid #E9E0D5;color:#5A4E42', note: 'Distinct from S2: the restaurant has a menu, this section is simply unfilled.' },
+      ],
+
+      mobileItems: [
+        { name: 'ข้าวผัดกุ้ง', desc: 'ข้าวผัดกุ้งสด ไข่ ต้นหอม', price: '฿65.00', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', shell: '' },
+        { name: 'ผัดกะเพราหมูสับ', desc: 'เผ็ดกลาง · ไข่ดาวเพิ่มได้', price: '฿60.00', availLabel: 'พร้อมขาย', availTextStyle: 'color:#0F6C4C', trackStyle: 'background:#0F8B5F;justify-content:flex-end', shell: '' },
+        { name: 'ยำวุ้นเส้น', desc: 'ปิดขายวันนี้', price: '฿70.00', availLabel: 'ปิดขายวันนี้', availTextStyle: 'color:#7A6E64', trackStyle: 'background:#E0D6C8;justify-content:flex-start', shell: 'background:#FCFAF6' },
+      ],
+
+      responsiveRules: [
+        { bp: '≥1280px', rule: 'Overview at max-width 1360px, centred. Row: image · name + description · price · availability · ⋯, all on one line. Edit drawer 520px from the right, board visible behind the scrim.' },
+        { bp: '1024–1279px', rule: 'Description truncates to one line with ellipsis. Price column narrows to 90px. Nothing is dropped.' },
+        { bp: '768–1023px (shop tablet)', rule: 'The primary layout target. Row becomes two lines: identity above, price + availability + ⋯ below. Drawer widens to min(88vw, 640px), matching M-04 tablet.' },
+        { bp: '<768px', rule: 'Rows become cards with 12px gaps. The drawer becomes a full-height bottom sheet with a sticky footer, so บันทึก is reachable without scrolling past the fields.' },
+        { bp: 'Touch targets', rule: 'Switch 56×32 inside a 44px-tall hit area; ⋯ 44×44; footer buttons 52px, matching sizes.buttonHeight. No control below 44px at any width.' },
+        { bp: 'Overflow', rule: 'Long Thai dish names wrap to two lines and then truncate; price never wraps. Thai line-height stays 1.55–1.75 throughout so vowel marks never collide.' },
+      ],
+
+      a11y: [
+        { control: 'Availability switch', semantics: 'A real <button role="switch"> with aria-checked, reachable by Tab, toggled by Space or Enter. Never a bare div.', state: 'aria-label reads สถานะการขาย: ข้าวผัดกุ้ง. The result is announced through a polite live region: ปิดขายวันนี้แล้ว / พร้อมขายแล้ว.' },
+        { control: 'Dish row', semantics: 'The row is a link/button to the edit drawer; the switch and ⋯ are siblings, not nested inside it, so activating one never triggers the other.', state: 'Focus ring 2px #E4572E with a 2px offset — the same ring the board uses for a selected card.' },
+        { control: 'Form fields', semantics: 'Every input has a visible <label> tied by id. No placeholder-as-label anywhere. Price is inputMode="decimal" so a tablet raises a numeric keypad.', state: 'Errors are rendered under the field, referenced by aria-describedby, with aria-invalid set. The first invalid field receives focus on a failed submit.' },
+        { control: 'Drawer / dialog', semantics: 'role="dialog" aria-modal="true", labelled by its own title. Focus moves to the first field on open and returns to the originating control on close. Focus is trapped; Escape closes.', state: 'The discard dialog is a second dialog above the drawer and takes focus on ยกเลิก, so an accidental Enter never discards work.' },
+        { control: 'Disabled save', semantics: 'Kept focusable with aria-disabled rather than the disabled attribute, so a screen-reader user can find it and hear why.', state: 'The reason is announced: กรอกข้อมูลที่จำเป็นก่อนบันทึก.' },
+        { control: 'Category reorder', semantics: 'Drag is not the only path: each row exposes ย้ายขึ้น / ย้ายลง buttons at 44px, operable by keyboard.', state: 'Each move announces ย้าย เครื่องดื่ม ไปลำดับที่ 3 through the live region.' },
+        { control: 'Destructive dialog', semantics: 'Focus starts on ยกเลิก, never on นำออกจากเมนู. Escape cancels.', state: 'The dish name appears in the dialog title, so the confirmation is never ambiguous about its subject.' },
+        { control: 'Colour and contrast', semantics: 'Availability is never conveyed by the switch colour alone — the พร้อมขาย / ปิดขายวันนี้ label is always present.', state: 'Body copy uses #1F1A16 or #5A4E42 on white. #9A8C7E is decorative only (UX-FINDING-02), never load-bearing text.' },
+      ],
+
+      contract: [
+        { ui: 'Restaurant name', source: 'restaurants.name', status: 'AVAILABLE', style: OK, note: 'Already resolved by useRestaurantScope for the shell.' },
+        { ui: 'Category name, order', source: 'menu_categories.name, sort_order', status: 'AVAILABLE', style: OK, note: 'Member SELECT policy exists; filter archived_at is null.' },
+        { ui: 'Dish name', source: 'menu_items.name', status: 'AVAILABLE', style: OK, note: 'text not null.' },
+        { ui: 'Description', source: 'menu_items.description', status: 'AVAILABLE', style: OK, note: 'Nullable — omit the line when absent.' },
+        { ui: 'Price', source: 'menu_items.base_price_satang', status: 'AVAILABLE', style: OK, note: 'bigint satang; formatted ฿65.00 in the UI, never stored as baht.' },
+        { ui: 'Availability', source: 'menu_items.is_available', status: 'AVAILABLE', style: OK, note: 'Read is fine; the write needs an endpoint (§14).' },
+        { ui: 'Image', source: 'menu_items.image_url', status: 'AVAILABLE', style: OK, note: 'Public URL. Upload routes exist; the column write does not (§14).' },
+        { ui: 'Dish order', source: 'menu_items.sort_order', status: 'AVAILABLE', style: OK, note: 'int default 0.' },
+        { ui: 'Last edited', source: 'menu_items.updated_at', status: 'AVAILABLE', style: OK, note: 'Maintained by menu_items_set_updated_at.' },
+        { ui: 'Option group + rule', source: 'menu_option_groups.title, min_select, max_select', status: 'AVAILABLE', style: OK, note: 'Member policy chains group → item → restaurant.' },
+        { ui: 'Option label, delta, availability', source: 'menu_options.label, price_delta_satang, is_available', status: 'AVAILABLE', style: OK, note: 'price_delta_satang has no non-negative CHECK by design.' },
+        { ui: 'Any write on this screen', source: 'no endpoint exists', status: 'MISSING', style: NEW, note: 'Catalog tables grant SELECT only to authenticated. See §14 C-01.' },
+      ],
+
+      decisions: [
+        { id: 'M11-D01', title: 'Categories are sections in one scroll, not tabs', body: 'menu_categories.sort_order already defines what a customer sees in C-07. A merchant checking their menu should see the same sequence in one view; tabs would hide it and add a click per section.' },
+        { id: 'M11-D02', title: 'The availability switch lives on the row, not in the form', body: 'The UX specification calls this the single most frequent merchant action during service and requires it to cost nothing. Anything that opens first — drawer, menu, dialog — fails that requirement.' },
+        { id: 'M11-D03', title: 'Availability writes optimistically and reverts on failure', body: 'A merchant taps it while cooking and does not watch the result. The same pattern useOrderActions already applies to a board transition, so no new failure vocabulary is introduced.' },
+        { id: 'M11-D04', title: 'Create and edit are one drawer, reusing M-04', body: 'Same 520px right drawer, same scrim, same focus trap, same Escape behaviour. Two overlay paradigms in one app would be a regression, and M-05 already established that reuse is the rule.' },
+        { id: 'M11-D05', title: 'Price is entered in baht and stored in satang', body: 'base_price_satang is the storage unit; ฿65.00 is the merchant unit. The field prefixes ฿, accepts two decimals, and the conversion happens once at the boundary. No merchant is ever shown satang.' },
+        { id: 'M11-D06', title: 'Removal is worded as an archive', body: 'menu_items_reject_delete makes deletion impossible and order_items must keep pointing at the row. The UX specification already set this precedent for addresses: copy must not promise removal. The button reads นำออกจากเมนู.' },
+        { id: 'M11-D07', title: 'Option select rules are presets, not two number inputs', body: 'min_select/max_select exist so BQ-009 stays data. Asking a merchant to enter the pair leaks a schema decision into the shop. Three presets cover every combination the customer app renders.' },
+        { id: 'M11-D08', title: 'sort_order is changed by dragging, never typed', body: 'The column is an int with no uniqueness guarantee. A drag with one explicit บันทึกลำดับ makes the rewrite one request; a number field per row would invite collisions and partial saves.' },
+        { id: 'M11-D09', title: 'Image upload is edit-only', body: 'Both existing endpoints are keyed by menuItemId, so no key exists before the dish is saved. Create shows the image field disabled with บันทึกรายการก่อน แล้วจึงเพิ่มรูปภาพ rather than inventing a pre-create upload.' },
+        { id: 'M11-D10', title: 'An empty category stays visible', body: 'A merchant builds structure before content. Hiding an empty section makes their own work look lost and hides the place a new dish belongs.' },
+        { id: 'M11-D11', title: 'The client validates exactly what the database constrains', body: 'Required name, non-negative price, satang precision, a category that exists. No invented length limit, no minimum price, no duplicate-name rule — the schema declares none and no document asks for one.' },
+        { id: 'M11-D12', title: 'No open/closed control appears anywhere on this screen', body: 'Brief §6. Opening hours (M-12), order acceptance and restaurants.status are three separate concepts. A dish being available today says nothing about whether the shop is open, and this screen introduces no link between them.' },
+      ],
+
+      constraints: [
+        { id: 'M11-C01', border: '#EFCFCF', bg: '#FDF6F5', text: 'No merchant catalog write path exists. 20260811000003 revokes all privileges on menu_categories, menu_items, menu_option_groups and menu_options from anon and authenticated; 20260811000011 grants back select only. Per DEC-APP-008 writes go through the API, and the API has no catalog write routes — apps/api/src/modules/merchant contains only restaurant-cover and menu-item-image. Every write designed above depends on new endpoints.' },
+        { id: 'M11-C02', border: '#EFCFCF', bg: '#FDF6F5', text: 'No validation schemas exist for catalog writes. packages/validation exports menu-item-image schemas only. Create/update DTOs for a dish, a category, an option group and an option are all new work.' },
+        { id: 'M11-C03', border: '#EFCFCF', bg: '#FDF6F5', text: 'No merchant menu screen exists to extend. apps/merchant/src at ac2c88c5 contains login, restaurant selection, dashboard and the order board. There is no route, no repository and no query module for the catalog on the merchant side.' },
+        { id: 'M11-C04', border: '#E8D8B8', bg: '#FDF9F0', text: 'AppShell renders a placeholder nav. Its single แดชบอร์ด label is a non-interactive span. M-11 needs the five-item nav the UX specification already defines; that is a shell change, small but real.' },
+        { id: 'M11-C05', border: '#E8D8B8', bg: '#FDF9F0', text: 'The availability write needs an endpoint whose cost matches its frequency. This is the most-used merchant action after accepting an order. A single-field PATCH on one dish is the right shape; routing it through a full item-update payload would make the fast path the heaviest request on the screen.' },
+        { id: 'M11-C06', border: '#E8D8B8', bg: '#FDF9F0', text: 'Reordering rewrites many rows and needs one transaction. Both dish and category reorder change several sort_order values at once. Without a transactional endpoint a partial failure leaves a visibly scrambled menu.' },
+        { id: 'M11-C07', border: '#E8D8B8', bg: '#FDF9F0', text: 'Nothing writes menu_items.image_url. completeUpload returns a resolved public URL, and the image column write is not visibly part of that path. Whether the endpoint persists it or the caller does must be settled before the image field can be trusted.' },
+        { id: 'M11-C08', border: '#E8D8B8', bg: '#FDF9F0', text: 'No Realtime for the catalog. 20260831000001 adds orders to supabase_realtime; no catalog table is published. Two devices editing one menu will not see each other. The design assumes a single editing device and refetches on window focus — it does not pretend to sync.' },
+        { id: 'M11-C09', border: '#E8D8B8', bg: '#FDF9F0', text: 'A price change is not revalidated against live carts by this screen. 20260819000001 reads price live from menu_items at order creation, and the customer app already handles ราคามีการเปลี่ยนแปลง at checkout. M-11 relies on that and adds no warning of its own — but the merchant is given no indication that carts are open either.' },
+      ],
+
+      notDecided: [
+        { id: 'M11-Q-01', title: 'Does archiving a category hide the dishes inside it?', body: 'menu_categories.archived_at exists, but menu_items_select_active checks only the item and the restaurant — not the category. So archiving a category would leave its dishes publicly readable with no section to appear in. Either the customer read must also consider the category (a policy change against a LOCKED schema) or the merchant flow must require moving or archiving the dishes first. The design blocks removal of a non-empty category as the safe placeholder and does not choose.' },
+        { id: 'M11-Q-02', title: 'Can a dish be moved between categories after it has been ordered?', body: 'category_id is a plain FK with no immutability trigger, so the database permits it. The design allows it because nothing forbids it — order_items snapshots the name and price, so history is unaffected. Confirm this is intended: it silently changes where a returning customer looks for a familiar dish.' },
+        { id: 'M11-Q-03', title: 'Does availability reset automatically at the start of a day?', body: 'The copy ปิดขายวันนี้ says "today", but is_available is a plain boolean with no timestamp and no job. Either the wording overstates what the system does, or a reset is needed. The design uses the specified wording unchanged and flags the mismatch rather than adding an unbacked reset or quietly rewording customer-visible copy.' },
+        { id: 'M11-Q-04', title: 'What happens when two staff edit the same dish?', body: 'restaurant_members allows several members per restaurant, updated_at moves on every write, and there is no version column or conflict rule anywhere in the documents. Last-write-wins is the implicit behaviour; whether that is acceptable, or an optimistic-concurrency check is required, is a product call.' },
+        { id: 'M11-Q-05', title: 'May a merchant set a price of ฿0?', body: 'The CHECK is base_price_satang >= 0, so zero is legal in the database. No document says whether a free dish is a legitimate offering or a data-entry accident worth blocking. The design permits it, per M11-D11, and asks for confirmation.' },
+      ],
+
+      traceability: [
+        { doc: 'docs/design/BANHAO-UX-SPEC-V1.md §12 (merchant IA and nav)', use: 'The five-item merchant nav; เมนู as a top-level destination.' },
+        { doc: 'BANHAO-UX-SPEC-V1.md — merchant screen inventory M-11', use: 'Scope: categories, items, options, availability. Priority MUST.' },
+        { doc: 'BANHAO-UX-SPEC-V1.md — merchant principles', use: '“Menu availability is one tap… inline, immediate and reversible, with no dialog.” Sets M11-D02 and M11-D03.' },
+        { doc: 'BANHAO-UX-SPEC-V1.md §5.3 / C-07', use: 'วันนี้หมด as the customer-side consequence; unavailable items stay visible.' },
+        { doc: 'BANHAO-UX-SPEC-V1.md §17 error table', use: 'Thai wording for 403 and network failure, reused verbatim.' },
+        { doc: 'BANHAO-UX-SPEC-V1.md — destructive-action rule for addresses', use: 'Precedent that copy must not promise removal when the database archives.' },
+        { doc: 'supabase/migrations/20260811000003_catalog_domain.sql', use: 'Every field, type and CHECK on all five catalog tables; reject_delete on items and categories; the min/max rationale for BQ-009.' },
+        { doc: 'supabase/migrations/20260811000011_rls_policies.sql', use: 'select-only grants; the member policies that make the read work without an endpoint.' },
+        { doc: 'supabase/migrations/20260817000001_catalog_availability_visibility.sql', use: 'PC-Q-001: availability is business state, not a visibility rule.' },
+        { doc: 'supabase/migrations/20260819000001_order_creation_function.sql', use: 'Price is read live from menu_items at order creation — the basis of M11-C09.' },
+        { doc: 'supabase/migrations/20260811000005_order_domain.sql', use: 'order_items.menu_item_id on delete set null; snapshot columns that make archival safe.' },
+        { doc: 'apps/api/src/modules/merchant/menu-item-image.controller.ts', use: 'The only existing catalog write path: upload-url then complete, keyed by menuItemId. Sets M11-D09.' },
+        { doc: 'packages/validation/src/menu-item-image.ts', use: 'The image content-type rule; the absence of any other catalog schema (M11-C02).' },
+        { doc: 'apps/merchant/src/lib/styles.ts · components/AppShell.tsx · ErrorState.tsx · Spinner.tsx (ac2c88c5)', use: 'Input 48px, button 52px, radius 16, the shell header, and the existing error and loading treatments.' },
+        { doc: 'packages/ui/src/theme/tokens.ts', use: 'Every colour, radius, spacing step and the 44px touch-target baseline.' },
+        { doc: 'docs/design/BANHAO M-04 / M-05 artifacts', use: 'Drawer geometry, scrim value, focus trap, dialog behaviour and the annotation conventions of this document.' },
+      ],
+
+      assumptions: [
+        'day-to-day editing happens on one device at a time. No catalog table is in the Realtime publication, so the design refetches on window focus instead of claiming live sync (M11-C08).',
+        'The three option-group presets are an interpretation of min_select/max_select, not a documented vocabulary. BQ-009 is OPEN; the presets are chosen so that whichever way it lands, only labels change, never stored data.',
+        'A dish list of the size a Buntharik shop keeps — tens, not hundreds — so the overview is one scroll with no pagination, search or filter. Add search only if a real menu proves longer than a screen or two.',
+        'The ⋯ row menu holds นำออกจากเมนู and ทำสำเนา is deliberately absent: duplication is not in the schema-supported set and no document asks for it.',
+        'Thai copy follows the register already shipped in the merchant app (ลองอีกครั้ง, ออกจากระบบ, เปลี่ยนร้าน) — operational, no marketing tone, no honorifics.',
+        'The artifact is written for docs/design/ in the source repository. It is created here only; no repository file was created, modified, staged, committed or pushed.',
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>

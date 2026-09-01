@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}
+  a:hover{color:#C2431F}
+</style>
+</helmet>
+
+<div style="max-width:1520px;margin:0 auto;padding:48px 40px 140px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:0 0 auto">M</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">M-12 — OPENING HOURS</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · design artifact for <span style="font-family:'IBM Plex Mono',monospace">docs/design/</span> · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1060px">
+    Screen M-12 <span style="font-family:'IBM Plex Mono',monospace">เวลาเปิด–ปิดร้าน</span> — the weekly schedule stored in <span style="font-family:'IBM Plex Mono',monospace">restaurant_hours</span>. Read against the deployed catalog schema, the catalog RLS policies and the merchant web app at <span style="font-family:'IBM Plex Mono',monospace">ac2c88c5</span> / <span style="font-family:'IBM Plex Mono',monospace">bc6e468e</span>.
+    The table's own comment sets the shape of this screen: <em>“Replaced wholesale on edit — the application deletes and re-inserts a restaurant's rows.”</em> One form, one save, the whole week. In-product copy is Thai, all annotation is English.
+  </div>
+
+  <div style="margin-top:14px;padding:16px 18px;border-radius:16px;background:#FDF6F5;border:1px solid #EFCFCF;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1060px">
+    <strong style="color:#B32B2B">Product boundary, held.</strong> Opening hours are not order acceptance and not <span style="font-family:'IBM Plex Mono',monospace">restaurants.status</span>. <span style="font-family:'IBM Plex Mono',monospace">20260811000002</span> records that the open/closed a customer sees is <em>derived by the application</em> from status, hours and <span style="font-family:'IBM Plex Mono',monospace">temporarily_closed_until</span> together. This screen edits exactly one of those three inputs and introduces no control over the other two.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="14">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- 00 SCOPE -->
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — SCOPE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Seven days, wall-clock times, one atomic save</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px"><span style="font-family:'IBM Plex Mono',monospace">restaurant_hours</span> holds four meaningful columns — <span style="font-family:'IBM Plex Mono',monospace">day_of_week</span>, <span style="font-family:'IBM Plex Mono',monospace">opens_at</span>, <span style="font-family:'IBM Plex Mono',monospace">closes_at</span> and the restaurant. There is no per-day “closed” flag: a closed day is the <em>absence</em> of a row. That single fact determines most of this design.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#0F8B5F;margin-bottom:14px">IN SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ inScope }}" as="i" hint-placeholder-count="8">
+          <div style="font-size:13.5px;line-height:1.65;color:#3D342C">{{ i }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #EFCFCF;background:#FDF6F5;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#B32B2B;margin-bottom:14px">OUT OF SCOPE FOR M-12</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ outScope }}" as="o" hint-placeholder-count="9">
+          <div style="font-size:13.5px;line-height:1.65;color:#5A4E42">{{ o }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 MODEL -->
+  <div id="s1" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — THE STORED MODEL</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What the table can and cannot express</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:20px">
+    <sc-for list="{{ modelFacts }}" as="m" hint-placeholder-count="6">
+      <div style="border-radius:18px;border:1px solid {{ m.border }};background:{{ m.bg }};padding:18px 20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.1em;padding:3px 9px;border-radius:8px;{{ m.tagStyle }}">{{ m.tag }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ m.col }}</div>
+        </div>
+        <div style="font-size:15px;font-weight:700;line-height:1.55">{{ m.title }}</div>
+        <div style="font-size:13px;line-height:1.8;color:#5A4E42;margin-top:5px">{{ m.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 02 DESKTOP READ -->
+  <div id="s2" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — STATE A · WEEKLY SCHEDULE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Desktop · ≥1024px · one row per day, always seven rows</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">Seven rows are always rendered, closed days included, because a merchant reads this screen to check a week — not to count the days that happen to have rows. Today's row is marked, since the most common reason to open this screen is “are we meant to be open right now”. The times are wall-clock <span style="font-family:'IBM Plex Mono',monospace">Asia/Bangkok</span> in 24-hour form, matching the <span style="font-family:'IBM Plex Mono',monospace">time</span> columns exactly, with no timezone label and no conversion.</div>
+
+  <div style="width:1360px;max-width:100%;border-radius:22px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.07)">
+    <div style="height:72px;background:#fff;border-bottom:1px solid #EAE1D6;display:flex;align-items:center;gap:16px;padding:0 24px">
+      <div style="width:38px;height:38px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700">ฮ</div>
+      <div>
+        <div style="font-size:17px;font-weight:700;line-height:1.4">ร้านตามสั่งป้าสมร</div>
+        <div style="font-size:12px;color:#7A6E64">ร้านของฉัน · เวลาเปิด–ปิดร้าน</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ shellNav }}" as="t" hint-placeholder-count="5">
+          <div style="height:44px;display:flex;align-items:center;padding:0 14px;border-radius:12px;font-size:14px;{{ t.style }}">{{ t.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="padding:24px;display:grid;grid-template-columns:1fr 330px;gap:22px;align-items:start">
+      <div style="border-radius:20px;background:#fff;border:1px solid #EAE1D6;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #F1E9DE">
+          <div style="font-size:16.5px;font-weight:700">เวลาเปิด–ปิดร้าน</div>
+          <div style="flex:1"></div>
+          <div style="font-size:12.5px;color:#7A6E64">เวลาประเทศไทย · แสดงแบบ 24 ชั่วโมง</div>
+        </div>
+        <sc-for list="{{ week }}" as="d" hint-placeholder-count="7">
+          <div style="display:flex;align-items:center;gap:16px;padding:16px 20px;border-top:1px solid #F6F0E7;{{ d.rowStyle }}">
+            <div style="width:150px;flex:0 0 auto;display:flex;align-items:center;gap:8px">
+              <div style="font-size:15px;font-weight:600">{{ d.day }}</div>
+              <div style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:7px;{{ d.todayStyle }}">{{ d.today }}</div>
+            </div>
+            <div style="width:112px;flex:0 0 auto;display:flex;align-items:center;gap:9px">
+              <div style="width:48px;height:28px;border-radius:14px;padding:3px;box-sizing:border-box;display:flex;{{ d.trackStyle }}">
+                <div style="width:22px;height:22px;border-radius:11px;background:#fff;box-shadow:0 1px 3px rgba(31,26,22,.25)"></div>
+              </div>
+              <div style="font-size:13px;font-weight:600;{{ d.stateStyle }}">{{ d.state }}</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ d.intervals }}" as="iv" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:112px;height:48px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:15px;{{ iv.fieldStyle }}">{{ iv.opens }}</div>
+                  <div style="font-size:14px;color:#7A6E64">ถึง</div>
+                  <div style="width:112px;height:48px;border-radius:12px;border:1px solid #E9E0D5;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:15px;{{ iv.fieldStyle }}">{{ iv.closes }}</div>
+                  <div style="width:44px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:15px;color:#7A6E64;{{ iv.removeStyle }}">✕</div>
+                  <div style="font-size:12.5px;color:#7A6E64">{{ iv.note }}</div>
+                </div>
+              </sc-for>
+              <div style="height:40px;display:flex;align-items:center;padding:0 12px;border-radius:11px;border:1px dashed #D9CDBD;font-size:13px;font-weight:600;color:#7A6E64;align-self:flex-start;{{ d.addStyle }}">+ เพิ่มช่วงเวลา</div>
+            </div>
+            <div style="width:120px;flex:0 0 auto;display:flex;justify-content:flex-end">
+              <div style="height:40px;display:flex;align-items:center;padding:0 12px;border-radius:11px;font-size:12.5px;font-weight:600;{{ d.copyStyle }}">{{ d.copy }}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="border-top:1px solid #EAE1D6;background:#FBF7F1;padding:18px 20px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:12.5px;color:#7A6E64;flex:1;line-height:1.7">การบันทึกจะแทนที่เวลาทำการทั้งสัปดาห์</div>
+          <div style="height:52px;display:flex;align-items:center;padding:0 22px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;font-size:15px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+          <div style="height:52px;display:flex;align-items:center;padding:0 26px;border-radius:16px;background:#E4572E;color:#fff;font-size:15px;font-weight:600">บันทึกเวลาทำการ</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;padding:18px">
+          <div style="font-size:12px;font-weight:600;letter-spacing:.12em;color:#A2968A;margin-bottom:10px">วันนี้</div>
+          <div style="font-size:19px;font-weight:700">เปิด 08:00–20:00</div>
+          <div style="font-size:13px;color:#7A6E64;line-height:1.7;margin-top:6px">ลูกค้าเห็นเวลานี้ในหน้าร้านของคุณ</div>
+        </div>
+        <sc-for list="{{ sideNotes }}" as="n" hint-placeholder-count="3">
+          <div style="border-radius:18px;background:#fff;border:1px solid #EAE1D6;padding:18px">
+            <div style="font-size:14.5px;font-weight:700;margin-bottom:6px">{{ n.title }}</div>
+            <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ n.body }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 EDITING -->
+  <div id="s3" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — EDITING</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The whole week is one form, because the write is one replacement</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The table comment is unambiguous: an edit deletes and re-inserts the restaurant's rows. A per-day save button would therefore be a lie — pressing it would rewrite all seven days. So the screen is directly editable, tracks one dirty state for the week, and commits once. Nothing is saved until <span style="font-family:'IBM Plex Mono',monospace">บันทึกเวลาทำการ</span> is pressed.</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ editRules }}" as="e" hint-placeholder-count="7">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 20px;display:flex;gap:18px;align-items:flex-start">
+        <div style="font-size:13.5px;font-weight:700;width:190px;flex:0 0 auto;line-height:1.6">{{ e.action }}</div>
+        <div style="flex:1;font-size:13px;line-height:1.8;color:#5A4E42">{{ e.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 04 VALIDATION -->
+  <div id="s4" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — VALIDATION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Two rules the database enforces, one it cannot, and one it forbids</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">Only the first three rows below are backed by a constraint or a documented decision. The overlap rule is the one place this design guards something the database does not — and it is flagged in §12 rather than presented as settled.</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+    <div style="display:grid;grid-template-columns:170px 1fr 1.05fr 1fr;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>CASE</div><div>RULE</div><div>SOURCE OF THE RULE</div><div>MESSAGE (THAI, INLINE)</div>
+    </div>
+    <sc-for list="{{ validation }}" as="v" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:170px 1fr 1.05fr 1fr;padding:12px 18px;border-top:1px solid #F1E9DE;font-size:13px;line-height:1.65">
+        <div style="font-weight:600">{{ v.field }}</div>
+        <div style="color:#5A4E42">{{ v.rule }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ v.source }}</div>
+        <div style="{{ v.msgStyle }}">{{ v.msg }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:22px">
+    <div style="border-radius:20px;border:1px solid #EFCFCF;background:#fff;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid #F1E9DE;font-size:12px;font-weight:600;letter-spacing:.12em;color:#B32B2B">STATE B · VALIDATION FAILURE, IN PLACE</div>
+      <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:110px;font-size:15px;font-weight:600">ศุกร์</div>
+          <div style="width:112px;height:48px;border-radius:12px;border:1px solid #D93A3A;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:15px">18:00</div>
+          <div style="font-size:14px;color:#7A6E64">ถึง</div>
+          <div style="width:112px;height:48px;border-radius:12px;border:1px solid #D93A3A;background:#FDF6F5;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:15px;color:#B23030">02:00</div>
+        </div>
+        <div style="font-size:13px;line-height:1.75;color:#B23030">เวลาปิดต้องหลังเวลาเปิด · ยังไม่รองรับร้านที่ปิดหลังเที่ยงคืน</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#5A4E42;padding:12px 14px;border-radius:12px;background:#FBF7F1">The message names the limitation instead of pretending the input was a mistake. Overnight trading is DBQ-006, OPEN and gated on BQ-007; the CHECK <span style="font-family:'IBM Plex Mono',monospace">closes_at &gt; opens_at</span> forbids it today. No two-row workaround is offered to the merchant, because that representation has not been decided (§12).</div>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid #F1E9DE;font-size:12px;font-weight:600;letter-spacing:.12em;color:#7A5A1E">SPLIT SHIFT · A SUPPORTED, ORDINARY CASE</div>
+      <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="width:110px;font-size:15px;font-weight:600">เสาร์</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:100px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px">07:00</div>
+              <div style="font-size:13px;color:#7A6E64">ถึง</div>
+              <div style="width:100px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px">13:00</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:100px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px">16:00</div>
+              <div style="font-size:13px;color:#7A6E64">ถึง</div>
+              <div style="width:100px;height:44px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:14px">20:00</div>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:12.5px;line-height:1.75;color:#5A4E42;padding:12px 14px;border-radius:12px;background:#FBF7F1">Two rows for one <span style="font-family:'IBM Plex Mono',monospace">day_of_week</span> — explicitly allowed: <em>“a shop that closes in the afternoon is representable”</em>. The afternoon gap needs no representation of its own; a customer is simply outside every interval. This is why the day row holds a list of intervals rather than a single pair.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 FEEDBACK -->
+  <div id="s5" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — LOADING · SAVING · SUCCESS · FAILURE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">A destructive write deserves an honest failure state</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">Because the write is delete-then-insert, a failure mid-write is the one case that could leave a restaurant with no hours at all. The failure copy therefore never claims the previous schedule survived; it tells the merchant to check the week and try again, and the form keeps everything they entered.</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+    <sc-for list="{{ states }}" as="s" hint-placeholder-count="6">
+      <div style="border-radius:20px;border:1px solid {{ s.border }};background:#fff;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid #F1E9DE;display:flex;align-items:center;gap:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">{{ s.tag }}</div>
+        </div>
+        <div style="padding:18px;min-height:132px;background:#FBF7F1;display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:15.5px;font-weight:700;line-height:1.5;{{ s.headStyle }}">{{ s.head }}</div>
+          <div style="font-size:13px;color:#5A4E42;line-height:1.75">{{ s.sub }}</div>
+          <div style="flex:1"></div>
+          <div style="height:44px;display:flex;align-items:center;justify-content:center;border-radius:13px;font-size:13.5px;font-weight:600;{{ s.ctaStyle }}">{{ s.cta }}</div>
+        </div>
+        <div style="padding:14px 18px;font-size:12.5px;line-height:1.7;color:#5A4E42">{{ s.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 06 MOBILE -->
+  <div id="s6" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — RESPONSIVE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Below 768px each day becomes a card, and the save bar sticks</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">Seven days do not fit a phone as a table. Each day becomes a card with the switch at the top and its intervals beneath, and the save bar pins to the bottom of the viewport — a one-save form is unusable if the button is seven cards down.</div>
+  <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap">
+    <div style="width:390px;border-radius:26px;border:1px solid #E2D8CB;background:#FBF7F1;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.09)">
+      <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:14px 16px">
+        <div style="font-size:12px;color:#7A6E64;letter-spacing:.08em">ร้านของฉัน</div>
+        <div style="font-size:17px;font-weight:700;margin-top:2px">เวลาเปิด–ปิดร้าน</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+        <sc-for list="{{ mobileDays }}" as="m" hint-placeholder-count="3">
+          <div style="border-radius:16px;background:#fff;border:1px solid #EAE1D6;padding:14px;display:flex;flex-direction:column;gap:12px;{{ m.shell }}">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="font-size:15.5px;font-weight:600;flex:1">{{ m.day }}</div>
+              <div style="font-size:12.5px;font-weight:600;{{ m.stateStyle }}">{{ m.state }}</div>
+              <div style="width:48px;height:28px;border-radius:14px;padding:3px;box-sizing:border-box;display:flex;{{ m.trackStyle }}">
+                <div style="width:22px;height:22px;border-radius:11px;background:#fff;box-shadow:0 1px 3px rgba(31,26,22,.25)"></div>
+              </div>
+            </div>
+            <sc-for list="{{ m.intervals }}" as="iv" hint-placeholder-count="1">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="flex:1;height:48px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:15px;{{ iv.fieldStyle }}">{{ iv.opens }}</div>
+                <div style="font-size:13px;color:#7A6E64">ถึง</div>
+                <div style="flex:1;height:48px;border-radius:12px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:15px;{{ iv.fieldStyle }}">{{ iv.closes }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border-top:1px solid #EAE1D6;background:#fff;padding:14px 16px;display:flex;gap:10px">
+        <div style="flex:1;height:52px;border-radius:16px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+        <div style="flex:1.5;height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึก</div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ responsiveRules }}" as="r" hint-placeholder-count="6">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 18px;display:flex;gap:14px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#A2968A;width:120px;flex:0 0 auto">{{ r.bp }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#3D342C">{{ r.rule }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 07 TIMEZONE -->
+  <div id="s7" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — TIME AND TIMEZONE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Wall-clock in, wall-clock out, no conversion anywhere</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:20px">
+    <sc-for list="{{ timezone }}" as="t" hint-placeholder-count="4">
+      <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:18px 20px">
+        <div style="font-size:15px;font-weight:700;line-height:1.55">{{ t.title }}</div>
+        <div style="font-size:13px;line-height:1.8;color:#5A4E42;margin-top:6px">{{ t.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 08 ACCESSIBILITY -->
+  <div id="s8" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — ACCESSIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">A schedule is a form, and it is labelled like one</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:grid;grid-template-columns:190px 1fr 1fr;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>CONTROL</div><div>SEMANTICS &amp; KEYBOARD</div><div>STATE COMMUNICATION</div>
+    </div>
+    <sc-for list="{{ a11y }}" as="a" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:190px 1fr 1fr;padding:12px 18px;border-top:1px solid #F1E9DE;font-size:13px;line-height:1.7">
+        <div style="font-weight:600">{{ a.control }}</div>
+        <div style="color:#5A4E42">{{ a.semantics }}</div>
+        <div style="color:#5A4E42">{{ a.state }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 09 DATA CONTRACT -->
+  <div id="s9" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — DATA CONTRACT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Five columns, one missing write path</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:grid;grid-template-columns:1fr 1.2fr 130px 1.3fr;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>UI FIELD</div><div>SOURCE</div><div>STATUS</div><div>NOTE</div>
+    </div>
+    <sc-for list="{{ contract }}" as="c" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:1fr 1.2fr 130px 1.3fr;padding:12px 18px;border-top:1px solid #F1E9DE;font-size:13px;line-height:1.7">
+        <div style="font-weight:600">{{ c.ui }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#5A4E42">{{ c.source }}</div>
+        <div><span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;{{ c.style }}">{{ c.status }}</span></div>
+        <div style="color:#5A4E42">{{ c.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 10 DECISIONS -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — DESIGN DECISIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">M12-D01 … M12-D10</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="10">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:18px 20px;display:flex;gap:18px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#E4572E;width:76px;flex:0 0 auto;padding-top:2px">{{ d.id }}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;line-height:1.55">{{ d.title }}</div>
+          <div style="font-size:13px;line-height:1.8;color:#5A4E42;margin-top:5px">{{ d.body }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 11 CONSTRAINTS -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — IMPLEMENTATION CONSTRAINTS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Same missing write path as M-11, plus one transaction requirement</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
+    <sc-for list="{{ constraints }}" as="c" hint-placeholder-count="6">
+      <div style="border-radius:16px;border:1px solid {{ c.border }};background:{{ c.bg }};padding:16px 20px;display:flex;gap:18px;align-items:flex-start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#B32B2B;width:84px;flex:0 0 auto;padding-top:2px">{{ c.id }}</div>
+        <div style="flex:1;font-size:13.5px;line-height:1.8;color:#3D342C">{{ c.text }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 12 NOT DECIDED -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — REQUIRES PRODUCT DECISION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Four questions, one of them blocking</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">M12-Q-01 is the only item in either artifact that must be answered before implementation can begin: the design cannot label seven days correctly without it.</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <sc-for list="{{ notDecided }}" as="q" hint-placeholder-count="4">
+      <div style="border-radius:16px;border:1px solid {{ q.border }};background:{{ q.bg }};padding:18px 20px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;background:#F0E2C4;color:#7A5A1E">REQUIRES PRODUCT DECISION</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#7A6E64">{{ q.id }}</div>
+          <div style="font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;{{ q.sevStyle }}">{{ q.sev }}</div>
+        </div>
+        <div style="font-size:15px;font-weight:700;line-height:1.55;margin-top:10px">{{ q.title }}</div>
+        <div style="font-size:13px;line-height:1.8;color:#5A4E42;margin-top:5px">{{ q.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 13 TRACEABILITY -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — TRACEABILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What this design was read from</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;background:#F6F0E7;font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#7A6E64;padding:12px 18px">
+      <div>SOURCE</div><div>WHAT IT SETTLED</div>
+    </div>
+    <sc-for list="{{ traceability }}" as="t" hint-placeholder-count="13">
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;padding:11px 18px;border-top:1px solid #F1E9DE;font-size:12.5px;line-height:1.7">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#3D342C">{{ t.doc }}</div>
+        <div style="color:#5A4E42">{{ t.use }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A;margin-top:44px">ASSUMPTIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 16px">Where the design interpreted rather than read</div>
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:1100px">
+    <sc-for list="{{ assumptions }}" as="a" hint-placeholder-count="6">
+      <div style="border-radius:14px;border:1px solid #EAE1D6;background:#fff;padding:14px 18px;font-size:13.5px;line-height:1.8;color:#3D342C">{{ a }}</div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:44px;padding:18px 20px;border-radius:16px;background:#211B16;color:#F5EFE7;font-size:13.5px;line-height:1.8;max-width:1100px">
+    <strong>Design only.</strong> No React, API, migration, RLS policy or environment file was created or modified for this artifact. The repository was read at <span style="font-family:'IBM Plex Mono',monospace">main</span> / <span style="font-family:'IBM Plex Mono',monospace">bc6e468e</span> and the merchant web app at <span style="font-family:'IBM Plex Mono',monospace">ac2c88c5</span>. Companion artifact: <a href="./BANHAO M-11 Menu Management.dc.html" style="color:#E4572E">M-11 Menu Management</a>.
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1100}}">
+const OK = 'background:#E7F4EE;color:#0F6C4C';
+const MISSING = 'background:#FDECE6;color:#B23030';
+
+class Component extends DCLogic {
+  renderVals() {
+    const open = { trackStyle: 'background:#0F8B5F;justify-content:flex-end', state: 'เปิด', stateStyle: 'color:#0F6C4C' };
+    const closed = { trackStyle: 'background:#E0D6C8;justify-content:flex-start', state: 'ปิด', stateStyle: 'color:#7A6E64' };
+    const iv = (opens, closes, note) => ({ opens, closes, note: note || '', fieldStyle: '', removeStyle: '' });
+
+    return {
+      nav: [
+        { label: '00 Scope', href: '#s0' },
+        { label: '01 Stored model', href: '#s1' },
+        { label: '02 Weekly schedule', href: '#s2' },
+        { label: '03 Editing', href: '#s3' },
+        { label: '04 Validation', href: '#s4' },
+        { label: '05 Feedback states', href: '#s5' },
+        { label: '06 Responsive', href: '#s6' },
+        { label: '07 Timezone', href: '#s7' },
+        { label: '08 Accessibility', href: '#s8' },
+        { label: '09 Data contract', href: '#s9' },
+        { label: '10 Decisions', href: '#s10' },
+        { label: '11 Constraints', href: '#s11' },
+        { label: '12 Product decisions', href: '#s12' },
+        { label: '13 Traceability', href: '#s13' },
+      ],
+
+      inScope: [
+        'All seven days, always rendered, with Thai day names.',
+        'Open / closed per day — expressed as the presence or absence of intervals.',
+        'Opening and closing time per interval, 24-hour, wall-clock Asia/Bangkok.',
+        'More than one interval per day (split shift), which the schema explicitly allows.',
+        'One dirty state for the whole week, one save, one cancel — matching the delete-and-re-insert write.',
+        'Validation for missing times, closing before opening, the unsupported overnight case, and overlapping intervals.',
+        'Loading, saving, success, validation-failure, server-failure and retry states.',
+        'Desktop, tablet and phone arrangements; accessibility for every control.',
+      ],
+      outScope: [
+        'Order acceptance and the board — a merchant pausing orders is not an hours change (brief §6).',
+        'restaurants.status (DRAFT / ACTIVE / SUSPENDED / CLOSED) — platform state, edited in admin A-06, never here.',
+        'Temporary close (temporarily_closed_until, temporary_close_reason) — part of BQ-007, which is OPEN. Not designed.',
+        'Public holidays — BUSINESS_RULES.md states Thai holidays are not modelled.',
+        'The order cutoff rule (closing time − preparation time) — proposed in BQ-007, not enforced anywhere, and not surfaced here.',
+        'Overnight trading (18:00 → 02:00) — forbidden by the CHECK; DBQ-006 is OPEN.',
+        'Per-day preparation time or per-day capacity — no column exists.',
+        'The derived “open now” badge the customer app shows — read-only elsewhere, computed from three inputs, not owned by this screen.',
+        'The API endpoint M-12 needs — named in §11, not written.',
+      ],
+
+      shellNav: [
+        { label: 'ออเดอร์วันนี้', style: 'color:#7A6E64' },
+        { label: 'ประวัติ', style: 'color:#7A6E64' },
+        { label: 'เมนู', style: 'color:#7A6E64' },
+        { label: 'ร้านของฉัน', style: 'color:#1F1A16;font-weight:600;background:#FDF3E6' },
+        { label: 'ตั้งค่า', style: 'color:#7A6E64' },
+      ],
+
+      modelFacts: [
+        { tag: 'PRESENCE', col: 'no is_closed column', border: '#EAE1D6', bg: '#fff', tagStyle: OK, title: 'A closed day is a day with no rows', body: 'There is no boolean to store. The per-day switch in the UI does not map to a column — off simply means the day contributes no rows to the replacement write. This is why the switch is a UI affordance, and why turning a day off has to preserve its times locally until save (M12-D04).' },
+        { tag: 'MULTI-ROW', col: 'day_of_week 0–6', border: '#EAE1D6', bg: '#fff', tagStyle: OK, title: 'Several intervals per day are allowed', body: 'The migration says so outright: a shop that closes in the afternoon is representable. No unique constraint exists on (restaurant_id, day_of_week), so nothing at the database level stops duplicates either — which is the origin of M12-Q-02.' },
+        { tag: 'CHECK', col: 'closes_at > opens_at', border: '#EAE1D6', bg: '#fff', tagStyle: OK, title: 'A closing time must be later in the same day', body: 'A hard constraint. It forbids overnight spans and it forbids a zero-length interval. Both are surfaced as inline validation before a request is ever sent.' },
+        { tag: 'WALL CLOCK', col: 'opens_at / closes_at time', border: '#EAE1D6', bg: '#fff', tagStyle: OK, title: 'time, not timestamptz — local by definition', body: 'DATABASE_DESIGN records opening hours as wall-clock plus day_of_week, with business days resolved in Asia/Bangkok by the application. Nothing is converted, so nothing can drift.' },
+        { tag: 'REPLACE', col: 'no updated_at, no immutability trigger', border: '#E8D8B8', bg: '#FDF9F0', tagStyle: 'background:#F0E2C4;color:#7A5A1E', title: 'An edit replaces the whole week', body: 'The table comment states the application deletes and re-inserts a restaurant\u2019s rows rather than patching them. That is the reason this screen is one form with one save button, and the reason §11 requires the write to be transactional.' },
+        { tag: 'DERIVED', col: 'restaurants (20260811000002)', border: '#E8D8B8', bg: '#FDF9F0', tagStyle: 'background:#F0E2C4;color:#7A5A1E', title: '“Open now” is computed from three inputs, not stored', body: 'status + restaurant_hours + temporarily_closed_until, derived by the application. This screen owns exactly one of the three and must not appear to own the answer.' },
+      ],
+
+      week: [
+        { day: 'จันทร์', today: '', todayStyle: 'display:none', rowStyle: '', copy: 'คัดลอกไปทุกวัน', copyStyle: 'border:1px solid #E9E0D5;color:#5A4E42', addStyle: '', intervals: [iv('08:00', '20:00')], ...open },
+        { day: 'อังคาร', today: '', todayStyle: 'display:none', rowStyle: '', copy: 'คัดลอก', copyStyle: 'color:#7A6E64', addStyle: '', intervals: [iv('08:00', '20:00')], ...open },
+        { day: 'พุธ', today: 'วันนี้', todayStyle: 'background:#FDF3E6;color:#7A5A1E', rowStyle: 'background:#FDFBF7', copy: 'คัดลอก', copyStyle: 'color:#7A6E64', addStyle: '', intervals: [iv('08:00', '20:00')], ...open },
+        { day: 'พฤหัสบดี', today: '', todayStyle: 'display:none', rowStyle: '', copy: 'คัดลอก', copyStyle: 'color:#7A6E64', addStyle: '', intervals: [iv('08:00', '20:00')], ...open },
+        { day: 'ศุกร์', today: '', todayStyle: 'display:none', rowStyle: '', copy: 'คัดลอก', copyStyle: 'color:#7A6E64', addStyle: '', intervals: [iv('08:00', '21:00')], ...open },
+        { day: 'เสาร์', today: '', todayStyle: 'display:none', rowStyle: '', copy: 'คัดลอก', copyStyle: 'color:#7A6E64', addStyle: '', intervals: [iv('07:00', '13:00', 'ช่วงที่ 1'), iv('16:00', '20:00', 'ช่วงที่ 2')], ...open },
+        { day: 'อาทิตย์', today: '', todayStyle: 'display:none', rowStyle: 'background:#FCFAF6', copy: '', copyStyle: 'display:none', addStyle: 'display:none', intervals: [{ opens: 'ปิดทั้งวัน', closes: '—', note: '', fieldStyle: 'color:#9A8C7E;background:#F6F0E7;border-color:#EFE7DC', removeStyle: 'display:none' }], ...closed },
+      ],
+
+      sideNotes: [
+        { title: 'Why วันนี้ is pinned', body: 'The commonest reason to open this screen mid-service is to check what today is meant to be. The panel restates today\u2019s intervals in words, and disappears entirely on a closed day, replaced by วันนี้ร้านปิด.' },
+        { title: 'What this panel does not claim', body: 'It says ลูกค้าเห็นเวลานี้ในหน้าร้านของคุณ — not เปิดอยู่. Whether the shop is open right now also depends on restaurants.status and temporary close, neither of which this screen can see or set.' },
+        { title: 'คัดลอกไปทุกวัน', body: 'Most Buntharik shops keep one schedule all week, so the first day offers a copy-to-all action. It fills the other six rows in the form only; nothing is written until save, and any day can then be adjusted.' },
+      ],
+
+      editRules: [
+        { action: 'Turning a day off', body: 'The switch empties the day\u2019s intervals visually and the row dims. The times are kept in form state, so switching back restores them rather than making the merchant retype — the day only truly loses its rows at save, since no row means closed.' },
+        { action: 'Turning a day on', body: 'A day with no stored hours opens with one empty interval and focus in the opening-time field. No default times are invented — an empty field with a validation rule is honest; 09:00–17:00 pre-filled is a guess a merchant might not notice.' },
+        { action: 'Adding an interval', body: '+ เพิ่มช่วงเวลา appends a second (or third) interval to that day. Supported by the schema, and the only way to express a shop that closes in the afternoon.' },
+        { action: 'Removing an interval', body: '✕ removes it immediately with no dialog — it is a form field, not stored data, until save. Removing the last interval of a day switches that day to ปิด, keeping the two representations consistent.' },
+        { action: 'Cancel', body: 'ยกเลิก reverts every field to the loaded schedule. If the form is dirty it first asks ออกจากหน้านี้โดยไม่บันทึก?; if it is clean it does nothing visible. Same discard-guard pattern as M-11 and M-04.' },
+        { action: 'Save', body: 'Enabled only when the form is dirty and every interval is valid. One request carrying the whole week; the API deletes and re-inserts inside one transaction (§11 C-02). Partial saves do not exist in this model.' },
+        { action: 'Reset to stored values', body: 'Not designed as a separate control. ยกเลิก already is that action, and nothing in the repository asks for a second one — a คืนค่าเริ่มต้น button would need a notion of default hours that does not exist.' },
+      ],
+
+      validation: [
+        { field: 'เวลาว่าง', rule: 'Both times required once a day is open', source: 'opens_at / closes_at not null', msg: 'กรอกเวลาเปิดและเวลาปิด', msgStyle: 'color:#B23030' },
+        { field: 'ปิดก่อนเปิด', rule: 'closes_at must be later than opens_at', source: 'restaurant_hours_span_check', msg: 'เวลาปิดต้องหลังเวลาเปิด', msgStyle: 'color:#B23030' },
+        { field: 'ข้ามเที่ยงคืน', rule: 'Rejected, and named as a limitation', source: 'same CHECK; DBQ-006 OPEN, gated on BQ-007', msg: 'ยังไม่รองรับร้านที่ปิดหลังเที่ยงคืน', msgStyle: 'color:#B23030' },
+        { field: 'เวลาเท่ากัน', rule: 'A zero-length interval is rejected', source: 'closes_at > opens_at is strict', msg: 'เวลาเปิดและเวลาปิดต้องไม่ตรงกัน', msgStyle: 'color:#B23030' },
+        { field: 'รูปแบบเวลา', rule: 'HH:MM, 24-hour, minutes 00–59', source: 'time column; native time input', msg: 'กรอกเวลาในรูปแบบ 08:00', msgStyle: 'color:#B23030' },
+        { field: 'ช่วงเวลาซ้อนกัน', rule: 'Two intervals on one day may not overlap', source: 'NOT a database rule — see M12-Q-02', msg: 'ช่วงเวลาซ้อนกัน · ตรวจสอบอีกครั้ง', msgStyle: 'color:#7A5A1E' },
+        { field: 'ช่วงเวลาซ้ำ', rule: 'An exact duplicate interval is blocked', source: 'NOT a database rule — see M12-Q-02', msg: 'ช่วงเวลานี้ซ้ำกับช่วงก่อนหน้า', msgStyle: 'color:#7A5A1E' },
+      ],
+
+      states: [
+        { tag: 'S1 · LOADING', border: '#EAE1D6', head: 'กำลังโหลดเวลาทำการ', headStyle: 'color:#9A8C7E', sub: 'Seven skeleton rows at the real row height. The header and nav render immediately.', cta: '', ctaStyle: 'display:none', note: 'One query, direct from Supabase under restaurant_hours_select_member. No endpoint needed for the read.' },
+        { tag: 'S2 · EMPTY', border: '#EAE1D6', head: 'ยังไม่ได้ตั้งเวลาทำการ', headStyle: '', sub: 'ลูกค้าจะเห็นว่าร้านปิดจนกว่าคุณจะตั้งเวลา', cta: 'ตั้งเวลาทำการ', ctaStyle: 'background:#E4572E;color:#fff', note: 'Zero rows is a real and consequential state: with no hours, the derived open/closed can only read closed. The copy says so plainly.' },
+        { tag: 'S3 · SAVING', border: '#EAE1D6', head: 'กำลังบันทึก…', headStyle: '', sub: 'Fields become read-only rather than greyed, both footer buttons disable, and the primary button carries a 16px spinner.', cta: 'กำลังบันทึก…', ctaStyle: 'background:#E0D6C8;color:#fff', note: 'Read-only, not hidden: the merchant can still read the week they just submitted while it is in flight.' },
+        { tag: 'S4 · SUCCESS', border: '#CFE6DA', head: 'บันทึกเวลาทำการแล้ว', headStyle: 'color:#0F6C4C', sub: 'The form leaves edit state, the toast confirms, and the วันนี้ panel refreshes from the saved values.', cta: 'บันทึกแล้ว', ctaStyle: 'background:#E7F4EE;color:#0F6C4C', note: 'The saved week is re-read rather than assumed, so what the merchant sees afterwards is what the database holds.' },
+        { tag: 'S5 · INVALID', border: '#EFCFCF', head: 'ยังบันทึกไม่ได้', headStyle: 'color:#B23030', sub: 'มี 1 ช่วงเวลาที่ยังไม่ถูกต้อง — the count is in the footer, the message is on the field, and focus moves to the first invalid input.', cta: 'ไปที่ช่วงเวลาที่ผิด', ctaStyle: 'border:1px solid #E9E0D5;color:#5A4E42', note: 'Validation runs on blur and again on save. No request is sent while the form is invalid.' },
+        { tag: 'S6 · FAILED', border: '#EFCFCF', head: 'บันทึกไม่สำเร็จ', headStyle: 'color:#B23030', sub: 'ตรวจสอบเวลาทำการแล้วลองอีกครั้ง — the entered week is preserved, and the copy does not claim the previous schedule is intact.', cta: 'ลองอีกครั้ง', ctaStyle: 'border:1px solid #E9E0D5;color:#5A4E42', note: 'Because the write is delete-then-insert, a non-transactional failure could leave zero rows. Retry re-reads from the server first, so the merchant is never shown a stale week as if it were saved. 403 reads คุณไม่มีสิทธิ์แก้ไขข้อมูลร้านนี้ with no retry.' },
+      ],
+
+      mobileDays: [
+        { day: 'จันทร์', shell: '', intervals: [{ opens: '08:00', closes: '20:00', fieldStyle: '' }], ...open },
+        { day: 'เสาร์', shell: '', intervals: [{ opens: '07:00', closes: '13:00', fieldStyle: '' }, { opens: '16:00', closes: '20:00', fieldStyle: '' }], ...open },
+        { day: 'อาทิตย์', shell: 'background:#FCFAF6', intervals: [{ opens: 'ปิดทั้งวัน', closes: '—', fieldStyle: 'color:#9A8C7E;background:#F6F0E7;border-color:#EFE7DC' }], ...closed },
+      ],
+
+      responsiveRules: [
+        { bp: '≥1280px', rule: 'Two columns: the seven-day form at flexible width, a 330px rail holding วันนี้ and the boundary notes. Day · switch · intervals · copy all on one line.' },
+        { bp: '1024–1279px', rule: 'The rail drops below the form. The copy action collapses to an icon button with an accessible label.' },
+        { bp: '768–1023px (shop tablet)', rule: 'Primary target. Day and switch on the first line, intervals on the second, still inside one row container. Time fields stay 48px tall.' },
+        { bp: '<768px', rule: 'One card per day. Time fields split the width evenly. The save bar is fixed to the bottom of the viewport with a 1px top border, so a one-save form is never out of reach.' },
+        { bp: 'Touch targets', rule: 'Switch 48×28 inside a 44px hit area; ✕ 44×44; time inputs 48px (sizes.inputHeight); footer buttons 52px (sizes.buttonHeight).' },
+        { bp: 'Overflow', rule: 'Thai day names never truncate — the column is sized for พฤหัสบดี, the longest of the seven. Times are tabular mono so columns align down the week.' },
+      ],
+
+      timezone: [
+        { title: 'The stored value has no timezone, and needs none', body: 'opens_at and closes_at are time columns: wall-clock by definition. 08:00 means eight in the morning at the shop. The UI shows exactly the stored string and sends exactly what was typed.' },
+        { title: 'Asia/Bangkok is stated once, not per field', body: 'The section header reads เวลาประเทศไทย · แสดงแบบ 24 ชั่วโมง. Repeating a timezone next to fourteen fields would suggest a conversion is happening; none is.' },
+        { title: '24-hour, because the schema is', body: 'BUSINESS_RULES.md fixes Asia/Bangkok for all business-day logic, and Thai operational contexts read 24-hour time. 08:00–20:00 is also unambiguous in a way 8:00–8:00 is not.' },
+        { title: 'Today is resolved in Asia/Bangkok', body: 'The วันนี้ marker and panel resolve the current day and time in Asia/Bangkok on the client, not in the browser\u2019s local zone — a tablet with a wrong timezone would otherwise highlight the wrong row. The same rule the order number already follows (DEC-E-03).' },
+      ],
+
+      a11y: [
+        { control: 'Day switch', semantics: 'A real <button role="switch"> with aria-checked, labelled เปิดร้านวันจันทร์. Space or Enter toggles; Tab order runs day by day, top to bottom.', state: 'Turning a day off announces จันทร์: ปิด through a polite live region. The เปิด / ปิด text label is always present — colour alone never carries the state.' },
+        { control: 'Time inputs', semantics: 'Native <input type="time"> with a visible label per field (เวลาเปิด / เวลาปิด, day named in the accessible label). Keyboard-typable; no custom dropdown that traps focus.', state: 'aria-invalid plus aria-describedby pointing at the message under the interval. The first invalid field takes focus on a failed save.' },
+        { control: 'Interval group', semantics: 'Each day is a <fieldset> with a <legend> carrying the Thai day name, so a screen reader announces which day a field belongs to.', state: 'A second interval announces itself as ช่วงที่ 2 rather than repeating the same label twice.' },
+        { control: 'Add / remove interval', semantics: '44×44 buttons with real labels: เพิ่มช่วงเวลาวันเสาร์, ลบช่วงที่ 2 วันเสาร์. Never icon-only without a name.', state: 'Removal announces the result and moves focus to the previous interval\u2019s closing field, so the keyboard position is never lost.' },
+        { control: 'Save button', semantics: 'Kept focusable with aria-disabled instead of the disabled attribute, so the reason can be heard.', state: 'Announces either มี 1 ช่วงเวลาที่ยังไม่ถูกต้อง or ยังไม่มีการเปลี่ยนแปลง — never a silent dead control.' },
+        { control: 'Copy to all days', semantics: 'A named button (คัดลอกเวลานี้ไปทุกวัน), not a drag interaction.', state: 'Announces คัดลอกเวลาไป 6 วันแล้ว and marks the form dirty, so the change is audible and reversible by ยกเลิก.' },
+        { control: 'Colour and contrast', semantics: 'Body copy at #1F1A16 / #5A4E42 on white. #9A8C7E appears only on the disabled ปิดทั้งวัน field, alongside the ปิด text label (UX-FINDING-02).', state: 'Error text is #B23030 on white and always paired with a red field border and an icon-free explicit message.' },
+      ],
+
+      contract: [
+        { ui: 'Day of week', source: 'restaurant_hours.day_of_week', status: 'AVAILABLE', style: OK, note: 'smallint 0–6. The mapping to a Thai day name is M12-Q-01.' },
+        { ui: 'Opening time', source: 'restaurant_hours.opens_at', status: 'AVAILABLE', style: OK, note: 'time, wall-clock. Rendered verbatim.' },
+        { ui: 'Closing time', source: 'restaurant_hours.closes_at', status: 'AVAILABLE', style: OK, note: 'time. CHECK guarantees it is later than opens_at.' },
+        { ui: 'Closed day', source: 'absence of rows for that day', status: 'DERIVED', style: OK, note: 'No column. The switch is a UI construct over presence (M12-D04).' },
+        { ui: 'Second interval', source: 'a second row, same day_of_week', status: 'AVAILABLE', style: OK, note: 'Explicitly allowed by the migration.' },
+        { ui: 'Restaurant name', source: 'restaurants.name', status: 'AVAILABLE', style: OK, note: 'Already resolved by useRestaurantScope.' },
+        { ui: 'Today marker', source: 'client clock, resolved in Asia/Bangkok', status: 'DERIVED', style: OK, note: 'Presentation only; nothing is stored.' },
+        { ui: 'Save the week', source: 'no endpoint exists', status: 'MISSING', style: MISSING, note: 'restaurant_hours grants SELECT only to authenticated. See §11 C-01.' },
+      ],
+
+      decisions: [
+        { id: 'M12-D01', title: 'One form, one save, the whole week', body: 'The table is replaced wholesale on edit. A per-day save button would silently rewrite the other six days. So the screen owns one dirty state and one commit, and says so above the button: การบันทึกจะแทนที่เวลาทำการทั้งสัปดาห์.' },
+        { id: 'M12-D02', title: 'All seven days are always visible', body: 'A merchant reads this screen to verify a week. Rendering only the days that have rows would make a mistakenly-closed Sunday invisible — exactly the error this screen exists to catch.' },
+        { id: 'M12-D03', title: 'The day row holds a list of intervals, not one pair', body: 'The schema permits several rows per day and the migration names the afternoon-closing case. Designing a single pair per day would forbid in the UI something the database supports.' },
+        { id: 'M12-D04', title: 'The per-day switch is a UI construct, and keeps its times', body: 'There is no closed flag to write; off means contributing no rows. Because a merchant may toggle a day by accident, the times survive in form state until save — losing them on a tap would make the switch dangerous.' },
+        { id: 'M12-D05', title: 'No default times are pre-filled', body: 'Opening a day gives an empty pair with focus in the first field. Pre-filling 09:00–17:00 risks a merchant saving a plausible-looking schedule they never chose.' },
+        { id: 'M12-D06', title: 'The overnight message names the limitation', body: 'A shop that genuinely trades 18:00–02:00 has not made an input error. The message says the case is not yet supported rather than blaming the entry, and no two-row workaround is suggested while DBQ-006 is open.' },
+        { id: 'M12-D07', title: '24-hour wall-clock, timezone stated once', body: 'The stored columns are timezone-free; the UI adds no conversion and no per-field annotation. One header line carries เวลาประเทศไทย.' },
+        { id: 'M12-D08', title: 'The failure copy does not claim the old week survived', body: 'Delete-then-insert means a non-transactional failure can leave zero rows. บันทึกไม่สำเร็จ · ตรวจสอบเวลาทำการแล้วลองอีกครั้ง is true in every outcome; "your previous hours are unchanged" would not be.' },
+        { id: 'M12-D09', title: 'No open/closed or pause-orders control on this screen', body: 'Brief §6, and the schema agrees: the customer-visible state is derived from three independent inputs. Putting a เปิดรับออเดอร์ toggle here would fuse a weekly schedule to a live operational state.' },
+        { id: 'M12-D10', title: 'The screen lives under ร้านของฉัน, not as its own nav item', body: 'The UX specification fixes the five merchant nav items, and hours are one page of restaurant profile. Adding a sixth top-level item for a page edited monthly would crowd the two used daily.' },
+      ],
+
+      constraints: [
+        { id: 'M12-C01', border: '#EFCFCF', bg: '#FDF6F5', text: 'No write path exists. 20260811000003 revokes all privileges on restaurant_hours from anon and authenticated, and 20260811000011 grants back select only. There is no hours endpoint in apps/api — the merchant module contains only restaurant-cover and menu-item-image — and no validation schema in packages/validation. The read works today; the save does not exist.' },
+        { id: 'M12-C02', border: '#EFCFCF', bg: '#FDF6F5', text: 'The write must be one transaction. The documented edit strategy is delete-then-insert for the restaurant. Outside a transaction, a failure between the two leaves a restaurant with no hours — which the derived open/closed reads as permanently closed. This is a correctness requirement, not an optimisation.' },
+        { id: 'M12-C03', border: '#E8D8B8', bg: '#FDF9F0', text: 'Nothing prevents overlapping or duplicate rows in the database. There is no unique constraint on (restaurant_id, day_of_week) and no exclusion constraint on the ranges. The overlap and duplicate rules in §04 are client-side guards only; a direct write or a future importer could still produce contradictory rows.' },
+        { id: 'M12-C04', border: '#E8D8B8', bg: '#FDF9F0', text: 'No merchant restaurant-profile route exists to hang this on. apps/merchant/src at ac2c88c5 has login, restaurant selection, dashboard and the order board only. M-12 needs the ร้านของฉัน section (M-10) or a standalone route, plus the real nav the shell still stubs out.' },
+        { id: 'M12-C05', border: '#E8D8B8', bg: '#FDF9F0', text: 'Changing hours has an immediate effect on customers that this screen cannot show. The derivation is live, so saving a schedule can close the shop for anyone browsing. Whether the merchant should be warned when the new schedule closes the shop right now — and whether open orders matter — is not specified anywhere, and is left unaddressed rather than invented.' },
+        { id: 'M12-C06', border: '#E8D8B8', bg: '#FDF9F0', text: 'The order cutoff rule is proposed and unenforced. BUSINESS_RULES.md describes a cutoff at closing time minus preparation time (BQ-007), and DATABASE_DESIGN records that the database does not enforce it. M-12 therefore shows no cutoff, and a merchant reading 20:00 should not be told orders stop earlier until that rule is decided.' },
+      ],
+
+      notDecided: [
+        { id: 'M12-Q-01', sev: 'BLOCKING', sevStyle: 'background:#FDECE6;color:#B23030', border: '#EFCFCF', bg: '#FDF6F5', title: 'Which day is day_of_week = 0?', body: 'The column is only constrained to 0–6. No migration comment, document or code sample states whether 0 is Sunday (the PostgreSQL EXTRACT(DOW) convention, and JavaScript\u2019s getDay()) or Monday (ISO-8601, and Thai calendars, which start the week on Sunday in print but treat จันทร์ as the first working day). Every label on this screen and every derivation of "open now" depends on the answer, and getting it wrong shifts a whole week silently. This artifact draws 0 = อาทิตย์ as a placeholder only, because a screen cannot be drawn without picking one; it is not a decision.' },
+        { id: 'M12-Q-02', sev: 'NON-BLOCKING', sevStyle: 'background:#F0E2C4;color:#7A5A1E', border: '#E8D8B8', bg: '#FDF9F0', title: 'Must overlapping intervals on one day be rejected?', body: 'Multiple rows per day are supported and no constraint forbids overlap, so 08:00–14:00 together with 12:00–20:00 is storable today. It is almost certainly a data-entry error rather than an intention, and the design blocks it in the client — but the rule is not documented anywhere, and a client-only guard does not make the data safe (M12-C03). Confirm the rule, and whether it belongs in the API or in an exclusion constraint.' },
+        { id: 'M12-Q-03', sev: 'NON-BLOCKING', sevStyle: 'background:#F0E2C4;color:#7A5A1E', border: '#E8D8B8', bg: '#FDF9F0', title: 'How does a merchant close for one day only?', body: 'BQ-007 covers temporary close, holidays and cutoff together and is OPEN; temporarily_closed_until appears in DATABASE_DESIGN as part of that proposal. Until it is decided, a merchant with a family funeral on Thursday has only one tool: edit Thursday out of the weekly schedule and remember to put it back. That is a real operational gap and the most likely first complaint about this screen. No temporary-close UI is designed here.' },
+        { id: 'M12-Q-04', sev: 'NON-BLOCKING', sevStyle: 'background:#F0E2C4;color:#7A5A1E', border: '#E8D8B8', bg: '#FDF9F0', title: 'Should saving a schedule that closes the shop right now warn first?', body: 'The derivation is live: a merchant editing hours at 19:00 who shortens today to 18:00 closes their own shop mid-service. Whether that deserves a confirmation, a passive note, or nothing at all is a product judgement about how much the system should second-guess a merchant. Nothing is designed for it; M12-C05 records the gap.' },
+      ],
+
+      traceability: [
+        { doc: 'docs/design/BANHAO-UX-SPEC-V1.md — merchant screen inventory M-12', use: 'Scope: operating hours over restaurant_hours. Priority MUST.' },
+        { doc: 'BANHAO-UX-SPEC-V1.md §12 (merchant IA and nav)', use: 'The five-item merchant nav; hours living under ร้านของฉัน (M12-D10).' },
+        { doc: 'BANHAO-UX-SPEC-V1.md — C-05 / C-07 and the error table', use: 'How hours reach a customer (ร้านปิดอยู่ · เปิด 08:00 พรุ่งนี้), and the 403 / network wording reused here.' },
+        { doc: 'supabase/migrations/20260811000003_catalog_domain.sql', use: 'The whole model: day_of_week 0–6, wall-clock times, the span CHECK, multiple rows per day, and the delete-and-re-insert edit strategy.' },
+        { doc: 'supabase/migrations/20260811000011_rls_policies.sql', use: 'select-only grants; restaurant_hours_select_active and _select_member.' },
+        { doc: 'supabase/migrations/20260811000002_merchant_domain.sql', use: 'Open/closed is derived by the application from status + restaurant_hours + temporarily_closed_until — the basis of the product boundary and M12-D09.' },
+        { doc: 'docs/OPEN_DATABASE_QUESTIONS.md DBQ-006', use: 'Overnight hours OPEN, gated on BQ-007; the two-row option explicitly not chosen. Sets M12-D06.' },
+        { doc: 'docs/OPEN_BUSINESS_QUESTIONS.md BQ-007', use: 'Opening hours, holidays, temporary close and cutoff are one open question. Sets M12-Q-03 and M12-C06.' },
+        { doc: 'docs/BUSINESS_RULES.md §15 and the open/closed derivation', use: 'Asia/Bangkok for all business-day logic; the proposed cutoff rule that this screen does not surface; holidays not modelled.' },
+        { doc: 'docs/DATABASE_DESIGN.md §5.3 and the timezone table', use: 'Opening hours stored as time + day_of_week, local by definition; the database does not enforce the cutoff.' },
+        { doc: 'docs/DECISIONS.md DEC-E-03', use: 'Precedent for resolving "today" in Asia/Bangkok rather than the device zone.' },
+        { doc: 'apps/merchant/src/lib/styles.ts · components/AppShell.tsx · ErrorState.tsx (ac2c88c5)', use: 'Input 48px, button 52px, radius 16, header chrome, and the existing error and retry treatments.' },
+        { doc: 'packages/ui/src/theme/tokens.ts', use: 'Every colour, radius, spacing step, and the 44px touch-target baseline.' },
+        { doc: 'docs/design/BANHAO M-04 / M-05 / M-11 artifacts', use: 'Discard-guard pattern, dialog behaviour, annotation conventions, and the shared §14 / §11 constraint framing.' },
+      ],
+
+      assumptions: [
+        'day_of_week 0 is drawn as อาทิตย์ purely so the seven rows can be labelled. This is a placeholder, not a decision — see M12-Q-01.',
+        'One editing device at a time. restaurant_hours is not in the Realtime publication, and the write replaces the week, so two simultaneous editors would silently overwrite each other. The design refetches on window focus and does not claim to sync.',
+        'Thai day names are the ordinary spoken forms (จันทร์ … อาทิตย์), not the formal วันจันทร์ prefix, matching the operational register already shipped in the merchant app.',
+        'Most shops keep one schedule for the whole week, which is why คัดลอกไปทุกวัน sits on the first row. It fills the form only; nothing is written until save.',
+        'A split shift is presented as ช่วงที่ 1 / ช่วงที่ 2 rather than named periods (เช้า / เย็น), since the schema stores no label for an interval.',
+        'The artifact is written for docs/design/ in the source repository. It is created here only; no repository file was created, modified, staged, committed or pushed.',
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>
