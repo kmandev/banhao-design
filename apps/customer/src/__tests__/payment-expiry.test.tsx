@@ -14,6 +14,17 @@ import { PromptPayQrScreen } from '../screens/payment';
  * CON-002 still means only a verified provider webhook may do that.
  */
 
+/**
+ * These three tests each drive the countdown one real second at a time for the
+ * whole 600-second TTL (see `advanceSeconds`), so their wall time is set by how
+ * fast 600 React commits run, not by anything the assertions wait for. Alone
+ * that is ~1 s per test; with the rest of the monorepo's suites running
+ * alongside it can pass Jest's 5 s default, which surfaced as a timeout rather
+ * than as a failed expectation. The assertions are unchanged — only the
+ * allowance for a loaded machine is.
+ */
+jest.setTimeout(30_000);
+
 const mockReplace = jest.fn();
 const mockNavigate = jest.fn();
 
