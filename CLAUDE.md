@@ -112,7 +112,8 @@ explicit instruction" rule.
 | EVENT-024 | 3 further migrations merged after the `e471ec1d` checkpoint (catalog availability visibility, order creation function, rider release/reconciliation invariant) — see §3 and §7 |
 | EVENT-025 | D-7 — `CLAUDE.md` reconciled to actual repository state (migration count, app/API implementation status, G7 status) |
 | EVENT-026 | Merchant app built to its MUST scope: M-01 login, M-2/M-2.6 order board, M-2.7 order actions, M-03 arrival alerting, M-04 order detail panel, M-05 accept confirmation with prep time. **M-05 live-verified end-to-end against `banhao-dev`** — see §5 and §11 |
-| EVENT-027 | 2 further migrations merged (`orders` Realtime publication, `orders.prep_minutes`), bringing the total to **21**, all applied live; API `tick`/`webhook` e2e suites repaired — full suite green (this update) |
+| EVENT-027 | 2 further migrations merged (`orders` Realtime publication, `orders.prep_minutes`), bringing the total to **21**, all applied live; API `tick`/`webhook` e2e suites repaired — full suite green |
+| EVENT-028 | API contract published and guarded (`docs/06-api/openapi.json` + drift test); rider controller HTTP-boundary suite; three test/build flakes removed (cross-worker port collision, a tampered-signature test passing by luck, Next typed-routes racing its own build); CI now runs the database domain suite; Phase A observability completed bar Sentry — structured JSON logging, one log line per request, `/health` database ping. `docs/CURRENT_STATUS.md` rewritten to reality (this update) |
 
 ## 5. Current implementation status
 
@@ -124,7 +125,7 @@ explicit instruction" rule.
 | Supabase Auth (Phone OTP) | **Configured live**; app-side flow written |
 | `profiles` + RLS | **DONE and live-verified** |
 | Mock repositories | **None left in the Customer app.** All nine bindings in `apps/customer/src/repositories/index.ts` are live: catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. The `mockRepositories` object survives only as test fixtures |
-| NestJS API | Beyond `/health`, `/api/v1/me`: implemented modules for identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (`NullPaymentProvider`), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage |
+| NestJS API | 30 routed operations across identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (`NullPaymentProvider`), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage. **The contract is `docs/06-api/openapi.json`**, generated from the real `AppModule` and guarded against drift by `apps/api/test/openapi.contract.spec.ts`; `docs/06-api/README.md` documents the envelope, the error catalogue and the guard order |
 | Merchant app | **MUST scope built** (Next.js, DEC-APP-003) — phone-OTP login, restaurant scope, the three-column live order board with Realtime + audible arrival alerting, order detail panel, and the accept-with-prep-time dialog. The documented build order M-01 → M-03 → M-04/M-05 → M-07/M-08 is complete. **Not built: M-06 reject dialog (SHOULD), M-09…M-14 — all blocked on a design artifact, none exists** |
 | Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
 | Admin app | **Still a shell** — default Next.js scaffold (`layout.tsx` / `page.tsx`), no admin UI |
@@ -234,7 +235,10 @@ docs/OPEN_BUSINESS_QUESTIONS.md   BQ-001…BQ-039 — read before any domain wor
 docs/BANHAO-APP-ARCHITECTURE-V1.md  ★ AUTHORITATIVE — V1.1, APPROVED.
                                     DEC-APP-001…012, 9 phases + F′. Read first.
 docs/ARCHITECTURE.md              the system as built — orientation summary
-docs/CURRENT_STATUS.md            what works, what does not, what is unverified
+docs/CURRENT_STATUS.md            what works, what does not, what is unverified —
+                                    rewritten 2026-09-01; §13 is the classified blocker list
+docs/06-api/README.md             API contract: envelope, error catalogue, guard order
+docs/06-api/openapi.json          generated contract, drift-guarded by a test
 docs/TECHNICAL_ARCHITECTURE.md    how the decisions get built
 docs/ARCHITECTURE_DECISIONS.md    ADR-001…ADR-012, all ACCEPTED (V1.1 §16)
 docs/OPEN_TECHNICAL_QUESTIONS.md  TQ-001…TQ-016 — read before backend work
@@ -327,7 +331,7 @@ this file summarises it.
 
 | Phase | What | State |
 |---|---|---|
-| **A** | Foundation hardening — docs, error envelope + `correlationId`, webhook raw body, `worker.ts`, `/internal/tick`, deploy workflows, Sentry | Implemented in earlier events |
+| **A** | Foundation hardening — docs, error envelope + `correlationId`, webhook raw body, `worker.ts`, `/internal/tick`, deploy workflows, Sentry | Implemented **except Sentry**. Observability completed 2026-09-01 (EVENT-028): structured JSON logging with Cloud Logging severities, one log line per request (route pattern, never an id), `/health` extended with a bounded database ping that reports `degraded` at 200 rather than making Cloud Run crash-loop. **Sentry is absent and blocked on an external account/DSN** |
 | **B** | Identity & capability resolution — DEC-APP-004, membership-based guards | Implemented — identity/address APIs built (EVENT-022) |
 | **C** | Catalog & merchant read path — replaces the customer app's mocks | Implemented — Customer app catalog integration built (EVENT-022) |
 | **D** | Cart | Implemented — cart/checkout validation built (EVENT-022) |
@@ -380,6 +384,12 @@ migration explicitly instructed for the current phase — see §10.
 - Payment provider SDKs may only be imported under `payments/providers/`.
 
 **Working rules:**
+
+- **Run the quality gate with `--force`.** `pnpm turbo run lint typecheck test
+  build --force`. A cached-green task hides a real failure: on 2026-09-01 the
+  customer app's QR-expiry suite was failing on every uncached run while
+  `pnpm turbo run test` reported success from cache. Run it more than once —
+  three of the failures fixed that day only appeared under parallel load.
 
 - The **design artifact is the source of truth** for Customer App UI:
   `design/customer/BANHAO Customer App.dc.html`. Do not re-design; record a

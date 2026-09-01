@@ -52,7 +52,14 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 - [ ] Design the full Admin Web UI (currently 3 wireframe-level screens only: A-02, A-03, A-12)
   - Priority: P1
   - Source: same section
-  - Notes: —
+  - Notes: Updated 2026-09-01. **This blocks the whole of Phase I.** `apps/admin`
+    is still the default Next.js scaffold, and A-01, A-04, A-05/A-06, A-08/A-09
+    and A-13 are all `MUST`. `docs/design/BANHAO-UX-SPEC-V1.md` §8 specifies
+    admin *behaviour* — nine sections, the four A-04 regions, the A-13 queue's
+    four sources, mandatory reasons on every intervention — but specifies no
+    screens, and every merchant screen built so far had a committed
+    `.dc.html` artifact first. Do not design these inside an implementation
+    task.
 
 - [ ] Legal/compliance review: payment provider terms, marketplace receiving model, KYC/KYB, refund policy, payout cycles, Thai payment regulation, tax/accounting, PDPA, bank account verification
   - Priority: P1
@@ -61,10 +68,26 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## P2 — Medium
 
-- [ ] Write API contract documentation
+- [ ] Sentry — the one Phase A deliverable that does not exist
   - Priority: P2
-  - Source: `docs/06-api/README.md` (empty placeholder created 2026-08-09)
-  - Notes: Depends on the backend stack decision (P0).
+  - Source: `docs/BANHAO-APP-ARCHITECTURE-V1.md` §11 and §15 (Phase A)
+  - Notes: Added 2026-09-01. Structured JSON logging, the per-request log line,
+    correlation and the `/health` database ping are all now implemented
+    (`docs/CURRENT_STATUS.md` §7); error tracking is not. **Blocked on an
+    external account and a DSN**, which is a credential-provisioning decision,
+    not an implementation one. V1.1 §18 risk 10 already budgets it: free tier is
+    single-user, $26/month on the second developer.
+
+- [x] ~~Write API contract documentation~~
+  - **RESOLVED 2026-09-01.** `docs/06-api/README.md` now documents the response
+    envelope, the `ErrorCode`-to-status catalogue, the three-guard authorization
+    order, the operation surface by actor, and the two internal endpoints
+    deliberately excluded. `docs/06-api/openapi.json` is generated from the real
+    `AppModule` (`pnpm --filter @banhao/api openapi`) and guarded against drift
+    by `apps/api/test/openapi.contract.spec.ts`. **One known limitation remains
+    and is recorded in both files:** `components.schemas` is empty, because
+    controllers annotate operations but not payload shapes. Filling it in is
+    additive work, not a redesign.
 
 - [ ] Write functional specs for each surface
   - Priority: P2
