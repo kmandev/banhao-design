@@ -147,7 +147,7 @@ describe('POST /internal/tick (integration)', () => {
 
     app = moduleRef.createNestApplication({ rawBody: true });
     app.useGlobalFilters(new HttpExceptionFilter());
-    await app.listen(0);
+    await app.init();
   });
 
   afterAll(async () => {

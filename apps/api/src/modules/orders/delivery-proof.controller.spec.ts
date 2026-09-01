@@ -67,7 +67,7 @@ async function buildApp(options: {
 
   const app = moduleRef.createNestApplication();
   app.useGlobalFilters(new HttpExceptionFilter());
-  await app.listen(0);
+  await app.init();
   return app;
 }
 

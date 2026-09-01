@@ -155,7 +155,7 @@ describe('POST /webhooks/payments/:provider (integration)', () => {
 
     app = moduleRef.createNestApplication({ rawBody: true });
     app.useGlobalFilters(new HttpExceptionFilter());
-    await app.listen(0);
+    await app.init();
   });
 
   beforeEach(() => {

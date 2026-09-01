@@ -210,8 +210,15 @@ describe('verifyAccessToken — rejects everything else', () => {
   it('rejects a token whose signature has been tampered with', async () => {
     const token = await signToken();
     const [header, payload, signature = ''] = token.split('.');
-    const tamperedChar = signature.endsWith('A') ? 'B' : 'A';
-    const tampered = `${header}.${payload}.${signature.slice(0, -1)}${tamperedChar}`;
+    // The FIRST character, not the last. An ES256 signature is 64 bytes, which
+    // base64url-encodes to 86 characters — 516 bits of alphabet for 512 bits of
+    // signature, so the final character carries only two significant bits and
+    // four bits of padding a decoder discards. Editing it can leave the decoded
+    // bytes, and therefore the verification result, completely unchanged. Every
+    // bit of the first character is significant, so this always produces a
+    // genuinely different signature.
+    const tamperedChar = signature.startsWith('A') ? 'B' : 'A';
+    const tampered = `${header}.${payload}.${tamperedChar}${signature.slice(1)}`;
 
     await expect(service().verifyAccessToken(tampered)).resolves.toBeNull();
   });
