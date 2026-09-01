@@ -21,6 +21,8 @@ import { WebhooksModule } from '../src/modules/webhooks/webhooks.module';
 import { PAYMENT_PROVIDER } from '../src/modules/payments/payment-provider.interface';
 import type { PaymentProvider, WebhookVerification } from '../src/modules/payments/payment-provider.interface';
 import { IS_PUBLIC_KEY, Public } from '../src/common/decorators/public.decorator';
+import { SupabaseModule } from '../src/supabase/supabase.module';
+import { SupabaseService } from '../src/supabase/supabase.service';
 
 /** A recording double so tests can assert exactly what the controller forwarded. */
 class RecordingProvider implements PaymentProvider {
@@ -82,6 +84,31 @@ class ProbeController {
 }
 
 /**
+ * Minimal `SupabaseService` double for the one thing this controller does with
+ * it: `persistEvent`'s `payment_events` INSERT (F-2a).
+ *
+ * When these tests were written the controller wrote nothing on a verified
+ * webhook, so no double was needed. It now records the event, and with the
+ * real service pointed at a fake `SUPABASE_URL` every success-path test would
+ * 500 on a failed network write. This records the insert instead, so the
+ * success path both works and stays assertable.
+ */
+class FakeSupabaseService {
+  inserted: Record<string, unknown>[] = [];
+
+  readonly admin = {
+    from: (table: string) => ({
+      insert: async (row: Record<string, unknown>) => {
+        if (table === 'payment_events') {
+          this.inserted.push(row);
+        }
+        return { error: null };
+      },
+    }),
+  };
+}
+
+/**
  * End-to-end proof of DEC-APP-005: raw body reaches the provider byte-for-byte,
  * the webhook route needs no Authorization, its response bypasses the global
  * envelope, and everything from A-2/A-3/A-4 keeps working around it.
@@ -89,12 +116,31 @@ class ProbeController {
 describe('POST /webhooks/payments/:provider (integration)', () => {
   let app: INestApplication;
   let provider: RecordingProvider;
+  let supabase: FakeSupabaseService;
+  const originalEnv = process.env;
 
   beforeAll(async () => {
     provider = new RecordingProvider();
+    supabase = new FakeSupabaseService();
+
+    // `WebhooksModule` pulls in `PaymentsModule`, whose `PaymentsService`
+    // needs `SupabaseService`, which refuses to construct without a Supabase
+    // configuration. Obviously-fake values: the real provider is overridden
+    // below and no Supabase call is made by any test in this file.
+    process.env = {
+      ...originalEnv,
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'anon',
+      SUPABASE_SERVICE_ROLE_KEY: 'service',
+      SUPABASE_JWT_SECRET: 'jwt',
+      INTERNAL_TICK_SECRET: 'e2e-tick-secret-unused-here',
+    };
 
     const moduleRef = await Test.createTestingModule({
-      imports: [CorrelationModule, WebhooksModule],
+      // `SupabaseModule` is `@Global()`; `AppModule` importing it once is what
+      // makes `SupabaseService` resolvable in production. A testing module
+      // built from `WebhooksModule` alone gets no such import.
+      imports: [CorrelationModule, SupabaseModule, WebhooksModule],
       controllers: [ProbeController],
       providers: [
         { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
@@ -103,6 +149,8 @@ describe('POST /webhooks/payments/:provider (integration)', () => {
     })
       .overrideProvider(PAYMENT_PROVIDER)
       .useValue(provider)
+      .overrideProvider(SupabaseService)
+      .useValue(supabase)
       .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });
@@ -113,10 +161,12 @@ describe('POST /webhooks/payments/:provider (integration)', () => {
   beforeEach(() => {
     provider.received = [];
     provider.setNextResult({ verified: false, reason: 'default' });
+    supabase.inserted = [];
   });
 
   afterAll(async () => {
     await app.close();
+    process.env = originalEnv;
   });
 
   const server = (): ReturnType<INestApplication['getHttpServer']> => app.getHttpServer();
@@ -182,6 +232,9 @@ describe('POST /webhooks/payments/:provider (integration)', () => {
       provider.setNextResult({
         verified: true,
         providerPaymentId: 'p-1',
+        // DEC-028's idempotency anchor — `payment_events.provider_event_id`.
+        // Required by `WebhookVerification` since F-2b; these stubs predate it.
+        providerEventId: 'evt-1',
         providerEvent: 'payment.succeeded',
         rawPayload: {},
       });
@@ -286,6 +339,9 @@ describe('POST /webhooks/payments/:provider (integration)', () => {
       provider.setNextResult({
         verified: true,
         providerPaymentId: 'p-1',
+        // DEC-028's idempotency anchor — `payment_events.provider_event_id`.
+        // Required by `WebhookVerification` since F-2b; these stubs predate it.
+        providerEventId: 'evt-1',
         providerEvent: 'payment.succeeded',
         rawPayload: {},
       });
