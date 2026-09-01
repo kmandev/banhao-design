@@ -3,10 +3,11 @@ import { resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { loadServerEnv } from '@banhao/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { buildOpenApiDocument } from './openapi';
 
 /**
  * Loads the repository-root `.env` into `process.env` for local development,
@@ -48,14 +49,7 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableCors({ origin: env.corsOrigins, credentials: true });
 
-  const config = new DocumentBuilder()
-    .setTitle('BANHAO API')
-    .setDescription('BANHAO | บ้านเฮา — Phase 1 Food Delivery API')
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build();
-
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
+  SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
 
   await app.listen(env.port);
 
