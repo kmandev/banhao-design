@@ -76,10 +76,11 @@ main @ 14289652                   ← YOU ARE HERE — everything below is merge
 in `main`. **Branch new work from `main`.**
 
 `e471ec1d` is the **database checkpoint** — the commit V1.1 was reviewed against.
-Three further migrations have since been merged on top of that checkpoint as
-part of Phase C/E/G work (catalog availability visibility, the order creation
-function, and the rider release/reconciliation invariant — see §7), bringing
-the total to 19. The **table/RLS design itself is still the one V1.1 reviewed**
+Five further migrations have since been merged on top of that checkpoint as
+part of Phase C/E/G and merchant M-05 work (catalog availability visibility,
+the order creation function, the rider release/reconciliation invariant, the
+`orders` Realtime publication, and `orders.prep_minutes` — see §7), bringing
+the total to 21. The **table/RLS design itself is still the one V1.1 reviewed**
 — see §10 for the still-current "do not add a table/RLS policy/RPC without an
 explicit instruction" rule.
 
@@ -109,7 +110,9 @@ explicit instruction" rule.
 | EVENT-022 | Phases B–D and Phase E order foundation built: identity/address APIs, catalog read path, cart/checkout, order creation |
 | EVENT-023 | Phase G rider/delivery work: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, proof-of-delivery (driver capture, storage, customer read) |
 | EVENT-024 | 3 further migrations merged after the `e471ec1d` checkpoint (catalog availability visibility, order creation function, rider release/reconciliation invariant) — see §3 and §7 |
-| **EVENT-025** | **D-7 — `CLAUDE.md` reconciled to actual repository state (migration count, app/API implementation status, G7 status)** (this update) |
+| EVENT-025 | D-7 — `CLAUDE.md` reconciled to actual repository state (migration count, app/API implementation status, G7 status) |
+| EVENT-026 | Merchant app built to its MUST scope: M-01 login, M-2/M-2.6 order board, M-2.7 order actions, M-03 arrival alerting, M-04 order detail panel, M-05 accept confirmation with prep time. **M-05 live-verified end-to-end against `banhao-dev`** — see §5 and §11 |
+| EVENT-027 | 2 further migrations merged (`orders` Realtime publication, `orders.prep_minutes`), bringing the total to **21**, all applied live; API `tick`/`webhook` e2e suites repaired — full suite green (this update) |
 
 ## 5. Current implementation status
 
@@ -122,7 +125,7 @@ explicit instruction" rule.
 | `profiles` + RLS | **DONE and live-verified** |
 | Mock repositories | Customer app now reads several domains (catalog, cart, orders, delivery proof) from the real API — remaining unconverted areas are still mock-backed |
 | NestJS API | Beyond `/health`, `/api/v1/me`: implemented modules for identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (`NullPaymentProvider`), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage |
-| Merchant app | **Still a shell** — `App.tsx` only proves the shared packages resolve and the API is reachable; no ordering/cart/checkout/map UI |
+| Merchant app | **MUST scope built** (Next.js, DEC-APP-003) — phone-OTP login, restaurant scope, the three-column live order board with Realtime + audible arrival alerting, order detail panel, and the accept-with-prep-time dialog. The documented build order M-01 → M-03 → M-04/M-05 → M-07/M-08 is complete. **Not built: M-06 reject dialog (SHOULD), M-09…M-14 — all blocked on a design artifact, none exists** |
 | Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
 | Admin app | **Still a shell** — default Next.js scaffold (`layout.tsx` / `page.tsx`), no admin UI |
 | Orders | Implemented in the API (creation, pricing, controller/service) and consumed by the Customer app — not the full nine-state lifecycle claimed complete, see Phase table in §9 |
@@ -170,9 +173,9 @@ Three `T0` technical questions block backend work: TQ-008, TQ-011, TQ-012.
 **The database is designed AND implemented as migrations** (EVENT-016 design →
 EVENT-017 DEC-033/034 lock → EVENT-018 migration). **16 migration files, 40
 tables, merged to `main` at `e471ec1d` and applied to `banhao-dev`** — this was
-the schema V1.1 was reviewed against. **3 further migrations have since been
-merged** (EVENT-023/024) for Phase C/E/G needs, bringing the current total to
-**19 migration files**. Verified by two Docker-based test
+the schema V1.1 was reviewed against. **5 further migrations have since been
+merged** (EVENT-023/024/027) for Phase C/E/G and M-05 needs, bringing the
+current total to **21 migration files**. Verified by two Docker-based test
 suites: **60/60 assertions pass**, including the rider race condition proven
 with two genuinely concurrent `psql` processes (see
 `docs/DATABASE_MIGRATION_V1_REPORT.md`). The live `profiles` RLS pattern
@@ -213,7 +216,7 @@ apps/api/src/                 NestJS: guards, identity, merchant/catalog, cart, 
 apps/driver/                  Status/availability, offer inbox, active delivery,
                                proof camera/review/upload; screens + repositories, tested
 apps/merchant/, apps/admin/   Still shells — see §5
-supabase/migrations/          19 migration files (16 at the `e471ec1d` checkpoint + 3 since)
+supabase/migrations/          21 migration files (16 at the `e471ec1d` checkpoint + 5 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -240,7 +243,7 @@ docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-0
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
 docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          19 migrations (16 at checkpoint + 3 since) — do not
+supabase/migrations/*.sql          21 migrations (16 at checkpoint + 5 since) — do not
                                     edit an existing file; do not add a new one without
                                     an explicit instruction (see §10)
 ```
@@ -256,7 +259,7 @@ supabase/migrations/*.sql          19 migrations (16 at checkpoint + 3 since) �
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
-| Migrations | **19 applied live · 0 pending** (16 at the `e471ec1d` V1.1 checkpoint + 3 merged since for Phase C/E/G) |
+| Migrations | **21 applied live · 0 pending** (16 at the `e471ec1d` V1.1 checkpoint + 5 merged since for Phase C/E/G and M-05) |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -410,8 +413,8 @@ migration explicitly instructed for the current phase — see §10.
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **19 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
-  plus 3 since for Phase C/E/G — see §3/§7). Read
+- **21 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 5 since for Phase C/E/G and M-05 — see §3/§7). Read
   `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
   edit an existing migration, and do not add a table, view, RLS policy, RPC, or
   new migration, and never run `supabase db push` or `supabase link`, without
@@ -445,7 +448,90 @@ that they are built **in phase order, one phase at a time**, not opportunistical
 - Build only the current phase. Do not start the next one early.
 - **Still hard-locked:** Phase F′ (real payment provider) and settlement.
 - **Still hard-locked:** the database, except where phase work has needed a
-  new migration under explicit instruction (3 have been merged since the
+  new migration under explicit instruction (5 have been merged since the
   `e471ec1d` checkpoint — see §3/§7/§10 above). No opportunistic migration or
   schema change outside that.
 - Merchant's approved target is **Next.js web**, not Expo (DEC-APP-003).
+
+---
+
+## 11. Merchant app — built scope, live verification, and open blockers
+
+Added 2026-09-01 (EVENT-026/027). The Merchant app is no longer a shell; §5's
+table is the summary, this section is the detail.
+
+### What is built
+
+`apps/merchant` is a **Next.js** app (DEC-APP-003 — never Expo), scoped to one
+restaurant at a time. The documented merchant build order in
+`docs/design/BANHAO-UX-SPEC-V1.md` §6 is `M-01 → M-03 → M-04/M-05 →
+M-07/M-08 → M-11/M-12`, and everything up to and including M-07/M-08 exists:
+
+| Screen | State |
+|---|---|
+| M-01 login (phone OTP) | Built |
+| M-02 restaurant selection | Membership resolved; the switcher itself is only needed for multi-restaurant membership, which no live account has |
+| M-03 live order board | Built — three columns, Supabase Realtime, audible arrival alert, tab-title count, connection pill |
+| M-04 order detail panel | Built |
+| M-05 accept + prep time | Built and **live-verified** (below) |
+| M-07 preparing / M-08 ready | Built as the board's per-card actions (`เริ่มทำอาหาร`, `อาหารพร้อม`) |
+| M-06 reject (SHOULD), M-09…M-14 | **Not built — no design artifact exists.** See the blocker below |
+
+### M-05 live verification — PARTIAL PASS (2026-09-01)
+
+Verified end-to-end against `banhao-dev` through the real browser UI, using
+fixture order `M05-VERIFY-0005`. **Directly observed:** the accept dialog opens
+with nothing preselected; `20 นาที` selects and enables confirm; exactly one
+`POST /api/v1/orders/:id/accept` → **200**; `orders.state` becomes
+`MERCHANT_ACCEPTED` with `prep_minutes = 20` and `accepted_at` set; exactly one
+`deliveries` row (`RIDER_SEARCHING`); exactly one `order_status_history` row
+(`PAID → MERCHANT_ACCEPTED`, actor the signed-in merchant); exactly one
+undispatched `MerchantAcceptedOrder` outbox row; the board moved the card
+reactively via Realtime with no reload, and the M-03 counts followed.
+
+**Not verified: the customer-side C-14 prep-time caption.** See the blocker
+below. Treat C-14 as `UNVERIFIED`, not as passing.
+
+### Open blockers — read before planning merchant work
+
+1. **No design artifact for M-06 or M-09…M-14.** Every merchant screen built so
+   far had a committed `docs/design/BANHAO M-NN ….dc.html` first. Do not design
+   these yourself — that is a product decision, not an implementation one.
+   **M-11 (menu management) and M-12 (operating hours) are `MUST` scope and are
+   the next items in the documented build order**, so this is the single thing
+   blocking merchant progress.
+2. **C-14 cannot be live-verified with the current test credentials.** The
+   fixture orders belong to customer `d25a51f9-…` (phone `+66811110009`), and
+   **no Test OTP code for that number is documented anywhere in this repo** —
+   `docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md` §9 explicitly records that Auth
+   accounts for the G-7.1 identities were never provisioned. The two documented
+   pairs (§7) belong to other identities. Do not guess an OTP and do not
+   fabricate a session. Unblocking this is a Supabase Dashboard action:
+   configure a Test OTP pair for `+66811110009`, or point future fixtures at an
+   already-onboarded customer identity.
+
+### Local development notes (not committed — `.env` is gitignored)
+
+- The Merchant app dev server runs on **port 3002**; the API on 3000. The API's
+  `CORS_ORIGINS` must therefore include `http://localhost:3002` or every
+  browser call from the merchant app fails preflight with no
+  `Access-Control-Allow-Origin`. This is a local `.env` value only.
+- **`dotenv` never overwrites an already-exported variable** (`main.ts` says so).
+  An API process started from a shell that exports a stale `SUPABASE_URL` will
+  silently ignore the correct value in `.env` and reject every valid token with
+  `401 Invalid or expired token` — the JWT issuer check fails against the wrong
+  project. If authentication fails inexplicably, check the *process* env
+  (`ps eww -p <pid>`), not just the file.
+
+### Live M-05 fixtures in `banhao-dev`
+
+`M05-VERIFY-0001` … `M05-VERIFY-0005` exist permanently (orders are
+delete-protected for every role, including `service_role`). `0001`–`0004` are
+`PAID` with expired accept windows; `0005` is the accepted one. They are
+**UI-state fixtures only** — `PAID` with no `payments`, `payment_events` or
+ledger row behind them, exactly like the `G71-…` orders. Never treat them as
+financial or settlement input. Their provisioning SQL is
+`supabase/seed-dev/m05_paid_order_fixture.sql`, tracked in Git alongside
+`catalog_dev_seed.sql` and `g71_offer_fixture.sql` — the same reviewed,
+idempotent, hand-run convention (`docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md`
+§5.2). Nothing runs it automatically and it is in no workflow.
