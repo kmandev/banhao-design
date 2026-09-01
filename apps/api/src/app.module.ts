@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { CorrelationModule } from './common/correlation/correlation.module';
+import { LoggingModule } from './common/logging/logging.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { UsersModule } from './modules/users/users.module';
 import { CartModule } from './modules/cart/cart.module';
@@ -34,11 +35,14 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
  *
  * CorrelationModule is listed first for readability only — its middleware runs
  * before every guard regardless, which is what makes an auth rejection
- * traceable.
+ * traceable. LoggingModule follows it because middleware runs in registration
+ * order, and a request line written before the correlation id exists would be
+ * the one line nothing can be traced from.
  */
 @Module({
   imports: [
     CorrelationModule,
+    LoggingModule,
     SupabaseModule,
     UsersModule,
     CartModule,

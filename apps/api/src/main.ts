@@ -7,6 +7,7 @@ import { SwaggerModule } from '@nestjs/swagger';
 import { loadServerEnv } from '@banhao/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { createLogger } from './common/logging/logger.factory';
 import { buildOpenApiDocument } from './openapi';
 
 /**
@@ -44,7 +45,12 @@ async function bootstrap(): Promise<void> {
   // bytes, alongside Nest's normal JSON body parsing. DEC-APP-005 requires
   // this: a payment provider's signature is computed over its exact bytes, and
   // a JSON-parsed-and-reserialized body will not verify.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  // The logger is passed at creation, not set afterwards, so bootstrap's own
+  // lines are already structured in production (V1.1 §11).
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    logger: createLogger(env.nodeEnv),
+  });
 
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableCors({ origin: env.corsOrigins, credentials: true });

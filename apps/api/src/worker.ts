@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { loadServerEnv } from '@banhao/config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { createLogger } from './common/logging/logger.factory';
 
 /**
  * The worker entrypoint (DEC-APP-002, ADR-010).
@@ -26,7 +27,10 @@ async function bootstrap(): Promise<void> {
 
   // rawBody: true — TickHmacGuard verifies a signature over the exact request
   // bytes, the same requirement DEC-APP-005 already established for webhooks.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    logger: createLogger(env.nodeEnv),
+  });
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
