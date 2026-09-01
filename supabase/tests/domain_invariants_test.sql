@@ -799,6 +799,117 @@ select test_assert(
 
 \echo '--- H. POD proof_photo_path write lockout (T4.4): PASS ---'
 
+-- ===========================================================================
+-- I. Notification RLS (Phase H)
+--
+-- `notifications` is the one Phase H table a client touches at all, and it
+-- carries an unusually narrow grant: `select, update (read_at)`. A column
+-- grant is easy to write and easy to get wrong, and nothing exercised it —
+-- this section proves both halves, the row boundary and the column boundary,
+-- and proves that the rest of the notification machinery is unreachable.
+-- ===========================================================================
+
+insert into public.notifications (id, recipient_id, recipient_type, event_type, title, body)
+values
+  ('a8000000-0000-0000-0000-000000000001', :'CUST_A', 'CUSTOMER', 'OrderDelivered',
+   'ออเดอร์ถึงแล้ว', 'ไรเดอร์ส่งของเรียบร้อย'),
+  ('a8000000-0000-0000-0000-000000000002', :'CUST_B', 'CUSTOMER', 'OrderDelivered',
+   'ออเดอร์ถึงแล้ว', 'ไรเดอร์ส่งของเรียบร้อย');
+
+-- I1. A recipient reads their own notification.
+select test_assert(
+  test_select_count_as_user(:'CUST_A',
+    $stmt$select count(*) from public.notifications where id = 'a8000000-0000-0000-0000-000000000001'$stmt$
+  ) = 1,
+  'I1. A recipient reads their own notification'
+);
+
+-- I2. And sees nothing of anyone else's — asserted with an UNFILTERED select,
+-- so a policy that accidentally matched every row would fail here even though
+-- an id-filtered read would still look correct.
+select test_assert(
+  test_select_count_as_user(:'CUST_A',
+    $stmt$select count(*) from public.notifications$stmt$
+  ) = 1,
+  'I2. An unfiltered read returns only the caller''s own notifications'
+);
+
+-- I3. Marking one's own notification read is the one write a client may make.
+select test_assert(
+  test_as_user(:'CUST_A',
+    $stmt$update public.notifications set read_at = now()
+       where id = 'a8000000-0000-0000-0000-000000000001'$stmt$
+  ) = 'ALLOWED',
+  'I3. A recipient can mark their own notification read'
+);
+
+-- I4. The column grant, proven directly: `read_at` is the only updatable
+-- column, so rewriting the body of one's own notification is refused for lack
+-- of a grant, not merely ignored.
+select test_assert(
+  test_as_user(:'CUST_A',
+    $stmt$update public.notifications set body = 'rewritten'
+       where id = 'a8000000-0000-0000-0000-000000000001'$stmt$
+  ) like 'BLOCKED%',
+  'I4. A recipient cannot rewrite any other column of their own notification — read_at is the only grant'
+);
+
+-- I5. The row boundary on writes, not just on reads: CUST_B's notification is
+-- untouchable even though the statement is otherwise identical to I3.
+select test_assert(
+  test_as_user(:'CUST_A',
+    $stmt$update public.notifications set read_at = now()
+       where id = 'a8000000-0000-0000-0000-000000000002'$stmt$
+  ) = 'ALLOWED',
+  'I5. Marking another recipient''s notification read raises nothing — RLS filters the row rather than erroring'
+);
+select test_assert(
+  (select read_at is null from public.notifications
+    where id = 'a8000000-0000-0000-0000-000000000002'),
+  'I5b. ... and that other recipient''s row is genuinely unchanged'
+);
+
+-- I6. No client may create a notification. Anything a user could forge here
+-- would be indistinguishable, in the app, from something BANHAO said.
+select test_assert(
+  test_as_user(:'CUST_A',
+    $stmt$insert into public.notifications (recipient_id, recipient_type, event_type, title)
+       values ('a0000000-0000-0000-0000-000000000001', 'CUSTOMER', 'Forged', 'จ่ายเงินที่นี่')$stmt$
+  ) like 'BLOCKED%',
+  'I6. A client cannot insert a notification — no INSERT grant'
+);
+
+-- I7. Nor delete one, so a delivered notification cannot be made to disappear.
+select test_assert(
+  test_as_user(:'CUST_A',
+    $stmt$delete from public.notifications where id = 'a8000000-0000-0000-0000-000000000001'$stmt$
+  ) like 'BLOCKED%',
+  'I7. A client cannot delete a notification — no DELETE grant'
+);
+
+-- I8. anon reads nothing at all.
+select test_assert(
+  test_as_anon($stmt$select 1 from public.notifications limit 1$stmt$) like 'BLOCKED%',
+  'I8. anon cannot read notifications'
+);
+
+-- I9. The rest of the Phase H machinery has no client access of any kind:
+-- `outbox` is the dispatch queue the tick drains, and
+-- `notification_deliveries` is the per-channel attempt log. Neither has a
+-- grant or a policy, by design (rls_policies § 18).
+select test_assert(
+  test_as_user(:'CUST_A', $stmt$select 1 from public.outbox limit 1$stmt$) like 'BLOCKED%',
+  'I9a. An authenticated client cannot read the outbox'
+);
+select test_assert(
+  test_as_user(:'CUST_A',
+    $stmt$select 1 from public.notification_deliveries limit 1$stmt$
+  ) like 'BLOCKED%',
+  'I9b. An authenticated client cannot read notification_deliveries'
+);
+
+\echo '--- I. Notification RLS (Phase H): PASS ---'
+
 \echo ''
 \echo 'All domain invariant assertions passed.'
 \echo ''
