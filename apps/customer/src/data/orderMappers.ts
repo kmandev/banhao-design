@@ -39,6 +39,8 @@ export interface OrderRow {
   delivery_address_snapshot: string;
   delivery_landmark: string | null;
   placed_at: string;
+  /** M-05. `null` for every order accepted before the merchant was asked. */
+  prep_minutes: number | null;
 }
 
 export interface OrderItemRow {
@@ -147,6 +149,7 @@ export function toOrderDetail(
     deliveryAddressSnapshot: order.delivery_address_snapshot,
     deliveryLandmark: order.delivery_landmark,
     placedAt: order.placed_at,
+    prepMinutes: order.prep_minutes,
     items,
     statusHistory,
   };

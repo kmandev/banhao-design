@@ -44,6 +44,7 @@ const ORDER: OrderDetail = {
   orderNumber: 'BH-20260819-0001',
   state: 'PREPARING',
   paymentMethod: 'ONLINE',
+  prepMinutes: null,
   subtotalSatang: 12000,
   deliveryFeeSatang: 1500,
   serviceFeeSatang: 500,
@@ -238,4 +239,66 @@ it('renders shared generic-error copy without a raw server error', async () => {
   await waitFor(() => expect(screen.getByTestId('screen-order-tracking-error')).toBeTruthy());
   expect(screen.getByText('ระบบมีปัญหาชั่วคราว')).toBeTruthy();
   expect(screen.queryByText(/42P01/)).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// M-05 §08 — the merchant's per-order prep-time caption. One line under the
+// existing state headline; no new screen, no new read, no ETA.
+// ---------------------------------------------------------------------------
+
+it('renders the merchant’s prep-time estimate once the value exists', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'MERCHANT_ACCEPTED', prepMinutes: 20 });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  expect(screen.getByTestId('tracking-prep-minutes').props.children.join('')).toBe(
+    'ร้านใช้เวลาทำอาหารประมาณ 20 นาที',
+  );
+});
+
+it.each([10, 20, 30, 45, 60])('renders the merchant’s chosen %i minutes exactly, never a range', async (minutes) => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'MERCHANT_ACCEPTED', prepMinutes: minutes });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  expect(screen.getByTestId('tracking-prep-minutes').props.children.join('')).toBe(
+    `ร้านใช้เวลาทำอาหารประมาณ ${minutes} นาที`,
+  );
+});
+
+it('renders no caption at all when the order carries no prep time', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'MERCHANT_ACCEPTED', prepMinutes: null });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  // Every order accepted before M-05 shipped is this case, permanently. No
+  // placeholder, no substitute value, no line.
+  expect(screen.queryByTestId('tracking-prep-minutes')).toBeNull();
+  expect(screen.queryByText(/ประมาณ/)).toBeNull();
+});
+
+it('leaves the approved MERCHANT_ACCEPTED headline in place — the caption is additive', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'MERCHANT_ACCEPTED', prepMinutes: 20 });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  expect(screen.getByTestId('tracking-state')).toBeTruthy();
+  expect(screen.getByTestId('tracking-order-id')).toBeTruthy();
+});
+
+it('presents the prep time as an estimate, never as an ETA or an arrival time', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'MERCHANT_ACCEPTED', prepMinutes: 20 });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  // No arrival wording anywhere on the screen. Prep time plus delivery time
+  // is not an arrival estimate and must not be shown as one.
+  for (const forbidden of ['ถึงประมาณ', 'จัดส่งประมาณ', 'ETA', 'ไรเดอร์ถึง']) {
+    expect(screen.queryByText(new RegExp(forbidden))).toBeNull();
+  }
 });

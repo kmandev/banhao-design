@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createMerchantOrdersRepository } from './merchantOrders';
+import { createMerchantOrdersRepository, type MerchantOrderCommand } from './merchantOrders';
 
 /**
  * M-2.3's initial-fetch half of the Order Board (M2-RT-001) — a direct
@@ -226,12 +226,15 @@ function commandRepo(outcome: { resolve: unknown } | { reject: unknown }) {
 
 const TRANSITION_OK = { orderId: 'order-1', state: 'MERCHANT_ACCEPTED' };
 
+/** M-05: `accept` is the one command that carries a body. */
+const ACCEPT: MerchantOrderCommand = { command: 'accept', prepMinutes: 20 };
+
 describe('transitionOrder — endpoint contract', () => {
   it.each([
-    ['accept', '/api/v1/orders/order-1/accept'],
-    ['start-preparing', '/api/v1/orders/order-1/start-preparing'],
-    ['mark-ready', '/api/v1/orders/order-1/mark-ready'],
-  ] as const)('%s posts to %s', async (command, expectedPath) => {
+    [ACCEPT, '/api/v1/orders/order-1/accept'],
+    [{ command: 'start-preparing' } as const, '/api/v1/orders/order-1/start-preparing'],
+    [{ command: 'mark-ready' } as const, '/api/v1/orders/order-1/mark-ready'],
+  ] as const)('$command.command posts to %s', async (command, expectedPath) => {
     const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
     await subject.transitionOrder('order-1', command);
 
@@ -240,38 +243,67 @@ describe('transitionOrder — endpoint contract', () => {
     expect(requests[0]!.init.method).toBe('POST');
   });
 
-  it('sends no request body — none of the three endpoints declares one', async () => {
-    const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
-    await subject.transitionOrder('order-1', 'accept');
+  // -------------------------------------------------------------------
+  // M-05 — request bodies. `accept` gained one; the other two must not.
+  // -------------------------------------------------------------------
 
-    expect(requests[0]!.init.body).toBeUndefined();
+  it('accept sends the prep time as its request body', async () => {
+    const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
+    await subject.transitionOrder('order-1', { command: 'accept', prepMinutes: 45 });
+
+    expect(requests[0]!.init.body).toBe(JSON.stringify({ prepMinutes: 45 }));
   });
+
+  it.each([10, 20, 30, 45, 60])('accept sends the %i-minute preset verbatim', async (prepMinutes) => {
+    const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
+    await subject.transitionOrder('order-1', { command: 'accept', prepMinutes });
+
+    expect(JSON.parse(String(requests[0]!.init.body))).toEqual({ prepMinutes });
+  });
+
+  it.each([['start-preparing'], ['mark-ready']] as const)(
+    '%s sends no request body at all — not even {}',
+    async (command) => {
+      const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
+      await subject.transitionOrder('order-1', { command });
+
+      expect(requests[0]!.init.body).toBeUndefined();
+      expect('body' in requests[0]!.init).toBe(false);
+    },
+  );
 
   it('url-scopes the command to the order it was given', async () => {
     const { subject, requests } = commandRepo({ resolve: TRANSITION_OK });
-    await subject.transitionOrder('order-99', 'mark-ready');
+    await subject.transitionOrder('order-99', { command: 'mark-ready' });
 
     expect(requests[0]!.path).toBe('/api/v1/orders/order-99/mark-ready');
   });
 
   it('returns the server transition response unchanged', async () => {
     const { subject } = commandRepo({ resolve: TRANSITION_OK });
-    await expect(subject.transitionOrder('order-1', 'accept')).resolves.toEqual(TRANSITION_OK);
+    await expect(subject.transitionOrder('order-1', ACCEPT)).resolves.toEqual(TRANSITION_OK);
   });
 
   it('never writes through Supabase — authenticated holds no update grant on orders', async () => {
     const { subject, supabaseCalls } = commandRepo({ resolve: TRANSITION_OK });
-    await subject.transitionOrder('order-1', 'accept');
+    await subject.transitionOrder('order-1', ACCEPT);
 
     expect(supabaseCalls).toHaveLength(0);
   });
 
-  it('propagates the API error intact so callers can branch on code, not message', async () => {
-    const failure = Object.assign(new Error('invalid transition'), { code: 'INVALID_TRANSITION', status: 409 });
-    const { subject } = commandRepo({ reject: failure });
+  it.each([
+    ['accept', ACCEPT],
+    ['start-preparing', { command: 'start-preparing' } as const],
+    ['mark-ready', { command: 'mark-ready' } as const],
+  ] as const)(
+    '%s propagates the API error intact so callers can branch on code, not message',
+    async (_label, command) => {
+      const failure = Object.assign(new Error('invalid transition'), { code: 'INVALID_TRANSITION', status: 409 });
+      const { subject } = commandRepo({ reject: failure });
 
-    await expect(subject.transitionOrder('order-1', 'accept')).rejects.toBe(failure);
-  });
+      await expect(subject.transitionOrder('order-1', command)).rejects.toBe(failure);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

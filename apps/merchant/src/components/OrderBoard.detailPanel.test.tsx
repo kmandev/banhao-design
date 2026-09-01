@@ -150,12 +150,19 @@ describe('OrderBoard — opening detail from a card', () => {
     expect(openButton).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('clicking the action button (accept) does not open the panel', () => {
+  // Since M-05 the accept button opens its own confirmation dialog. The
+  // assertion this test has always made — that it never opens the *detail
+  // panel* — is unchanged; only the negative is now specific, because the
+  // two overlays are distinguishable and must never both be present.
+  it('clicking the action button (accept) opens M-05, never the detail panel', () => {
     mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: '1', state: 'PAID' })] }));
     render(<OrderBoard restaurantId="rest-a" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    expect(screen.queryByTestId('order-detail-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('accept-confirm-dialog')).toBeInTheDocument();
+    expect(getOrderDetail).not.toHaveBeenCalled();
   });
 });
 

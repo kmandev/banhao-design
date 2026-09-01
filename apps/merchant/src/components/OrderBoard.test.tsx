@@ -293,13 +293,27 @@ describe('OrderBoard — order actions (M-2.7)', () => {
     transitionOrder.mockResolvedValue({ orderId: 'o1', state: 'MERCHANT_ACCEPTED' });
   });
 
+  /**
+   * M-05 changed the accept trigger: `รับออเดอร์` opens the confirmation
+   * dialog and the command is issued only after a prep time is chosen and
+   * confirmed. Every M-2.7 assertion below is unchanged in substance — it just
+   * reaches the command through the step the merchant now actually takes.
+   */
+  function acceptThroughDialog(button: HTMLElement, prepMinutes = 20) {
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('radio', { name: `${prepMinutes} นาที` }));
+    fireEvent.click(screen.getByTestId('accept-dialog-confirm'));
+  }
+
   it('routes a card action to the repository with the order id and command', async () => {
     mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
     render(<OrderBoard restaurantId="rest-a" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    acceptThroughDialog(screen.getByRole('button', { name: 'รับออเดอร์' }));
 
-    await waitFor(() => expect(transitionOrder).toHaveBeenCalledWith('o1', 'accept'));
+    await waitFor(() =>
+      expect(transitionOrder).toHaveBeenCalledWith('o1', { command: 'accept', prepMinutes: 20 }),
+    );
   });
 
   it.each([
@@ -313,14 +327,14 @@ describe('OrderBoard — order actions (M-2.7)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: label }));
 
-    await waitFor(() => expect(transitionOrder).toHaveBeenCalledWith('o1', command));
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledWith('o1', { command }));
   });
 
   it('does not move the card on a successful command — Realtime remains authoritative', async () => {
     mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
     render(<OrderBoard restaurantId="rest-a" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    acceptThroughDialog(screen.getByRole('button', { name: 'รับออเดอร์' }));
     await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
 
     // The board state the component was given still says PAID, so the card
@@ -334,7 +348,7 @@ describe('OrderBoard — order actions (M-2.7)', () => {
     mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
     const view = render(<OrderBoard restaurantId="rest-a" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    acceptThroughDialog(screen.getByRole('button', { name: 'รับออเดอร์' }));
     await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
 
     // Realtime lands: useOrderBoard now reports MERCHANT_ACCEPTED.
@@ -363,10 +377,13 @@ describe('OrderBoard — order actions (M-2.7)', () => {
     mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
     render(<OrderBoard restaurantId="rest-a" />);
 
-    const button = screen.getByRole('button', { name: 'รับออเดอร์' });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    fireEvent.click(screen.getByRole('radio', { name: '20 นาที' }));
+
+    const confirm = screen.getByTestId('accept-dialog-confirm');
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
 
     await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
 
@@ -392,7 +409,7 @@ describe('OrderBoard — order actions (M-2.7)', () => {
     render(<OrderBoard restaurantId="rest-a" />);
 
     const [first, second] = screen.getAllByRole('button', { name: 'รับออเดอร์' });
-    fireEvent.click(first!);
+    acceptThroughDialog(first!);
 
     await waitFor(() => expect(first!).toBeDisabled());
     expect(second!).toBeEnabled();
@@ -406,10 +423,18 @@ describe('OrderBoard — order actions (M-2.7)', () => {
   it('surfaces a failure inline, keeps the card, and allows a retry', async () => {
     transitionOrder.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'INVALID_TRANSITION' }));
 
-    mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
+    mockUseOrderBoard.mockReturnValue(
+      boardState({
+        orders: [
+          order({ id: 'o1', state: 'MERCHANT_ACCEPTED', acceptedAt: new Date(Date.now() - 120_000).toISOString() }),
+        ],
+      }),
+    );
     render(<OrderBoard restaurantId="rest-a" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'รับออเดอร์' }));
+    // A start-preparing failure still reports on the card — M-05 only moved
+    // the *accept* failure into its own dialog.
+    fireEvent.click(screen.getByRole('button', { name: 'เริ่มทำอาหาร' }));
 
     await waitFor(() =>
       expect(screen.getByTestId('order-action-error-o1')).toHaveTextContent(
@@ -419,13 +444,13 @@ describe('OrderBoard — order actions (M-2.7)', () => {
 
     // The board is intact — one failed command never blanks it.
     expect(screen.getByTestId('order-card-o1')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'ใหม่ · รอตอบรับ' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'กำลังทำ' })).toBeInTheDocument();
 
     // ...and the action is live again.
-    const retry = screen.getByRole('button', { name: 'รับออเดอร์' });
+    const retry = screen.getByRole('button', { name: 'เริ่มทำอาหาร' });
     expect(retry).toBeEnabled();
 
-    transitionOrder.mockResolvedValue({ orderId: 'o1', state: 'MERCHANT_ACCEPTED' });
+    transitionOrder.mockResolvedValue({ orderId: 'o1', state: 'PREPARING' });
     fireEvent.click(retry);
 
     await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(2));
@@ -454,9 +479,9 @@ describe('OrderBoard — order actions (M-2.7)', () => {
     );
     render(<OrderBoard restaurantId="rest-a" />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'รับออเดอร์' })[1]!);
+    acceptThroughDialog(screen.getAllByRole('button', { name: 'รับออเดอร์' })[1]!);
 
     await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
-    expect(transitionOrder).toHaveBeenCalledWith('o2', 'accept');
+    expect(transitionOrder).toHaveBeenCalledWith('o2', { command: 'accept', prepMinutes: 20 });
   });
 });

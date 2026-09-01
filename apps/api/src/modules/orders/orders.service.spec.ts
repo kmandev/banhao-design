@@ -415,6 +415,8 @@ function buildTransitionService(results: Result[]) {
 }
 
 const ORDER_ID = 'order-1';
+/** M-05: `accept` is the one merchant command that carries a body, and `prepMinutes` is required. */
+const ACCEPT_INPUT = { prepMinutes: 20 } as const;
 const RESTAURANT_A = 'restaurant-a';
 const RESTAURANT_B = 'restaurant-b';
 
@@ -469,16 +471,23 @@ describe('OrdersService — merchant transitions', () => {
   ] as const)('%s succeeds from %s and writes state + history', async (method, from, to, timestampCol) => {
     const { subject, calls } = buildTransitionService([updatedRow(to), { data: null, error: null }]);
 
-    const result = await (subject[method] as (u: AuthenticatedUser, id: string) => Promise<unknown>)(
-      merchantUser(RESTAURANT_A),
-      ORDER_ID,
-    );
+    const result = await (
+      subject[method] as (u: AuthenticatedUser, id: string, input?: unknown) => Promise<unknown>
+    )(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     expect(result).toEqual({ orderId: ORDER_ID, state: to });
 
     const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
     expect(updateCall?.payload).toMatchObject({ state: to });
     if (timestampCol) expect(updateCall?.payload).toHaveProperty(timestampCol);
+    // M-05: only `accept` carries a prep time. `start-preparing` and
+    // `mark-ready` ask no question, so they must not acquire one merely
+    // because the same private helper writes all three.
+    if (method === 'acceptOrder') {
+      expect(updateCall?.payload).toMatchObject({ prep_minutes: 20 });
+    } else {
+      expect(updateCall?.payload).not.toHaveProperty('prep_minutes');
+    }
     expect(updateCall?.eq).toMatchObject({ id: ORDER_ID, state: from });
     expect(updateCall?.in).toMatchObject({ restaurant_id: [RESTAURANT_A] });
 
@@ -495,7 +504,7 @@ describe('OrdersService — merchant transitions', () => {
   it('rejects a merchant with no restaurant membership at all — NOT_RESTAURANT_MEMBER, no query issued', async () => {
     const { subject, calls } = buildTransitionService([]);
 
-    await expect(subject.acceptOrder(merchantUser(), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'NOT_RESTAURANT_MEMBER',
     });
     expect(calls).toHaveLength(0);
@@ -507,7 +516,7 @@ describe('OrdersService — merchant transitions', () => {
       { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'PAID' }, error: null }, // diagnostic read
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_B), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_B), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'NOT_RESTAURANT_MEMBER',
     });
   });
@@ -518,7 +527,7 @@ describe('OrdersService — merchant transitions', () => {
       { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'CREATED' }, error: null },
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
       details: { currentState: 'CREATED' },
     });
@@ -530,7 +539,7 @@ describe('OrdersService — merchant transitions', () => {
       { data: null, error: null }, // diagnostic read also finds nothing
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
   });
@@ -541,14 +550,111 @@ describe('OrdersService — merchant transitions', () => {
       { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'CREATED' }, error: null },
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toThrow();
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toThrow();
     expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+  });
+
+  // -------------------------------------------------------------------
+  // M-05 — prep time, written by the same guarded UPDATE that moves the
+  // state. `prep_minutes` is data about the transition, so it must never
+  // exist on an order this call did not actually accept.
+  // -------------------------------------------------------------------
+
+  it('M-05: persists prep_minutes in the same guarded UPDATE as the state', async () => {
+    const { subject, calls } = buildTransitionService([updatedRow('MERCHANT_ACCEPTED'), { data: null, error: null }]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, { prepMinutes: 45 });
+
+    const orderUpdates = calls.filter((c) => c.table === 'orders' && c.op === 'update');
+    // One statement, not two — never a follow-up "set the prep time" write.
+    expect(orderUpdates).toHaveLength(1);
+    expect(orderUpdates[0]?.payload).toMatchObject({ state: 'MERCHANT_ACCEPTED', prep_minutes: 45 });
+    // ...and that one statement is still the guarded one (ADR-003, M05-C04).
+    expect(orderUpdates[0]?.eq).toMatchObject({ id: ORDER_ID, state: 'PAID' });
+    expect(orderUpdates[0]?.in).toMatchObject({ restaurant_id: [RESTAURANT_A] });
+  });
+
+  it('M-05: the prep time cannot overwrite the guard — state and ownership stay the WHERE clause', async () => {
+    const { subject, calls } = buildTransitionService([updatedRow('MERCHANT_ACCEPTED'), { data: null, error: null }]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, { prepMinutes: 10 });
+
+    const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
+    expect(updateCall?.payload).toMatchObject({ state: 'MERCHANT_ACCEPTED' });
+    expect(updateCall?.payload).not.toHaveProperty('restaurant_id');
+    expect(updateCall?.payload).not.toHaveProperty('customer_id');
+  });
+
+  it('M-05: a non-PAID order receives no prep time — the guard matched 0 rows, so nothing was written', async () => {
+    const { subject, calls } = buildTransitionService([
+      { data: null, error: null }, // guarded UPDATE finds 0 rows (state != PAID)
+      { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'PREPARING' }, error: null },
+    ]);
+
+    await expect(
+      subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, { prepMinutes: 60 }),
+    ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+
+    // The statement was issued and matched nothing — that is the guard doing
+    // its job. What must never happen is a second, unguarded write that lands
+    // the prep time anyway.
+    const orderUpdates = calls.filter((c) => c.table === 'orders' && c.op === 'update');
+    expect(orderUpdates).toHaveLength(1);
+    expect(orderUpdates[0]?.eq).toMatchObject({ state: 'PAID' });
+  });
+
+  it('M-05: a wrong-restaurant accept writes no prep time', async () => {
+    const { subject, calls } = buildTransitionService([
+      { data: null, error: null },
+      { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'PAID' }, error: null },
+    ]);
+
+    await expect(
+      subject.acceptOrder(merchantUser(RESTAURANT_B), ORDER_ID, { prepMinutes: 30 }),
+    ).rejects.toMatchObject({ code: 'NOT_RESTAURANT_MEMBER' });
+
+    const orderUpdates = calls.filter((c) => c.table === 'orders' && c.op === 'update');
+    expect(orderUpdates).toHaveLength(1);
+    expect(orderUpdates[0]?.in).toMatchObject({ restaurant_id: [RESTAURANT_B] });
+  });
+
+  it('M-05: a concurrent second accept is still rejected and does not re-write the prep time', async () => {
+    // The loser of the race: the winner already moved the order, so this
+    // caller's identical guarded UPDATE matches 0 rows.
+    const { subject, calls } = buildTransitionService([
+      { data: null, error: null },
+      { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'MERCHANT_ACCEPTED' }, error: null },
+    ]);
+
+    await expect(
+      subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, { prepMinutes: 60 }),
+    ).rejects.toMatchObject({ code: 'INVALID_TRANSITION', details: { currentState: 'MERCHANT_ACCEPTED' } });
+
+    expect(calls.filter((c) => c.table === 'orders' && c.op === 'update')).toHaveLength(1);
+    expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+  });
+
+  it('M-05: prep_minutes is never written to restaurants.avg_prep_minutes (M05-C03)', async () => {
+    const { subject, calls } = buildTransitionService([updatedRow('MERCHANT_ACCEPTED'), { data: null, error: null }]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, { prepMinutes: 20 });
+
+    expect(calls.find((c) => c.table === 'restaurants' && c.op === 'update')).toBeUndefined();
+  });
+
+  it('M-05: does not touch quoted_eta_minutes — a prep time is not an ETA', async () => {
+    const { subject, calls } = buildTransitionService([updatedRow('MERCHANT_ACCEPTED'), { data: null, error: null }]);
+
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, { prepMinutes: 20 });
+
+    const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
+    expect(updateCall?.payload).not.toHaveProperty('quoted_eta_minutes');
   });
 
   it('does not touch money columns on a successful transition', async () => {
     const { subject, calls } = buildTransitionService([updatedRow('MERCHANT_ACCEPTED'), { data: null, error: null }]);
 
-    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
     for (const field of ['subtotal_satang', 'delivery_fee_satang', 'service_fee_satang', 'grand_total_satang']) {
@@ -616,9 +722,10 @@ describe('OrdersService — terminal-state protection', () => {
       ]);
 
       await expect(
-        (subject[method] as (u: AuthenticatedUser, id: string) => Promise<unknown>)(
+        (subject[method] as (u: AuthenticatedUser, id: string, input?: unknown) => Promise<unknown>)(
           merchantUser(RESTAURANT_A),
           ORDER_ID,
+          ACCEPT_INPUT,
         ),
       ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
     },
@@ -794,7 +901,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
       NO_ERROR, // RiderSearchStarted outbox insert
     ]);
 
-    const result = await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    const result = await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     expect(result).toEqual({ orderId: ORDER_ID, state: 'MERCHANT_ACCEPTED' });
 
@@ -814,7 +921,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
       NO_ERROR,
     ]);
 
-    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     const payload = calls.find((c) => c.table === 'deliveries')?.payload;
     expect(payload).toHaveProperty('rider_earning_satang');
@@ -832,7 +939,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
       NO_ERROR,
     ]);
 
-    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     expect(calls.find((c) => c.table === 'addresses')).toBeUndefined();
     expect(calls.find((c) => c.table === 'deliveries')?.payload).toMatchObject({
@@ -852,7 +959,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
       NO_ERROR,
     ]);
 
-    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     expect(calls.find((c) => c.table === 'deliveries')?.payload).toMatchObject({
       pickup_lat: null,
@@ -871,7 +978,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
       NO_ERROR,
     ]);
 
-    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     for (const table of [
       'payments',
@@ -909,7 +1016,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
       { data: null, error: { message: 'connection reset' } },
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_ERROR',
     });
   });
@@ -927,7 +1034,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
 
     // The transition genuinely did not happen on this call, so the caller is
     // told so — the established stale-state contract is unchanged.
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
       details: { currentState: 'MERCHANT_ACCEPTED' },
     });
@@ -947,7 +1054,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
       { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
     });
 
@@ -969,7 +1076,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
       { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
     ]);
 
-    const result = await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    const result = await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     expect(result).toEqual({ orderId: ORDER_ID, state: 'MERCHANT_ACCEPTED' });
     expect(calls.filter((c) => c.table === 'deliveries')).toHaveLength(1);
@@ -982,7 +1089,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
       deliverySnapshot('PREPARING'), // self-heal read
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
       details: { currentState: 'PREPARING' },
     });
@@ -997,7 +1104,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
       deliverySnapshot('MERCHANT_ACCEPTED', RESTAURANT_A), // self-heal read
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_B), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_B), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'NOT_RESTAURANT_MEMBER',
     });
 
@@ -1012,7 +1119,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
     ]);
 
     // Still the precise stale-state answer, not a generic INTERNAL_ERROR.
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
       details: { currentState: 'MERCHANT_ACCEPTED' },
     });
@@ -1021,7 +1128,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
   it('issues no query at all for a merchant with no membership — the heal path does not weaken that', async () => {
     const { subject, calls } = buildTransitionService([]);
 
-    await expect(subject.acceptOrder(merchantUser(), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'NOT_RESTAURANT_MEMBER',
     });
     expect(calls).toHaveLength(0);
@@ -1034,7 +1141,7 @@ describe('OrdersService.acceptOrder — crash-window self-heal', () => {
       NO_ERROR, // self-heal read: no such order
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
     expect(calls.find((c) => c.table === 'deliveries')).toBeUndefined();
@@ -1052,7 +1159,7 @@ describe('OrdersService — atomic guarded update (no SELECT-then-UPDATE)', () =
       { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'MERCHANT_ACCEPTED' }, error: null },
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INVALID_TRANSITION',
       details: { currentState: 'MERCHANT_ACCEPTED' },
     });
@@ -1061,7 +1168,7 @@ describe('OrdersService — atomic guarded update (no SELECT-then-UPDATE)', () =
   it('a database error on the guarded UPDATE itself maps to INTERNAL_ERROR, not a silent success', async () => {
     const { subject } = buildTransitionService([{ data: null, error: { message: 'connection reset' } }]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toMatchObject({
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toMatchObject({
       code: 'INTERNAL_ERROR',
     });
   });
@@ -1132,7 +1239,7 @@ describe('OrdersService — H-3 outbox events', () => {
     const pricing = {} as unknown as OrderPricingService;
     const subject = new OrdersService(supabase, cart, addresses, pricing);
 
-    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID);
+    await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
     const outboxInserts = calls.filter((c) => c.table === 'outbox');
     const merchantAcceptedEvent = outboxInserts
@@ -1209,7 +1316,7 @@ describe('OrdersService — H-3 outbox events', () => {
       { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'CREATED', customer_id: 'customer-1' }, error: null }, // diagnostic read
     ]);
 
-    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID)).rejects.toThrow();
+    await expect(subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT)).rejects.toThrow();
 
     expect(calls.find((c) => c.table === 'outbox')).toBeUndefined();
   });

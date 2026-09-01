@@ -52,6 +52,8 @@ function deferred<T>() {
 }
 
 const OK = { orderId: 'o1', state: 'MERCHANT_ACCEPTED' };
+/** M-05: accept now carries a prep time. */
+const ACCEPT = { command: 'accept', prepMinutes: 20 } as const;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -63,9 +65,9 @@ describe('useOrderActions — issuing a command', () => {
     const { result } = renderHook(() => useOrderActions());
     const paid = order('o1', 'PAID');
 
-    act(() => result.current.runAction(paid, 'accept'));
+    act(() => result.current.runAction(paid, ACCEPT));
 
-    await waitFor(() => expect(transitionOrder).toHaveBeenCalledWith('o1', 'accept'));
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledWith('o1', ACCEPT));
   });
 
   it('marks only the acted-on card pending', async () => {
@@ -76,7 +78,7 @@ describe('useOrderActions — issuing a command', () => {
     const acted = order('o1', 'PAID');
     const other = order('o2', 'PAID');
 
-    act(() => result.current.runAction(acted, 'accept'));
+    act(() => result.current.runAction(acted, ACCEPT));
 
     await waitFor(() => expect(result.current.isPending(acted)).toBe(true));
     expect(result.current.isPending(other)).toBe(false);
@@ -96,10 +98,10 @@ describe('useOrderActions — duplicate submission', () => {
     const paid = order('o1', 'PAID');
 
     act(() => {
-      result.current.runAction(paid, 'accept');
-      result.current.runAction(paid, 'accept');
+      result.current.runAction(paid, ACCEPT);
+      result.current.runAction(paid, ACCEPT);
     });
-    act(() => result.current.runAction(paid, 'accept'));
+    act(() => result.current.runAction(paid, ACCEPT));
 
     expect(transitionOrder).toHaveBeenCalledTimes(1);
 
@@ -111,15 +113,15 @@ describe('useOrderActions — duplicate submission', () => {
   it('still allows the next, different command once the order has moved on', async () => {
     const { result } = renderHook(() => useOrderActions());
 
-    act(() => result.current.runAction(order('o1', 'PAID'), 'accept'));
+    act(() => result.current.runAction(order('o1', 'PAID'), ACCEPT));
     await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
 
     // Realtime has since moved the order; the same card now offers a
     // different command and must not be blocked by the previous one.
-    act(() => result.current.runAction(order('o1', 'MERCHANT_ACCEPTED'), 'start-preparing'));
+    act(() => result.current.runAction(order('o1', 'MERCHANT_ACCEPTED'), { command: 'start-preparing' }));
 
     await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(2));
-    expect(transitionOrder).toHaveBeenLastCalledWith('o1', 'start-preparing');
+    expect(transitionOrder).toHaveBeenLastCalledWith('o1', { command: 'start-preparing' });
   });
 });
 
@@ -129,7 +131,7 @@ describe('useOrderActions — success does not fabricate state', () => {
     const paid = order('o1', 'PAID');
 
     await act(async () => {
-      result.current.runAction(paid, 'accept');
+      result.current.runAction(paid, ACCEPT);
     });
 
     // HTTP has resolved, but the board has not yet seen the Realtime UPDATE.
@@ -141,7 +143,7 @@ describe('useOrderActions — success does not fabricate state', () => {
     const { result } = renderHook(() => useOrderActions());
 
     await act(async () => {
-      result.current.runAction(order('o1', 'PAID'), 'accept');
+      result.current.runAction(order('o1', 'PAID'), ACCEPT);
     });
 
     expect(result.current.isPending(order('o1', 'PAID'))).toBe(true);
@@ -154,7 +156,7 @@ describe('useOrderActions — success does not fabricate state', () => {
     const paid = order('o1', 'PAID');
 
     await act(async () => {
-      result.current.runAction(paid, 'accept');
+      result.current.runAction(paid, ACCEPT);
     });
 
     expect(result.current.errorFor(paid)).toBeNull();
@@ -169,7 +171,7 @@ describe('useOrderActions — failure', () => {
     const paid = order('o1', 'PAID');
 
     await act(async () => {
-      result.current.runAction(paid, 'accept');
+      result.current.runAction(paid, ACCEPT);
     });
 
     expect(result.current.isPending(paid)).toBe(false);
@@ -183,7 +185,7 @@ describe('useOrderActions — failure', () => {
     const paid = order('o1', 'PAID');
 
     await act(async () => {
-      result.current.runAction(paid, 'accept');
+      result.current.runAction(paid, ACCEPT);
     });
 
     expect(result.current.errorFor(paid)).toBe('ทำรายการไม่สำเร็จ · ลองอีกครั้ง');
@@ -196,13 +198,13 @@ describe('useOrderActions — failure', () => {
     const paid = order('o1', 'PAID');
 
     await act(async () => {
-      result.current.runAction(paid, 'accept');
+      result.current.runAction(paid, ACCEPT);
     });
     expect(result.current.errorFor(paid)).not.toBeNull();
 
     transitionOrder.mockResolvedValue(OK);
     await act(async () => {
-      result.current.runAction(paid, 'accept');
+      result.current.runAction(paid, ACCEPT);
     });
 
     expect(transitionOrder).toHaveBeenCalledTimes(2);
@@ -218,7 +220,7 @@ describe('useOrderActions — failure', () => {
     const other = order('o2', 'PAID');
 
     await act(async () => {
-      result.current.runAction(failed, 'accept');
+      result.current.runAction(failed, ACCEPT);
     });
 
     expect(result.current.errorFor(other)).toBeNull();
@@ -231,7 +233,7 @@ describe('useOrderActions — failure', () => {
     const { result } = renderHook(() => useOrderActions());
 
     await act(async () => {
-      result.current.runAction(order('o1', 'PAID'), 'accept');
+      result.current.runAction(order('o1', 'PAID'), ACCEPT);
     });
 
     expect(result.current.errorFor(order('o1', 'PAID'))).not.toBeNull();

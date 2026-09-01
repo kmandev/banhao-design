@@ -6,9 +6,10 @@ import { useOrderActions } from '../hooks/useOrderActions';
 import { useOrderAlerts } from '../hooks/useOrderAlerts';
 import type { MerchantOrderRealtimeStatus } from '../hooks/useOrderRealtime';
 import type { MerchantOrderSummary } from '../domain/order';
-import { BOARD_COLUMNS, groupOrdersByColumn, type BoardColumnId } from '../lib/orderBoardDisplay';
+import { BOARD_COLUMNS, groupOrdersByColumn, type BoardColumnId, type OrderActionCommand } from '../lib/orderBoardDisplay';
 import { OrderCard } from './OrderCard';
 import { OrderDetailPanel } from './OrderDetailPanel';
+import { AcceptConfirmDialog } from './AcceptConfirmDialog';
 
 /**
  * The Order Board (M-2.6) — design
@@ -76,6 +77,27 @@ import { OrderDetailPanel } from './OrderDetailPanel';
  * No second Realtime subscription and no direct Supabase read happen here:
  * `OrderDetailPanel` → `useOrderDetail` fetches through the same
  * `repositories.merchantOrders` seam `useOrderBoard` already uses.
+ *
+ * ## Accept confirmation (M-05)
+ *
+ * `รับออเดอร์` no longer issues the command. It opens `AcceptConfirmDialog`,
+ * which collects a prep time and calls back into the same
+ * `useOrderActions.runAction` the other two commands use — the button's
+ * `onAction` contract is unchanged in shape, only what this board does with
+ * an `'accept'` is (M05-D02). The other two commands are dispatched
+ * immediately, exactly as before.
+ *
+ * `acceptOrderId` is a lookup into `orders`, the same way `selectedOrderId`
+ * is, so the dialog always sees the live row. The dialog closes when that row
+ * is **no longer `PAID`** — which only Realtime can make true (M05-D05/D06).
+ * Nothing here closes it on an HTTP success, applies a mutation response, or
+ * fabricates `MERCHANT_ACCEPTED`; there is no timer and no second
+ * subscription.
+ *
+ * M-04 and M-05 are mutually exclusive: opening one clears the other, so two
+ * scrims and two focus traps can never be stacked. `openerRef` is shared —
+ * only one overlay is ever open, so one return target is enough, and focus
+ * returns to the originating card in every close path.
  */
 
 function isDegraded(status: MerchantOrderRealtimeStatus): boolean {
@@ -400,18 +422,18 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const selectedOrder = selectedOrderId ? (orders.find((o) => o.id === selectedOrderId) ?? null) : null;
 
-  /** The element that opened the panel — focus returns here on close (design §06). */
+  // M-05. Same lookup discipline as M-04's, for the same reason: the dialog
+  // must read the live row so a Realtime change reaches it.
+  const [acceptOrderId, setAcceptOrderId] = useState<string | null>(null);
+  const acceptOrder = acceptOrderId ? (orders.find((o) => o.id === acceptOrderId) ?? null) : null;
+
+  /** The element that opened the overlay — focus returns here on close (design §06 / M-05 §07). */
   const openerRef = useRef<HTMLElement | null>(null);
   /** Fallback focus target when the opener is gone (its order left the board via a restaurant switch). */
   const boardContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const handleOpenDetail = useCallback((order: MerchantOrderSummary) => {
-    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setSelectedOrderId(order.id);
-  }, []);
-
-  const handleCloseDetail = useCallback(() => {
-    setSelectedOrderId(null);
+  /** Focus return, shared by both overlays — only one is ever open at a time. */
+  const returnFocus = useCallback(() => {
     const opener = openerRef.current;
     openerRef.current = null;
     if (opener && document.contains(opener)) {
@@ -421,25 +443,88 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
     }
   }, []);
 
+  const handleOpenDetail = useCallback((order: MerchantOrderSummary) => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Opening M-04 must not create an M-05 confirmation state, and vice
+    // versa — never two scrims, never two focus traps.
+    setAcceptOrderId(null);
+    setSelectedOrderId(order.id);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedOrderId(null);
+    returnFocus();
+  }, [returnFocus]);
+
+  /**
+   * M05-D02 — `รับออเดอร์` opens the dialog; every other command is issued
+   * straight away, unchanged. This is the only behavioural change to the
+   * card's action, and the card itself is untouched.
+   */
+  const handleCardAction = useCallback(
+    (order: MerchantOrderSummary, command: OrderActionCommand) => {
+      if (command !== 'accept') {
+        actions.runAction(order, { command });
+        return;
+      }
+      openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setSelectedOrderId(null);
+      setAcceptOrderId(order.id);
+    },
+    [actions],
+  );
+
+  const handleCloseAccept = useCallback(() => {
+    setAcceptOrderId(null);
+    returnFocus();
+  }, [returnFocus]);
+
+  const handleConfirmAccept = useCallback(
+    (order: MerchantOrderSummary, prepMinutes: number) => {
+      // Fire and forget. The dialog is NOT closed here: HTTP success is not
+      // the fact the merchant is waiting on, and the effect below closes it
+      // when the order actually leaves PAID (M05-D05).
+      actions.runAction(order, { command: 'accept', prepMinutes });
+    },
+    [actions],
+  );
+
+  /**
+   * The one thing that closes M-05 after a confirm: the order is no longer
+   * `PAID`, which only the board — i.e. Realtime, or an authoritative
+   * re-read — can make true. No timer, no polling, no mutation response.
+   *
+   * An order that leaves the board entirely (restaurant switch) resolves
+   * `acceptOrder` to `null` and is handled by the `restaurantId` effect
+   * below, which clears both overlays.
+   */
+  useEffect(() => {
+    if (acceptOrder && acceptOrder.state !== 'PAID') {
+      setAcceptOrderId(null);
+      returnFocus();
+    }
+  }, [acceptOrder, returnFocus]);
+
   // A restaurant switch is the only way a selected order can leave board
-  // scope (orders cannot be deleted) — close the panel explicitly rather
-  // than relying solely on `selectedOrder` resolving to `null`, so focus is
+  // scope (orders cannot be deleted) — close the overlays explicitly rather
+  // than relying solely on the lookups resolving to `null`, so focus is
   // deliberately returned to the board instead of being left wherever it was.
   useEffect(() => {
     setSelectedOrderId(null);
+    setAcceptOrderId(null);
     openerRef.current = null;
   }, [restaurantId]);
 
-  // Body scroll is locked while the panel is open, released on close or
+  // Body scroll is locked while either overlay is open, released on close or
   // unmount (design §04 "SCROLL": "the board behind it does not [scroll]").
   useEffect(() => {
-    if (!selectedOrderId) return;
+    if (!selectedOrderId && !acceptOrderId) return;
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = original;
     };
-  }, [selectedOrderId]);
+  }, [selectedOrderId, acceptOrderId]);
 
   return (
     <div ref={boardContainerRef} tabIndex={-1} style={{ position: 'relative', outline: 'none' }}>
@@ -621,7 +706,7 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
                           key={order.id}
                           order={order}
                           now={now}
-                          onAction={actions.runAction}
+                          onAction={handleCardAction}
                           pending={actions.isPending(order)}
                           actionError={actions.errorFor(order)}
                           onOpenDetail={handleOpenDetail}
@@ -638,6 +723,15 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
       )}
 
       <OrderDetailPanel order={selectedOrder} now={now} onClose={handleCloseDetail} />
+
+      <AcceptConfirmDialog
+        order={acceptOrder}
+        now={now}
+        pending={acceptOrder ? actions.isPending(acceptOrder) : false}
+        failure={acceptOrder ? actions.failureFor(acceptOrder) : null}
+        onConfirm={handleConfirmAccept}
+        onClose={handleCloseAccept}
+      />
     </div>
   );
 }

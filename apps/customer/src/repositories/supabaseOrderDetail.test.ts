@@ -12,6 +12,8 @@ type Result = { data: unknown; error: { message: string } | null };
 
 interface Recorded {
   table: string;
+  /** The column list passed to `.select()`, so a projection change is assertable. */
+  columns: string;
   eq: Record<string, unknown>;
   in: Record<string, unknown[]>;
   order: { column: string; ascending: boolean }[];
@@ -22,11 +24,14 @@ function supabaseStub(byTable: Record<string, Result>) {
 
   const client = {
     from(table: string) {
-      const call: Recorded = { table, eq: {}, in: {}, order: [] };
+      const call: Recorded = { table, columns: '', eq: {}, in: {}, order: [] };
       calls.push(call);
 
       const builder: Record<string, unknown> = {
-        select: () => builder,
+        select(columns: string) {
+          call.columns = columns;
+          return builder;
+        },
         eq(column: string, value: unknown) {
           call.eq[column] = value;
           return builder;
@@ -75,6 +80,7 @@ const ORDER_ROW = {
   delivery_address_snapshot: '123 หมู่ 4 ต.บุณฑริก',
   delivery_landmark: 'ใกล้ตลาดสดบุณฑริก',
   placed_at: '2026-08-19T05:00:00Z',
+  prep_minutes: 20,
 };
 
 const ITEM_ROW = {
@@ -128,6 +134,7 @@ describe('getOrder — owner reads own order', () => {
       recipientNameSnapshot: 'สมชาย ใจดี',
       recipientPhoneSnapshot: '0812345678',
       deliveryAddressSnapshot: '123 หมู่ 4 ต.บุณฑริก',
+      prepMinutes: 20,
       deliveryLandmark: 'ใกล้ตลาดสดบุณฑริก',
       placedAt: '2026-08-19T05:00:00Z',
       items: [
@@ -196,6 +203,47 @@ describe('getOrder — owner reads own order', () => {
 
     expect(order?.items).toEqual([]);
     expect(callsTo('order_item_options')).toHaveLength(0);
+  });
+});
+
+describe('getOrder — prep time (M-05)', () => {
+  it('selects prep_minutes as part of the order projection', async () => {
+    const { subject, calls } = repoWith({
+      orders: { data: ORDER_ROW, error: null },
+      order_items: { data: [], error: null },
+      order_item_options: { data: [], error: null },
+      order_status_history: { data: [], error: null },
+    });
+
+    await subject.getOrder('order-1');
+
+    expect(calls.find((c) => c.table === 'orders')?.columns).toContain('prep_minutes');
+  });
+
+  it('carries a null prep time through as null — never a substituted default', async () => {
+    const { subject } = repoWith({
+      orders: { data: { ...ORDER_ROW, prep_minutes: null }, error: null },
+      order_items: { data: [], error: null },
+      order_item_options: { data: [], error: null },
+      order_status_history: { data: [], error: null },
+    });
+
+    const order = await subject.getOrder('order-1');
+
+    expect(order?.prepMinutes).toBeNull();
+  });
+
+  it('never reads restaurants.avg_prep_minutes as a stand-in (M05-C03)', async () => {
+    const { subject, calls } = repoWith({
+      orders: { data: { ...ORDER_ROW, prep_minutes: null }, error: null },
+      order_items: { data: [], error: null },
+      order_item_options: { data: [], error: null },
+      order_status_history: { data: [], error: null },
+    });
+
+    await subject.getOrder('order-1');
+
+    expect(calls.find((c) => c.table === 'restaurants')).toBeUndefined();
   });
 });
 

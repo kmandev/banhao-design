@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type {
+  AcceptOrderRequest,
   CreateOrderRequest,
   CreateOrderResponse,
   OrderTransitionResponse,
@@ -245,6 +246,11 @@ export class OrdersService {
   /**
    * `PAID → MERCHANT_ACCEPTED`. Merchant, scoped to their own restaurant.
    *
+   * Also records `orders.prep_minutes` — the preparation time the merchant
+   * named for this order (M-05) — in the same guarded `UPDATE`. It is not an
+   * ETA and it is not `restaurants.avg_prep_minutes`; see the column's own
+   * comment in `20260901000001_orders_prep_minutes.sql`.
+   *
    * Also creates the order's `deliveries` row (`RIDER_SEARCHING`) — V1.1 §6's
    * operations catalogue, the first half of what DEC-020 calls for. Only the
    * row is created here: candidate selection, `rider_assignment_attempts` and
@@ -272,7 +278,11 @@ export class OrdersService {
    * stale-state contract (`OrdersService — atomic guarded update`) is the
    * established convention here.
    */
-  async acceptOrder(user: AuthenticatedUser, orderId: string): Promise<OrderTransitionResponse> {
+  async acceptOrder(
+    user: AuthenticatedUser,
+    orderId: string,
+    input: AcceptOrderRequest,
+  ): Promise<OrderTransitionResponse> {
     const restaurantIds = user.capabilities.merchant.map((m) => m.restaurantId);
 
     let transitioned: OrderTransitionResponse;
@@ -284,6 +294,12 @@ export class OrdersService {
         'MERCHANT_ACCEPTED',
         'accepted_at',
         'MerchantAcceptedOrder',
+        // M-05, M05-C04. The prep time rides in the SAME guarded UPDATE that
+        // moves the state — never a second write, and never before the state
+        // check. An accept that loses the guard matches 0 rows and therefore
+        // writes no prep time at all, which is the whole point: a prep time
+        // can only exist on an order this call actually accepted.
+        { prep_minutes: input.prepMinutes },
       );
     } catch (cause) {
       // Self-heal only. The original failure is what the caller must see, so
@@ -370,6 +386,15 @@ export class OrdersService {
     return this.customerCancel(user, orderId, reason);
   }
 
+  /**
+   * `columns` is the transition's own additional payload — data the
+   * transition records about itself, written in the one guarded statement
+   * rather than in a follow-up `UPDATE`. `accept` is the only caller that
+   * passes any today (`prep_minutes`, M-05); `start-preparing` and
+   * `mark-ready` ask no question and pass none, so they keep writing exactly
+   * `state` and their timestamp. Nothing here may carry a state or an
+   * ownership column — those are the guard's, not the payload's.
+   */
   private async merchantTransition(
     user: AuthenticatedUser,
     orderId: string,
@@ -377,13 +402,14 @@ export class OrdersService {
     toState: string,
     timestampColumn: string | null,
     outboxEventType?: string,
+    columns?: Record<string, unknown>,
   ): Promise<OrderTransitionResponse> {
     const restaurantIds = user.capabilities.merchant.map((m) => m.restaurantId);
     if (restaurantIds.length === 0) {
       throw new DomainError('NOT_RESTAURANT_MEMBER');
     }
 
-    const patch: Record<string, unknown> = { state: toState };
+    const patch: Record<string, unknown> = { ...columns, state: toState };
     if (timestampColumn) {
       patch[timestampColumn] = new Date().toISOString();
     }

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { repositories } from '../repositories';
 import type { MerchantOrderSummary, OrderState } from '../domain/order';
-import { orderActionErrorMessage, type OrderActionCommand } from '../lib/orderBoardDisplay';
+import { orderActionErrorMessage } from '../lib/orderBoardDisplay';
+import type { MerchantOrderCommand } from '../repositories/merchantOrders';
 
 /**
  * Per-card action state for the Order Board's three merchant commands (M-2.7).
@@ -75,15 +76,49 @@ import { orderActionErrorMessage, type OrderActionCommand } from '../lib/orderBo
 /** The state a card's in-flight command was issued from, keyed by order id. */
 type PendingMap = Record<string, OrderState>;
 /** The failure of a card's last command, keyed by order id. */
-type ErrorMap = Record<string, { state: OrderState; message: string }>;
+type ErrorMap = Record<string, { state: OrderState; message: string; retryable: boolean }>;
+
+/**
+ * A failure, as a surface that offers a retry needs to read it (M-05).
+ *
+ * `message` is `orderActionErrorMessage(cause)` verbatim — there is exactly
+ * one merchant-facing error vocabulary in this app and M-05 does not write a
+ * second one. `retryable` is the separate question a *dialog* has to answer
+ * and a card does not: the card leaves its button live either way, because
+ * pressing it again is harmless, but M-05 keeps a confirm button in front of
+ * the merchant and must remove it when pressing it again cannot possibly
+ * succeed.
+ */
+export interface OrderActionFailure {
+  message: string;
+  /**
+   * `false` for `INVALID_TRANSITION` and `NOT_RESTAURANT_MEMBER`: the first
+   * means the order has already moved (Realtime is about to say so), the
+   * second is an authorization answer, not a transient fault. Neither changes
+   * by being asked again. Everything else — network, timeout, 5xx — is a
+   * `true`, because the same command may well land on the next press.
+   */
+  retryable: boolean;
+}
+
+/** The two codes a retry cannot fix. Read structurally, matching `orderActionErrorMessage`. */
+const NON_RETRYABLE_CODES = ['INVALID_TRANSITION', 'NOT_RESTAURANT_MEMBER', 'FORBIDDEN'];
+
+function isRetryable(cause: unknown): boolean {
+  const code =
+    typeof cause === 'object' && cause !== null && 'code' in cause ? (cause as { code: unknown }).code : null;
+  return typeof code !== 'string' || !NON_RETRYABLE_CODES.includes(code);
+}
 
 export interface UseOrderActions {
   /** True while this order has a command in flight that its current state has not yet resolved. */
   isPending(order: MerchantOrderSummary): boolean;
   /** The Thai failure message for this order's last command, or `null`. Cleared once the order's state moves on. */
   errorFor(order: MerchantOrderSummary): string | null;
+  /** The same failure with its retryability, for a surface that must decide whether to keep offering a retry (M-05). */
+  failureFor(order: MerchantOrderSummary): OrderActionFailure | null;
   /** Issues one command. A no-op if this order already has one in flight. */
-  runAction(order: MerchantOrderSummary, command: OrderActionCommand): void;
+  runAction(order: MerchantOrderSummary, command: MerchantOrderCommand): void;
 }
 
 export function useOrderActions(): UseOrderActions {
@@ -106,7 +141,7 @@ export function useOrderActions(): UseOrderActions {
     };
   }, []);
 
-  const runAction = useCallback((order: MerchantOrderSummary, command: OrderActionCommand) => {
+  const runAction = useCallback((order: MerchantOrderSummary, command: MerchantOrderCommand) => {
     // Duplicate submission guard. Deliberately keyed on state as well as id,
     // so it blocks a second press of *this* command while it is unresolved,
     // yet never blocks the next, legitimately different command once the
@@ -145,7 +180,11 @@ export function useOrderActions(): UseOrderActions {
         });
         setErrors((prev) => ({
           ...prev,
-          [order.id]: { state: order.state, message: orderActionErrorMessage(cause) },
+          [order.id]: {
+            state: order.state,
+            message: orderActionErrorMessage(cause),
+            retryable: isRetryable(cause),
+          },
         }));
       });
   }, []);
@@ -170,5 +209,21 @@ export function useOrderActions(): UseOrderActions {
     [errors],
   );
 
-  return { isPending, errorFor, runAction };
+  /**
+   * The same entry `errorFor` reads, scoped the same way, with the
+   * retryability M-05's dialog needs. Kept alongside `errorFor` rather than
+   * replacing it: `OrderCard` wants the string and nothing else, and widening
+   * its prop to an object would change a component M-05 has no reason to
+   * touch.
+   */
+  const failureFor = useCallback(
+    (order: MerchantOrderSummary): OrderActionFailure | null => {
+      const failure = errors[order.id];
+      if (!failure || failure.state !== order.state) return null;
+      return { message: failure.message, retryable: failure.retryable };
+    },
+    [errors],
+  );
+
+  return { isPending, errorFor, failureFor, runAction };
 }

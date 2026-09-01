@@ -10,6 +10,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import {
+  acceptOrderRequestSchema,
   cancelOrderRequestSchema,
   createOrderRequestSchema,
   type CreateOrderResponse,
@@ -63,6 +64,20 @@ export class OrdersController {
   // does on `/merchant/restaurants/:restaurantId/...` routes.
   // ---------------------------------------------------------------------
 
+  /**
+   * The one merchant transition that carries a body (M-05). `prepMinutes` is
+   * the preparation time the merchant named for this order, and it is
+   * required: M-05's whole product job is to make that answer exist before
+   * the order leaves the board's first column, so an accept without one is a
+   * 400 rather than an order accepted with an unstated prep time. The
+   * body is parsed before anything else happens, so a malformed request never
+   * reaches the guarded UPDATE.
+   *
+   * Nothing else about this route changes — same path, same verb, same 200,
+   * same `OrderTransitionResponse`, same authorization. `prepMinutes` is
+   * data, not a capability: the caller still sends no restaurant id and gains
+   * no new authorization responsibility (M05-C06).
+   */
   @Post(':id/accept')
   @HttpCode(200)
   @Roles('MERCHANT')
@@ -73,8 +88,10 @@ export class OrdersController {
   async accept(
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Param('id') id: string,
+    @Body() body: unknown,
   ): Promise<OrderTransitionResponse> {
-    return this.orders.acceptOrder(requireUser(user), id);
+    const input = parseOrThrow(acceptOrderRequestSchema, body);
+    return this.orders.acceptOrder(requireUser(user), id, input);
   }
 
   @Post(':id/start-preparing')

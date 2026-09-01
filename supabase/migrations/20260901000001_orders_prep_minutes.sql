@@ -1,0 +1,71 @@
+-- BANHAO — M-05: per-order preparation time on public.orders
+--
+-- 1. WHY. M-05 (Merchant Accept Confirmation) requires the merchant to name a
+--    preparation time for THIS order before the order leaves the ออเดอร์ใหม่
+--    column. No column on `orders` carries that today: the row has
+--    `accepted_at`, `ready_at` and `picked_up_at`, and nothing about
+--    preparation. The value is chosen per order at accept time, so it belongs
+--    on `orders` alongside `accepted_at`, and it is written in the same
+--    guarded conditional UPDATE that sets the state (ADR-003) — never in a
+--    second write, and never before the state check.
+--
+-- 2. WHAT IT IS NOT.
+--    * NOT `restaurants.avg_prep_minutes` (20260811000002_merchant_domain.sql).
+--      That is restaurant-level catalogue data surfaced to the customer app's
+--      shop model; it is not a per-order fact and it is not the merchant's
+--      answer for this order. It is neither read as a default here nor
+--      written to.
+--    * NOT `orders.quoted_eta_minutes` (20260811000005_order_domain.sql).
+--      That column is a delivery-arrival estimate. Preparation time is a
+--      kitchen estimate; prep time plus delivery time is not an arrival time
+--      and must never be presented as one. The two are kept distinct.
+--
+-- 3. NULLABLE, NO DEFAULT, NO BACKFILL. Every order that already exists was
+--    accepted without this question being asked, and inventing a value for it
+--    would be fabricating a fact the merchant never stated. Historical rows
+--    stay NULL, permanently, and every read path must treat NULL as "no prep
+--    time was recorded" rather than substituting one.
+--
+-- 4. THE CHECK IS `> 0` AND NOTHING MORE. The M-05 merchant UI offers five
+--    fixed presets (10/20/30/45/60 นาที) and that is a UI policy which
+--    M05-Q-01 leaves open to change — whether the presets are eventually
+--    platform-fixed or per-restaurant is undecided. Encoding those five
+--    values as a database constraint would freeze an undecided product
+--    question into the schema and require a migration to answer it. The
+--    database therefore constrains only what is universally true: a
+--    preparation time is a positive number of minutes. A NULL passes this
+--    CHECK, because a CHECK rejects only a FALSE result — which is exactly
+--    the "unset is legal, zero and negative are not" rule wanted here.
+--
+-- 5. NO RLS CHANGE, NO NEW POLICY, NO NEW GRANT. `public.orders` already
+--    carries `grant select on public.orders to authenticated`
+--    (20260811000011_rls_policies.sql) — a table-level grant, not a column
+--    list, so a new column is covered by it automatically. The existing
+--    `orders_select_customer` / `orders_select_merchant` / `orders_select_rider`
+--    policies decide who may read the row, and this migration does not touch
+--    any of them. `authenticated` still holds no UPDATE grant at all: the
+--    write goes through the NestJS API's service role, as every order write
+--    already does (DEC-APP-008).
+--
+-- 6. NO INDEX. Nothing queries by prep time — it is read as part of an order
+--    row already being fetched by primary key or by an existing index.
+--
+-- 7. NO STATE-MACHINE CHANGE. `PAID → MERCHANT_ACCEPTED` is unchanged, and
+--    the `state` CHECK constraint in 20260811000005_order_domain.sql is not
+--    touched. This column is data, not a state.
+--
+-- IMMUTABILITY: `orders_enforce_immutable_columns()` is deliberately NOT
+-- extended. That trigger is a denylist of money and snapshot columns, and
+-- `prep_minutes` is neither — it is a milestone-adjacent operational value
+-- written by the accept transition, in the same class as `accepted_at`,
+-- which the trigger likewise leaves freely updatable. Whether a merchant may
+-- revise the prep time after accepting is M05-Q-02, NOT DECIDED; the schema
+-- stays permissive rather than pre-deciding it, and no service today issues
+-- such an update.
+
+alter table public.orders
+  add column prep_minutes integer
+    constraint orders_prep_minutes_positive check (prep_minutes > 0);
+
+comment on column public.orders.prep_minutes is
+  'M-05: the preparation time in minutes the merchant named for THIS order when accepting it. NULL means no prep time was recorded — every order accepted before M-05 shipped, permanently. Not an ETA, and never to be presented as an arrival time. Distinct from restaurants.avg_prep_minutes (restaurant-level catalogue data) and from orders.quoted_eta_minutes (a delivery estimate).';

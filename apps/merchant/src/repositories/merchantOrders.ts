@@ -18,9 +18,10 @@
  * The same split `apps/driver/src/repositories/` already draws twice
  * (`riderOfferInbox.ts`/`riderOfferActions.ts`, `riderDelivery.ts`/
  * `riderDeliveryActions.ts`). The driver app puts each half in its own file;
- * the board's write half is three body-less commands, so it stays in this
- * file rather than earning a second module for ~20 lines — M-2.7's brief
- * asks for the smallest appropriate public API and no new repository.
+ * the board's write half is three commands — two body-less, and `accept`
+ * carrying M-05's prep time — so it stays in this file rather than earning a
+ * second module for ~25 lines; M-2.7's brief asks for the smallest
+ * appropriate public API and no new repository, and M-05 did not change that.
  *
  * ## No client-side state machine
  *
@@ -49,9 +50,30 @@ import type { ApiClient } from '@banhao/api-client';
 import type { OrderTransitionResponse } from '@banhao/validation';
 import type { MerchantOrderSummary } from '../domain/order';
 import type { MerchantOrderDetail } from '../domain/orderDetail';
-import type { OrderActionCommand } from '../lib/orderBoardDisplay';
 import { fetchOrderDetail, fetchRestaurantOrders, toMerchantOrderDetail, toMerchantOrderSummary } from '../data/orderQueries';
 import { apiClient as defaultApiClient } from '../lib/apiClient';
+
+/**
+ * One merchant transition command, with whatever that particular command
+ * needs to say (M-05).
+ *
+ * A discriminated union rather than a `command` string plus an optional body,
+ * because the three commands do not take the same argument and pretending
+ * they do is what would let `accept` be called with no prep time or
+ * `mark-ready` be called with one. `command` still *is* the URL segment, so a
+ * caller still cannot name an endpoint this API does not have; what it gains
+ * is that the compiler now requires `prepMinutes` on exactly the one command
+ * that has it and forbids it on the two that do not.
+ *
+ * The two body-less commands carry no body property at all, and
+ * `transitionOrder` sends no `body` for them — not `{}`. Sending `{}` would
+ * be inventing a request shape their controllers do not declare, which is
+ * the reason this repository sent no body for any command before M-05.
+ */
+export type MerchantOrderCommand =
+  | { command: 'accept'; prepMinutes: number }
+  | { command: 'start-preparing' }
+  | { command: 'mark-ready' };
 
 export interface MerchantOrdersRepository {
   /**
@@ -67,20 +89,18 @@ export interface MerchantOrdersRepository {
    * `POST /api/v1/orders/:orderId/:command`.
    *
    * One method rather than three, because all three endpoints are the same
-   * call with a different final path segment: same verb, same 200, no request
-   * body on any of them, and the identical `OrderTransitionResponse` back.
-   * `OrderActionCommand`'s three values *are* the URL segments, so the caller
-   * cannot name a command this API does not have.
+   * call with a different final path segment: same verb, same 200, and the
+   * identical `OrderTransitionResponse` back.
    *
-   *   `accept`          `PAID → MERCHANT_ACCEPTED`
-   *   `start-preparing` `MERCHANT_ACCEPTED → PREPARING`
-   *   `mark-ready`      `PREPARING → READY_FOR_PICKUP`
+   *   `accept`          `PAID → MERCHANT_ACCEPTED`  · body `{ prepMinutes }`
+   *   `start-preparing` `MERCHANT_ACCEPTED → PREPARING`  · no body
+   *   `mark-ready`      `PREPARING → READY_FOR_PICKUP`   · no body
    *
    * The resolved value reports what the *server* did. It is intentionally not
    * the board's source of truth: the visible transition arrives over Realtime
    * (see `useOrderActions`), so nothing here is written into board state.
    */
-  transitionOrder(orderId: string, command: OrderActionCommand): Promise<OrderTransitionResponse>;
+  transitionOrder(orderId: string, command: MerchantOrderCommand): Promise<OrderTransitionResponse>;
 
   /**
    * One order's full detail (M-04) — items, options, money, recipient and
@@ -103,12 +123,16 @@ export function createMerchantOrdersRepository(
       return rows.map(toMerchantOrderSummary);
     },
 
-    transitionOrder: (orderId: string, command: OrderActionCommand) =>
-      // No body: all three endpoints take none. Sending `{}` would be inventing
-      // a request shape the controller does not declare — `accept` in
-      // particular has no DTO at all, unlike `POST /orders/:id/cancel`.
-      apiClient.request<OrderTransitionResponse>(`/api/v1/orders/${orderId}/${command}`, {
+    transitionOrder: (orderId: string, command: MerchantOrderCommand) =>
+      apiClient.request<OrderTransitionResponse>(`/api/v1/orders/${orderId}/${command.command}`, {
         method: 'POST',
+        // `accept` is the one command with something to say, so it is the one
+        // command that sends a body (M-05). The other two send none at all —
+        // deliberately no `body: '{}'`, which would be inventing a request
+        // shape their controllers do not declare.
+        ...(command.command === 'accept'
+          ? { body: JSON.stringify({ prepMinutes: command.prepMinutes }) }
+          : {}),
       }),
 
     getOrderDetail: async (orderId: string, restaurantId: string) => {

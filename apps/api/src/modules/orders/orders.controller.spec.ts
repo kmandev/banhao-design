@@ -267,14 +267,22 @@ const OPERATOR_USER: AuthenticatedUser = {
 
 const TRANSITION_RESULT = { orderId: ORDER_ID, state: 'MERCHANT_ACCEPTED' };
 
+/**
+ * M-05: `accept` is the one transition route that carries a body, so the
+ * shared table now names each route's valid request body and the arguments
+ * its handler is expected to forward. Every other route stays body-less and
+ * keeps forwarding exactly `(user, orderId)`.
+ */
+const ACCEPT_BODY = { prepMinutes: 20 };
+
 describe.each([
-  ['POST /:id/accept', 'accept', 'acceptOrder', MERCHANT_USER],
-  ['POST /:id/start-preparing', 'start-preparing', 'startPreparing', MERCHANT_USER],
-  ['POST /:id/mark-ready', 'mark-ready', 'markReady', MERCHANT_USER],
-  ['POST /:id/pickup', 'pickup', 'pickupOrder', RIDER_USER],
-  ['POST /:id/start-delivery', 'start-delivery', 'startDelivery', RIDER_USER],
-  ['POST /:id/complete', 'complete', 'completeDelivery', RIDER_USER],
-] as const)('%s', (_label, path, serviceMethod, actingUser) => {
+  ['POST /:id/accept', 'accept', 'acceptOrder', MERCHANT_USER, ACCEPT_BODY, [ORDER_ID, ACCEPT_BODY]],
+  ['POST /:id/start-preparing', 'start-preparing', 'startPreparing', MERCHANT_USER, {}, [ORDER_ID]],
+  ['POST /:id/mark-ready', 'mark-ready', 'markReady', MERCHANT_USER, {}, [ORDER_ID]],
+  ['POST /:id/pickup', 'pickup', 'pickupOrder', RIDER_USER, {}, [ORDER_ID]],
+  ['POST /:id/start-delivery', 'start-delivery', 'startDelivery', RIDER_USER, {}, [ORDER_ID]],
+  ['POST /:id/complete', 'complete', 'completeDelivery', RIDER_USER, {}, [ORDER_ID]],
+] as const)('%s', (_label, path, serviceMethod, actingUser, validBody, expectedArgs) => {
   let app: INestApplication;
 
   afterEach(async () => {
@@ -284,7 +292,7 @@ describe.each([
   it('rejects an unauthenticated request before it reaches the handler', async () => {
     app = await buildApp({ user: null });
 
-    const response = await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send({});
+    const response = await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send(validBody);
 
     expect(response.status).toBe(401);
     expect(response.body).toMatchObject({ success: false, error: { code: 'UNAUTHORIZED' } });
@@ -294,9 +302,9 @@ describe.each([
     const method = jest.fn().mockResolvedValue(TRANSITION_RESULT);
     app = await buildApp({ user: actingUser, service: { [serviceMethod]: method } });
 
-    await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send({}).expect(200);
+    await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send(validBody).expect(200);
 
-    expect(method).toHaveBeenCalledWith(actingUser, ORDER_ID);
+    expect(method).toHaveBeenCalledWith(actingUser, ...expectedArgs);
   });
 
   it('renders a successful transition as 200 in the shared envelope', async () => {
@@ -305,7 +313,7 @@ describe.each([
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/orders/${ORDER_ID}/${path}`)
-      .send({})
+      .send(validBody)
       .expect(200);
 
     expect(response.body).toEqual({ success: true, data: TRANSITION_RESULT });
@@ -317,7 +325,7 @@ describe.each([
       const method = jest.fn().mockRejectedValue(new DomainError(code));
       app = await buildApp({ user: actingUser, service: { [serviceMethod]: method } });
 
-      const response = await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send({});
+      const response = await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send(validBody);
 
       expect(response.body).toMatchObject({ success: false, error: { code } });
     },
@@ -329,7 +337,7 @@ describe.each([
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/orders/${ORDER_ID}/${path}`)
-      .send({})
+      .send(validBody)
       .expect(404);
 
     expect(response.body).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
@@ -345,10 +353,81 @@ describe.each([
       withRolesGuard: true,
     });
 
-    const response = await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send({});
+    const response = await request(app.getHttpServer()).post(`/api/v1/orders/${ORDER_ID}/${path}`).send(validBody);
 
     expect(response.status).toBe(403);
     expect(method).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /:id/accept — prep-time body (M-05)', () => {
+  let app: INestApplication;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  it.each([10, 20, 30, 45, 60])('forwards the %i-minute preset to the service', async (prepMinutes) => {
+    const acceptOrder = jest.fn().mockResolvedValue(TRANSITION_RESULT);
+    app = await buildApp({ user: MERCHANT_USER, service: { acceptOrder } });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${ORDER_ID}/accept`)
+      .send({ prepMinutes })
+      .expect(200);
+
+    expect(acceptOrder).toHaveBeenCalledWith(MERCHANT_USER, ORDER_ID, { prepMinutes });
+  });
+
+  it.each([
+    ['a missing prepMinutes', {}],
+    ['a non-integer prepMinutes', { prepMinutes: 20.5 }],
+    ['zero', { prepMinutes: 0 }],
+    ['a negative value', { prepMinutes: -20 }],
+    ['a string prepMinutes', { prepMinutes: '20' }],
+    ['an unknown key alongside a valid value', { prepMinutes: 20, restaurantId: 'restaurant-a' }],
+  ])('rejects %s with 400 and never calls the service', async (_label, body) => {
+    const acceptOrder = jest.fn();
+    app = await buildApp({ user: MERCHANT_USER, service: { acceptOrder } });
+
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${ORDER_ID}/accept`)
+      .send(body)
+      .expect(400);
+
+    expect(response.body).toMatchObject({ success: false, error: { code: 'VALIDATION_FAILED' } });
+    // The order's state is untouched because the transition was never
+    // attempted — a bad prep time must not move an order.
+    expect(acceptOrder).not.toHaveBeenCalled();
+  });
+
+  it('does not change the route, verb, status or response shape', async () => {
+    const acceptOrder = jest.fn().mockResolvedValue(TRANSITION_RESULT);
+    app = await buildApp({ user: MERCHANT_USER, service: { acceptOrder } });
+
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${ORDER_ID}/accept`)
+      .send({ prepMinutes: 20 })
+      .expect(200);
+
+    // Still exactly `OrderTransitionResponse` — the prep time is not echoed.
+    expect(response.body).toEqual({ success: true, data: TRANSITION_RESULT });
+  });
+
+  it('still rejects a non-merchant before the body is even considered', async () => {
+    const acceptOrder = jest.fn();
+    app = await buildApp({
+      user: CUSTOMER_ONLY_USER,
+      service: { acceptOrder },
+      withRolesGuard: true,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/orders/${ORDER_ID}/accept`)
+      .send({ prepMinutes: 20 })
+      .expect(403);
+
+    expect(acceptOrder).not.toHaveBeenCalled();
   });
 });
 

@@ -63,6 +63,36 @@ export const cancelOrderRequestSchema = z
 
 export type CancelOrderRequest = z.infer<typeof cancelOrderRequestSchema>;
 
+/**
+ * `POST /api/v1/orders/:id/accept` request body (M-05).
+ *
+ * The one merchant transition command that carries a body. `start-preparing`
+ * and `mark-ready` remain body-less: they ask no question, so they have
+ * nothing to send. Accept asks exactly one — how long will this kitchen take
+ * — and M-05 makes answering it required, so the field is not optional.
+ *
+ * ## Why `positive()` and not the five UI presets
+ *
+ * The M-05 merchant UI offers 10 / 20 / 30 / 45 / 60 นาที and nothing else.
+ * That is a UI policy, and M05-Q-01 explicitly leaves open whether those five
+ * values stay platform-fixed or become per-restaurant configuration. Encoding
+ * them here would make a shared contract the place that answers an undecided
+ * product question, and would reject `25` from a future client the database
+ * would happily store — `orders.prep_minutes` is constrained to `> 0` and
+ * nothing narrower (20260901000001_orders_prep_minutes.sql). This schema
+ * matches the column: a positive whole number of minutes.
+ *
+ * `.strict()` matches every other request schema in this package, so an
+ * unknown key is a rejected request rather than a silently ignored one.
+ */
+export const acceptOrderRequestSchema = z
+  .object({
+    prepMinutes: z.number().int().positive(),
+  })
+  .strict();
+
+export type AcceptOrderRequest = z.infer<typeof acceptOrderRequestSchema>;
+
 /** The response every `POST /api/v1/orders/:id/...` transition returns on success. */
 export interface OrderTransitionResponse {
   orderId: string;

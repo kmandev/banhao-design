@@ -111,6 +111,23 @@ export function OrderTrackingScreen() {
             {currentStateLabel}
           </Text>
         ) : null}
+        {/*
+          M-05 §08 — the merchant's own prep-time estimate for this order,
+          directly under the state headline because it qualifies the state.
+          Rendered only when the value exists: an order accepted before M-05
+          shipped has none, and inventing one would be fabricating a fact the
+          merchant never stated.
+
+          "ประมาณ" is load-bearing. This is NOT an ETA and must never become
+          one — no countdown, no arithmetic against the delivery time, no
+          clock time, and never `restaurants.avg_prep_minutes`, which the
+          catalog mappers already refuse to derive an ETA from.
+        */}
+        {order.prepMinutes !== null ? (
+          <Text style={styles.prepCaption} testID="tracking-prep-minutes">
+            ร้านใช้เวลาทำอาหารประมาณ {order.prepMinutes} นาที
+          </Text>
+        ) : null}
         <Text style={styles.orderId} testID="tracking-order-id">
           #{order.orderNumber}
         </Text>
@@ -151,6 +168,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.bold,
     color: colors.textPrimary,
   },
+  prepCaption: { fontSize: fontSize.md, fontFamily: fontFamily.medium, color: colors.textMuted },
   orderId: { fontSize: fontSize.sm, fontFamily: fontFamily.regular, color: colors.textSubtle },
   summaryFooter: {
     flexDirection: 'row',

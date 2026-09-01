@@ -1,4 +1,4 @@
-import { cancelOrderRequestSchema, createOrderRequestSchema } from './order';
+import { acceptOrderRequestSchema, cancelOrderRequestSchema, createOrderRequestSchema } from './order';
 
 const ADDRESS_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -117,6 +117,54 @@ describe('cancelOrderRequestSchema', () => {
 
   it('rejects an unknown field — strict, like every other order schema', () => {
     const result = cancelOrderRequestSchema.safeParse({ reason: 'ok', causeCode: 'CUSTOMER_CANCELLED' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('acceptOrderRequestSchema (M-05)', () => {
+  it.each([10, 20, 30, 45, 60])('accepts the %i-minute UI preset', (prepMinutes) => {
+    const result = acceptOrderRequestSchema.safeParse({ prepMinutes });
+    expect(result.success).toBe(true);
+  });
+
+  // M05-Q-01 leaves the preset policy open, and orders.prep_minutes is
+  // constrained to `> 0` and nothing narrower. A shared schema that rejected
+  // 25 would be answering an undecided product question in the wrong place.
+  it('accepts a positive value the current UI does not offer', () => {
+    const result = acceptOrderRequestSchema.safeParse({ prepMinutes: 25 });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a missing prepMinutes — M-05 makes the answer required', () => {
+    const result = acceptOrderRequestSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a non-integer prepMinutes', () => {
+    const result = acceptOrderRequestSchema.safeParse({ prepMinutes: 20.5 });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects zero', () => {
+    const result = acceptOrderRequestSchema.safeParse({ prepMinutes: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a negative value', () => {
+    const result = acceptOrderRequestSchema.safeParse({ prepMinutes: -20 });
+    expect(result.success).toBe(false);
+  });
+
+  it.each([['a string', '20'], ['null', null], ['an array', []], ['a string body', 'prepMinutes=20']])(
+    'rejects a malformed body — %s',
+    (_label, body) => {
+      const result = acceptOrderRequestSchema.safeParse(body as unknown);
+      expect(result.success).toBe(false);
+    },
+  );
+
+  it('rejects an unknown field — strict, like every other order schema', () => {
+    const result = acceptOrderRequestSchema.safeParse({ prepMinutes: 20, restaurantId: 'x' });
     expect(result.success).toBe(false);
   });
 });

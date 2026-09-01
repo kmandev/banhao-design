@@ -119,6 +119,18 @@ export interface OrderDetail {
   /** `orders.delivery_landmark` — nullable; not every address has one. */
   deliveryLandmark: string | null;
   placedAt: string;
+  /**
+   * `orders.prep_minutes` (M-05) — the preparation time the merchant named
+   * for THIS order when accepting it, in minutes. `null` when none was
+   * recorded, which is permanently true of every order accepted before M-05
+   * shipped; the caption is then simply not rendered.
+   *
+   * **Not an ETA.** It is a kitchen's estimate of its own work, and prep time
+   * plus delivery time is not an arrival time. It must never be presented as
+   * a countdown, a delivery ETA, a rider ETA or a promised delivery time, and
+   * it is not `orders.quoted_eta_minutes` or `restaurants.avg_prep_minutes`.
+   */
+  prepMinutes: number | null;
   items: OrderLineItem[];
   /**
    * The append-only audit trail. Fetched and modelled here because it is part

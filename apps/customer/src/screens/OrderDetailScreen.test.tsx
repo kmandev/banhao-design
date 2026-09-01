@@ -56,6 +56,7 @@ const ORDER: OrderDetail = {
   orderNumber: 'BH-20260819-0001',
   state: 'PREPARING',
   paymentMethod: 'ONLINE',
+  prepMinutes: null,
   subtotalSatang: 12000,
   deliveryFeeSatang: 1500,
   serviceFeeSatang: 500,
