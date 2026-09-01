@@ -615,7 +615,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Service is up"
+            "description": "Service is up; the body reports whether the database answered"
           }
         },
         "tags": [

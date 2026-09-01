@@ -61,9 +61,28 @@ export interface ApiError {
 
 export type ApiResponse<T> = { success: true; data: T } | { success: false; error: ApiError };
 
+/**
+ * `GET /health` — the platform liveness probe, extended with a database ping
+ * (V1.1 §11).
+ *
+ * **`degraded` is still HTTP 200.** Cloud Run treats a failing health check as
+ * a reason to kill and restart the instance, and restarting an API process
+ * fixes nothing about an unreachable database — it just turns an outage into a
+ * crash loop while the logs fill with startup lines instead of the real cause.
+ * The status the operator needs is in the body; the status code stays the one
+ * the platform needs.
+ */
 export interface HealthResponse {
-  status: 'ok';
+  /** `degraded` means the service is up but its database ping did not succeed. */
+  status: 'ok' | 'degraded';
   service: string;
   version: string;
   timestamp: string;
+  database: DatabaseHealth;
+}
+
+export interface DatabaseHealth {
+  status: 'ok' | 'unreachable';
+  /** Round-trip time of the ping. Absent when the ping did not complete. */
+  latencyMs?: number;
 }
