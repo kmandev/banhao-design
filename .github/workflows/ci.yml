@@ -57,6 +57,23 @@ jobs:
         # regression in profile access control.
         run: ./supabase/tests/run-rls-tests.sh
 
+  domain:
+    name: Verify database domain invariants
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run domain verification
+        # The other half of the SQL suite, and until now the half nothing ran
+        # automatically: identity/cart/order snapshot invariants, the rider
+        # views' row isolation, catalog availability visibility, the rider
+        # race proven with two genuinely concurrent psql processes, rider
+        # reassignment atomicity, and create_order()'s full assertion set.
+        # Same throwaway-Postgres model as the RLS job — it applies the auth
+        # shim and every migration to a container and touches no real project.
+        run: ./supabase/tests/run-domain-tests.sh
+
   docker:
     name: Build API image
     runs-on: ubuntu-latest
