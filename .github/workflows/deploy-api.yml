@@ -218,6 +218,12 @@ jobs:
           url="${{ steps.deploy.outputs.url }}/health"
           body="$(curl --fail --silent --show-error "$url")"
           echo "$body" | grep -q '"success":true' || { echo "::error::/health did not report success:true — $body"; exit 1; }
+          # `/health` answers 200 even when its database ping fails, so that a
+          # database outage cannot make Cloud Run crash-loop a healthy process
+          # (see HealthResponse). A deploy is a different question: an API that
+          # cannot reach its database is not deployed successfully, so the
+          # degraded case is checked explicitly and named in the error.
+          echo "$body" | grep -q '"database":{"status":"ok"' || { echo "::error::/health reports the database unreachable — the service is up but cannot serve a real request. $body"; exit 1; }
           echo "$body" | grep -q '"status":"ok"' || { echo "::error::/health did not report status:ok — $body"; exit 1; }
           echo "Smoke test passed: $url"
         # Payment processing is deliberately not exercised here — Q-001 is

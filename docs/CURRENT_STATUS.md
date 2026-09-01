@@ -178,6 +178,26 @@ a schema change and needs its own approved migration; see `docs/TODO.md`.
 
 ## 11. Deployment
 
+### The Phase A local validation gate
+
+V1.1 §15 requires this sequence before any cloud step: local build → local
+tests → **API starts in Docker locally** → API integration tests → only then
+Cloud Run. Every step but the last has now been executed (2026-09-01):
+
+| Step | Result |
+|---|---|
+| Local build | ✅ 44/44 Turborepo tasks |
+| Local tests | ✅ 2,522, uncached, five consecutive runs |
+| `docker build -f apps/api/Dockerfile` | ✅ image builds |
+| Container boots and answers | ✅ `GET /health` → 200 in a container started with placeholder credentials |
+| Logs are structured in the container | ✅ one JSON object per line, Cloud Logging severities, `correlationId` on both the error and the request line |
+| Degraded reporting works for real | ✅ with an unreachable database the body reported `"status":"degraded"`, `"database":{"status":"unreachable"}` — at 200, as designed |
+| Cloud Run | ❌ blocked on infrastructure that does not exist |
+
+`deploy-api.yml`'s smoke test now checks the database line explicitly: a
+deployed API that cannot reach its database fails the deploy, even though the
+same body is deliberately a 200 for the platform's liveness probe.
+
 **Nothing is deployed.** All four workflows exist and validate; none has ever
 executed against real infrastructure, and no external infrastructure exists.
 [`INFRASTRUCTURE-READINESS-V1.md`](INFRASTRUCTURE-READINESS-V1.md) is the
