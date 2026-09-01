@@ -123,7 +123,7 @@ explicit instruction" rule.
 | Design tokens & components | DONE — `packages/ui` |
 | Supabase Auth (Phone OTP) | **Configured live**; app-side flow written |
 | `profiles` + RLS | **DONE and live-verified** |
-| Mock repositories | Customer app now reads several domains (catalog, cart, orders, delivery proof) from the real API — remaining unconverted areas are still mock-backed |
+| Mock repositories | **None left in the Customer app.** All nine bindings in `apps/customer/src/repositories/index.ts` are live: catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. The `mockRepositories` object survives only as test fixtures |
 | NestJS API | Beyond `/health`, `/api/v1/me`: implemented modules for identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (`NullPaymentProvider`), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage |
 | Merchant app | **MUST scope built** (Next.js, DEC-APP-003) — phone-OTP login, restaurant scope, the three-column live order board with Realtime + audible arrival alerting, order detail panel, and the accept-with-prep-time dialog. The documented build order M-01 → M-03 → M-04/M-05 → M-07/M-08 is complete. **Not built: M-06 reject dialog (SHOULD), M-09…M-14 — all blocked on a design artifact, none exists** |
 | Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
@@ -334,7 +334,7 @@ this file summarises it.
 | **E** | Order — nine ACCEPTED states plus `CANCELLED`, as commands | Order foundation + API built (EVENT-022); full lifecycle coverage not independently re-verified in this update |
 | **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | `NullPaymentProvider` module implemented (service, controller, webhook simulator, attempt-expiry, event processing) in the API; ledger-balances-to-zero property not independently re-verified in this update |
 | **G** | Rider & delivery — depends on E, **not** F | Substantial implementation: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, and the G7 proof-of-delivery flow (driver capture → compressed/EXIF-stripped upload → private R2 storage → signed download → customer read UI), all with test coverage (EVENT-023). Full-phase completion not independently re-verified in this update |
-| **H** | Notification — outbox via the tick | Not evidenced as started |
+| **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
 | **I** | Admin operations | Not started — Admin app is still a shell (§5) |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
 
