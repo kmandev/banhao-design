@@ -89,54 +89,16 @@ export interface Address {
   lng: number | null;
 }
 
-/**
- * Order state, mirroring the 12-state Order State Machine in
- * docs/ARCHITECTURE.md. Kept separate from payment state (CON-001).
+/*
+ * `OrderState`, `PaymentState`, `PaymentMethod` and `OrderSummary` used to live
+ * here. They were the pre-DEC-019 12-state vocabulary (`NEW`, `ACCEPTED`,
+ * `READY`, `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) that CLAUDE.md forbids
+ * in new work, and by Phase E-3B.1 nothing imported them: the production
+ * contract is `src/domain/order.ts`, whose `OrderState` is exactly the CHECK
+ * constraint on `orders.state`. Deleted rather than migrated — a fixture type
+ * with no reader is not a contract, it is a second vocabulary waiting to be
+ * copied by mistake.
  */
-export type OrderState =
-  | 'NEW'
-  | 'ACCEPTED'
-  | 'PREPARING'
-  | 'READY'
-  | 'DRIVER_ASSIGNED'
-  | 'PICKED_UP'
-  | 'DELIVERING'
-  | 'COMPLETED'
-  | 'NO_DRIVER'
-  | 'PAYMENT_FAILED'
-  | 'REJECTED'
-  | 'CANCELLED';
-
-/**
- * Payment state, mirroring the 12-state Payment State Machine.
- * Deliberately a separate type from OrderState — CON-001 forbids merging them.
- */
-export type PaymentState =
-  | 'CREATED'
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'SUCCESS'
-  | 'FAILED'
-  | 'EXPIRED'
-  | 'CANCELLED'
-  | 'REFUND_PENDING'
-  | 'REFUND_PROCESSING'
-  | 'REFUNDED'
-  | 'CASH_PENDING'
-  | 'CASH_COLLECTED';
-
-export type PaymentMethod = 'PROMPTPAY' | 'CASH';
-
-export interface OrderSummary {
-  id: string;
-  shopName: string;
-  glyph: string;
-  orderState: OrderState;
-  placedAt: string;
-  itemSummary: string;
-  totalSatang: Satang;
-  paymentMethod: PaymentMethod;
-}
 
 export interface AppNotification {
   id: string;

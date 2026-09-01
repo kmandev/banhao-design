@@ -233,10 +233,6 @@ anywhere in the application.
 Everything in §13 is blocked on something outside engineering. What is not:
 
 - Filling `components.schemas` in the OpenAPI contract (§6).
-- Reconciling `apps/customer/src/mocks/types.ts`, which still encodes the
-  superseded 12-state order machine alongside the nine-state constant. The
-  remaining half needs the exception **state names** settled (UX-Q-009), so
-  only the accepted nine can be reconciled now.
 - Further test and contract hardening, on the pattern of the rider
   controller's HTTP-boundary suite.
 - Documentation reconciliation, of which this file is one instance.

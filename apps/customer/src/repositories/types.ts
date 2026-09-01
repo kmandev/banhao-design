@@ -145,11 +145,10 @@ export interface OrderCreationRepository {
  * A read, not a write, so it goes client → Supabase directly under RLS
  * (DEC-APP-008) rather than through the API — `orders_select_customer` and
  * its three sibling policies exist precisely for this. Deliberately its own
- * interface rather than an addition to `OrderRepository`: that one's
- * `OrderSummary` type carries the superseded 12-state mock vocabulary
- * (`src/mocks/types.ts`). The real C-16, C-19, and C-14 read screens all use
- * this production contract instead — this is the same "old and new contract
- * coexist" shape `CatalogRepository` went through in Phase C.
+ * interface rather than an addition to `OrderRepository`: history is a list of
+ * summaries and detail is one whole order, and a repository that returned both
+ * would make every history read pay for line items nothing on that screen
+ * shows.
  *
  * `null` means the order does not exist or is not the caller's own — RLS
  * makes the two indistinguishable, which is the safe behaviour to expose.

@@ -2,14 +2,12 @@
  * Customer App order domain — the production contract (Phase E-3B.1).
  *
  * These types describe what the **deployed schema actually holds**
- * (`supabase/migrations/20260811000005_order_domain.sql`), not the mock
- * `OrderSummary`/`OrderState` in `src/mocks/types.ts` — that pair carries the
- * superseded 12-state machine (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`,
- * `COMPLETED`, `NO_DRIVER`) and CLAUDE.md forbids using those names in new
- * work. This file is the source for the real order-history, detail, and
- * tracking reads; it exists alongside the mock pair in the same way
- * `domain/catalog.ts` sits alongside the old catalog mock types without
- * replacing unrelated work in one sweep.
+ * (`supabase/migrations/20260811000005_order_domain.sql`). They are the only
+ * order vocabulary in the app: the pre-DEC-019 12-state mock pair that used to
+ * sit in `src/mocks/types.ts` (`NEW`, `ACCEPTED`, `READY`, `DRIVER_ASSIGNED`,
+ * `COMPLETED`, `NO_DRIVER` — names CLAUDE.md forbids in new work) is deleted,
+ * having outlived its last reader. This file is the source for the real
+ * order-history, detail, and tracking reads.
  *
  * Money is integer satang throughout (CON-003) — never a float, never Baht.
  *

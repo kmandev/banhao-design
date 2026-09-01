@@ -11,7 +11,7 @@
  * later touches one layer rather than every screen. See brief §13.
  */
 
-import type { Category, Shop, MenuItem, OrderSummary, AppNotification, Address } from './types';
+import type { Category, Shop, MenuItem, AppNotification, Address } from './types';
 
 export const categories: Category[] = [
   { id: 'tam-sang', icon: '🍜', name: 'ตามสั่ง' },
@@ -208,38 +208,13 @@ export const addresses: Address[] = [
   },
 ];
 
-export const orders: OrderSummary[] = [
-  {
-    id: 'BH000125',
-    shopName: 'ส้มตำป้าทองดี (ตัวอย่าง)',
-    glyph: '🥗',
-    orderState: 'DELIVERING',
-    placedAt: '18:40',
-    itemSummary: 'ส้มตำไทยไข่เค็ม, ผัดกะเพราหมูสับ',
-    totalSatang: 13000,
-    paymentMethod: 'PROMPTPAY',
-  },
-  {
-    id: 'BH000118',
-    shopName: 'ก๋วยเตี๋ยวลุงหนวด (ตัวอย่าง)',
-    glyph: '🍜',
-    orderState: 'COMPLETED',
-    placedAt: 'เมื่อวาน 12:15',
-    itemSummary: 'ก๋วยเตี๋ยวหมูน้ำตก',
-    totalSatang: 7000,
-    paymentMethod: 'CASH',
-  },
-  {
-    id: 'BH000104',
-    shopName: 'ครัวป้าน้อยตำแซ่บ (ตัวอย่าง)',
-    glyph: '🌶️',
-    orderState: 'CANCELLED',
-    placedAt: '7 ส.ค. 19:02',
-    itemSummary: 'ตำซั่วปูปลาร้า',
-    totalSatang: 8500,
-    paymentMethod: 'PROMPTPAY',
-  },
-];
+/*
+ * The `orders` fixture used to live here. It carried the superseded 12-state
+ * vocabulary and non-UUID ids (`BH000125`), and its last reader went away when
+ * order history became a live Supabase read — see the comment on
+ * `mockOrderRepository` in `src/repositories/index.ts` for why the fixture is
+ * empty rather than fabricated.
+ */
 
 export const notifications: AppNotification[] = [
   {
