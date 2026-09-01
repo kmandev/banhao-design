@@ -16,6 +16,12 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "@banhao/admin#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
+    "@banhao/merchant#typecheck": {
+      "dependsOn": ["^build", "build"]
     }
   }
 }
