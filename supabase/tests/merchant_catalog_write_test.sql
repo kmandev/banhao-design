@@ -14,7 +14,11 @@
 --   C. reorder_menu_categories / reorder_menu_items: renumbering, tenant
 --      isolation, and rejection of partial or duplicated orders.
 --   D. replace_menu_item_option_groups: replacement at both levels, ordering,
---      the empty case, and that order history is untouched by it.
+--      the empty case, and that order history is untouched by it — including
+--      the case that broke live (a dish whose options are referenced by a real
+--      order line), the survival of the provenance id after the catalogue row
+--      it pointed at is gone, and proof that dropping that FK in
+--      20260902000001 left the append-only trigger fully strict.
 
 \set ON_ERROR_STOP on
 
@@ -513,6 +517,23 @@ select test_assert(
 
 -- D9. Order history is untouched by an option rewrite. This is the reason
 -- recreating rows is safe at all: order_item_options snapshots names as text.
+--
+-- IMPORTANT — why this fixture sets `menu_option_id` explicitly.
+--
+-- Until 20260902000001 this block inserted the historical row WITHOUT
+-- `menu_option_id`, leaving it NULL. That made the whole assertion vacuous:
+-- with no live option referenced, the FK
+-- `order_item_options_menu_option_id_fkey` (ON DELETE SET NULL) had nothing
+-- to null, so it never fired, so `order_item_options_reject_mutation` never
+-- saw an UPDATE, so the rewrite below trivially succeeded. Meanwhile
+-- `create_order()` (20260819000001) populates that column on EVERY real
+-- order line — so the one shape this test existed to cover was the one shape
+-- it could not reach, and the failure escaped to live `banhao-dev`, where
+-- `replace_menu_item_option_groups` raised 42501 for any dish that had ever
+-- been ordered.
+--
+-- The fixture now points at a REAL `menu_options` row, exactly as a real
+-- order does. Before 20260902000001 dropped the FK, D9 fails here.
 insert into public.addresses (id, user_id, recipient_name, recipient_phone, address_line)
 values ('2f000000-0000-0000-0000-00000000000a', :'OWNER_M', 'ผู้รับ', '+66892220001', '1 หมู่ 1');
 
@@ -535,21 +556,129 @@ insert into public.order_items (
   :'REST_A', :'ITEM_1', 'ข้าวผัดกุ้ง', 6500, 1, 6500
 );
 
-insert into public.order_item_options (
-  id, order_item_id, group_name_snapshot, option_name_snapshot, price_delta_satang
-) values (
-  '2f000000-0000-0000-0000-000000000003', '2f000000-0000-0000-0000-000000000002',
-  'ระดับความเผ็ด', 'เผ็ดมาก', 0
+-- The live option this historical line was ordered from. D8b established
+-- that ITEM_1 currently holds exactly one group; take its option.
+select o.id as hist_option_id
+  from public.menu_options o
+  join public.menu_option_groups g on g.id = o.group_id
+ where g.menu_item_id = :'ITEM_1'
+ order by g.sort_order, o.sort_order
+ limit 1
+\gset
+
+select test_assert(
+  :'hist_option_id' is not null,
+  'D9a. Fixture precondition: a live menu_options row exists to reference'
 );
 
+insert into public.order_item_options (
+  id, order_item_id, menu_option_id, group_name_snapshot, option_name_snapshot, price_delta_satang
+) values (
+  '2f000000-0000-0000-0000-000000000003', '2f000000-0000-0000-0000-000000000002',
+  :'hist_option_id', 'ระดับความเผ็ด', 'เผ็ดมาก', 0
+);
+
+select test_assert(
+  (select menu_option_id from public.order_item_options
+    where id = '2f000000-0000-0000-0000-000000000003') = :'hist_option_id'::uuid,
+  'D9b. The historical line references a real, live menu_options row — the shape create_order() always writes'
+);
+
+-- The regression itself: this call deletes the referenced option. Before
+-- 20260902000001 the FK turned that into an UPDATE on an append-only row and
+-- the whole transaction aborted with 42501.
 select public.replace_menu_item_option_groups(:'ITEM_1', '[]'::jsonb);
 
+select test_assert(
+  (select count(*) from public.menu_option_groups where menu_item_id = :'ITEM_1') = 0,
+  'D9c. Replacing the options of a dish that HAS order history now succeeds (the live M-11 blocker)'
+);
+
+select test_assert(
+  not exists (select 1 from public.menu_options where id = :'hist_option_id'::uuid),
+  'D9d. The referenced catalogue option really was deleted — the FK path was genuinely exercised'
+);
+
+-- Test B — historical snapshot preservation.
 select test_assert(
   (select group_name_snapshot from public.order_item_options
     where id = '2f000000-0000-0000-0000-000000000003') = 'ระดับความเผ็ด'
   and (select option_name_snapshot from public.order_item_options
-    where id = '2f000000-0000-0000-0000-000000000003') = 'เผ็ดมาก',
+    where id = '2f000000-0000-0000-0000-000000000003') = 'เผ็ดมาก'
+  and (select price_delta_satang from public.order_item_options
+    where id = '2f000000-0000-0000-0000-000000000003') = 0,
   'D9. Rewriting a dish''s options leaves a historical order''s snapshots untouched'
+);
+
+-- Test C — provenance preservation. The point of dropping the FK rather than
+-- letting it SET NULL: the id survives the catalogue row it pointed at.
+select test_assert(
+  (select menu_option_id from public.order_item_options
+    where id = '2f000000-0000-0000-0000-000000000003') = :'hist_option_id'::uuid,
+  'D10. Provenance survives: menu_option_id still holds its original value after the catalogue option was deleted'
+);
+
+-- Test D — the append-only guarantee is NOT what was relaxed. Every mutation
+-- of order_item_options is still refused, for every role, including
+-- service_role (which is `bypassrls` — so this proves the TRIGGER refuses it,
+-- not RLS).
+select test_assert(
+  test_call_as('service_role',
+    $stmt$update public.order_item_options set price_delta_satang = 999
+       where id = '2f000000-0000-0000-0000-000000000003'$stmt$
+  ) like 'BLOCKED%',
+  'D11. service_role still cannot UPDATE order_item_options — DEC-014/034 unweakened'
+);
+select test_assert(
+  test_call_as('service_role',
+    $stmt$update public.order_item_options set menu_option_id = null
+       where id = '2f000000-0000-0000-0000-000000000003'$stmt$
+  ) like 'BLOCKED%',
+  'D12. Not even menu_option_id may be updated — the fix removed the cascade, it did not carve out a writable column'
+);
+select test_assert(
+  test_call_as('service_role',
+    $stmt$delete from public.order_item_options
+       where id = '2f000000-0000-0000-0000-000000000003'$stmt$
+  ) like 'BLOCKED%',
+  'D13. service_role still cannot DELETE order_item_options'
+);
+select test_assert(
+  (select count(*) from public.order_item_options
+    where id = '2f000000-0000-0000-0000-000000000003') = 1
+  and (select price_delta_satang from public.order_item_options
+    where id = '2f000000-0000-0000-0000-000000000003') = 0,
+  'D14. ... and the row is provably still there, unchanged, after all three attempts'
+);
+
+-- The constraint really is gone, and only that one. cart_item_options keeps
+-- its own ON DELETE CASCADE, which is correct and wanted.
+select test_assert(
+  not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.order_item_options'::regclass
+       and contype = 'f'
+       and conname = 'order_item_options_menu_option_id_fkey'
+  ),
+  'D15. order_item_options_menu_option_id_fkey no longer exists'
+);
+select test_assert(
+  exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.cart_item_options'::regclass
+       and contype = 'f'
+       and conname = 'cart_item_options_menu_option_id_fkey'
+  ),
+  'D16. cart_item_options keeps its FK — an open cart SHOULD lose a deleted option'
+);
+select test_assert(
+  exists (
+    select 1 from pg_trigger
+     where tgrelid = 'public.order_item_options'::regclass
+       and tgname = 'order_item_options_reject_mutation'
+       and not tgisinternal
+  ),
+  'D17. The append-only trigger is still attached to order_item_options'
 );
 
 \echo '--- D. replace_menu_item_option_groups: PASS ---'

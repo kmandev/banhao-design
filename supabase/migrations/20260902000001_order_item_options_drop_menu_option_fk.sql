@@ -1,0 +1,86 @@
+-- BANHAO — M-11: order_item_options.menu_option_id becomes provenance-only
+--
+-- 1. WHY. `replace_menu_item_option_groups`
+--    (20260901000002_merchant_catalog_write_functions.sql) fails — live,
+--    reproducibly, with SQLSTATE 42501 — for any dish whose options have
+--    ever been ordered. The failure is not in that function; it is the
+--    collision of two mechanisms that were each correct in isolation:
+--
+--      a. `order_item_options.menu_option_id` carried
+--         `references public.menu_options (id) ON DELETE SET NULL`
+--         (20260811000005_order_domain.sql).
+--      b. `order_item_options_reject_mutation` fires
+--         BEFORE UPDATE OR DELETE and calls `reject_mutation()`, which
+--         raises unconditionally with **no service_role escape hatch**
+--         (20260811000001_identity_domain.sql).
+--
+--    The function deletes a dish's `menu_option_groups`; `menu_options`
+--    cascades from that group (20260811000003_catalog_domain.sql); the FK
+--    then attempts `SET NULL`, which is an UPDATE on `order_item_options`;
+--    the append-only trigger refuses it; the whole transaction rolls back.
+--    A merchant can therefore never edit the options of a dish anyone has
+--    ordered.
+--
+--    Note the shape of this bug: `ON DELETE SET NULL` is not the missing
+--    fix, it IS the mechanism that fails. Re-declaring it would change
+--    nothing.
+--
+-- 2. WHAT THIS MIGRATION DOES. Drops that one foreign key. Nothing else.
+--    The column stays, with the same name, type and nullability, and keeps
+--    every value it already holds.
+--
+-- 3. WHY DROPPING THE FK IS THE RIGHT FIX, AND NOT A LOSS.
+--
+--    * The snapshot is the truth, by design. `order_item_options` stores
+--      `group_name_snapshot`, `option_name_snapshot` and
+--      `price_delta_satang` as its own columns precisely so that a
+--      historical order is explicable without the live catalogue.
+--      docs/DATABASE_DESIGN.md § 5.5 states this for the twin column on
+--      `order_items`: "the snapshot is the truth; the FK is only a
+--      convenience link back to the live item. Making it NOT NULL/RESTRICT
+--      would let a historical order block a merchant from ever removing a
+--      discontinued dish." That intent is what this migration restores.
+--
+--    * Nothing reads the column. Verified across all three clients: the
+--      customer order-detail path selects
+--      `id, order_item_id, group_name_snapshot, option_name_snapshot,
+--      price_delta_satang` (apps/customer/src/data/orderQueries.ts); the
+--      rider path selects `id, order_item_id, group_name_snapshot,
+--      option_name_snapshot, created_at`
+--      (apps/driver/src/data/riderOrderQueries.ts); the merchant path reads
+--      the snapshots only. `menu_option_id` is written once by
+--      `create_order()` (20260819000001) and read by no application query.
+--
+--    * Provenance is strictly BETTER after this change, not worse. Under
+--      `ON DELETE SET NULL` the id was destined to be erased the first time
+--      a merchant edited that dish's options. With no FK it survives, so a
+--      future refund or forensic question (BQ-031) can still ask which
+--      catalogue option a historical line came from.
+--
+--    * The append-only guarantee is untouched. This migration deliberately
+--      does NOT relax `reject_mutation()`, does not add a service_role
+--      exception, and does not narrow the trigger to permit a "harmless"
+--      column. DEC-014 / DEC-034 hold exactly as before: no UPDATE and no
+--      DELETE on `order_item_options`, for any role, ever. Removing the
+--      only mechanism that was trying to mutate the row is what makes that
+--      guarantee enforceable rather than something a cascade could trip.
+--
+-- 4. WHAT THIS MIGRATION DOES NOT TOUCH — each deliberate:
+--    * `order_item_options_reject_mutation` and `reject_mutation()` — see
+--      above; the whole point is to leave them strict.
+--    * The column itself: not dropped, not renamed, nullability unchanged.
+--    * `order_items.menu_item_id`, which carries the identical latent
+--      contradiction but cannot fire today because `menu_items` is
+--      delete-protected by `menu_items_reject_delete`. It is a separate
+--      decision and is out of scope here.
+--    * `cart_item_options.menu_option_id`, whose `ON DELETE CASCADE` is
+--      correct and wanted: deleting an option should remove it from open
+--      carts, and the customer app revalidates a cart at checkout.
+--    * `replace_menu_item_option_groups` — unchanged. It was never wrong.
+--    * No RLS policy, no grant, no trigger, no index, no other constraint.
+
+alter table public.order_item_options
+  drop constraint order_item_options_menu_option_id_fkey;
+
+comment on column public.order_item_options.menu_option_id is
+  'Provenance only — which catalogue option this line was chosen from, recorded at order creation. Intentionally carries NO foreign key: group_name_snapshot / option_name_snapshot / price_delta_satang are the historical truth, and an FK here could only act by mutating this append-only row (ON DELETE SET NULL is an UPDATE), which order_item_options_reject_mutation refuses for every role. Dropping the FK is what lets a merchant edit a dish''s options after it has been ordered, while leaving DEC-014 / DEC-034 append-only protection completely unweakened. The value may reference a menu_options row that no longer exists; that is expected and is not an integrity fault.';
