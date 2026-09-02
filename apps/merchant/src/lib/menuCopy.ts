@@ -95,6 +95,19 @@ export const menuCopy = {
   rename: 'เปลี่ยนชื่อ',
   moved: (name: string, position: number) => `ย้าย ${name} ไปลำดับที่ ${position}`,
 
+  // Item reorder — M-11 §17 addendum
+  reorderEntry: '⇅ จัดลำดับ',
+  reorderEntryLabel: (categoryName: string) => `⇅ จัดลำดับ: ${categoryName}`,
+  reorderModeLabel: 'กำลังจัดลำดับ',
+  reorderChanged: 'ลำดับเปลี่ยนแล้ว — ยังไม่บันทึก',
+  reorderSaveFailed: 'จัดลำดับไม่สำเร็จ · ลองอีกครั้ง',
+  reorderSaved: 'บันทึกลำดับแล้ว',
+  dragHandleLabel: (name: string) => `ลากเพื่อจัดลำดับ ${name}`,
+  movedItem: (name: string, position: number, total: number) =>
+    `ย้าย ${name} ไปตำแหน่งที่ ${position} จาก ${total}`,
+  reorderModeEnter: (categoryName: string) => `เข้าสู่โหมดจัดลำดับ ${categoryName}`,
+  reorderModeExit: 'ออกจากโหมดจัดลำดับ',
+
   // Removal — M-11 §08. Never the word ลบ.
   removeItemTitle: (name: string) => `นำ “${name}” ออกจากเมนู`,
   removeItemBody: [

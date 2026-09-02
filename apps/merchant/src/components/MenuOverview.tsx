@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { colors, spacing } from '@banhao/ui/theme';
 import type { CreateMenuItemInput, MenuOptionGroupInput, UpdateMenuItemInput } from '@banhao/validation';
 import type { MenuCategory, MenuItem, MenuOptionGroup } from '../domain/menu';
@@ -14,6 +14,7 @@ import { AvailabilitySwitch } from './AvailabilitySwitch';
 import { CategoryManagerDialog } from './CategoryManagerDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ErrorState } from './ErrorState';
+import { ItemReorderList } from './ItemReorderList';
 import { MenuItemDrawer } from './MenuItemDrawer';
 import { OptionGroupEditor } from './OptionGroupEditor';
 import { Spinner } from './Spinner';
@@ -61,6 +62,13 @@ export function MenuOverview({
   const [busy, setBusy] = useState<Busy>({ kind: 'idle' });
   const [failure, setFailure] = useState<{ forbidden: boolean } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const [reordering, setReordering] = useState<{
+    categoryId: string;
+    saving: boolean;
+    failed: boolean;
+  } | null>(null);
+  const reorderTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const sections = menu.state.status === 'ready' ? menu.state.sections : [];
   const categories: MenuCategory[] = useMemo(
@@ -88,6 +96,25 @@ export function MenuOverview({
       setFailure({ forbidden });
     } finally {
       setBusy({ kind: 'idle' });
+    }
+  };
+
+  const exitReorder = () => {
+    setReordering(null);
+    reorderTriggerRef.current?.focus();
+  };
+
+  const saveItemOrder = async (categoryId: string, menuItemIds: string[]) => {
+    setReordering({ categoryId, saving: true, failed: false });
+    try {
+      await repository.reorderItems(restaurantId, categoryId, menuItemIds);
+      menu.reload();
+      setToast(menuCopy.reorderSaved);
+      exitReorder();
+    } catch {
+      // Stays in reorder mode with the draft intact — ItemReorderList holds
+      // its own draft state and does not lose it on a failed save (§17-F).
+      setReordering({ categoryId, saving: false, failed: true });
     }
   };
 
@@ -180,7 +207,14 @@ export function MenuOverview({
         </div>
       ) : null}
 
-      {sections.map((section, index) => (
+      {sections.map((section, index) => {
+        const isReorderingThis = reordering?.categoryId === section.category.id;
+        // Another category's draft is open — this entry stays visible but
+        // inert so switching categories cannot silently discard it (§17: no
+        // autosave, and Cancel/Escape are the only ways to discard a draft).
+        const reorderBlockedByOther = reordering !== null && !isReorderingThis;
+
+        return (
         <section key={section.category.id} style={m.panel}>
           <div style={m.sectionHeader}>
             <h2 style={{ fontSize: 16, fontWeight: 600, color: colors.textPrimary, margin: 0 }}>
@@ -190,8 +224,42 @@ export function MenuOverview({
             <span style={{ ...m.fieldHint, marginLeft: 'auto' }}>
               {menuCopy.categoryPosition(index + 1)}
             </span>
+            {/* §17-A: hidden entirely below two items — an empty or single-item
+                category has nothing to reorder. */}
+            {!isReorderingThis && section.items.length >= 2 ? (
+              <button
+                type="button"
+                style={m.secondaryButton}
+                aria-label={menuCopy.reorderEntryLabel(section.category.name)}
+                aria-disabled={reorderBlockedByOther}
+                title={reorderBlockedByOther ? menuCopy.reorderChanged : undefined}
+                onClick={(event) => {
+                  if (reorderBlockedByOther) return;
+                  reorderTriggerRef.current = event.currentTarget;
+                  setReordering({ categoryId: section.category.id, saving: false, failed: false });
+                  setAnnouncement(menuCopy.reorderModeEnter(section.category.name));
+                }}
+                data-testid={`reorder-entry-${section.category.name}`}
+              >
+                {menuCopy.reorderEntry}
+              </button>
+            ) : null}
           </div>
 
+          {isReorderingThis ? (
+            <ItemReorderList
+              categoryName={section.category.name}
+              items={section.items}
+              saving={reordering.saving}
+              failed={reordering.failed}
+              onSave={(menuItemIds) => void saveItemOrder(section.category.id, menuItemIds)}
+              onCancel={() => {
+                setAnnouncement(menuCopy.reorderModeExit);
+                exitReorder();
+              }}
+            />
+          ) : (
+            <>
           {section.items.length === 0 ? (
             <div style={{ padding: `${spacing.md}px 0` }} data-testid={`empty-category-${section.category.name}`}>
               <p style={m.fieldHint}>{menuCopy.emptyCategory}</p>
@@ -259,8 +327,11 @@ export function MenuOverview({
               </button>
             </div>
           ))}
+            </>
+          )}
         </section>
-      ))}
+        );
+      })}
 
       <MenuItemDrawer
         open={drawerOpen}
@@ -333,6 +404,9 @@ export function MenuOverview({
 
       <span style={m.visuallyHidden} aria-live="polite" data-testid="menu-toast">
         {toast ?? ''}
+      </span>
+      <span style={m.visuallyHidden} aria-live="polite" data-testid="menu-mode-announcement">
+        {announcement}
       </span>
     </div>
   );

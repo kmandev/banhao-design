@@ -519,3 +519,99 @@ describe('MenuOverview — option groups (M-11 §06)', () => {
     expect(within(editor).getByText('ลูกค้าต้องเลือกก่อนสั่ง')).toBeInTheDocument();
   });
 });
+
+describe('MenuOverview — item reorder (M-11 §17 addendum)', () => {
+  it('shows the entry point on a category with 2+ items', async () => {
+    await renderOverview();
+
+    expect(screen.getByTestId('reorder-entry-แนะนำ')).toBeInTheDocument();
+  });
+
+  it('hides the entry point on a one-item category', async () => {
+    const oneItemSections: MenuSection[] = [
+      {
+        category: { id: 'cat-1', name: 'ของหวาน', sortOrder: 0, archivedAt: null },
+        items: [item()],
+      },
+    ];
+    await renderOverview(makeRepository({ listMenu: jest.fn().mockResolvedValue(oneItemSections) }));
+
+    expect(screen.queryByTestId('reorder-entry-ของหวาน')).toBeNull();
+  });
+
+  it('hides the entry point on an empty category', async () => {
+    await renderOverview();
+
+    expect(screen.queryByTestId('reorder-entry-เครื่องดื่ม')).toBeNull();
+  });
+
+  it('entering reorder mode hides normal item actions (edit, availability, ⋯)', async () => {
+    await renderOverview();
+
+    fireEvent.click(screen.getByTestId('reorder-entry-แนะนำ'));
+
+    expect(screen.queryByTestId('edit-item-ข้าวผัดกุ้ง')).toBeNull();
+    expect(screen.queryByTestId('remove-item-ข้าวผัดกุ้ง')).toBeNull();
+    expect(screen.getByTestId('reorder-row-ข้าวผัดกุ้ง')).toBeInTheDocument();
+  });
+
+  it('reorder is scoped to the category it was opened from — other categories are untouched', async () => {
+    await renderOverview();
+
+    fireEvent.click(screen.getByTestId('reorder-entry-แนะนำ'));
+
+    // เครื่องดื่ม (empty) still renders its normal empty-category state, not a
+    // reorder list — the other category's mode is unaffected.
+    expect(screen.getByTestId('empty-category-เครื่องดื่ม')).toBeInTheDocument();
+  });
+
+  it('save calls reorderItems with the restaurant, category and full ordered id list', async () => {
+    const repository = await renderOverview();
+
+    fireEvent.click(screen.getByTestId('reorder-entry-แนะนำ'));
+    fireEvent.click(screen.getByTestId('reorder-down-ข้าวผัดกุ้ง'));
+    fireEvent.click(screen.getByTestId('reorder-save'));
+
+    await waitFor(() =>
+      expect(repository.reorderItems).toHaveBeenCalledWith('rest-1', 'cat-1', ['item-2', 'item-1']),
+    );
+  });
+
+  it('exits reorder mode and reloads the menu on a successful save', async () => {
+    await renderOverview();
+
+    fireEvent.click(screen.getByTestId('reorder-entry-แนะนำ'));
+    fireEvent.click(screen.getByTestId('reorder-down-ข้าวผัดกุ้ง'));
+    fireEvent.click(screen.getByTestId('reorder-save'));
+
+    await waitFor(() => expect(screen.queryByTestId('reorder-row-ข้าวผัดกุ้ง')).toBeNull());
+    expect(screen.getByTestId('edit-item-ข้าวผัดกุ้ง')).toBeInTheDocument();
+  });
+
+  it('a failed save stays in reorder mode with the draft intact, and offers retry', async () => {
+    const repository = makeRepository({
+      reorderItems: jest.fn().mockRejectedValueOnce(new Error('network')),
+    });
+    await renderOverview(repository);
+
+    fireEvent.click(screen.getByTestId('reorder-entry-แนะนำ'));
+    fireEvent.click(screen.getByTestId('reorder-down-ข้าวผัดกุ้ง'));
+    fireEvent.click(screen.getByTestId('reorder-save'));
+
+    await screen.findByTestId('reorder-error');
+    // Still in reorder mode, and the moved order survived the failure.
+    expect(screen.getByTestId('reorder-position-ข้าวผัดกุ้ง')).toHaveTextContent('2');
+  });
+
+  it('cancel exits reorder mode without calling reorderItems', async () => {
+    const repository = await renderOverview();
+
+    fireEvent.click(screen.getByTestId('reorder-entry-แนะนำ'));
+    fireEvent.click(screen.getByTestId('reorder-down-ข้าวผัดกุ้ง'));
+    fireEvent.click(screen.getByTestId('reorder-cancel'));
+
+    expect(screen.queryByTestId('reorder-row-ข้าวผัดกุ้ง')).toBeNull();
+    expect(screen.getByTestId('edit-item-ข้าวผัดกุ้ง')).toBeInTheDocument();
+    expect(repository.reorderItems).not.toHaveBeenCalled();
+  });
+});
