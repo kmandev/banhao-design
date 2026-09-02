@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E;text-decoration:none}
+  a:hover{color:#C2431F}
+</style>
+</helmet>
+
+<div style="max-width:1520px;margin:0 auto;padding:48px 40px 140px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:0 0 auto">M</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">M-10 — RESTAURANT PROFILE</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · design artifact for <span style="font-family:'IBM Plex Mono',monospace">docs/design/</span> · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1080px">
+    Screen M-10 <span style="font-family:'IBM Plex Mono',monospace">โปรไฟล์ร้าน</span> — the merchant-facing editor for <span style="font-family:'IBM Plex Mono',monospace">restaurants</span>' descriptive fields. Read against <span style="font-family:'IBM Plex Mono',monospace">20260811000002_merchant_domain.sql</span>, <span style="font-family:'IBM Plex Mono',monospace">20260811000011_rls_policies.sql</span>, the existing cover-upload API, and the merchant web app at <span style="font-family:'IBM Plex Mono',monospace">ac2c88c5</span>.
+    Only the cover photo has a working write path today. Every other field on this page is designed as an editable form control that currently has nowhere to send its data — each is labelled accordingly. In-product copy is Thai, all annotation is English.
+  </div>
+
+  <div style="margin-top:14px;padding:16px 18px;border-radius:16px;background:#FDF6F5;border:1px solid #EFCFCF;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1080px">
+    <strong style="color:#B32B2B">Blocking finding.</strong> <span style="font-family:'IBM Plex Mono',monospace">restaurants</span> has zero INSERT/UPDATE grant to <span style="font-family:'IBM Plex Mono',monospace">authenticated</span> — the RLS migration grants that role SELECT only. The cover-photo flow works because <span style="font-family:'IBM Plex Mono',monospace">RestaurantCoverService</span> writes through the service-role connection after its own guard chain, never through client RLS. Every field this screen edits needs the same shape of new work: a guarded controller route, a service-role write, and — for <span style="font-family:'IBM Plex Mono',monospace">name</span>/<span style="font-family:'IBM Plex Mono',monospace">description</span>/<span style="font-family:'IBM Plex Mono',monospace">phone</span>/<span style="font-family:'IBM Plex Mono',monospace">address_line</span>/<span style="font-family:'IBM Plex Mono',monospace">cuisine</span> — a validation schema in <span style="font-family:'IBM Plex Mono',monospace">packages/validation</span>, none of which exist yet.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="16">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E9E0D5;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- 00 SCOPE -->
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — SCOPE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The descriptive half of the storefront, not its lifecycle</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:20px">A restaurant's identity (<span style="font-family:'IBM Plex Mono',monospace">name</span>, <span style="font-family:'IBM Plex Mono',monospace">description</span>, <span style="font-family:'IBM Plex Mono',monospace">cuisine</span>, <span style="font-family:'IBM Plex Mono',monospace">image_url</span>, <span style="font-family:'IBM Plex Mono',monospace">phone</span>, <span style="font-family:'IBM Plex Mono',monospace">address_line</span>) is one page. Who runs the restaurant, whether it's approved, whether it's open right now, and where its delivery zone sits are each a different, deliberately excluded, domain.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div style="border-radius:20px;border:1px solid #EAE1D6;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#0F8B5F;margin-bottom:14px">IN SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ inScope }}" as="i" hint-placeholder-count="9">
+          <div style="font-size:13.5px;line-height:1.65;color:#3D342C">{{ i }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #EFCFCF;background:#FDF6F5;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#B32B2B;margin-bottom:14px">OUT OF SCOPE FOR M-10</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ outScope }}" as="o" hint-placeholder-count="11">
+          <div style="font-size:13.5px;line-height:1.65;color:#5A4E42">{{ o }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 EXISTING ARCHITECTURE -->
+  <div id="s1" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — EXISTING ARCHITECTURE THIS SCREEN SITS ON</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What this design reuses, verbatim</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:20px">
+    <sc-for list="{{ existingCapabilities }}" as="e" hint-placeholder-count="6">
+      <div style="border-radius:18px;border:1px solid #E7F4EE;background:#F4FAF7;padding:18px 20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.1em;padding:3px 9px;border-radius:8px;background:#0F8B5F;color:#fff">EXISTING</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ e.file }}</div>
+        </div>
+        <div style="font-size:15px;font-weight:700;line-height:1.55">{{ e.title }}</div>
+        <div style="font-size:13px;line-height:1.8;color:#5A4E42;margin-top:5px">{{ e.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 02 NAVIGATION -->
+  <div id="s2" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — NAVIGATION / ENTRY POINT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">ร้านของฉัน resolves to one page, not a sub-section</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">The shipped <span style="font-family:'IBM Plex Mono',monospace">AppShell.tsx</span> still renders a single non-interactive <span style="font-family:'IBM Plex Mono',monospace">แดชบอร์ด</span> label — M-11 and M-12 already found this and drew the five-item nav the UX spec calls for. This screen is what <span style="font-family:'IBM Plex Mono',monospace">ร้านของฉัน</span> opens directly: no tabs, no sub-nav. Opening hours (M-12) and menu (M-11) keep their own top-level nav items; nothing here duplicates them. There is exactly one restaurant selector in the product — <span style="font-family:'IBM Plex Mono',monospace">เปลี่ยนร้าน</span> in the header — and this screen does not add a second one.</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;padding:0;overflow:hidden;max-width:1100px">
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid #EAE1D6">
+      <div style="width:34px;height:34px;border-radius:10px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700">ฮ</div>
+      <div style="font-size:14px;font-weight:700">ร้านตามสั่งป้าสมร</div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ shellNav }}" as="t" hint-placeholder-count="5">
+          <div style="height:44px;display:flex;align-items:center;padding:0 14px;border-radius:12px;font-size:14px;{{ t.style }}">{{ t.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="padding:16px 22px;font-size:13px;color:#7A6E64;display:flex;align-items:center;gap:8px">
+      <span>คลิก</span><span style="font-weight:600;color:#1F1A16">ร้านของฉัน</span><span>→ เปิดหน้าโปรไฟล์ร้านนี้ทันที ไม่มีเมนูย่อย</span>
+    </div>
+  </div>
+
+  <!-- 03 DESKTOP PAGE -->
+  <div id="s3" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — STATE A · DESKTOP PAGE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Desktop · ≥1024px · one form, one save</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">Cover photo up top since it is the one field with a working upload flow already; the rest of the form below it, grouped by how they will be implemented rather than by visual category — a merchant sees no difference, but §11's data contract keeps this ordering.</div>
+
+  <div style="width:1220px;max-width:100%;border-radius:22px;border:1px solid #E2D8CB;background:#F6F0E7;overflow:hidden;box-shadow:0 10px 40px rgba(31,26,22,.07)">
+    <div style="height:72px;background:#fff;border-bottom:1px solid #EAE1D6;display:flex;align-items:center;gap:16px;padding:0 24px">
+      <div style="width:38px;height:38px;border-radius:12px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700">ฮ</div>
+      <div>
+        <div style="font-size:17px;font-weight:700;line-height:1.4">ร้านตามสั่งป้าสมร</div>
+        <div style="font-size:12px;color:#7A6E64">ร้านของฉัน · โปรไฟล์ร้าน</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <sc-for list="{{ shellNav }}" as="t" hint-placeholder-count="5">
+          <div style="height:44px;display:flex;align-items:center;padding:0 14px;border-radius:12px;font-size:14px;{{ t.style }}">{{ t.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="padding:24px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap">
+        <div style="font-size:22px;font-weight:700">โปรไฟล์ร้าน</div>
+        <div style="font-size:12px;font-weight:600;padding:5px 11px;border-radius:9px;background:#E7F4EE;color:#0F8B5F">เปิดให้บริการ</div>
+        <div style="flex:1"></div>
+        <div style="font-size:13px;color:#7A6E64">บันทึกล่าสุดเมื่อ 2 วันก่อน</div>
+      </div>
+
+      <div style="border-radius:20px;background:#fff;border:1px solid #EAE1D6;overflow:hidden">
+        <div style="position:relative;height:260px;background:linear-gradient(135deg,#EFE7DC,#E2D8CB);display:flex;align-items:center;justify-content:center">
+          <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(45deg,rgba(31,26,22,.03) 0 2px,transparent 2px 14px)"></div>
+          <div style="font-size:13px;color:#9A8C7E;z-index:1">รูปหน้าปกร้าน (ตัวอย่างพื้นที่แสดงรูป)</div>
+          <div style="position:absolute;bottom:18px;right:20px;height:44px;padding:0 18px;border-radius:14px;background:rgba(31,26,22,.72);color:#fff;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px">เปลี่ยนรูปภาพ</div>
+        </div>
+
+        <div style="padding:24px;display:flex;flex-direction:column;gap:20px">
+          <sc-for list="{{ desktopFields }}" as="f" hint-placeholder-count="6">
+            <div style="display:{{ f.display }};gap:20px">
+              <sc-for list="{{ f.cols }}" as="c" hint-placeholder-count="2">
+                <div style="flex:{{ c.flex }};display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="font-size:13px;font-weight:600">{{ c.label }}</div>
+                    <sc-if value="{{ c.badge }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:7px;{{ c.badgeStyle }}">{{ c.badge }}</div>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ c.isTextarea }}" hint-placeholder-val="{{ false }}">
+                    <div style="min-height:96px;border-radius:12px;border:1px solid {{ c.borderColor }};background:{{ c.bg }};padding:12px 14px;font-size:14px;color:{{ c.textColor }}">{{ c.value }}</div>
+                  </sc-if>
+                  <sc-if value="{{ c.isStatic }}" hint-placeholder-val="{{ false }}">
+                    <div style="height:48px;border-radius:12px;border:1px dashed #D9CDBD;background:#F6F0E7;display:flex;align-items:center;padding:0 14px;font-size:14px;color:#7A6E64">{{ c.value }}</div>
+                  </sc-if>
+                  <sc-if value="{{ c.isInput }}" hint-placeholder-val="{{ false }}">
+                    <div style="height:48px;border-radius:12px;border:1px solid {{ c.borderColor }};background:{{ c.bg }};display:flex;align-items:center;padding:0 14px;font-size:14px;color:{{ c.textColor }}">{{ c.value }}</div>
+                  </sc-if>
+                  <sc-if value="{{ c.hint }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:12px;color:#7A6E64;line-height:1.6">{{ c.hint }}</div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="border-top:1px solid #EAE1D6;background:#FBF7F1;padding:18px 24px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:12.5px;color:#7A6E64;flex:1;line-height:1.7">มีการเปลี่ยนแปลงที่ยังไม่บันทึก</div>
+          <div style="height:52px;display:flex;align-items:center;padding:0 22px;border-radius:16px;border:1px solid #E9E0D5;background:#fff;font-size:15px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+          <div style="height:52px;display:flex;align-items:center;padding:0 26px;border-radius:16px;background:#E4572E;color:#fff;font-size:15px;font-weight:600">บันทึกการเปลี่ยนแปลง</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 FIELD SPEC -->
+  <div id="s4" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — PROFILE FIELDS, ONE BY ONE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every field's editability, source of truth, and treatment</div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">
+    <sc-for list="{{ fieldSpecs }}" as="fs" hint-placeholder-count="8">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 20px;display:grid;grid-template-columns:140px 100px 1fr 200px;gap:16px;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">{{ fs.column }}</div>
+        <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;{{ fs.tagStyle }};align-self:start;white-space:nowrap">{{ fs.tag }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#3D342C">{{ fs.treatment }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#7A6E64">{{ fs.validation }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 05 PHOTO -->
+  <div id="s5" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — RESTAURANT PHOTO</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Reusing the existing R2 presigned upload, states 1–7</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">Two calls exactly as <span style="font-family:'IBM Plex Mono',monospace">RestaurantCoverController</span> exposes them today: <span style="font-family:'IBM Plex Mono',monospace">upload-url</span> then <span style="font-family:'IBM Plex Mono',monospace">complete</span>. Nothing here assumes a new endpoint or a different storage mechanism.</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+    <sc-for list="{{ photoStates }}" as="p" hint-placeholder-count="7">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;overflow:hidden">
+        <div style="height:110px;background:{{ p.previewBg }};display:flex;align-items:center;justify-content:center;position:relative">
+          <div style="font-size:12px;color:#9A8C7E">{{ p.previewLabel }}</div>
+          <sc-if value="{{ p.showBar }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;bottom:10px;left:10px;right:10px;height:6px;border-radius:3px;background:rgba(255,255,255,.5)"><div style="width:{{ p.barPct }};height:6px;border-radius:3px;background:#E4572E"></div></div>
+          </sc-if>
+        </div>
+        <div style="padding:12px 14px">
+          <div style="font-size:12px;font-weight:600;letter-spacing:.08em;color:#A2968A;margin-bottom:4px">{{ p.tag }}</div>
+          <div style="font-size:13.5px;font-weight:700;margin-bottom:4px">{{ p.title }}</div>
+          <div style="font-size:12.5px;line-height:1.65;color:#5A4E42">{{ p.body }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:16px;padding:14px 18px;border-radius:14px;background:#F3EDE4;font-size:13px;line-height:1.75;color:#5A4E42;max-width:900px">
+    <strong>Guidance copy shown under the upload control:</strong> "แนะนำอัตราส่วน 16:9 ขนาดไม่เกิน 5MB (JPG, PNG หรือ WEBP)". The exact size limit and MIME allow-list are asserted here, not verified — this pass did not read <span style="font-family:'IBM Plex Mono',monospace">object-key.ts</span>'s <span style="font-family:'IBM Plex Mono',monospace">mimeTypeForExtension</span>. Confirm against that file before implementation; if it differs, only this copy string changes.
+  </div>
+
+  <!-- 06 FORM BEHAVIOR -->
+  <div id="s6" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — FORM BEHAVIOR</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Loading, dirty state, saving, failure</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px">
+    <sc-for list="{{ formBehaviors }}" as="fb" hint-placeholder-count="7">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 20px;display:grid;grid-template-columns:200px 1fr;gap:18px">
+        <div style="font-size:14px;font-weight:700">{{ fb.title }}</div>
+        <div style="font-size:13.5px;line-height:1.75;color:#3D342C">{{ fb.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 07 VALIDATION -->
+  <div id="s7" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — VALIDATION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">No invented limits — every unconfirmed rule is flagged</div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">
+    <sc-for list="{{ validationRows }}" as="v" hint-placeholder-count="5">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:16px 20px;display:grid;grid-template-columns:120px 1fr 1fr 140px;gap:16px;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">{{ v.field }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#3D342C">{{ v.rule }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#7A6E64">{{ v.errorCopy }}</div>
+        <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;{{ v.tagStyle }};white-space:nowrap;align-self:start">{{ v.tag }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 08 RESPONSIVE -->
+  <div id="s8" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — STATE B · NARROW / MOBILE LAYOUT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">&lt;720px · same form, stacked, sticky save bar</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:900px;margin-bottom:22px">No separate mobile screen. Photo becomes a 16:9 strip at full width, every field stacks to one column, and the save bar becomes fixed to the viewport bottom so it survives scrolling a long form — matching the bottom-bar shadow token already defined for this purpose.</div>
+  <div style="display:flex;gap:28px;flex-wrap:wrap">
+    <div style="width:360px;border-radius:28px;border:1px solid #E2D8CB;background:#211B16;padding:14px;box-shadow:0 20px 50px rgba(31,26,22,.25)">
+      <div style="border-radius:20px;background:#FBF7F1;overflow:hidden;height:680px;display:flex;flex-direction:column">
+        <div style="background:#fff;border-bottom:1px solid #EAE1D6;padding:14px 16px">
+          <div style="font-size:12px;color:#7A6E64;letter-spacing:.08em">BANHAO · ร้านค้า</div>
+          <div style="font-size:17px;font-weight:700;margin-top:2px">โปรไฟล์ร้าน</div>
+        </div>
+        <div style="flex:1;overflow:hidden;padding:14px 16px;display:flex;flex-direction:column;gap:14px">
+          <div style="height:140px;border-radius:16px;background:#EFE7DC;display:flex;align-items:center;justify-content:center;font-size:11.5px;color:#9A8C7E;position:relative">
+            รูปหน้าปกร้าน
+            <div style="position:absolute;bottom:8px;right:8px;height:36px;padding:0 12px;border-radius:11px;background:rgba(31,26,22,.72);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center">เปลี่ยนรูป</div>
+          </div>
+          <sc-for list="{{ mobileFields }}" as="mf" hint-placeholder-count="5">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="font-size:12.5px;font-weight:600">{{ mf.label }}</div>
+              <div style="height:44px;border-radius:11px;border:1px solid {{ mf.borderColor }};background:{{ mf.bg }};display:flex;align-items:center;padding:0 12px;font-size:13px;color:{{ mf.textColor }}">{{ mf.value }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background:#fff;border-top:1px solid #EAE1D6;box-shadow:0 -6px 20px rgba(31,26,22,.06);padding:12px 16px;display:flex;gap:10px">
+          <div style="flex:1;height:48px;border-radius:14px;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#5A4E42">ยกเลิก</div>
+          <div style="flex:1.3;height:48px;border-radius:14px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">บันทึก</div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:12px;justify-content:center">
+      <sc-for list="{{ responsiveNotes }}" as="rn" hint-placeholder-count="5">
+        <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:14px 18px">
+          <div style="font-size:13.5px;font-weight:700;margin-bottom:4px">{{ rn.title }}</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ rn.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 09 ACCESSIBILITY -->
+  <div id="s9" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — ACCESSIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Labels, focus order, announced state</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px">
+    <sc-for list="{{ a11yRows }}" as="ax" hint-placeholder-count="8">
+      <div style="border-radius:16px;border:1px solid #EAE1D6;background:#fff;padding:14px 18px">
+        <div style="font-size:13.5px;font-weight:700;margin-bottom:4px">{{ ax.control }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ ax.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 10 COPY -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — EXACT THAI UX COPY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every string this screen shows</div>
+  <div style="display:flex;flex-direction:column;gap:8px;margin-top:18px">
+    <sc-for list="{{ copyRows }}" as="cp" hint-placeholder-count="20">
+      <div style="border-radius:12px;border:1px solid #EAE1D6;background:#fff;padding:12px 18px;display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:center">
+        <div style="font-size:12px;color:#7A6E64">{{ cp.context }}</div>
+        <div style="font-size:14px;font-weight:600">{{ cp.thai }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 11 DATA CONTRACT -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — DATA CONTRACT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">restaurants — column by column</div>
+  <div style="border-radius:18px;border:1px solid #EAE1D6;background:#fff;overflow:hidden;margin-top:18px">
+    <div style="display:grid;grid-template-columns:180px 90px 130px 1fr;gap:12px;padding:12px 20px;background:#F6F0E7;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>COLUMN</div><div>TYPE</div><div>WRITE PATH</div><div>NOTE</div>
+    </div>
+    <sc-for list="{{ dataContract }}" as="dc" hint-placeholder-count="11">
+      <div style="display:grid;grid-template-columns:180px 90px 130px 1fr;gap:12px;padding:13px 20px;border-top:1px solid #F1E9DE;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;word-break:break-all">{{ dc.column }}</div>
+        <div style="font-size:12px;color:#7A6E64">{{ dc.type }}</div>
+        <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;{{ dc.tagStyle }};align-self:start;white-space:nowrap">{{ dc.tag }}</div>
+        <div style="font-size:12.5px;line-height:1.65;color:#3D342C">{{ dc.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 12 PRODUCT DECISIONS -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — PRODUCT DECISIONS REQUIRED</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Five open questions, none answered here</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px">
+    <sc-for list="{{ productQuestions }}" as="pq" hint-placeholder-count="5">
+      <div style="border-radius:16px;border:1px solid #EFCFCF;background:#FDF6F5;padding:16px 20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#B32B2B">{{ pq.id }}</div>
+          <div style="font-size:14.5px;font-weight:700">{{ pq.title }}</div>
+        </div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ pq.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:22px;border-radius:18px;border:1px solid #EFCFCF;background:#FDF6F5;padding:20px 22px">
+    <div style="font-size:12px;font-weight:600;letter-spacing:.1em;color:#B32B2B;margin-bottom:10px">TEMPORARY CLOSURE — ACCOMMODATED, NOT DESIGNED</div>
+    <div style="font-size:13.5px;line-height:1.8;color:#3D342C;max-width:900px">
+      <span style="font-family:'IBM Plex Mono',monospace">temporarily_closed_until</span> and <span style="font-family:'IBM Plex Mono',monospace">temporary_close_reason</span> exist on the table and this screen's status pill (§03 header) is left as the one place a future closure indicator could attach without reflowing the page. What would be needed: a way to display an active closure end-time and reason next to the status pill, and a control to set/clear both fields.
+      What is deliberately not decided here: exact duration rules, whether reopening is automatic or manual, which restaurant_member role may trigger it, how it interacts with <span style="font-family:'IBM Plex Mono',monospace">status</span>, and any customer-facing copy. This holds the same boundary M-12 already recorded against BQ-007 (OPEN) — hours, temporary closure and order acceptance stay three separate decisions.
+    </div>
+  </div>
+
+  <!-- 13 CONSTRAINTS -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — IMPLEMENTATION CONSTRAINTS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">M10-C01 … C08</div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">
+    <sc-for list="{{ constraints }}" as="ct" hint-placeholder-count="8">
+      <div style="border-radius:14px;border:1px solid #EAE1D6;background:#fff;padding:14px 20px;display:grid;grid-template-columns:90px 1fr;gap:16px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;color:#7A6E64">{{ ct.id }}</div>
+        <div style="font-size:13px;line-height:1.75;color:#3D342C">{{ ct.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 14 DECISIONS -->
+  <div id="s14" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">14 — DESIGN DECISIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">M10-D01 … D08</div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="8">
+      <div style="border-radius:14px;border:1px solid #EAE1D6;background:#fff;padding:16px 20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#C2431F">{{ d.id }}</div>
+          <div style="font-size:14.5px;font-weight:700">{{ d.title }}</div>
+        </div>
+        <div style="font-size:13px;line-height:1.75;color:#3D342C">{{ d.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 15 TRACEABILITY / ASSUMPTIONS / OUT OF SCOPE -->
+  <div id="s15" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">15 — TRACEABILITY, ASSUMPTIONS, OUT OF SCOPE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What this reads, what it assumes, what it deliberately skips</div>
+
+  <div style="font-size:13px;font-weight:700;margin:22px 0 10px;color:#7A6E64;letter-spacing:.05em">TRACEABILITY</div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <sc-for list="{{ traceability }}" as="tr" hint-placeholder-count="10">
+      <div style="font-size:12.5px;line-height:1.8;color:#5A4E42;border-radius:10px;background:#fff;border:1px solid #EAE1D6;padding:10px 16px">
+        <span style="font-family:'IBM Plex Mono',monospace;color:#3D342C">{{ tr.doc }}</span> — {{ tr.use }}
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:13px;font-weight:700;margin:26px 0 10px;color:#7A6E64;letter-spacing:.05em">ASSUMPTIONS</div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <sc-for list="{{ assumptions }}" as="as" hint-placeholder-count="6">
+      <div style="font-size:12.5px;line-height:1.8;color:#5A4E42;border-radius:10px;background:#F3EDE4;padding:10px 16px">{{ as }}</div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:13px;font-weight:700;margin:26px 0 10px;color:#7A6E64;letter-spacing:.05em">EXPLICIT OUT OF SCOPE</div>
+  <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px">
+    <sc-for list="{{ outScope2 }}" as="o2" hint-placeholder-count="10">
+      <div style="font-size:12.5px;line-height:1.8;color:#5A4E42;border-radius:10px;background:#FDF6F5;border:1px solid #EFCFCF;padding:10px 16px">{{ o2 }}</div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:8px;padding:16px 18px;border-radius:14px;background:#F3EDE4;font-size:12.5px;line-height:1.8;color:#5A4E42">
+    No repository file was created, modified, staged, committed or pushed while producing this artifact. Reads only: <span style="font-family:'IBM Plex Mono',monospace">20260811000002_merchant_domain.sql</span>, <span style="font-family:'IBM Plex Mono',monospace">20260811000011_rls_policies.sql</span>, <span style="font-family:'IBM Plex Mono',monospace">restaurant-cover.controller.ts</span>, <span style="font-family:'IBM Plex Mono',monospace">restaurant-cover.service.ts</span>, <span style="font-family:'IBM Plex Mono',monospace">tokens.ts</span>, and — at <span style="font-family:'IBM Plex Mono',monospace">ac2c88c5</span> — <span style="font-family:'IBM Plex Mono',monospace">AppShell.tsx</span>, <span style="font-family:'IBM Plex Mono',monospace">useRestaurantScope.tsx</span>, <span style="font-family:'IBM Plex Mono',monospace">restaurantScope.ts</span>, <span style="font-family:'IBM Plex Mono',monospace">ErrorState.tsx</span>, <span style="font-family:'IBM Plex Mono',monospace">Spinner.tsx</span>, <span style="font-family:'IBM Plex Mono',monospace">styles.ts</span>, <span style="font-family:'IBM Plex Mono',monospace">select-restaurant/page.tsx</span>.
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const tagExisting = 'background:#E7F4EE;color:#0F8B5F';
+    const tagDecision = 'background:#EFE7DC;color:#1F1A16';
+    const tagApi = 'background:#FDF3E6;color:#C2431F';
+    const tagProduct = 'background:#FDF6F5;color:#B32B2B';
+    const tagOut = 'background:#F3EDE4;color:#5A4E42';
+
+    return {
+      nav: [
+        { href: '#s0', label: '00 Scope' }, { href: '#s1', label: '01 Existing architecture' },
+        { href: '#s2', label: '02 Navigation' }, { href: '#s3', label: '03 Desktop page' },
+        { href: '#s4', label: '04 Field spec' }, { href: '#s5', label: '05 Photo' },
+        { href: '#s6', label: '06 Form behavior' }, { href: '#s7', label: '07 Validation' },
+        { href: '#s8', label: '08 Mobile layout' }, { href: '#s9', label: '09 Accessibility' },
+        { href: '#s10', label: '10 Thai copy' }, { href: '#s11', label: '11 Data contract' },
+        { href: '#s12', label: '12 Product decisions' }, { href: '#s13', label: '13 Constraints' },
+        { href: '#s14', label: '14 Decisions' }, { href: '#s15', label: '15 Traceability' },
+      ],
+
+      inScope: [
+        'Restaurant photo — current/no-photo states, replace, upload progress/failure/success (reuses restaurant-cover API).',
+        'Name, description, phone, address_line — displayed as editable fields; each flagged REQUIRES API IMPLEMENTATION.',
+        'Cuisine — shown, editability held open pending M10-Q-01.',
+        'Status — read-only contextual pill, no transition control.',
+        'Save / cancel, dirty-state protection, validation, loading/saving/error states.',
+        'Responsive behavior — one page, stacks to mobile.',
+        'Accessibility — labels, focus order, announced state.',
+        'Exact Thai copy for every string on the page.',
+        'A named slot for temporary closure to attach later, without redesigning the page.',
+      ],
+      outScope: [
+        'Restaurant switching — the existing เปลี่ยนร้าน control is untouched.',
+        'Merchant account / restaurant_members / role administration.',
+        'Platform Admin UI, restaurant approval workflow, status transitions.',
+        'Temporary-closure interaction, duration rules, auto-reopen logic.',
+        'Map picker, geocoding, pin movement — lat/lng stay non-editable in Phase 1.',
+        'Service-area / zone editor, delivery radius.',
+        'Payment configuration, analytics.',
+        'Menu management (M-11) and opening hours (M-12) — referenced, not redesigned.',
+        'A second upload mechanism — only the existing cover API is used.',
+        'Structured Thai address fields (บ้านเลขที่/ตำบล/etc.) — the schema has one address_line text column.',
+        'Delivery-availability derivation — restaurants.status + hours + closure stay the application\'s concern, unaffected by this screen.',
+      ],
+
+      existingCapabilities: [
+        { file: 'restaurant-cover.controller.ts / .service.ts', title: 'The only working write path on this page', body: 'upload-url then complete, guarded by @Roles(\'MERCHANT\') + @RestaurantScope(), writing image_url through the service-role connection. Reused exactly.' },
+        { file: 'useRestaurantScope.tsx / restaurantScope.ts', title: 'Current-restaurant context, already resolved', body: 'currentRestaurantId is re-verified against restaurant_members on every load — this screen reads it, never re-derives or re-validates it.' },
+        { file: 'AppShell.tsx (ac2c88c5)', title: 'The shell this page mounts inside', body: 'Header, restaurant identity, เปลี่ยนร้าน, ออกจากระบบ are already built. Only the five-item nav (already drawn by M-11/M-12) is new, and not this screen\'s change to make.' },
+        { file: 'ErrorState.tsx / Spinner.tsx / styles.ts', title: 'Shared loading/error primitives', body: 'page/card/title/subtitle/button styles and the existing Spinner + NetworkErrorState components are the ones this screen\'s loading/error states use — no new primitive introduced.' },
+        { file: '20260811000002_merchant_domain.sql', title: 'The exact column set available to edit', body: 'name, description, cuisine, image_url, phone, address_line, lat, lng, status, temporarily_closed_until, temporary_close_reason — nothing else exists to design a field for.' },
+        { file: '20260811000011_rls_policies.sql', title: 'Confirms the RLS gap', body: 'grant select on public.restaurants to anon, authenticated — the only grant. No insert/update grant exists for any client role.' },
+      ],
+
+      shellNav: [
+        { label: 'ออเดอร์วันนี้', style: 'color:#7A6E64' },
+        { label: 'ประวัติ', style: 'color:#7A6E64' },
+        { label: 'เมนู', style: 'color:#7A6E64' },
+        { label: 'ร้านของฉัน', style: 'color:#1F1A16;font-weight:600;background:#FDF3E6' },
+        { label: 'ตั้งค่า', style: 'color:#7A6E64' },
+      ],
+
+      desktopFields: [
+        { display: 'flex', cols: [
+          { flex: 1, label: 'ชื่อร้าน', badge: 'REQUIRES API', badgeStyle: tagApi, isInput: true, borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16', value: 'ร้านตามสั่งป้าสมร' },
+        ]},
+        { display: 'flex', cols: [
+          { flex: 1, label: 'ประเภทอาหาร', badge: 'PENDING M10-Q-01', badgeStyle: tagProduct, isInput: true, borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16', value: 'อาหารไทย, ก๋วยเตี๋ยว' },
+          { flex: 1, label: 'เบอร์โทรร้าน', badge: 'REQUIRES API', badgeStyle: tagApi, isInput: true, borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16', value: '081-234-5678' },
+        ]},
+        { display: 'flex', cols: [
+          { flex: 1, label: 'คำอธิบายร้าน', badge: 'REQUIRES API', badgeStyle: tagApi, isTextarea: true, borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16', value: 'ร้านก๋วยเตี๋ยวเรือและอาหารไทยตามสั่ง เปิดมากว่า 15 ปี วัตถุดิบสดใหม่ทุกวัน' },
+        ]},
+        { display: 'flex', cols: [
+          { flex: 1, label: 'ที่อยู่ร้าน', badge: 'REQUIRES API', badgeStyle: tagApi, isInput: true, borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16', value: '123 ถ.สถลมาร์ค ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี 34230', hint: null },
+        ]},
+        { display: 'flex', cols: [
+          { flex: 1, label: 'พิกัดตำแหน่ง', badge: 'READ-ONLY · PHASE 1', badgeStyle: tagDecision, isStatic: true, value: '15.1892° N, 105.0872° E', hint: 'ดำเนินการโดยทีมงาน — ยังไม่เปิดให้แก้ไขในเฟสนี้ (M10-D06). ที่อยู่แบบข้อความด้านบนคือสิ่งที่แก้ไขได้.' },
+        ]},
+      ],
+
+      fieldSpecs: [
+        { column: 'name', tag: 'REQUIRES API', tagStyle: tagApi, treatment: 'Single-line editable text input, always shown, always required.', validation: 'No length limit confirmed in repo.' },
+        { column: 'description', tag: 'REQUIRES API', tagStyle: tagApi, treatment: 'Multi-line textarea, optional.', validation: 'No length limit confirmed.' },
+        { column: 'cuisine', tag: 'PENDING M10-Q-01', tagStyle: tagProduct, treatment: 'Shown as a text input for now; may become read-only or a fixed vocabulary once Q-01 resolves.', validation: 'No vocabulary defined in schema (free text).' },
+        { column: 'phone', tag: 'REQUIRES API', tagStyle: tagApi, treatment: 'Single-line editable text input, optional.', validation: 'DB stores plain text with no format check; format rule is a design proposal (§07), not an enforced API rule.' },
+        { column: 'address_line', tag: 'REQUIRES API', tagStyle: tagApi, treatment: 'Single-line editable text input — one field, not a structured Thai address form (schema has one column).', validation: 'Nullable in DB; whether ACTIVE restaurants should require it is M10-Q-02.' },
+        { column: 'lat / lng', tag: 'OUT OF SCOPE', tagStyle: tagOut, treatment: 'Displayed read-only under the address field, not editable.', validation: 'Geo/service-area domain deferred — see M10-D06.' },
+        { column: 'image_url', tag: 'EXISTING', tagStyle: tagExisting, treatment: 'Cover photo strip with replace control — the one field with a working write path.', validation: 'Allow-list/size enforced by object-key.ts, not re-verified in this pass.' },
+        { column: 'status', tag: 'OUT OF SCOPE', tagStyle: tagOut, treatment: 'Read-only contextual pill in the page header, no control to change it.', validation: 'Admin/operator workflow, not a merchant capability.' },
+      ],
+
+      photoStates: [
+        { tag: 'S1 · NO PHOTO', title: 'ยังไม่มีรูปหน้าปกร้าน', body: 'Dashed placeholder + "เพิ่มรูปภาพ" call to action, centered.', previewBg: 'repeating-linear-gradient(45deg,#EFE7DC 0 2px,#F6F0E7 2px 14px)', previewLabel: 'ไม่มีรูป' },
+        { tag: 'S2 · HAS PHOTO', title: 'มีรูปหน้าปกอยู่แล้ว', body: 'Full-bleed image, "เปลี่ยนรูปภาพ" overlay button bottom-right.', previewBg: '#E2D8CB', previewLabel: 'รูปปัจจุบัน' },
+        { tag: 'S3 · HOVER / TAP', title: 'พร้อมเปลี่ยนรูป', body: 'Overlay darkens slightly on hover/focus to confirm the control is interactive.', previewBg: '#D9CDBD', previewLabel: 'โฟกัสปุ่มเปลี่ยนรูป' },
+        { tag: 'S4 · UPLOADING', title: 'กำลังอัปโหลด…', body: 'Progress bar over a dimmed preview of the selected file; replace control disabled meanwhile.', previewBg: '#EFE7DC', previewLabel: 'กำลังอัปโหลด 62%', showBar: true, barPct: '62%' },
+        { tag: 'S5 · UPLOAD FAILED', title: 'อัปโหลดรูปไม่สำเร็จ', body: 'Previous photo stays visible; inline error "อัปโหลดรูปไม่สำเร็จ · ลองอีกครั้ง" with retry, matching M-11\'s server-failure banner tone.', previewBg: '#FDF6F5', previewLabel: 'อัปโหลดล้มเหลว' },
+        { tag: 'S6 · UPLOAD SUCCESS', title: 'เปลี่ยนรูปสำเร็จ', body: 'New image swaps in immediately (completeUpload response); toast "อัปเดตรูปภาพแล้ว".', previewBg: '#E7F4EE', previewLabel: 'อัปเดตแล้ว' },
+        { tag: 'S7 · INITIAL LOAD', title: 'กำลังโหลดรูปภาพ', body: 'Skeleton block in place of the photo strip while the profile query resolves.', previewBg: '#F1E9DE', previewLabel: 'โครงร่างรูปภาพ' },
+      ],
+
+      formBehaviors: [
+        { title: 'Initial loading', body: 'Full skeleton: photo strip, then four field-shaped bars, using the same Spinner/skeleton visual language as M-11\'s S1. No form is interactive until the profile query resolves.' },
+        { title: 'Dirty state', body: 'A field changing from its loaded value sets dirty=true; the footer switches from "บันทึกล่าสุดเมื่อ…" to "มีการเปลี่ยนแปลงที่ยังไม่บันทึก" and บันทึก enables. Attempting to navigate away, switch restaurant, or refresh with dirty=true opens a confirmation dialog reusing M-05\'s modal pattern (scrim + focus trap): ออกโดยไม่บันทึก / กลับไปแก้ไข, focus starting on กลับไปแก้ไข.' },
+        { title: 'Saving', body: 'บันทึกการเปลี่ยนแปลง becomes กำลังบันทึก… with a spinner; both buttons disable and fields become read-only (not greyed) so the merchant can\'t submit twice or edit mid-request.' },
+        { title: 'Success', body: 'Footer reverts to "บันทึกล่าสุดเมื่อ…" (now), fields re-enable, a toast reads "บันทึกโปรไฟล์แล้ว". dirty resets to false.' },
+        { title: 'Server / validation failure', body: 'Form stays open with every typed value intact — never cleared. Field-level errors render under the offending input; a request-level failure shows an inline banner above the footer: "บันทึกไม่สำเร็จ · ลองอีกครั้ง" with retry, same tone as M-11\'s server-failure state.' },
+        { title: 'Cancel', body: 'If dirty, ยกเลิก opens the same discard-guard dialog before reverting fields to their last-loaded values. If not dirty, it is a no-op (fields already match the loaded state).' },
+        { title: 'Concurrent edit', body: 'restaurants.updated_at moves on every write, so two staff editing the same restaurant is possible. PRODUCT/API RULE REQUIRED: whether the save API should reject a stale updated_at (optimistic concurrency) — not decided here; the UI has no "someone else edited this" state until that\'s answered.' },
+      ],
+
+      validationRows: [
+        { field: 'name', rule: 'Required. Empty value blocks save.', errorCopy: '"กรุณากรอกชื่อร้าน" — shown on blur if empty, and again on submit attempt.', tag: 'MAX LENGTH: API RULE REQUIRED', tagStyle: tagProduct },
+        { field: 'description', rule: 'Optional. No format restriction proposed.', errorCopy: 'None — an empty description is valid.', tag: 'MAX LENGTH: API RULE REQUIRED', tagStyle: tagProduct },
+        { field: 'cuisine', rule: 'Optional, held pending M10-Q-01.', errorCopy: 'None defined.', tag: 'VOCABULARY: PRODUCT DECISION', tagStyle: tagProduct },
+        { field: 'phone', rule: 'Optional. Design proposes a loose Thai phone pattern (9–10 digits, optional dashes) checked client-side only.', errorCopy: '"รูปแบบเบอร์โทรไม่ถูกต้อง" on blur if non-empty and pattern fails.', tag: 'DESIGN PROPOSAL, NOT API-ENFORCED', tagStyle: tagDecision },
+        { field: 'address_line', rule: 'Optional per schema. Empty value shows a soft warning, not a blocking error, since ACTIVE restaurants requiring an address is undecided (M10-Q-02).', errorCopy: '"แนะนำให้กรอกที่อยู่ให้ครบถ้วน" — advisory, does not block save.', tag: 'REQUIRED-ON-ACTIVE: PRODUCT DECISION', tagStyle: tagProduct },
+      ],
+
+      mobileFields: [
+        { label: 'ชื่อร้าน', value: 'ร้านตามสั่งป้าสมร', borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16' },
+        { label: 'ประเภทอาหาร', value: 'อาหารไทย, ก๋วยเตี๋ยว', borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16' },
+        { label: 'เบอร์โทรร้าน', value: '081-234-5678', borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16' },
+        { label: 'ที่อยู่ร้าน', value: '123 ถ.สถลมาร์ค ต.บุณฑริก...', borderColor: '#E9E0D5', bg: '#fff', textColor: '#1F1A16' },
+        { label: 'พิกัดตำแหน่ง', value: '15.1892° N, 105.0872° E', borderColor: '#D9CDBD', bg: '#F6F0E7', textColor: '#7A6E64' },
+      ],
+
+      responsiveNotes: [
+        { title: 'Photo', body: 'Fixed 16:9 crop at full card width; the "เปลี่ยนรูปภาพ" overlay button shrinks to an icon+label pill, still ≥44px tall.' },
+        { title: 'Form width', body: 'Single column throughout — the two-up ประเภทอาหาร/เบอร์โทรร้าน row (desktop) stacks to two full-width rows.' },
+        { title: 'Actions', body: 'ยกเลิก/บันทึก move into a fixed bottom bar (shadow token "bar": 0 -6px 20px rgba(31,26,22,.06)) so they stay reachable on a long form.' },
+        { title: 'Status pill', body: 'Moves under the page title instead of beside it, to avoid crowding the header on narrow widths.' },
+        { title: 'Breakpoint', body: 'Single breakpoint at 720px, consistent with M-11/M-12\'s tablet/desktop split — no separate tablet-specific layout is introduced.' },
+      ],
+
+      a11yRows: [
+        { control: 'Every field', body: 'A visible <label> associated via for/id, not a placeholder standing in for a label.' },
+        { control: 'Focus order', body: 'Photo replace control → ชื่อร้าน → ประเภทอาหาร → เบอร์โทรร้าน → คำอธิบายร้าน → ที่อยู่ร้าน → ยกเลิก → บันทึก, matching visual order top to bottom, left to right.' },
+        { control: 'Photo upload control', body: 'A real <button> (not a bare <img> or div), name "เปลี่ยนรูปภาพร้าน" — never just "เปลี่ยนรูป" so it reads sensibly out of visual context.' },
+        { control: 'Image alt text', body: 'alt="รูปหน้าปกของ {ชื่อร้าน}" once a photo exists; no photo means no <img> is rendered (the placeholder is decorative, aria-hidden).' },
+        { control: 'Disabled save', body: 'Kept focusable via aria-disabled rather than the disabled attribute so a screen-reader user can find it and hear the reason ("กรอกข้อมูลที่จำเป็นก่อนบันทึก").' },
+        { control: 'Saving state', body: 'role="status" aria-live="polite" region announces "กำลังบันทึก…" then "บันทึกโปรไฟล์แล้ว" — the same pattern Spinner.tsx already uses.' },
+        { control: 'Errors', body: 'Field errors are associated via aria-describedby, not color alone; the request-level banner is announced via aria-live="assertive" since it can appear after focus has moved away.' },
+        { control: 'Discard-guard dialog', body: 'Focus starts on กลับไปแก้ไข (the safe default), not ออกโดยไม่บันทึก; Escape is treated as กลับไปแก้ไข, matching M-05\'s destructive-dialog convention of never defaulting focus onto the risky action.' },
+      ],
+
+      copyRows: [
+        { context: 'Page title', thai: 'โปรไฟล์ร้าน' },
+        { context: 'Nav item', thai: 'ร้านของฉัน' },
+        { context: 'Status pill (open)', thai: 'เปิดให้บริการ' },
+        { context: 'Saved-state footer', thai: 'บันทึกล่าสุดเมื่อ {relativeTime}' },
+        { context: 'Dirty-state footer', thai: 'มีการเปลี่ยนแปลงที่ยังไม่บันทึก' },
+        { context: 'Field: name', thai: 'ชื่อร้าน' },
+        { context: 'Field: cuisine', thai: 'ประเภทอาหาร' },
+        { context: 'Field: phone', thai: 'เบอร์โทรร้าน' },
+        { context: 'Field: description', thai: 'คำอธิบายร้าน' },
+        { context: 'Field: address', thai: 'ที่อยู่ร้าน' },
+        { context: 'Field: coordinates (read-only)', thai: 'พิกัดตำแหน่ง' },
+        { context: 'Coordinates hint', thai: 'ดำเนินการโดยทีมงาน — ยังไม่เปิดให้แก้ไขในเฟสนี้' },
+        { context: 'Photo — no photo', thai: 'ยังไม่มีรูปหน้าปกร้าน' },
+        { context: 'Photo — replace button', thai: 'เปลี่ยนรูปภาพ' },
+        { context: 'Photo — guidance', thai: 'แนะนำอัตราส่วน 16:9 ขนาดไม่เกิน 5MB (JPG, PNG หรือ WEBP)' },
+        { context: 'Photo — upload failed', thai: 'อัปโหลดรูปไม่สำเร็จ · ลองอีกครั้ง' },
+        { context: 'Photo — upload success toast', thai: 'อัปเดตรูปภาพแล้ว' },
+        { context: 'Save button', thai: 'บันทึกการเปลี่ยนแปลง' },
+        { context: 'Save button (mobile, short)', thai: 'บันทึก' },
+        { context: 'Cancel button', thai: 'ยกเลิก' },
+        { context: 'Saving state', thai: 'กำลังบันทึก…' },
+        { context: 'Save success toast', thai: 'บันทึกโปรไฟล์แล้ว' },
+        { context: 'Save failure banner', thai: 'บันทึกไม่สำเร็จ · ลองอีกครั้ง' },
+        { context: 'Validation — name required', thai: 'กรุณากรอกชื่อร้าน' },
+        { context: 'Validation — phone format', thai: 'รูปแบบเบอร์โทรไม่ถูกต้อง' },
+        { context: 'Validation — address advisory', thai: 'แนะนำให้กรอกที่อยู่ให้ครบถ้วน' },
+        { context: 'Discard-guard dialog title', thai: 'ยังไม่ได้บันทึกการเปลี่ยนแปลง' },
+        { context: 'Discard-guard — leave', thai: 'ออกโดยไม่บันทึก' },
+        { context: 'Discard-guard — stay', thai: 'กลับไปแก้ไข' },
+        { context: 'Initial loading', thai: 'กำลังโหลดโปรไฟล์ร้าน…' },
+      ],
+
+      dataContract: [
+        { column: 'name', type: 'text', tag: 'REQUIRES API', tagStyle: tagApi, note: 'No merchant write endpoint exists. Design: required text field.' },
+        { column: 'description', type: 'text', tag: 'REQUIRES API', tagStyle: tagApi, note: 'No merchant write endpoint exists. Design: optional textarea.' },
+        { column: 'cuisine', type: 'text', tag: 'PENDING M10-Q-01', tagStyle: tagProduct, note: 'Editability not decided; no vocabulary defined.' },
+        { column: 'image_url', type: 'text', tag: 'EXISTING', tagStyle: tagExisting, note: 'Written by restaurant-cover.service.ts via the presigned R2 flow. No change needed.' },
+        { column: 'phone', type: 'text', tag: 'REQUIRES API', tagStyle: tagApi, note: 'No merchant write endpoint exists. No DB format constraint.' },
+        { column: 'address_line', type: 'text', tag: 'REQUIRES API', tagStyle: tagApi, note: 'One free-text column — no structured address fields in schema.' },
+        { column: 'lat / lng', type: 'numeric(9,6)', tag: 'OUT OF SCOPE', tagStyle: tagOut, note: 'Not exposed as editable in Phase 1 (M10-D06). Displayed read-only.' },
+        { column: 'location', type: 'geography, generated', tag: 'OUT OF SCOPE', tagStyle: tagOut, note: 'Derived from lat/lng by the database. Never touched directly by any client.' },
+        { column: 'status', type: 'text enum', tag: 'OUT OF SCOPE', tagStyle: tagOut, note: 'Read-only display only. Merchant has no RLS or API path to change it.' },
+        { column: 'temporarily_closed_until', type: 'timestamptz', tag: 'PRODUCT DECISION', tagStyle: tagProduct, note: 'Column exists; UI slot reserved (§12); no control designed.' },
+        { column: 'temporary_close_reason', type: 'text', tag: 'PRODUCT DECISION', tagStyle: tagProduct, note: 'Column exists; UI slot reserved (§12); no control designed.' },
+      ],
+
+      productQuestions: [
+        { id: 'M10-Q-01', title: 'Should cuisine be editable by Merchant in M-10?', body: 'The column is free text with no defined vocabulary anywhere in the repository. The design shows it as an editable field pending this decision; it may need to become read-only, or move to a fixed option list, once answered.' },
+        { id: 'M10-Q-02', title: 'Should address_line be editable in Phase 1 while lat/lng stay operator-controlled?', body: 'Design assumes yes (it is the one address representation available). Whether it should be required before a restaurant can reach ACTIVE is not decided.' },
+        { id: 'M10-Q-03', title: 'Should temporary closure be part of M-10 or stay a separate capability?', body: 'This design reserves a slot (§12) but does not build the control. BQ-007 (opening-hours doc) is still OPEN on this question.' },
+        { id: 'M10-Q-04', title: 'What exact validation limits apply to name, description, phone, address?', body: 'No length limits, phone format, or required-address rule are defined in the API or database today. §07 lists design proposals, none of them confirmed rules.' },
+        { id: 'M10-Q-05', title: 'Should photo replacement be available to all restaurant_members, or only certain roles?', body: 'restaurant_members has OWNER/MANAGER/STAFF, but RestaurantCoverController checks only @RestaurantScope() (any member), not member_role. Whether that should narrow for M-10\'s other fields is undecided.' },
+      ],
+
+      constraints: [
+        { id: 'M10-C01', body: 'restaurants has no INSERT/UPDATE grant to authenticated. Every write this screen makes must go through a new service-role API route, following restaurant-cover.service.ts\'s pattern exactly.' },
+        { id: 'M10-C02', body: 'packages/validation has no schema for name/description/cuisine/phone/address_line today — only the two cover-upload schemas exist. New schemas are required before any save can be typed end to end.' },
+        { id: 'M10-C03', body: 'address_line is a single text column. No structured Thai address breakdown (บ้านเลขที่/ตำบล/etc.) can be built for this screen without a migration — out of scope per CLAUDE.md\'s locked-database rule.' },
+        { id: 'M10-C04', body: 'lat/lng have no confirmed write path and the geo/service-area domain is deferred — they render read-only, sourced from the same row the form loads.' },
+        { id: 'M10-C05', body: 'status transitions are exclusively an Admin/Operator capability per DEC-033 — no restaurant_members role, including OWNER, has a documented path to change it from the merchant app.' },
+        { id: 'M10-C06', body: 'The AppShell "ร้านของฉัน" nav item does not exist in the shipped app (ac2c88c5) — same gap M-11 and M-12 already found for เมนู and the fifth nav slot. This screen depends on that nav being built.' },
+        { id: 'M10-C07', body: 'restaurants_reject_delete blocks hard deletion of the row itself — irrelevant to this screen\'s field edits, but confirms there is no "delete restaurant" action to design here.' },
+        { id: 'M10-C08', body: 'No optimistic-concurrency column check exists on the (not-yet-built) save endpoint; updated_at moving on write is necessary but not sufficient without an API rule that actually compares it.' },
+      ],
+
+      decisions: [
+        { id: 'M10-D01', title: 'Cover photo stays the existing upload-url/complete flow', body: 'No new upload mechanism, no mention of Supabase Storage — described in-product simply as "restaurant photo".' },
+        { id: 'M10-D02', title: 'All non-photo fields render as real inputs, tagged by write-readiness', body: 'Rather than disabling fields with no API yet, the design shows the intended end-state UI and marks each control REQUIRES API IMPLEMENTATION — so the form doesn\'t need a redesign once the backend catches up.' },
+        { id: 'M10-D03', title: 'One page, no tabs', body: 'ร้านของฉัน opens directly into this form. No sub-navigation is introduced for a page with five editable fields and one photo.' },
+        { id: 'M10-D04', title: 'Discard-guard reuses M-05\'s modal pattern', body: 'Same scrim, focus trap, and "never default focus onto the risky action" convention — no new dialog paradigm for this app.' },
+        { id: 'M10-D05', title: 'Status is shown, never editable', body: 'A pill next to the page title gives the merchant orientation ("is my restaurant even visible right now") without implying they can change it here.' },
+        { id: 'M10-D06', title: 'lat/lng are not exposed as editable in Phase 1', body: 'address_line is the only address surface; coordinates render as static read-only text with an explanatory hint, avoiding the false impression that the pin can be moved.' },
+        { id: 'M10-D07', title: 'Address validation is advisory, not blocking', body: 'Because address_line is nullable in the schema and required-for-ACTIVE is unresolved (M10-Q-02), the design treats an empty address as a soft warning rather than a hard validation error.' },
+        { id: 'M10-D08', title: 'Save replaces the whole editable field set in one request', body: 'No per-field save buttons and no autosave — one form, one ยกเลิก/บันทึก pair, consistent with M-12\'s "one form, one save" precedent for this same app.' },
+      ],
+
+      traceability: [
+        { doc: 'BANHAO-UX-SPEC-V1.md — M-10 (SHOULD)', use: 'Establishes this screen exists and its priority; no prior complete artifact.' },
+        { doc: '20260811000002_merchant_domain.sql', use: 'The restaurants column list this entire page is built from.' },
+        { doc: '20260811000011_rls_policies.sql', use: 'Confirms restaurants has select-only grants — the blocking finding in the header banner.' },
+        { doc: 'restaurant-cover.controller.ts / .service.ts', use: 'Photo upload flow, reused exactly; the pattern every other field\'s future API should follow.' },
+        { doc: 'useRestaurantScope.tsx / restaurantScope.ts', use: 'Current-restaurant resolution this screen reads, does not redesign.' },
+        { doc: 'AppShell.tsx / ErrorState.tsx / Spinner.tsx / styles.ts (ac2c88c5)', use: 'Shell, loading and error primitives this screen reuses.' },
+        { doc: 'select-restaurant/page.tsx (ac2c88c5)', use: 'Confirms the one existing restaurant-selector surface, not duplicated here.' },
+        { doc: 'packages/ui/src/theme/tokens.ts', use: 'Every color, spacing, radius and type value in this artifact.' },
+        { doc: 'BANHAO M-11 Menu Management.dc.html / M-12 Opening Hours.dc.html', use: 'Adjacent merchant screens referenced for nav placement, dialog conventions and boundary language — not redesigned.' },
+        { doc: 'docs/OPEN_BUSINESS_QUESTIONS.md — BQ-007', use: 'Same OPEN temporary-closure question M-12 recorded; this screen reserves a slot without resolving it.' },
+      ],
+
+      assumptions: [
+        'A merchant reaching this screen already has a resolved restaurantId — useRestaurantScope\'s existing guard, not re-implemented here.',
+        'Save is a single request replacing every editable field at once, matching the merchant app\'s existing "no partial-save" pattern seen in M-12.',
+        'The photo upload size/format guidance copy (16:9, 5MB, JPG/PNG/WEBP) is asserted, not verified against object-key.ts in this pass — confirm before build.',
+        'A phone-format check is a reasonable client-side design addition even though no API rule requires it yet; it can be relaxed if product decides otherwise.',
+        'restaurant_members role does not currently gate the existing cover-upload route, so this design assumes (pending M10-Q-05) the same is true for the other fields until told otherwise.',
+        'The status pill\'s five possible values (DRAFT/PENDING_APPROVAL/ACTIVE/SUSPENDED/CLOSED) are shown with plain Thai labels; exact wording for each is not fully speced here since transitions are out of scope — flag for a follow-up pass if needed.',
+      ],
+
+      outScope2: [
+        'Restaurant switching (existing เปลี่ยนร้าน control).',
+        'Merchant account management and restaurant_members administration.',
+        'OWNER/MANAGER/STAFF permission administration.',
+        'Platform Admin UI and restaurant approval workflow.',
+        'DRAFT → PENDING_APPROVAL → ACTIVE and SUSPENDED/CLOSED operator transitions.',
+        'Service-area management, zones, delivery pricing.',
+        'Map/geocoding system, pin movement.',
+        'Payment configuration and analytics.',
+        'Menu management (M-11) and opening-hours editor (M-12).',
+        'Temporary-closure duration rules, auto-reopen, trigger authorization, and customer-facing copy.',
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>
