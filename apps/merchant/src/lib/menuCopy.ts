@@ -199,3 +199,51 @@ export const HOURS_VALIDATION_MESSAGES: Record<HoursValidationCode, string> = {
   OVERLAPPING_INTERVALS: 'ช่วงเวลาซ้อนกัน · ตรวจสอบอีกครั้ง',
   DUPLICATE_INTERVAL: 'ช่วงเวลานี้ซ้ำกับช่วงก่อนหน้า',
 };
+
+/** M-10 §10 — every string transcribed verbatim from the design artifact. */
+export const profileCopy = {
+  pageTitle: 'โปรไฟล์ร้าน',
+  navItem: 'ร้านของฉัน',
+
+  fieldName: 'ชื่อร้าน',
+  fieldPhone: 'เบอร์โทรร้าน',
+  fieldDescription: 'คำอธิบายร้าน',
+  fieldAddress: 'ที่อยู่ร้าน',
+  fieldCoordinates: 'พิกัดตำแหน่ง',
+  coordinatesHint: 'ดำเนินการโดยทีมงาน — ยังไม่เปิดให้แก้ไขในเฟสนี้',
+
+  savedFooter: (relativeTime: string) => `บันทึกล่าสุดเมื่อ${relativeTime}`,
+  dirtyFooter: 'มีการเปลี่ยนแปลงที่ยังไม่บันทึก',
+
+  photoNoPhoto: 'ยังไม่มีรูปหน้าปกร้าน',
+  photoReplace: 'เปลี่ยนรูปภาพ',
+  photoReplaceAria: 'เปลี่ยนรูปภาพร้าน',
+  photoGuidance: 'แนะนำอัตราส่วน 16:9 ขนาดไม่เกิน 5MB (JPG, PNG หรือ WEBP)',
+  photoUploadFailed: 'อัปโหลดรูปไม่สำเร็จ · ลองอีกครั้ง',
+  photoUploadSuccess: 'อัปเดตรูปภาพแล้ว',
+  photoUploading: (percent: number) => `กำลังอัปโหลด ${percent}%`,
+  photoAlt: (restaurantName: string) => `รูปหน้าปกของ ${restaurantName}`,
+
+  save: 'บันทึกการเปลี่ยนแปลง',
+  saveShort: 'บันทึก',
+  cancel: 'ยกเลิก',
+  saving: 'กำลังบันทึก…',
+  saved: 'บันทึกโปรไฟล์แล้ว',
+  saveFailed: 'บันทึกไม่สำเร็จ · ลองอีกครั้ง',
+  saveForbidden: 'คุณไม่มีสิทธิ์แก้ไขข้อมูลร้านนี้',
+  saveDisabledReason: 'กรอกข้อมูลที่จำเป็นก่อนบันทึก',
+
+  nameRequired: 'กรุณากรอกชื่อร้าน',
+  phoneInvalid: 'รูปแบบเบอร์โทรไม่ถูกต้อง',
+  addressAdvisory: 'แนะนำให้กรอกที่อยู่ให้ครบถ้วน',
+
+  discardTitle: 'ยังไม่ได้บันทึกการเปลี่ยนแปลง',
+  discardLeave: 'ออกโดยไม่บันทึก',
+  discardStay: 'กลับไปแก้ไข',
+
+  loading: 'กำลังโหลดโปรไฟล์ร้าน…',
+  loadFailed: 'โหลดโปรไฟล์ร้านไม่สำเร็จ',
+  retry: 'ลองอีกครั้ง',
+
+  hoursLink: 'เวลาทำการ',
+} as const;

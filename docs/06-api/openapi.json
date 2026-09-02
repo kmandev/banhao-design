@@ -998,6 +998,40 @@
         ]
       }
     },
+    "/api/v1/merchant/restaurants/{restaurantId}/profile": {
+      "put": {
+        "operationId": "RestaurantProfileController_updateProfile",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The saved profile, re-read from the database"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of this restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_check",

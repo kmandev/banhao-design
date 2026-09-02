@@ -18,9 +18,11 @@ import { hoursCopy } from '../../../lib/menuCopy';
  * Adding a sixth item for a page edited monthly would crowd the two used
  * daily.
  *
- * `/restaurant` has no index page yet — M-10 (restaurant profile) is undesigned
- * and unbuilt, so `ร้านของฉัน` points here directly rather than at a section
- * landing page that does not exist.
+ * `ร้านของฉัน` now points at `/restaurant` (M-10, the restaurant profile),
+ * which links onward to this page — `/restaurant` had no index page when this
+ * comment was first written, so the nav pointed straight here for lack of
+ * anywhere else to go. That gap is closed; this page's own behavior is
+ * unchanged.
  */
 export default function RestaurantHoursPage() {
   const router = useRouter();

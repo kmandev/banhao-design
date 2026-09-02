@@ -8,6 +8,8 @@ import { MenuController } from './menu.controller';
 import { MenuService } from './menu.service';
 import { RestaurantHoursController } from './restaurant-hours.controller';
 import { RestaurantHoursService } from './restaurant-hours.service';
+import { RestaurantProfileController } from './restaurant-profile.controller';
+import { RestaurantProfileService } from './restaurant-profile.service';
 
 /**
  * The merchant-facing API surface. M-11 (restaurant cover upload) was its
@@ -32,12 +34,14 @@ import { RestaurantHoursService } from './restaurant-hours.service';
     MenuItemImageController,
     MenuController,
     RestaurantHoursController,
+    RestaurantProfileController,
   ],
   providers: [
     RestaurantCoverService,
     MenuItemImageService,
     MenuService,
     RestaurantHoursService,
+    RestaurantProfileService,
   ],
 })
 export class MerchantModule {}

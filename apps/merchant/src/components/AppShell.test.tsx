@@ -31,14 +31,11 @@ describe('AppShell navigation', () => {
     expect(nav.textContent).toContain('ตั้งค่า');
   });
 
-  it('links เมนู to M-11 and ร้านของฉัน to M-12', () => {
+  it('links เมนู to M-11 and ร้านของฉัน to M-10 (the restaurant profile, which links onward to hours)', () => {
     renderShell();
 
     expect(screen.getByRole('link', { name: 'เมนู' })).toHaveAttribute('href', '/menu');
-    expect(screen.getByRole('link', { name: 'ร้านของฉัน' })).toHaveAttribute(
-      'href',
-      '/restaurant/hours',
-    );
+    expect(screen.getByRole('link', { name: 'ร้านของฉัน' })).toHaveAttribute('href', '/restaurant');
   });
 
   it('does not link the two destinations that have no screen yet', () => {

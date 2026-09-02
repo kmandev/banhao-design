@@ -9,7 +9,11 @@ import { useAuth } from '../hooks/useAuth';
  * The five merchant destinations the UX specification fixes (§12), in its
  * order. M-11 occupies the third slot and M-12 sits under `ร้านของฉัน`
  * (M12-D10), so hours is a page of that section rather than a sixth top-level
- * item — a page edited monthly should not crowd the two used daily.
+ * item — a page edited monthly should not crowd the two used daily. Now that
+ * M-10 exists, `ร้านของฉัน` opens the restaurant profile directly (M10-D03),
+ * and the profile page itself links onward to `/restaurant/hours` — before
+ * M-10, this pointed straight at the hours page for lack of anywhere else to
+ * go.
  *
  * `ประวัติ` and `ตั้งค่า` have no route yet: M-09 and M-14 are unbuilt and
  * undesigned. They render as plain, non-interactive labels rather than links
@@ -20,7 +24,7 @@ const NAV_ITEMS: { key: string; label: string; href: string | null }[] = [
   { key: 'orders', label: 'ออเดอร์วันนี้', href: '/dashboard' },
   { key: 'history', label: 'ประวัติ', href: null },
   { key: 'menu', label: 'เมนู', href: '/menu' },
-  { key: 'restaurant', label: 'ร้านของฉัน', href: '/restaurant/hours' },
+  { key: 'restaurant', label: 'ร้านของฉัน', href: '/restaurant' },
   { key: 'settings', label: 'ตั้งค่า', href: null },
 ];
 
