@@ -50,13 +50,23 @@ describe('fromSaveResponse', () => {
 });
 
 describe('isPlausibleThaiPhone', () => {
-  it.each(['0812345678', '081-234-5678', '021234567'])('accepts %s', (phone) => {
+  it.each(['0812345678', '081-234-5678', '021234567'])('accepts the existing local format %s', (phone) => {
     expect(isPlausibleThaiPhone(phone)).toBe(true);
   });
 
-  it.each(['abc', '12', '081-234-56789012', '081 234 5678'])('rejects %s', (phone) => {
-    expect(isPlausibleThaiPhone(phone)).toBe(false);
+  // Live regression: a restaurant's stored phone is E.164 (+66...), the same
+  // format `apps/customer/src/lib/phone.ts` already normalises. This value
+  // was failing on an untouched, unedited profile before this fix.
+  it.each(['+66812345678', '+6681-234-5678'])('accepts the E.164 equivalent %s', (phone) => {
+    expect(isPlausibleThaiPhone(phone)).toBe(true);
   });
+
+  it.each(['abc', '12', '081-234-56789012', '081 234 5678', '+1234567890', '++66812345678'])(
+    'rejects %s',
+    (phone) => {
+      expect(isPlausibleThaiPhone(phone)).toBe(false);
+    },
+  );
 });
 
 describe('validateProfileDraft', () => {

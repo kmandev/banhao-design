@@ -63,9 +63,24 @@ export function fromSaveResponse(response: RestaurantProfileResponse): Restauran
  */
 const PHONE_PATTERN = /^[0-9]{2,4}(-?[0-9]{2,4}){0,2}$/;
 
+/**
+ * `+66` → `0`, the same substitution `apps/customer/src/lib/formatThaiPhone`
+ * exists to do in reverse for display — this is the read side of that same
+ * local ⟺ E.164 equivalence. Restaurant rows already store `phone` as E.164
+ * (`profiles.phone`'s own format, per Supabase Auth), so a live, untouched,
+ * valid number like `+66812345678` failed this check purely because it was
+ * never normalised — the local `0812345678` it is equivalent to always
+ * passed. Only a `+66` prefix is unwrapped; every other value is checked
+ * exactly as before.
+ */
+function normaliseToLocal(phone: string): string {
+  return phone.startsWith('+66') ? `0${phone.slice(3)}` : phone;
+}
+
 export function isPlausibleThaiPhone(phone: string): boolean {
-  const digitsOnly = phone.replace(/-/g, '');
-  return PHONE_PATTERN.test(phone) && digitsOnly.length >= 9 && digitsOnly.length <= 10;
+  const local = normaliseToLocal(phone);
+  const digitsOnly = local.replace(/-/g, '');
+  return PHONE_PATTERN.test(local) && digitsOnly.length >= 9 && digitsOnly.length <= 10;
 }
 
 export interface ProfileValidationIssues {
