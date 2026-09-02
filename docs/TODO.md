@@ -44,12 +44,12 @@ Every item cites where it comes from in the repository. Items with no in-repo so
   - Source: `docs/05-architecture/BANHAO Product Architecture.dc.html`, section "05 — WIREFRAMES"
   - Notes: Platform intention documented as Flutter mobile; not confirmed as final (see DEC-006 in `DECISIONS.md`).
 
-- [ ] Design the remaining Merchant Web UI screens — **this is what blocks merchant progress**
-  - Priority: P1
+- [ ] Design the remaining Merchant Web UI screens — **no longer blocks launch-critical work**
+  - Priority: P2 (was P1)
   - Source: `docs/05-architecture/BANHAO Product Architecture.dc.html`, section "05 — WIREFRAMES"; screen inventory in `docs/design/BANHAO-UX-SPEC-V1.md` §6
-  - Notes: Updated 2026-09-01. **M-01, M-03, M-04, M-05, M-07 and M-08 are now designed AND built** (see `CLAUDE.md` §11) — each had a committed `docs/design/BANHAO M-NN ….dc.html` artifact first, which is the established convention. Still undesigned: **M-11 menu management and M-12 operating hours, both `MUST` and both the next items in the documented build order** (`M-01 → M-03 → M-04/M-05 → M-07/M-08 → M-11/M-12`); then M-06 reject dialog and M-09/M-10 (`SHOULD`), and M-13/M-14 (`LATER`). Implementation cannot proceed past M-08 until these artifacts exist — do not design them inside an implementation task.
+  - Notes: Updated 2026-09-01 (EVENT-029). **The merchant `MUST` scope is complete.** M-01, M-03, M-04, M-05, M-07, M-08, **M-11 and M-12** are all designed AND built (see `CLAUDE.md` §11), each with a committed `docs/design/BANHAO M-NN ….dc.html` artifact first — the established convention held throughout. Still undesigned and unbuilt: M-06 reject dialog, M-09 history and M-10 restaurant profile (`SHOULD`), and M-13/M-14 (`LATER`). Dropped from P1 because none of those is launch-critical. Do not design them inside an implementation task.
 
-- [ ] Design the full Admin Web UI (currently 3 wireframe-level screens only: A-02, A-03, A-12)
+- [ ] Design the full Admin Web UI (currently 3 wireframe-level screens only: A-02, A-03, A-12) — **now the top design blocker**
   - Priority: P1
   - Source: same section
   - Notes: Updated 2026-09-01. **This blocks the whole of Phase I.** `apps/admin`
@@ -110,6 +110,18 @@ Every item cites where it comes from in the repository. Items with no in-repo so
   - Priority: P3
   - Source: `CHANGELOG.md`, 2026-08-09 entry
   - Notes: Documented trade-off, not urgent; see Technical Debt below.
+
+## Follow-through, no new decision needed
+
+- [ ] Apply `20260901000002_merchant_catalog_write_functions.sql` to `banhao-dev`, then live-verify M-11 and M-12
+  - Priority: P1
+  - Source: EVENT-029
+  - Notes: The migration is merged and proven against a throwaway Postgres by 38 assertions, but has **not** been applied to the dev project — applying it is a deliberate act under explicit instruction, never a side effect of building a screen (`CLAUDE.md` §10). Until it is applied, every M-11/M-12 write endpoint will fail against `banhao-dev`, and neither screen can be walked live the way M-05 was.
+
+- [ ] Wire the edit-mode image upload in the M-11 item drawer
+  - Priority: P2
+  - Source: EVENT-029, M11-D09
+  - Notes: The drawer renders the stored object key in edit mode but does not yet drive the existing two-step `upload-url` → `complete` flow. Create mode is correctly disabled with its reason stated — both endpoints are keyed by `menuItemId`, so no key exists before the dish is saved. No new endpoint, no second image system, and no design decision is required: the routes and their validation schemas already exist.
 
 ## Technical Debt
 

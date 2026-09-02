@@ -1,11 +1,12 @@
 # 06 — API
 
-**Status: IMPLEMENTED (Phase A–H surface). The machine-readable contract is
-[`openapi.json`](openapi.json), generated from the code.**
+**Status: IMPLEMENTED (Phase A–H surface plus the merchant M-11/M-12 writes).
+The machine-readable contract is [`openapi.json`](openapi.json), generated from
+the code.**
 
 Written 2026-09-01, replacing the 2026-08-09 placeholder that said no backend
 existed. It does: `apps/api` is a NestJS modular monolith (DEC-009, DEC-011)
-with 30 routed operations.
+serving 44 client-facing operations across 41 paths.
 
 ---
 
@@ -140,17 +141,63 @@ table by hand.
 | `POST` | `/api/v1/orders/{id}/cancel` (also `OPERATOR`) |
 | `GET` | `/api/v1/orders/{id}/delivery-proof` |
 
-### Merchant
+### Merchant — orders
 
 | Method | Path |
 |---|---|
 | `POST` | `/api/v1/orders/{id}/accept` |
 | `POST` | `/api/v1/orders/{id}/start-preparing` |
 | `POST` | `/api/v1/orders/{id}/mark-ready` |
+
+### Merchant — images
+
+| Method | Path |
+|---|---|
 | `POST` | `/api/v1/merchant/menu-items/{menuItemId}/image/upload-url` |
 | `POST` | `/api/v1/merchant/menu-items/{menuItemId}/image/complete` |
 | `POST` | `/api/v1/merchant/restaurants/{restaurantId}/cover/upload-url` |
 | `POST` | `/api/v1/merchant/restaurants/{restaurantId}/cover/complete` |
+
+### Merchant — menu (M-11)
+
+Writes only. The overview reads client-to-Supabase under
+`menu_categories_select_member` / `menu_items_select_member`, so no read
+endpoint exists here and none should be added.
+
+| Method | Path |
+|---|---|
+| `POST` | `/api/v1/merchant/restaurants/{restaurantId}/menu-categories` |
+| `PATCH` | `/api/v1/merchant/menu-categories/{categoryId}` |
+| `POST` | `/api/v1/merchant/menu-categories/{categoryId}/archive` |
+| `POST` | `/api/v1/merchant/restaurants/{restaurantId}/menu-categories/reorder` |
+| `POST` | `/api/v1/merchant/restaurants/{restaurantId}/menu-items` |
+| `PATCH` | `/api/v1/merchant/menu-items/{menuItemId}` |
+| `PATCH` | `/api/v1/merchant/menu-items/{menuItemId}/availability` |
+| `POST` | `/api/v1/merchant/menu-items/{menuItemId}/archive` |
+| `POST` | `/api/v1/merchant/restaurants/{restaurantId}/menu-items/reorder` |
+| `PUT` | `/api/v1/merchant/menu-items/{menuItemId}/option-groups` |
+
+**There is no `DELETE` anywhere on this surface.** `menu_items` and
+`menu_categories` both carry a `reject_delete` trigger and
+`order_items.menu_item_id` is `ON DELETE SET NULL`, so removal is
+`archived_at` and the copy says so.
+
+`…/availability` is its own single-field route on purpose: it is the most
+frequent merchant action after accepting an order, and routing it through the
+full item payload would make the fast path the heaviest request on the screen.
+
+### Merchant — opening hours (M-12)
+
+| Method | Path |
+|---|---|
+| `PUT` | `/api/v1/merchant/restaurants/{restaurantId}/hours` |
+
+`PUT`, and the whole week in one request: `restaurant_hours` is replaced
+wholesale on edit, so a per-day route would silently rewrite the other six
+days. The write runs inside one database transaction
+(`replace_restaurant_hours`) because a failure between the delete and the
+insert would otherwise leave a restaurant with no hours at all, which the
+derived open/closed reads as permanently closed.
 
 ### Rider
 

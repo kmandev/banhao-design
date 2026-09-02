@@ -2,8 +2,8 @@
 
 ## Last Updated
 
-2026-09-01 — after the merchant M-05 milestone, the OpenAPI contract, and the
-Phase A observability items (`8c13d4b1`).
+2026-09-01 — after M-11 menu management and M-12 opening hours (`8da83eaf`),
+which complete the merchant app's MUST scope.
 
 > **Historical note.** This file has been rewritten in full each time it fell
 > too far behind the repository to patch incrementally — 2026-08-09 ("No
@@ -25,8 +25,8 @@ Built by a solo founder using AI as the development team.
 | | |
 |---|---|
 | Branch | `feature/g7-driver-availability`, pushed to `origin` |
-| Current commit | `8c13d4b1` — `feat(api): add a database ping to GET /health` |
-| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **5 additive migrations merged since** (§10) |
+| Current commit | `8da83eaf` — `feat(merchant): implement M-11 menu management and M-12 opening hours` |
+| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **6 additive migrations merged since, 1 of them not yet applied live** (§10) |
 | Application architecture | [`BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md) — V1.1, **APPROVED / READY FOR IMPLEMENTATION** |
 | API contract | [`06-api/openapi.json`](06-api/openapi.json), generated from the code and guarded against drift by a test |
 
@@ -72,14 +72,14 @@ not the same claim.
 | App | State |
 |---|---|
 | **Customer** (Expo) | 31/31 design states, screenshot-verified. Every one of the nine repository bindings is live — catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. `mockRepositories` survives only as test fixtures |
-| **Merchant** (Next.js, DEC-APP-003) | M-01 login, M-02 scope resolution, M-03 live board with Realtime and audible arrival alerting, M-04 detail panel, M-05 accept with prep time, M-07/M-08 board actions. **Blocked at M-11/M-12** — see §13 |
+| **Merchant** (Next.js, DEC-APP-003) | **MUST scope complete.** M-01 login, M-02 scope resolution, M-03 live board with Realtime and audible arrival alerting, M-04 detail panel, M-05 accept with prep time, M-07/M-08 board actions, **M-11 menu management, M-12 opening hours**, and the five-item nav the UX specification fixes. Unbuilt: M-06/M-09/M-10 (`SHOULD`) and M-13/M-14 (`LATER`), all still without a design artifact |
 | **Driver** (Expo) | Status/availability, offer inbox with the 15 s foreground poll, active delivery, proof camera/review/upload, navigation. The gap list in `BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` §4 is closed except the items that need a product decision (D-13 money, D-14 push, D-17 icons) |
 | **Admin** (Next.js) | **Shell.** `layout.tsx` and `page.tsx` from the scaffold, no admin UI |
 | **tick-worker** (Cloudflare Worker) | Present, typechecks, bundles via dry-run, **never deployed** |
 
 ## 6. API
 
-30 routed operations, all under `/api/v1` except `GET /health`. The contract
+44 operations across 41 paths, all under `/api/v1` except `GET /health`. The contract
 is [`06-api/openapi.json`](06-api/openapi.json), generated from the real
 `AppModule` by `pnpm --filter @banhao/api openapi` and compared against the
 code by `apps/api/test/openapi.contract.spec.ts` on every test run — a route
@@ -125,15 +125,15 @@ Run in full, **uncached** (`pnpm turbo run lint typecheck test build --force`),
 
 | Package | Tests |
 |---|---|
-| `@banhao/api` | 1,219 |
+| `@banhao/api` | 1,335 |
+| `@banhao/merchant` | 520 |
 | `@banhao/customer` | 480 |
-| `@banhao/merchant` | 392 |
 | `@banhao/driver` | 316 |
-| `@banhao/validation` | 64 |
+| `@banhao/validation` | 127 |
 | `@banhao/ui` | 22 |
 | `@banhao/api-client` | 16 |
 | `@banhao/config` | 13 |
-| **Total** | **2,522 — all passing** |
+| **Total** | **2,829 — all passing** |
 
 `lint`, `typecheck` and `build` pass for all 44 Turborepo tasks.
 
@@ -146,14 +146,14 @@ SQL suites, both Docker-based and both now run by CI:
 | Suite | What |
 |---|---|
 | `supabase/tests/run-rls-tests.sh` | The `profiles` RLS pattern |
-| `supabase/tests/run-domain-tests.sh` | Domain invariants, rider view row isolation, catalog availability, the rider race with two genuinely concurrent `psql` processes, reassignment atomicity, `create_order()` |
+| `supabase/tests/run-domain-tests.sh` | Domain invariants, rider view row isolation, catalog availability, the rider race with two genuinely concurrent `psql` processes, reassignment atomicity, `create_order()`, and the four merchant catalog-write functions (38 assertions, incl. `day_of_week` 0 = Sunday round trips and both atomicity rollbacks) |
 
 ## 10. Database
 
-**Live and LOCKED.** 21 migration files, all applied to `banhao-dev`, 0
-pending. 16 of them are the `e471ec1d` checkpoint V1.1 was reviewed against;
-five have been merged since, each additive and each under an explicit
-instruction:
+**Live and LOCKED.** 22 migration files. 16 are the `e471ec1d` checkpoint V1.1
+was reviewed against; six have been merged since, each additive and each under
+an explicit instruction. **21 are applied to `banhao-dev`; one is not** — see
+the last row.
 
 | Migration | Why |
 |---|---|
@@ -162,6 +162,7 @@ instruction:
 | `20260825000001_reconciliation_rider_release_invariant.sql` | The rider release / reconciliation invariant |
 | `20260831000001_orders_realtime_publication.sql` | `orders` in the Realtime publication, for the merchant board |
 | `20260901000001_orders_prep_minutes.sql` | `orders.prep_minutes`, for M-05 |
+| `20260901000002_merchant_catalog_write_functions.sql` | Four transactional catalog-write functions for M-11/M-12. **Merged, verified against a throwaway Postgres, NOT applied to `banhao-dev`** — applying it is a separate explicit instruction |
 
 Six tables remain deferred (`settlements`, `settlement_items`,
 `delivery_fee_bands`, `zones`, `service_areas`, `delivery_attempts`), each
@@ -187,7 +188,7 @@ Cloud Run. Every step but the last has now been executed (2026-09-01):
 | Step | Result |
 |---|---|
 | Local build | ✅ 44/44 Turborepo tasks |
-| Local tests | ✅ 2,522, uncached, five consecutive runs |
+| Local tests | ✅ 2,829, uncached |
 | `docker build -f apps/api/Dockerfile` | ✅ image builds |
 | Container boots and answers | ✅ `GET /health` → 200 in a container started with placeholder credentials |
 | Logs are structured in the container | ✅ one JSON object per line, Cloud Logging severities, `correlationId` on both the error and the request line |
@@ -228,18 +229,18 @@ effort alone.
 
 | # | Blocked | Class | What would unblock it |
 |---|---|---|---|
-| 1 | Merchant M-11 (menu availability) and M-12 (operating hours), both `MUST` and both next in the build order | **Missing design artifact** | A committed `docs/design/BANHAO M-11 ….dc.html` / `M-12`. Every merchant screen built so far had one first; designing them inside an implementation task is a product decision |
-| 2 | Merchant M-06, M-09, M-10 (`SHOULD`) | Missing design artifact | Same |
-| 3 | The whole Admin app (Phase I) — A-01 through A-13 | Missing design artifact | Only A-02, A-03 and A-12 exist as wireframes. UX-SPEC §8 specifies behaviour but not screens |
-| 4 | Customer C-14 prep-time caption | **Missing credential** | The fixture orders belong to `+66811110009`, for which no Test OTP pair is documented. A Supabase Dashboard action, or a fixture pointed at an onboarded identity. Do not guess an OTP |
-| 5 | Sentry (the last Phase A item) | **External account** | An account and a DSN. Free tier is single-user; $26/month on the second developer |
-| 6 | Any deployment | **External infrastructure** | The whole of `INFRASTRUCTURE-READINESS-V1.md`: GCP project, billing, WIF, Artifact Registry, Cloudflare token |
-| 7 | R2 verified against a real bucket; POD on hardware | External infrastructure / devices | A provisioned private bucket; a physical iOS and Android device |
-| 8 | Phase F′ and everything ledger- or settlement-shaped | **Business decision** | Q-001 provider, Q-002 legal model, Q-010/BQ-028 commission rate, Q-020 refund mechanism |
-| 9 | Driver R-13 earnings, and any money on a rider surface | Business decision | BQ-029. `deliveries.rider_earning_satang` stays NULL by instruction |
-| 10 | Dropping `profiles.role` | **Approved migration** | A migration explicitly approved for it. The application half is already done |
-| 11 | Push notifications (Phase H's missing channel) | Technical decision | TQ-002 |
-| 12 | Android, physical iOS, real SMS, the search results list | Device / environment | Hardware and an Android SDK on the build machine |
+| 1 | The whole Admin app (Phase I) — A-01 through A-13 | **Missing design artifact** | Only A-02, A-03 and A-12 exist as wireframes. UX-SPEC §8 specifies admin *behaviour* — nine sections, the four A-04 regions, the A-13 queue's four sources — but specifies no screens, and every merchant screen built so far had a committed `.dc.html` first. **This is now the only `MUST` scope blocked on a design artifact** |
+| 2 | Merchant M-06, M-09, M-10 (`SHOULD`), M-13, M-14 (`LATER`) | Missing design artifact | Same. None is launch-critical |
+| 3 | Customer C-14 prep-time caption | **Missing credential** | The fixture orders belong to `+66811110009`, for which no Test OTP pair is documented. A Supabase Dashboard action, or a fixture pointed at an onboarded identity. Do not guess an OTP |
+| 4 | Sentry (the last Phase A item) | **External account** | An account and a DSN. Free tier is single-user; $26/month on the second developer |
+| 5 | Any deployment | **External infrastructure** | The whole of `INFRASTRUCTURE-READINESS-V1.md`: GCP project, billing, WIF, Artifact Registry, Cloudflare token |
+| 6 | R2 verified against a real bucket; POD on hardware | External infrastructure / devices | A provisioned private bucket; a physical iOS and Android device |
+| 7 | Phase F′ and everything ledger- or settlement-shaped | **Business decision** | Q-001 provider, Q-002 legal model, Q-010/BQ-028 commission rate, Q-020 refund mechanism |
+| 8 | Driver R-13 earnings, and any money on a rider surface | Business decision | BQ-029. `deliveries.rider_earning_satang` stays NULL by instruction |
+| 9 | Dropping `profiles.role` | **Approved migration** | A migration explicitly approved for it. The application half is already done |
+| 10 | Push notifications (Phase H's missing channel) | Technical decision | TQ-002 |
+| 11 | Android, physical iOS, real SMS, the search results list | Device / environment | Hardware and an Android SDK on the build machine |
+| 12 | Applying `20260901000002` to `banhao-dev`, and live-verifying M-11/M-12 | **Explicit instruction** | The migration is merged and proven against a throwaway Postgres by 38 assertions, but applying it to the dev project is a deliberate act, not a side effect of building the screens. M-11/M-12 cannot be walked live until it is |
 
 **7 P0 business decisions remain**, all of them a number, a provider or a
 legal question: Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-027
@@ -256,3 +257,7 @@ Everything in §13 is blocked on something outside engineering. What is not:
 - Further test and contract hardening, on the pattern of the rider
   controller's HTTP-boundary suite.
 - Documentation reconciliation, of which this file is one instance.
+- **M-11/M-12 follow-through that needs no new design**: applying
+  `20260901000002` to `banhao-dev` and walking both screens live, and the
+  edit-mode image upload in the item drawer, which currently shows the stored
+  key rather than driving the existing two-step upload.
