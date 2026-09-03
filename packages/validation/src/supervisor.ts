@@ -165,3 +165,16 @@ export interface ResolveSupervisorCaseResponse {
   state: SupervisorCaseState;
   resolution: SupervisorCaseResolution;
 }
+
+/**
+ * `GET /api/v1/admin/supervisor/me` — who is signed in, and with which grant.
+ *
+ * Presentation only. The console renders the role in its header; every route
+ * re-resolves the grant per request, so this answer is never the boundary and
+ * is never cached as one.
+ */
+export interface SupervisorIdentityResponse {
+  userId: string;
+  /** `OPERATOR` or `ADMIN` — the two values `platform_staff.staff_role` allows. */
+  staffRole: string;
+}

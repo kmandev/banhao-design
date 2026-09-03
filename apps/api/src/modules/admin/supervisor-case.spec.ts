@@ -421,6 +421,17 @@ describe('Phase I — the controller boundary', () => {
       (name) => name !== 'constructor',
     );
 
-    expect(methods.sort()).toEqual(['detail', 'list', 'resolve']);
+    // Three reads and one audit-only write. Nothing here cancels, releases,
+    // redispatches, pauses, refunds or writes any domain row.
+    expect(methods.sort()).toEqual(['detail', 'list', 'me', 'resolve']);
+  });
+
+  it('reports the grant held without reading anything', () => {
+    const controller = new SupervisorController({} as SupervisorCaseService);
+
+    expect(controller.me(staffUser('ADMIN'))).toEqual({
+      userId: STAFF_USER_ID,
+      staffRole: 'ADMIN',
+    });
   });
 });

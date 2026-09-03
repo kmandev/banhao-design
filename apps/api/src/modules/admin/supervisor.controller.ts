@@ -11,6 +11,7 @@ import {
 import { resolveSupervisorCaseSchema } from '@banhao/validation';
 import type {
   ResolveSupervisorCaseResponse,
+  SupervisorIdentityResponse,
   SupervisorCaseDetailResponse,
   SupervisorCaseListResponse,
 } from '@banhao/validation';
@@ -55,6 +56,30 @@ import { SupervisorCaseService } from './supervisor-case.service';
 @Controller('api/v1/admin/supervisor')
 export class SupervisorController {
   constructor(private readonly cases: SupervisorCaseService) {}
+
+  /**
+   * Who the console is signed in as, and with which grant.
+   *
+   * Presentation only — it exists so the console can render the staff role in
+   * its header and show a refusal instead of an empty inbox, per the design
+   * package's S-01. It is **not** the access boundary: every other route
+   * re-resolves the grant from `platform_staff` on its own request, so a
+   * revoked grant is refused there regardless of what this returned earlier.
+   *
+   * Reads nothing. The capabilities are already resolved on the request by
+   * `SupabaseAuthGuard`, so there is no second database round trip and no
+   * cached copy of an authorization answer.
+   */
+  @Get('me')
+  @ApiOkResponse({ description: 'The signed-in staff member and the grant held' })
+  me(@CurrentUser() user: AuthenticatedUser): SupervisorIdentityResponse {
+    return {
+      userId: user.id,
+      // Present by construction: `@Roles('OPERATOR','ADMIN')` refused anyone
+      // without a grant before this handler was reached.
+      staffRole: user.capabilities.platformStaff?.staffRole ?? 'OPERATOR',
+    };
+  }
 
   /** S-02 — the operations inbox: every AI Operations escalation, newest first. */
   @Get('cases')

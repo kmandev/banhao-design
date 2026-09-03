@@ -1526,6 +1526,31 @@
         ]
       }
     },
+    "/api/v1/admin/supervisor/me": {
+      "get": {
+        "operationId": "SupervisorController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The signed-in staff member and the grant held"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/supervisor/cases": {
       "get": {
         "operationId": "SupervisorController_list",
