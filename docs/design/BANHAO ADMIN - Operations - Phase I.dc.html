@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#C2431F;text-decoration:none}
+  a:hover{color:#8F3116}
+</style>
+</helmet>
+
+<div style="max-width:1620px;margin:0 auto;padding:48px 40px 160px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#1F1A16;color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex:0 0 auto">A</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">ADMIN — OPERATIONS — PHASE I</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · one design package for the whole operator surface · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1180px">
+    Read-only recon against <span style="font-family:'IBM Plex Mono',monospace">kmandev/banhao-design@main</span>: <span style="font-family:'IBM Plex Mono',monospace">docs/ROADMAP.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/TODO.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/CURRENT_STATUS.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/PAYMENT_LIFECYCLE.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/SETTLEMENT_MODEL.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/design/BANHAO-UX-SPEC-V1.md</span>, the payment / ledger / audit / reconciliation migrations, <span style="font-family:'IBM Plex Mono',monospace">apps/admin/src</span>, <span style="font-family:'IBM Plex Mono',monospace">apps/api/src/modules/**</span> and <span style="font-family:'IBM Plex Mono',monospace">CapabilitiesService</span>. Operator-facing copy is Thai; every annotation is English. No API, schema, migration, config or source file was created or modified.
+  </div>
+
+  <div style="margin-top:14px;padding:16px 18px;border-radius:16px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:13.5px;line-height:1.75;color:#8F3A3A;max-width:1180px">
+    <strong style="color:#B23030">Three boundaries this package never crosses.</strong> An operator cannot set <span style="font-family:'IBM Plex Mono',monospace">SUCCESS</span> or <span style="font-family:'IBM Plex Mono',monospace">REFUNDED</span> — both are reachable only from a signature-verified webhook (CON-002), so no screen here carries a control that writes them. No order state is added: the four exception states sit in the CHECK constraint and stay unimplemented (DEC-APP-006). And no amount, rate or cycle is invented — every settlement and commission figure renders as a decision dependency, not a number.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="22">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <div style="font-size:11.5px;font-weight:600;letter-spacing:.14em;color:#A2968A;margin-right:4px">STATUS LEGEND</div>
+    <sc-for list="{{ legend }}" as="l" hint-placeholder-count="5">
+      <div style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:8px;{{ l.style }}">{{ l.label }}</div>
+    </sc-for>
+  </div>
+
+  <!-- 00 SCOPE -->
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — SCOPE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The morning screen is a reconciliation view, not a revenue chart</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1000px">Phase I exists to let one operator resolve a stuck order, a mismatched payment or an unbalanced ledger group without opening a database client. Everything in this package serves that sentence; anything that does not is out of scope.</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#0A6B49;margin-bottom:14px">IN SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ inScope }}" as="i" hint-placeholder-count="9">
+          <div style="font-size:13.5px;line-height:1.65;color:#3D342C">{{ i }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #F0C9C9;background:#FDF6F5;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#B23030;margin-bottom:14px">OUT OF SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ outScope }}" as="o" hint-placeholder-count="9">
+          <div style="font-size:13.5px;line-height:1.65;color:#8F3A3A">{{ o }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:20px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px;max-width:1180px">
+    <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#A2968A;margin-bottom:14px">MILESTONE, AND THREE DISCREPANCIES FOUND DURING RECON</div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ recon }}" as="r" hint-placeholder-count="4">
+        <div style="display:grid;grid-template-columns:190px 1fr;gap:16px;align-items:start">
+          <div>
+            <div style="font-size:13px;font-weight:700">{{ r.title }}</div>
+            <div style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:8px;margin-top:6px;display:inline-block;{{ r.style }}">{{ r.status }}</div>
+          </div>
+          <div style="font-size:13px;line-height:1.75;color:#3D342C">{{ r.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 01 ARCHITECTURE DEPENDENCIES -->
+  <div id="s1" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — ARCHITECTURE DEPENDENCIES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Twelve facts the repository already locked</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1500px">
+    <div style="display:grid;grid-template-columns:150px 300px 1fr 150px;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>DECISION</div><div>SOURCE</div><div>WHAT IT FIXES FOR ADMIN</div><div>STATUS</div>
+    </div>
+    <sc-for list="{{ deps }}" as="d" hint-placeholder-count="12">
+      <div style="display:grid;grid-template-columns:150px 300px 1fr 150px;gap:12px;padding:13px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:#C2431F">{{ d.id }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64;word-break:break-all">{{ d.source }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#3D342C">{{ d.fact }}</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;align-self:start;{{ d.style }}">{{ d.status }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 02 PERSONAS -->
+  <div id="s2" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — OPERATOR PERSONAS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Two capability rows exist. There is no third.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1000px"><span style="font-family:'IBM Plex Mono',monospace">platform_staff.staff_role</span> is CHECK-constrained to <span style="font-family:'IBM Plex Mono',monospace">OPERATOR</span> and <span style="font-family:'IBM Plex Mono',monospace">ADMIN</span>, one active grant per user. Every persona below is one of those two rows — a finance-only or read-only role would be a schema change against a locked database.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;max-width:1180px">
+    <sc-for list="{{ personas }}" as="p" hint-placeholder-count="2">
+      <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#C2431F">{{ p.role }}</div>
+        <div style="font-size:18px;font-weight:700;margin-top:6px">{{ p.name }}</div>
+        <div style="font-size:13.5px;line-height:1.75;color:#5A4E42;margin-top:10px">{{ p.body }}</div>
+        <div style="height:1px;background:#F0EAE1;margin:16px 0"></div>
+        <div style="font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin-bottom:8px">OPENS THE DAY ON</div>
+        <div style="font-size:13px;line-height:1.7;color:#3D342C">{{ p.opens }}</div>
+        <div style="font-size:11.5px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin:14px 0 8px">CANNOT DO, BY ARCHITECTURE</div>
+        <div style="font-size:13px;line-height:1.7;color:#8F3A3A">{{ p.cannot }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 03 OPERATOR FLOW -->
+  <div id="s3" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — COMPLETE OPERATOR FLOW</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Detect on one screen, investigate on one screen, act once, and leave a reason behind</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;max-width:1500px">
+    <sc-for list="{{ flow }}" as="f" hint-placeholder-count="10">
+      <div style="display:grid;grid-template-columns:44px 220px 1fr 1fr;gap:16px;align-items:start;border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:14px 18px">
+        <div style="width:32px;height:32px;border-radius:10px;background:#EFE7DC;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:#5A4E42">{{ f.n }}</div>
+        <div>
+          <div style="font-size:14.5px;font-weight:700">{{ f.title }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64;margin-top:3px">{{ f.surface }}</div>
+        </div>
+        <div style="font-size:13px;line-height:1.7;color:#3D342C">{{ f.action }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#8F3A3A">{{ f.constraint }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 04 SCREEN MAP -->
+  <div id="s4" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — SCREEN MAP</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Six existing IDs from the UX spec, seven new ones for the financial surfaces it never inventoried</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1060px"><span style="font-family:'IBM Plex Mono',monospace">A-01…A-15</span> are fixed by the UX specification. Payment, refund, reconciliation, ledger and settlement have no ID there, so this package proposes <span style="font-family:'IBM Plex Mono',monospace">A-16…A-22</span> — continuing the same series past its current end rather than renumbering anything that already exists.</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1500px">
+    <div style="display:grid;grid-template-columns:80px 250px 130px 1fr 130px;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>ID</div><div>ROUTE</div><div>KIND</div><div>OWNS</div><div>STATUS</div>
+    </div>
+    <sc-for list="{{ screenMap }}" as="s" hint-placeholder-count="16">
+      <div style="display:grid;grid-template-columns:80px 250px 130px 1fr 130px;gap:12px;padding:13px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:#C2431F">{{ s.id }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#3D342C;word-break:break-all">{{ s.route }}</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;align-self:start;{{ s.kindStyle }}">{{ s.kind }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ s.owns }}</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;align-self:start;{{ s.style }}">{{ s.status }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 05 NAVIGATION MAP -->
+  <div id="s5" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — NAVIGATION MAP</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">One sidebar, four groups, and every deep link resolves to an entity</div>
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:20px;margin-top:18px;max-width:1500px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:20px">
+      <div style="font-size:11.5px;font-weight:600;letter-spacing:.12em;color:#A2968A;margin-bottom:14px">SIDEBAR</div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="4">
+          <div>
+            <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#7A6E64;margin-bottom:8px">{{ g.group }}</div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="4">
+                <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:7px 10px;border-radius:10px;background:#FBF7F1">
+                  <div style="color:#1F1A16">{{ it.th }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A">{{ it.id }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <sc-for list="{{ navRules }}" as="r" hint-placeholder-count="7">
+        <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:16px 18px">
+          <div style="font-size:13.5px;font-weight:700">{{ r.title }}</div>
+          <div style="font-size:13px;line-height:1.75;color:#3D342C;margin-top:6px">{{ r.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 06 STATE MATRIX -->
+  <div id="s6" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — STATE MATRIX</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every state an operator can see, and the one thing they may do about it</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1560px">
+    <div style="display:grid;grid-template-columns:130px 210px 1fr 1fr 150px;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>DOMAIN</div><div>STATE</div><div>OPERATOR SEES</div><div>OPERATOR MAY</div><div>STATUS</div>
+    </div>
+    <sc-for list="{{ stateMatrix }}" as="m" hint-placeholder-count="20">
+      <div style="display:grid;grid-template-columns:130px 210px 1fr 1fr 150px;gap:12px;padding:13px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-size:11.5px;font-weight:600;color:#7A6E64">{{ m.domain }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#1F1A16;word-break:break-all">{{ m.state }}</div>
+        <div style="font-size:12.5px;line-height:1.65;color:#3D342C">{{ m.sees }}</div>
+        <div style="font-size:12.5px;line-height:1.65;color:#3D342C">{{ m.may }}</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;align-self:start;{{ m.style }}">{{ m.status }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 07 CANVASES -->
+  <div id="s7" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — SCREEN CANVASES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Nine canvases at 1:1, in the order an operator meets them</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1000px">Desktop only — 1440px working width, no mobile admin. Every value shown is illustrative sample data except amounts on the settlement and commission surfaces, which stay as decision dependencies.</div>
+
+  <!-- C1 · A-01 -->
+  <div data-screen-label="A-01" style="margin-top:26px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-01</div>
+      <div style="font-size:17px;font-weight:700">เข้าสู่ระบบ · and the three ways it ends badly</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+      <sc-for list="{{ gateStates }}" as="g" hint-placeholder-count="4">
+        <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+          <div style="padding:8px 14px;background:#F3EDE4;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#7A6E64;display:flex;justify-content:space-between;gap:8px">
+            <div>{{ g.route }}</div><div>{{ g.code }}</div>
+          </div>
+          <div style="padding:26px 20px;min-height:210px;display:flex;flex-direction:column;justify-content:center;gap:12px;background:#F7F5F2">
+            <div style="width:34px;height:34px;border-radius:11px;background:#1F1A16;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700">B</div>
+            <div style="font-size:15px;font-weight:700;color:#1F1A16">{{ g.title }}</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ g.body }}</div>
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:2px">
+              <sc-for list="{{ g.fields }}" as="fl" hint-placeholder-count="2">
+                <div style="font-size:12px;color:#7A6E64;background:#fff;border:1px solid #E0D6C8;border-radius:9px;padding:8px 10px">{{ fl }}</div>
+              </sc-for>
+            </div>
+            <div style="margin-top:4px;font-size:12.5px;font-weight:600;color:#fff;background:{{ g.btnBg }};border-radius:10px;padding:9px 12px;text-align:center">{{ g.btn }}</div>
+          </div>
+          <div style="padding:10px 14px;border-top:1px solid #F0EAE1;font-size:11.5px;line-height:1.65;color:#8F3A3A">{{ g.note }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- C2 · A-02 -->
+  <div data-screen-label="A-02" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-02</div>
+      <div style="font-size:17px;font-weight:700">ภาพรวม · nine counters, each with a source</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1440px">
+      <div style="display:grid;grid-template-columns:212px 1fr">
+        <div style="background:#1F1A16;padding:18px 14px;min-height:640px">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:20px">
+            <div style="width:26px;height:26px;border-radius:8px;background:#C2431F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">B</div>
+            <div style="color:#fff;font-size:13px;font-weight:600">BANHAO · ผู้ดูแล</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="4">
+              <div>
+                <div style="font-size:9.5px;font-weight:600;letter-spacing:.12em;color:#6E645B;margin-bottom:6px">{{ g.group }}</div>
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="4">
+                    <div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:6px 9px;border-radius:8px;color:#D9D2CA">
+                      <div>{{ it.th }}</div>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6E645B">{{ it.id }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:22px;padding-top:14px;border-top:1px solid #332C26;font-size:11.5px;color:#8A7F75;line-height:1.6">ผู้ใช้: 08X-XXX-4471<br>สิทธิ์: OPERATOR</div>
+        </div>
+        <div style="padding:22px 24px;background:#F7F5F2">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:19px;font-weight:700">ภาพรวมการดำเนินงาน</div>
+              <div style="font-size:12px;color:#7A6E64;margin-top:2px">ข้อมูล ณ 09:14 · รีเฟรชทุก 30 วินาที</div>
+            </div>
+            <div style="font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:8px;background:#E7F3EC;color:#0A6B49">ระบบทำงานปกติ</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px">
+            <sc-for list="{{ counters }}" as="c" hint-placeholder-count="9">
+              <div style="border-radius:14px;border:1px solid {{ c.border }};background:{{ c.bg }};padding:14px">
+                <div style="font-size:12px;color:#5A4E42">{{ c.th }}</div>
+                <div style="display:flex;align-items:baseline;gap:7px;margin-top:6px">
+                  <div style="font-size:27px;font-weight:700;color:{{ c.numColor }};line-height:1">{{ c.n }}</div>
+                  <div style="font-size:11.5px;color:#7A6E64">{{ c.unit }}</div>
+                </div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#8A7F75;margin-top:8px;line-height:1.5">{{ c.source }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:18px;border-radius:14px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+            <div style="padding:11px 16px;border-bottom:1px solid #F0EAE1;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:13.5px;font-weight:700">รายการที่ต้องดำเนินการ</div>
+              <div style="font-size:11.5px;color:#C2431F;font-weight:600">ดูทั้งหมด · A-13</div>
+            </div>
+            <div style="display:grid;grid-template-columns:120px 130px 1fr 92px 116px;gap:10px;padding:9px 16px;background:#FBF9F6;font-size:10.5px;font-weight:600;color:#7A6E64">
+              <div>ประเภท</div><div>อ้างอิง</div><div>รายละเอียด</div><div>รออยู่</div><div>ผู้รับผิดชอบ</div>
+            </div>
+            <sc-for list="{{ alertRows }}" as="a" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:120px 130px 1fr 92px 116px;gap:10px;padding:11px 16px;border-top:1px solid #F5F1EB;align-items:center">
+                <div style="font-size:10.5px;font-weight:600;padding:3px 7px;border-radius:7px;justify-self:start;{{ a.style }}">{{ a.kind }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#C2431F">{{ a.ref }}</div>
+                <div style="font-size:12px;color:#3D342C">{{ a.detail }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:{{ a.ageColor }}">{{ a.age }}</div>
+                <div style="font-size:11.5px;color:#7A6E64">{{ a.owner }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:14px;padding:12px 15px;border-radius:12px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:12px;line-height:1.7;color:#5A4E42">ไม่มีกราฟรายได้และยอดขายรวมในหน้านี้ — SETTLEMENT_MODEL § 11 ระบุว่าตัวเลขทางการเงินยังไม่ถูกกำหนด จึงไม่แสดงตัวเลขที่ยังไม่มีแหล่งข้อมูลจริง</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C3 · A-04 -->
+  <div data-screen-label="A-04" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-04</div>
+      <div style="font-size:17px;font-weight:700">รายละเอียดออเดอร์ · four regions, three actions, one reason</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#F7F5F2;padding:20px;max-width:1440px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:11.5px;color:#7A6E64;font-family:'IBM Plex Mono',monospace">ออเดอร์ / BH-26090201-0147</div>
+          <div style="font-size:20px;font-weight:700;margin-top:4px">BH-26090201-0147</div>
+          <div style="font-size:12.5px;color:#5A4E42;margin-top:3px">ร้านครัวคุณแม่ · คุณสมชาย 08X-XXX-2288 · สร้าง 08:41</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="font-size:12px;font-weight:600;padding:6px 12px;border-radius:9px;background:#FDF3E6;color:#9A6410">กำลังเตรียมอาหาร</div>
+          <div style="font-size:12px;font-weight:600;padding:6px 12px;border-radius:9px;background:#E7F3EC;color:#0A6B49">ชำระเงินสำเร็จ</div>
+          <div style="font-size:12px;font-weight:600;padding:6px 12px;border-radius:9px;background:#FBEAEA;color:#B23030">ยังไม่มีไรเดอร์ · 14 นาที</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px">
+        <sc-for list="{{ orderRegions }}" as="r" hint-placeholder-count="4">
+          <div style="border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:16px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+              <div style="font-size:13.5px;font-weight:700">{{ r.title }}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#A2968A">{{ r.src }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:11px">
+              <sc-for list="{{ r.rows }}" as="row" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:baseline">
+                  <div style="font-size:12px;color:#7A6E64">{{ row.k }}</div>
+                  <div style="font-size:12.5px;color:#1F1A16;font-weight:500">{{ row.v }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ r.note }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#FBF9F6;border:1px solid #F0EAE1;font-size:11.5px;line-height:1.7;color:#5A4E42">{{ r.note }}</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:14px;border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:16px">
+        <div style="font-size:13.5px;font-weight:700">ไทม์ไลน์</div>
+        <div style="display:flex;flex-direction:column;gap:0;margin-top:12px">
+          <sc-for list="{{ timeline }}" as="t" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:76px 22px 1fr 190px;gap:10px;align-items:start;padding:7px 0">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ t.time }}</div>
+              <div style="display:flex;justify-content:center"><div style="width:9px;height:9px;border-radius:50%;background:{{ t.dot }};margin-top:4px"></div></div>
+              <div style="font-size:12.5px;color:#1F1A16">{{ t.what }}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#A2968A">{{ t.actor }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:grid;grid-template-columns:1fr 300px;gap:14px">
+        <div style="border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:16px">
+          <div style="font-size:13.5px;font-weight:700">การดำเนินการ</div>
+          <div style="font-size:11.5px;color:#7A6E64;margin-top:4px">สูงสุด 3 รายการ · ทุกรายการต้องระบุเหตุผล</div>
+          <div style="display:flex;gap:9px;margin-top:12px;flex-wrap:wrap">
+            <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#1F1A16;color:#fff">จัดหาไรเดอร์ใหม่</div>
+            <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#fff;border:1px solid #E0D6C8;color:#1F1A16">ค้นหาไรเดอร์ต่อ</div>
+            <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#FBEAEA;border:1px solid #F0C9C9;color:#B23030">ยกเลิกและคืนเงิน</div>
+          </div>
+          <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:11.5px;line-height:1.7;color:#9A6410">ลำดับและเงื่อนไขของสามปุ่มนี้ยังไม่ถูกกำหนด — UX-Q-006 · ปุ่มที่สถานะปัจจุบันทำไม่ได้จะไม่แสดง ไม่ใช่แสดงแบบกดไม่ได้</div>
+        </div>
+        <div style="border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:16px">
+          <div style="font-size:13.5px;font-weight:700">ประวัติการดำเนินการ</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#A2968A;margin-top:3px">audit_logs_entity_idx</div>
+          <div style="margin-top:11px;font-size:12px;line-height:1.75;color:#5A4E42">ยังไม่มีการดำเนินการโดยผู้ดูแลระบบสำหรับออเดอร์นี้</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C4 · A-17 -->
+  <div data-screen-label="A-17" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-17</div>
+      <div style="font-size:17px;font-weight:700">รายละเอียดการชำระเงิน · duplicate payment, read-only</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#F7F5F2;padding:20px;max-width:1440px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">การชำระเงิน / PAY-26090201-0147</div>
+          <div style="font-size:20px;font-weight:700;margin-top:4px">฿ 428.00 · ชำระเงินสำเร็จ</div>
+          <div style="font-size:12.5px;color:#5A4E42;margin-top:3px">ออเดอร์ <span style="color:#C2431F;font-weight:600">BH-26090201-0147</span> · PROMPTPAY_QR · สำเร็จ 08:44:12</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+          <div style="font-size:12px;font-weight:600;padding:6px 12px;border-radius:9px;background:#FBEAEA;color:#B23030">จ่ายซ้ำ · ต้องคืนเงิน ฿428.00</div>
+          <div style="font-size:12px;font-weight:600;padding:6px 12px;border-radius:9px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">อ่านอย่างเดียว</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding:12px 15px;border-radius:12px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:12.5px;line-height:1.75;color:#8F3A3A"><strong style="color:#B23030">ธุรกรรมที่สองถูกบันทึกไว้ ไม่ถูกตัดออก</strong> — ยอดของออเดอร์ไม่เปลี่ยน และระบบเปิดเคสกระทบยอดชนิด SURPLUS_PAYMENT ให้แล้วโดยอัตโนมัติ (DEC-030) ผู้ดูแลระบบไม่มีปุ่มแก้สถานะการชำระเงินในหน้านี้ — SUCCESS และ REFUNDED เขียนได้จาก webhook ที่ผ่านการตรวจลายเซ็นเท่านั้น (CON-002)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+        <sc-for list="{{ paymentPanels }}" as="p" hint-placeholder-count="4">
+          <div style="border-radius:14px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+            <div style="padding:12px 16px;border-bottom:1px solid #F0EAE1;display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+              <div style="font-size:13.5px;font-weight:700">{{ p.title }}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#A2968A">{{ p.src }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:{{ p.cols }};gap:10px;padding:8px 16px;background:#FBF9F6;font-size:10.5px;font-weight:600;color:#7A6E64">
+              <sc-for list="{{ p.head }}" as="h" hint-placeholder-count="4">
+                <div>{{ h }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ p.rows }}" as="row" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:{{ p.cols }};gap:10px;padding:10px 16px;border-top:1px solid #F5F1EB;align-items:center">
+                <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="4">
+                  <div style="font-size:11.5px;color:#3D342C;font-family:'IBM Plex Mono',monospace;word-break:break-all">{{ c }}</div>
+                </sc-for>
+              </div>
+            </sc-for>
+            <sc-if value="{{ p.note }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:11px 16px;border-top:1px solid #F0EAE1;font-size:11.5px;line-height:1.7;color:#5A4E42;background:#FBF9F6">{{ p.note }}</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:14px;border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:16px">
+        <div style="font-size:13.5px;font-weight:700">การดำเนินการที่ทำได้จากหน้านี้</div>
+        <div style="display:flex;gap:9px;margin-top:11px;flex-wrap:wrap">
+          <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#1F1A16;color:#fff">ขอคืนเงินส่วนที่จ่ายซ้ำ</div>
+          <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#fff;border:1px solid #E0D6C8;color:#1F1A16">เปิดเคสกระทบยอด</div>
+          <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#F3EDE4;color:#A2968A">แก้สถานะการชำระเงิน · ไม่มีให้ใช้</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C5 · A-18 / A-19 -->
+  <div data-screen-label="A-19" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-18 → A-19</div>
+      <div style="font-size:17px;font-weight:700">คืนเงิน · dual control, and the mechanism that does not exist yet</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 470px;gap:16px;max-width:1440px">
+      <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid #F0EAE1">
+          <div style="font-size:15px;font-weight:700">คิวคืนเงิน</div>
+          <div style="font-size:11.5px;color:#7A6E64;margin-top:3px">4 รายการ · เรียงตามเวลาที่ค้างนานที่สุด</div>
+        </div>
+        <div style="display:grid;grid-template-columns:132px 92px 1fr 128px 84px;gap:10px;padding:9px 18px;background:#FBF9F6;font-size:10.5px;font-weight:600;color:#7A6E64">
+          <div>อ้างอิง</div><div>ยอด</div><div>สถานะ</div><div>ผู้อนุมัติ</div><div>ค้าง</div>
+        </div>
+        <sc-for list="{{ refundQueue }}" as="r" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:132px 92px 1fr 128px 84px;gap:10px;padding:12px 18px;border-top:1px solid #F5F1EB;align-items:center;background:{{ r.bg }}">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#C2431F">{{ r.ref }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">{{ r.amount }}</div>
+            <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;justify-self:start;{{ r.style }}">{{ r.state }}</div>
+            <div style="font-size:11.5px;color:#5A4E42">{{ r.approver }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ r.age }}</div>
+          </div>
+        </sc-for>
+        <div style="padding:13px 18px;border-top:1px solid #F0EAE1;background:#FBF9F6;font-size:11.5px;line-height:1.7;color:#5A4E42">ยอดคืนเงินมาจาก payments.amount และ refunds.amount เท่านั้น ไม่มีการคำนวณส่วนแบ่งใด ๆ ในหน้านี้ — ค่าคอมมิชชันยังไม่ถูกกำหนด (Q-010)</div>
+      </div>
+      <div style="border-radius:18px;border:2px solid #1F1A16;background:#fff;overflow:hidden;align-self:start">
+        <div style="padding:14px 18px;border-bottom:1px solid #F0EAE1;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:14.5px;font-weight:700">ตรวจสอบคำขอคืนเงิน</div>
+          <div style="font-size:16px;color:#A2968A">✕</div>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <sc-for list="{{ refundDrawer }}" as="d" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:118px 1fr;gap:10px;align-items:baseline">
+                <div style="font-size:12px;color:#7A6E64">{{ d.k }}</div>
+                <div style="font-size:12.5px;font-weight:500;color:#1F1A16">{{ d.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:14px;padding:13px 14px;border-radius:12px;background:#FBEAEA;border:1px solid #F0C9C9">
+            <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#B23030">DECISION REQUIRED — Q-020</div>
+            <div style="font-size:12.5px;line-height:1.75;color:#8F3A3A;margin-top:7px">กลไกการคืนเงินยังไม่ถูกกำหนด อนุมัติได้ แต่ระบบยังไม่สามารถคืนเงินอัตโนมัติได้ · ปุ่มดำเนินการคืนเงินจะไม่ปรากฏจนกว่าการตัดสินใจนี้จะเสร็จสิ้น</div>
+            <div style="font-size:11.5px;line-height:1.7;color:#8F3A3A;margin-top:9px;font-family:'IBM Plex Mono',monospace">refund mechanism · provider API · manual transfer · evidence shape — all unresolved</div>
+          </div>
+          <div style="margin-top:14px">
+            <div style="font-size:12px;font-weight:600;color:#1F1A16">เหตุผล <span style="color:#B23030">*</span></div>
+            <div style="margin-top:6px;border:1px solid #E0D6C8;border-radius:10px;padding:10px 12px;min-height:56px;font-size:12px;color:#A2968A;background:#FBF9F6">ระบุเหตุผลของการอนุมัติหรือปฏิเสธ · บันทึกถาวรและแก้ไขไม่ได้</div>
+            <div style="font-size:11px;color:#7A6E64;margin-top:5px">audit_logs.reason เป็น NOT NULL สำหรับผู้ดูแลระบบ (DEC-032) · ส่งไม่ได้ถ้าเว้นว่าง</div>
+          </div>
+          <div style="display:flex;gap:9px;margin-top:14px;flex-wrap:wrap">
+            <div style="font-size:12.5px;font-weight:600;padding:10px 16px;border-radius:10px;background:#1F1A16;color:#fff">อนุมัติคำขอ</div>
+            <div style="font-size:12.5px;font-weight:600;padding:10px 16px;border-radius:10px;background:#fff;border:1px solid #F0C9C9;color:#B23030">ปฏิเสธคำขอ</div>
+          </div>
+          <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:11.5px;line-height:1.7;color:#9A6410">ผู้ขอและผู้อนุมัติต้องไม่ใช่คนเดียวกัน · คำขอนี้สร้างโดย 08X-XXX-4471 ซึ่งเป็นผู้ใช้ปัจจุบัน จึงอนุมัติเองไม่ได้ — ต้องให้ผู้ดูแลระบบอีกคนอนุมัติ</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C6 · A-20 -->
+  <div data-screen-label="A-20" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-20</div>
+      <div style="font-size:17px;font-weight:700">กระทบยอด · five case kinds, one investigation shape</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#F7F5F2;padding:20px;max-width:1440px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+        <sc-for list="{{ caseKinds }}" as="k" hint-placeholder-count="5">
+          <div style="border-radius:12px;border:1px solid {{ k.border }};background:#fff;padding:12px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#7A6E64;line-height:1.4">{{ k.kind }}</div>
+            <div style="font-size:22px;font-weight:700;margin-top:6px;color:{{ k.color }}">{{ k.n }}</div>
+            <div style="font-size:11px;color:#5A4E42;margin-top:4px;line-height:1.5">{{ k.th }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 430px;gap:14px;margin-top:14px">
+        <div style="border-radius:14px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+          <div style="display:grid;grid-template-columns:116px 150px 1fr 78px 104px;gap:10px;padding:9px 16px;background:#FBF9F6;font-size:10.5px;font-weight:600;color:#7A6E64">
+            <div>เคส</div><div>ชนิด</div><div>เกี่ยวข้องกับ</div><div>อายุ</div><div>สถานะ</div>
+          </div>
+          <sc-for list="{{ caseRows }}" as="c" hint-placeholder-count="5">
+            <div style="display:grid;grid-template-columns:116px 150px 1fr 78px 104px;gap:10px;padding:11px 16px;border-top:1px solid #F5F1EB;align-items:center;background:{{ c.bg }}">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#C2431F">{{ c.id }}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#3D342C;line-height:1.35">{{ c.kind }}</div>
+              <div style="font-size:11.5px;color:#3D342C">{{ c.rel }}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ c.ageColor }}">{{ c.age }}</div>
+              <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;justify-self:start;{{ c.style }}">{{ c.state }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="border-radius:14px;border:2px solid #1F1A16;background:#fff;padding:16px;align-self:start">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#7A6E64">RC-260902-0009 · RIDER_RELEASE_INVARIANT</div>
+          <div style="font-size:15px;font-weight:700;margin-top:5px">ปล่อยงานไรเดอร์ผิดเงื่อนไข</div>
+          <div style="display:flex;flex-direction:column;gap:9px;margin-top:12px">
+            <sc-for list="{{ caseDetail }}" as="d" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:112px 1fr;gap:10px;align-items:baseline">
+                <div style="font-size:11.5px;color:#7A6E64">{{ d.k }}</div>
+                <div style="font-size:12px;font-weight:500;color:#1F1A16">{{ d.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin-top:13px;padding:11px 13px;border-radius:10px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:11.5px;line-height:1.7;color:#8F3A3A">P0001 release invariant violated — ยังไม่มีหน้าใดในระบบที่อ่านเคสชนิดนี้ (DEC-021 / H-2) หน้านี้เป็นผู้อ่านรายแรก</div>
+          <div style="margin-top:13px">
+            <div style="font-size:12px;font-weight:600">บันทึกการแก้ไข <span style="color:#B23030">*</span></div>
+            <div style="margin-top:6px;border:1px solid #E0D6C8;border-radius:10px;padding:10px 12px;min-height:48px;font-size:12px;color:#A2968A;background:#FBF9F6">resolution_note · บันทึกถาวร</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            <div style="font-size:12px;font-weight:600;padding:9px 14px;border-radius:10px;background:#1F1A16;color:#fff">รับเคสนี้</div>
+            <div style="font-size:12px;font-weight:600;padding:9px 14px;border-radius:10px;background:#fff;border:1px solid #E0D6C8;color:#1F1A16">แก้ไขแล้ว</div>
+            <div style="font-size:12px;font-weight:600;padding:9px 14px;border-radius:10px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">ปิดเคส</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C7 · A-21 -->
+  <div data-screen-label="A-21" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-21</div>
+      <div style="font-size:17px;font-weight:700">บัญชีแยกประเภท · the zero-sum verdict the database deliberately does not enforce</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#F7F5F2;padding:20px;max-width:1440px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <sc-for list="{{ ledgerGroups }}" as="g" hint-placeholder-count="2">
+          <div style="border-radius:14px;border:1px solid {{ g.border }};background:#fff;overflow:hidden">
+            <div style="padding:13px 16px;border-bottom:1px solid #F0EAE1;display:flex;justify-content:space-between;align-items:center;gap:10px">
+              <div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#7A6E64">{{ g.group }}</div>
+                <div style="font-size:14px;font-weight:700;margin-top:3px">{{ g.title }}</div>
+              </div>
+              <div style="font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:9px;{{ g.verdictStyle }}">{{ g.verdict }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 108px 96px;gap:10px;padding:8px 16px;background:#FBF9F6;font-size:10.5px;font-weight:600;color:#7A6E64">
+              <div>บัญชี</div><div>ประเภท</div><div>จำนวน</div>
+            </div>
+            <sc-for list="{{ g.entries }}" as="e" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:1fr 108px 96px;gap:10px;padding:10px 16px;border-top:1px solid #F5F1EB;align-items:center">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#3D342C">{{ e.account }}</div>
+                <div style="font-size:11px;color:#7A6E64">{{ e.type }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:{{ e.color }};text-align:right">{{ e.amount }}</div>
+              </div>
+            </sc-for>
+            <div style="display:grid;grid-template-columns:1fr 96px;gap:10px;padding:11px 16px;border-top:2px solid #1F1A16;align-items:center">
+              <div style="font-size:12px;font-weight:700">ผลรวม</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:{{ g.sumColor }};text-align:right">{{ g.sum }}</div>
+            </div>
+            <div style="padding:11px 16px;border-top:1px solid #F0EAE1;background:{{ g.noteBg }};font-size:11.5px;line-height:1.7;color:{{ g.noteColor }}">{{ g.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- C8 · A-22 -->
+  <div data-screen-label="A-22" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">A-22</div>
+      <div style="font-size:17px;font-weight:700">รอบโอนเงิน · designed as blocked, on purpose</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#F7F5F2;padding:20px;max-width:1440px">
+      <div style="padding:14px 16px;border-radius:12px;background:#FBEAEA;border:1px solid #F0C9C9">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#B23030">BLOCKED · IMPLEMENTATION DEPENDENCY · LEGAL_REVIEW_REQUIRED</div>
+        <div style="font-size:13px;line-height:1.8;color:#8F3A3A;margin-top:8px">Settlement has no schema. SETTLEMENT_MODEL § 6 defers <span style="font-family:'IBM Plex Mono',monospace">settlement_runs</span>, <span style="font-family:'IBM Plex Mono',monospace">settlement_items</span>, <span style="font-family:'IBM Plex Mono',monospace">merchant_payouts</span>, <span style="font-family:'IBM Plex Mono',monospace">rider_payouts</span>, <span style="font-family:'IBM Plex Mono',monospace">commission_rules</span> and <span style="font-family:'IBM Plex Mono',monospace">payout_accounts</span> until Q-002 and Q-010 resolve. Whether BANHAO may calculate splits and move money at all is a legal question (Q-002), and no commission rate exists to calculate with (Q-010). This screen therefore previews payables from the ledger and creates nothing.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+        <sc-for list="{{ settlementPanels }}" as="s" hint-placeholder-count="2">
+          <div style="border-radius:14px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+            <div style="padding:13px 16px;border-bottom:1px solid #F0EAE1">
+              <div style="font-size:14px;font-weight:700">{{ s.title }}</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#A2968A;margin-top:3px">{{ s.src }}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 110px 118px;gap:10px;padding:8px 16px;background:#FBF9F6;font-size:10.5px;font-weight:600;color:#7A6E64">
+              <div>ผู้รับ</div><div>ออเดอร์</div><div>ยอด</div>
+            </div>
+            <sc-for list="{{ s.rows }}" as="row" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:1fr 110px 118px;gap:10px;padding:11px 16px;border-top:1px solid #F5F1EB;align-items:center">
+                <div style="font-size:12px;color:#3D342C">{{ row.who }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7A6E64">{{ row.orders }}</div>
+                <div style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;background:#FDF3E6;color:#9A6410;text-align:center">{{ row.amount }}</div>
+              </div>
+            </sc-for>
+            <div style="padding:11px 16px;border-top:1px solid #F0EAE1;background:#FBF9F6;font-size:11.5px;line-height:1.7;color:#5A4E42">{{ s.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:9px;flex-wrap:wrap;align-items:center">
+        <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#F3EDE4;color:#A2968A">สร้างรอบโอนเงิน · ยังใช้ไม่ได้</div>
+        <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#F3EDE4;color:#A2968A">อนุมัติรอบ · ยังใช้ไม่ได้</div>
+        <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#F3EDE4;color:#A2968A">บันทึกการโอน · ยังใช้ไม่ได้</div>
+        <div style="font-size:11.5px;color:#7A6E64">ทุกปุ่มปิดใช้งานพร้อมเหตุผลบนหน้าจอ ไม่ใช่ซ่อนไว้ — ผู้ดูแลระบบต้องรู้ว่ามีขั้นตอนนี้อยู่และยังทำไม่ได้</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C9 · confirmation -->
+  <div data-screen-label="Confirm" style="margin-top:34px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">OVERLAY</div>
+      <div style="font-size:17px;font-weight:700">Confirmation, irreversible warning, and the submit lock</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1440px">
+      <sc-for list="{{ dialogs }}" as="d" hint-placeholder-count="3">
+        <div style="border-radius:16px;border:2px solid {{ d.border }};background:#fff;overflow:hidden">
+          <div style="padding:14px 17px;border-bottom:1px solid #F0EAE1;display:flex;justify-content:space-between;gap:10px;align-items:center">
+            <div style="font-size:14px;font-weight:700">{{ d.title }}</div>
+            <div style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;{{ d.tagStyle }}">{{ d.tag }}</div>
+          </div>
+          <div style="padding:16px 17px">
+            <div style="font-size:12.5px;line-height:1.8;color:#3D342C">{{ d.body }}</div>
+            <sc-if value="{{ d.warn }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:12px;line-height:1.7;color:#8F3A3A">{{ d.warn }}</div>
+            </sc-if>
+            <div style="margin-top:13px;font-size:12px;font-weight:600">{{ d.fieldLabel }} <span style="color:#B23030">*</span></div>
+            <div style="margin-top:6px;border:1px solid #E0D6C8;border-radius:10px;padding:10px 12px;min-height:44px;font-size:12px;color:#A2968A;background:#FBF9F6">{{ d.fieldHint }}</div>
+            <div style="display:flex;gap:9px;margin-top:13px;flex-wrap:wrap">
+              <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:{{ d.primaryBg }};color:{{ d.primaryColor }}">{{ d.primary }}</div>
+              <div style="font-size:12.5px;font-weight:600;padding:10px 15px;border-radius:10px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">ยกเลิก</div>
+            </div>
+            <div style="margin-top:11px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;line-height:1.6;color:#8A7F75">{{ d.tech }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 08 SCREEN SPECS -->
+  <div id="s8" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — SCREEN SPECIFICATIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What each screen reads, shows and is allowed to write</div>
+  <div style="display:flex;flex-direction:column;gap:14px;margin-top:18px;max-width:1500px">
+    <sc-for list="{{ specs }}" as="s" hint-placeholder-count="10">
+      <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;padding:20px">
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#C2431F">{{ s.id }}</div>
+          <div style="font-size:16px;font-weight:700">{{ s.name }}</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;{{ s.style }}">{{ s.status }}</div>
+        </div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:8px;max-width:1180px">{{ s.purpose }}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:14px">
+          <div>
+            <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin-bottom:8px">READS</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ s.reads }}" as="r" hint-placeholder-count="3">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#3D342C;line-height:1.5">{{ r }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin-bottom:8px">SHOWS</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ s.shows }}" as="r" hint-placeholder-count="3">
+                <div style="font-size:12.5px;color:#3D342C;line-height:1.6">{{ r }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#B23030;margin-bottom:8px">WRITES · AND WHAT IT MAY NOT</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ s.writes }}" as="r" hint-placeholder-count="3">
+                <div style="font-size:12.5px;color:#3D342C;line-height:1.6">{{ r }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 09 INTERACTION -->
+  <div id="s9" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — INTERACTION RULES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Fourteen rules that hold on every screen</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px;max-width:1500px">
+    <sc-for list="{{ interactions }}" as="i" hint-placeholder-count="14">
+      <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:16px 18px">
+        <div style="display:flex;gap:10px;align-items:baseline">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#C2431F">{{ i.n }}</div>
+          <div style="font-size:14px;font-weight:700">{{ i.title }}</div>
+        </div>
+        <div style="font-size:12.5px;line-height:1.75;color:#3D342C;margin-top:7px">{{ i.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 10 UI STATES -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — LOADING · EMPTY · ERROR · SUCCESS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Four states per surface, and the difference between empty and broken</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1500px">
+    <div style="display:grid;grid-template-columns:150px 1fr 1fr 1fr 1fr;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>SURFACE</div><div>LOADING</div><div>EMPTY</div><div>ERROR</div><div>SUCCESS</div>
+    </div>
+    <sc-for list="{{ uiStates }}" as="u" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:150px 1fr 1fr 1fr 1fr;gap:12px;padding:13px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#C2431F">{{ u.surface }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#3D342C">{{ u.loading }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#3D342C">{{ u.empty }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#8F3A3A">{{ u.error }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#0A6B49">{{ u.success }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 11 FINANCIAL SAFETY -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — FINANCIAL SAFETY STATES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Nine controls that stand between an operator and an irreversible mistake</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;max-width:1500px">
+    <sc-for list="{{ safety }}" as="s" hint-placeholder-count="9">
+      <div style="display:grid;grid-template-columns:210px 1fr 1fr 170px;gap:16px;border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:15px 18px;align-items:start">
+        <div style="font-size:13.5px;font-weight:700">{{ s.control }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ s.behaviour }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.6;color:#7A6E64">{{ s.enforcement }}</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;justify-self:start;{{ s.style }}">{{ s.status }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 12 PERMISSIONS -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — PERMISSION MATRIX</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Two roles, one server-side answer</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1000px">The UI hides what the role cannot do; the endpoint refuses regardless. Both sides read the same capability row, resolved per request without caching.</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1500px">
+    <div style="display:grid;grid-template-columns:1fr 110px 110px 1fr;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>CAPABILITY</div><div>OPERATOR</div><div>ADMIN</div><div>SERVER-SIDE RULE</div>
+    </div>
+    <sc-for list="{{ permissions }}" as="p" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:1fr 110px 110px 1fr;gap:12px;padding:12px 20px;border-top:1px solid #F0EAE1;align-items:center">
+        <div style="font-size:12.5px;color:#1F1A16">{{ p.cap }}</div>
+        <div style="font-size:11.5px;font-weight:600;color:{{ p.opColor }}">{{ p.op }}</div>
+        <div style="font-size:11.5px;font-weight:600;color:{{ p.adColor }}">{{ p.ad }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;line-height:1.6;color:#7A6E64">{{ p.rule }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 13 FAILURE MATRIX -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — INCIDENT · FAILURE · EXCEPTION MATRIX</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Nine incident classes, each as detection → investigation → action → confirmation → audit</div>
+  <div style="display:flex;flex-direction:column;gap:14px;margin-top:18px;max-width:1560px">
+    <sc-for list="{{ incidents }}" as="i" hint-placeholder-count="9">
+      <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid #F0EAE1;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;background:#FBF9F6">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#C2431F">{{ i.n }}</div>
+          <div style="font-size:15.5px;font-weight:700">{{ i.title }}</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;{{ i.style }}">{{ i.status }}</div>
+          <div style="font-size:12px;color:#7A6E64">{{ i.th }}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0">
+          <sc-for list="{{ i.steps }}" as="st" hint-placeholder-count="5">
+            <div style="padding:14px 16px;border-right:1px solid #F0EAE1">
+              <div style="font-size:10px;font-weight:600;letter-spacing:.1em;color:#A2968A">{{ st.label }}</div>
+              <div style="font-size:12px;line-height:1.7;color:#3D342C;margin-top:7px">{{ st.body }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 14 AUDIT -->
+  <div id="s14" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">14 — AUDIT REQUIREMENTS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every operator write produces one audit row, and the row already has a shape</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px;max-width:1500px">
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;padding:20px">
+      <div style="font-size:11.5px;font-weight:600;letter-spacing:.12em;color:#A2968A;margin-bottom:14px">REQUIRED PER ACTION</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ auditFields }}" as="a" hint-placeholder-count="9">
+          <div style="display:grid;grid-template-columns:190px 1fr;gap:12px;align-items:baseline">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F">{{ a.field }}</div>
+            <div style="font-size:12.5px;line-height:1.65;color:#3D342C">{{ a.body }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <sc-for list="{{ auditRules }}" as="r" hint-placeholder-count="6">
+        <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:15px 17px">
+          <div style="font-size:13.5px;font-weight:700">{{ r.title }}</div>
+          <div style="font-size:12.5px;line-height:1.75;color:#3D342C;margin-top:6px">{{ r.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 15 ACCESSIBILITY -->
+  <div id="s15" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">15 — ACCESSIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">A dense financial table read by one tired person at 21:00</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px;max-width:1500px">
+    <sc-for list="{{ a11y }}" as="a" hint-placeholder-count="10">
+      <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:15px 17px">
+        <div style="font-size:13.5px;font-weight:700">{{ a.title }}</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#3D342C;margin-top:6px">{{ a.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 16 THAI COPY -->
+  <div id="s16" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">16 — THAI UI COPY INVENTORY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Operator Thai, written for the person who has to defend the decision later</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1060px">Line-height 1.6 minimum throughout so upper and lower vowels never collide. Every string keyed for one file per app, per CLAUDE.md — no i18n library for a single language.</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1500px">
+    <div style="display:grid;grid-template-columns:250px 1fr 1fr;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>KEY</div><div>THAI</div><div>WHEN IT APPEARS</div>
+    </div>
+    <sc-for list="{{ copy }}" as="c" hint-placeholder-count="30">
+      <div style="display:grid;grid-template-columns:250px 1fr 1fr;gap:12px;padding:11px 20px;border-top:1px solid #F0EAE1;align-items:baseline">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#C2431F;word-break:break-all">{{ c.key }}</div>
+        <div style="font-size:13px;line-height:1.65;color:#1F1A16">{{ c.th }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#7A6E64">{{ c.when }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 17 API -->
+  <div id="s17" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">17 — API ASSUMPTIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every endpoint below is a request to engineering, not a description of something that exists</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1060px">The admin module is <span style="font-family:'IBM Plex Mono',monospace">apps/api/src/modules/admin</span> with a single controller today. Admin has no direct database path (DEC-APP-008), so each screen needs a named endpoint. Names are proposals; shapes follow existing tables exactly.</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1560px">
+    <div style="display:grid;grid-template-columns:88px 320px 1fr 130px;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>METHOD</div><div>PROPOSED PATH</div><div>BACKED BY · NOTES</div><div>STATUS</div>
+    </div>
+    <sc-for list="{{ api }}" as="a" hint-placeholder-count="18">
+      <div style="display:grid;grid-template-columns:88px 320px 1fr 130px;gap:12px;padding:11px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:{{ a.mColor }}">{{ a.method }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#1F1A16;word-break:break-all">{{ a.path }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#3D342C">{{ a.note }}</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;align-self:start;{{ a.style }}">{{ a.status }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 18 DATA -->
+  <div id="s18" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">18 — DATA DEPENDENCIES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What exists, what is empty, and what has no table at all</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px;max-width:1560px">
+    <div style="display:grid;grid-template-columns:270px 130px 1fr 150px;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>TABLE · INDEX</div><div>USED BY</div><div>WHAT ADMIN NEEDS FROM IT</div><div>STATUS</div>
+    </div>
+    <sc-for list="{{ data }}" as="d" hint-placeholder-count="16">
+      <div style="display:grid;grid-template-columns:270px 130px 1fr 150px;gap:12px;padding:11px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#1F1A16;word-break:break-all">{{ d.table }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#C2431F">{{ d.by }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#3D342C">{{ d.need }}</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;align-self:start;{{ d.style }}">{{ d.status }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 19 OPEN DECISIONS -->
+  <div id="s19" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">19 — OPEN DECISIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Twelve decisions block implementation. Four of them block money.</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;max-width:1560px">
+    <sc-for list="{{ openDecisions }}" as="d" hint-placeholder-count="12">
+      <div style="border-radius:18px;border:1px solid {{ d.border }};background:{{ d.bg }};padding:17px 20px">
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:#C2431F">{{ d.id }}</div>
+          <div style="font-size:15.5px;font-weight:700">{{ d.title }}</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:8px;{{ d.style }}">{{ d.status }}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:11px">
+          <div>
+            <div style="font-size:10.5px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin-bottom:6px">THE QUESTION</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ d.question }}</div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin-bottom:6px">WHAT IT BLOCKS HERE</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ d.blocks }}</div>
+          </div>
+          <div>
+            <div style="font-size:10.5px;font-weight:600;letter-spacing:.1em;color:#A2968A;margin-bottom:6px">HOW THIS PACKAGE SURVIVES IT</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ d.mitigation }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 20 ACCEPTANCE -->
+  <div id="s20" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">20 — ACCEPTANCE CRITERIA</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Phase I is done when an operator resolves a stuck order without a database client</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px;max-width:1500px">
+    <sc-for list="{{ acceptance }}" as="a" hint-placeholder-count="18">
+      <div style="display:grid;grid-template-columns:34px 1fr;gap:12px;border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:14px 16px;align-items:start">
+        <div style="width:26px;height:26px;border-radius:8px;background:#EFE7DC;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:#5A4E42">{{ a.n }}</div>
+        <div>
+          <div style="font-size:12.5px;line-height:1.7;color:#1F1A16">{{ a.body }}</div>
+          <div style="font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:7px;margin-top:7px;display:inline-block;{{ a.style }}">{{ a.status }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 21 HANDOFF -->
+  <div id="s21" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">21 — IMPLEMENTATION NOTES FOR CLAUDE CODE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Build order, and the four things that must not be built</div>
+  <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:20px;margin-top:18px;max-width:1500px">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <sc-for list="{{ buildOrder }}" as="b" hint-placeholder-count="7">
+        <div style="display:grid;grid-template-columns:74px 1fr;gap:14px;border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:15px 17px;align-items:start">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.06em;color:#5A4E42;background:#EFE7DC;border-radius:8px;padding:5px 8px;text-align:center">{{ b.step }}</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:700">{{ b.title }}</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#3D342C;margin-top:5px">{{ b.body }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="border-radius:18px;border:1px solid #F0C9C9;background:#FDF6F5;padding:18px">
+        <div style="font-size:11.5px;font-weight:600;letter-spacing:.12em;color:#B23030;margin-bottom:12px">DO NOT BUILD</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ doNotBuild }}" as="d" hint-placeholder-count="6">
+            <div style="font-size:12.5px;line-height:1.7;color:#8F3A3A">{{ d }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;padding:18px">
+        <div style="font-size:11.5px;font-weight:600;letter-spacing:.12em;color:#A2968A;margin-bottom:12px">CONVENTIONS TO INHERIT</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ conventions }}" as="c" hint-placeholder-count="6">
+            <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ c }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:44px;padding:18px 20px;border-radius:16px;background:#1F1A16;color:#D9D2CA;font-size:12.5px;line-height:1.8;max-width:1180px">
+    Design only. No source file, schema, migration, RLS policy, RPC, API route, config or environment value was created or modified in producing this package, and nothing was committed or pushed. Database V1 remains at 16/16 migrations, commit <span style="font-family:'IBM Plex Mono',monospace">e471ec1d</span>.
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1620},&quot;highlightOpenDecisions&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Review&quot;,&quot;label&quot;:&quot;Ring every unresolved status tag&quot;}}">
+class Component extends DCLogic {
+  tag(s) {
+    const map = {
+      'LOCKED': 'background:#E7F3EC;color:#0A6B49',
+      'PROPOSED': 'background:#EDF1F8;color:#3A5C93',
+      'OPEN': 'background:#FDF3E6;color:#9A6410',
+      'DECISION REQUIRED': 'background:#FBEAEA;color:#B23030',
+      'LEGAL_REVIEW_REQUIRED': 'background:#F4EAF6;color:#7A3E8C',
+      'IMPLEMENTATION DEPENDENCY': 'background:#F3EDE4;color:#6B5B49',
+      'BLOCKED': 'background:#FBEAEA;color:#B23030',
+      'SHIPPED': 'background:#E7F3EC;color:#0A6B49',
+      'NOT BUILT': 'background:#F3EDE4;color:#6B5B49'
+    };
+    const base = map[s] || 'background:#F3EDE4;color:#6B5B49';
+    const unresolved = ['OPEN', 'DECISION REQUIRED', 'BLOCKED', 'LEGAL_REVIEW_REQUIRED'].indexOf(s) !== -1;
+    if (this.props.highlightOpenDecisions && unresolved) return base + ';box-shadow:0 0 0 2px #1F1A16';
+    return base;
+  }
+  withTag(rows) {
+    return rows.map((r) => ({ ...r, style: this.tag(r.status) }));
+  }
+  renderVals() {
+    const nav = [
+      ['00 Scope', '#s0'], ['01 Dependencies', '#s1'], ['02 Personas', '#s2'], ['03 Flow', '#s3'],
+      ['04 Screen map', '#s4'], ['05 Navigation', '#s5'], ['06 State matrix', '#s6'], ['07 Canvases', '#s7'],
+      ['08 Screen specs', '#s8'], ['09 Interaction', '#s9'], ['10 UI states', '#s10'],
+      ['11 Financial safety', '#s11'], ['12 Permissions', '#s12'], ['13 Failure matrix', '#s13'],
+      ['14 Audit', '#s14'], ['15 Accessibility', '#s15'], ['16 Thai copy', '#s16'], ['17 API', '#s17'],
+      ['18 Data', '#s18'], ['19 Open decisions', '#s19'], ['20 Acceptance', '#s20'], ['21 Handoff', '#s21']
+    ].map(([label, href]) => ({ label, href }));
+
+    const legend = ['LOCKED', 'PROPOSED', 'OPEN', 'DECISION REQUIRED', 'LEGAL_REVIEW_REQUIRED', 'IMPLEMENTATION DEPENDENCY']
+      .map((label) => ({ label, style: this.tag(label) }));
+
+    const inScope = [
+      'Staff authentication, session lifetime, unauthorized, forbidden, expiry and sign-out (A-01).',
+      'Operations dashboard whose every counter has a named source table or index (A-02).',
+      'Order lookup, order detail, timeline, payment situation, delivery situation and the operator action bar (A-03, A-04).',
+      'Payment lookup and payment detail — attempts, webhook events, transactions, provider references, refunds (A-16, A-17).',
+      'Refund request, review, dual-control approval, rejection, failure and retry (A-18, A-19).',
+      'Reconciliation queue and case investigation across all five case kinds (A-20).',
+      'Ledger group inspection with an explicit zero-sum verdict (A-21).',
+      'Settlement payable preview and run, designed as a blocked surface (A-22).',
+      'Incident handling for nine exception classes, each as Detection → Investigation → Action → Confirmation → Audit (§13).',
+      'Audit trail viewer, destructive-action confirmation, idempotency and double-submit protection (A-14, §11, §14).'
+    ];
+
+    const outScope = [
+      'Merchant onboarding, restaurant directory and menu administration (A-05, A-06, A-07).',
+      'Rider onboarding, document review and suspension (A-08, A-09) — Phase G surface, separate package.',
+      'Customer directory and staff grant/revoke screens (A-10, A-11, A-12).',
+      'Settings and timer configuration (A-15) — LATER in the UX spec, DEC-031.',
+      'Any provider integration, QR payload, signature scheme or refund API call — Q-001 and F′.',
+      'Any control that writes payments.state = SUCCESS or REFUNDED (CON-002).',
+      'Any new order state, including the four PROPOSED exception names (DEC-APP-006).',
+      'Live rider map and dispatch geography — Q-018 maps provider is unselected.',
+      'Revenue analytics, GMV charts, cohort or growth reporting.',
+      'Schema, migration, RLS, RPC, API, config or source change of any kind.'
+    ];
+
+    const recon = this.withTag([
+      {
+        title: 'Milestone: Phase I',
+        status: 'LOCKED',
+        body: 'docs/ROADMAP.md § FUTURE names "I — Admin operations · Admin app, operator fallback tooling", and BANHAO-APP-ARCHITECTURE-V1.md § 15 defines Phase I as "Order monitor, manual dispatch, reassignment with mandatory reason, refund initiation, ledger view, reconciliation queue, merchant/rider onboarding, audit log viewer", done when "an operator can resolve a stuck order without a database client". Screen IDs are the A-series, not I-nn: docs/TODO.md tracks "Design the full Admin Web UI (currently 3 wireframe-level screens only: A-02, A-03, A-12)" and the UX spec fixes A-01…A-15. This package therefore names the phase Phase I and the screens A-nn.'
+      },
+      {
+        title: 'Phase I dependency conflict',
+        status: 'OPEN',
+        body: 'Architecture V1.1 § 15 says Phase I depends on F, G and H. ROADMAP.md\'s future table lists Phase I\'s dependency as "—" (none). Recorded, not resolved: this package is designed so the order, payment, reconciliation and audit surfaces are buildable against what is already shipped, while settlement and refund execution wait on their own dependencies.'
+      },
+      {
+        title: 'A-03 / A-12 label collision',
+        status: 'OPEN',
+        body: 'The Product Architecture wireframes label A-03 "Live Map" and A-12 "คิวอนุมัติ" (approval queue). The later UX specification\'s screen inventory defines A-03 as "Orders — table, filter, search" and A-12 as "Staff detail — grant / revoke". This package follows the UX specification, which is the canonical screen inventory, and flags the wireframe labels as stale.'
+      },
+      {
+        title: '"Model A / Model C" are dispatch models',
+        status: 'LOCKED',
+        body: 'The brief asks that Model A / Model C not be pre-locked. In this repository those labels belong to docs/RIDER_LIFECYCLE.md § 11 — Model A is sequential nearest-first offer, Model C is broadcast / first accept, and Model C is already ACCEPTED by DEC-020. Q-002\'s money-flow options carry no A/C labels anywhere in the repository, so nothing here is designed against a lettered money-flow model; the financial surfaces are money-flow agnostic instead.'
+      }
+    ]);
+
+    const deps = this.withTag([
+      { id: 'DEC-APP-008', source: 'BANHAO-APP-ARCHITECTURE-V1.md § 12', fact: 'Admin is the deliberate exception with no direct Supabase reads — every operator read targets API-only tables. Every list and detail on every screen here needs a new API endpoint; none can be a PostgREST call.', status: 'LOCKED' },
+      { id: 'CON-002', source: 'PAYMENT_LIFECYCLE.md § 0', fact: 'Only a signature-verified webhook may set SUCCESS or REFUNDED. The payment surfaces are read-and-record only; the operator\'s output is a reconciliation case or a refund request, never a payment state.', status: 'LOCKED' },
+      { id: 'DEC-032', source: '20260811000010 audit_logs_operator_reason_check', fact: 'reason is NOT NULL for every actor_type = OPERATOR row, enforced by CHECK. Every operator action in this package has a mandatory reason field and cannot submit without it.', status: 'LOCKED' },
+      { id: 'DEC-034', source: '20260811000007_ledger_domain.sql', fact: 'No database zero-sum trigger, deliberately. Reconciliation is mandatory, not optional — the ledger inspector (A-21) and the imbalance alert are the compensating control the migration comment names.', status: 'LOCKED' },
+      { id: 'DEC-033', source: '20260811000001 platform_staff · CapabilitiesService', fact: 'Operator capability is a membership row, resolved from the database on every request with no caching, so a revoked grant takes effect on the next request. staff_role is OPERATOR or ADMIN only.', status: 'LOCKED' },
+      { id: 'DEC-027', source: '20260811000006 refunds', fact: 'Refund is a payment-domain state; the order is CANCELLED and the refund is REFUNDED. No order column ever holds a refund status, so refund progress renders in the payment region, never in the order state chip.', status: 'LOCKED' },
+      { id: 'DEC-030', source: 'payment_transactions · SURPLUS_PAYMENT', fact: 'A second successful transaction is recorded, never swallowed, and becomes a refund obligation — the order value does not change. Surplus is a reconciliation case with a refund next step.', status: 'LOCKED' },
+      { id: 'DEC-029', source: 'payment_attempts · LATE_PAYMENT', fact: 'Attempts keep their identity after expiry, so a late payment resolves to a specific attempt. The case detail shows which attempt; the business handling is undecided.', status: 'OPEN' },
+      { id: 'DEC-022', source: 'ORDER_LIFECYCLE.md · UX-SPEC § A-13', fact: 'No-rider is not an order state. The order waits in PREPARING or READY_FOR_PICKUP while dispatch keeps searching, and only an operator decision ends it — which is why A-13 is a queue with an owner and an age.', status: 'LOCKED' },
+      { id: 'DEC-021 / H-2', source: '20260811000013 · 20260825000001', fact: 'release_rider_assignment(delivery, status, reason) is the only sanctioned release path, service_role only. A P0001 "release invariant violated" raise must open a RIDER_RELEASE_INVARIANT reconciliation case — a case kind with no reader anywhere yet.', status: 'LOCKED' },
+      { id: 'DEC-APP-006', source: 'ROADMAP.md § Phase E', fact: 'PAYMENT_FAILED, PAYMENT_EXPIRED, MERCHANT_REJECTED and DELIVERY_FAILED exist in the CHECK constraint and stay unimplemented while BQ-013/015/016/017 are open. No screen offers a transition into them.', status: 'OPEN' },
+      { id: 'Q-002', source: 'SETTLEMENT_MODEL.md § 1', fact: 'Whether BANHAO calculating splits and running transfer rounds is regulated payment facilitation is unresolved. The settlement surface is designed as a preview and a record, and carries this marker on the screen itself.', status: 'LEGAL_REVIEW_REQUIRED' }
+    ]);
+
+    const personas = [
+      {
+        role: 'platform_staff.staff_role = OPERATOR',
+        name: 'The person on shift',
+        body: 'Works the queues. Resolves a stuck order, chases a delivery with no rider, investigates a payment that does not match, raises a refund request, and writes the reason that will still explain the decision in six months.',
+        opens: 'A-02 counters, then A-13 alerts, then A-20 reconciliation — in that order, once each morning and again at the end of trading.',
+        cannot: 'Approve their own refund request; move a payment to SUCCESS; edit a ledger entry, an audit row or an order history row; reach any table directly.'
+      },
+      {
+        role: 'platform_staff.staff_role = ADMIN',
+        name: 'The founder as approver',
+        body: 'Everything an operator can do, plus the second signature on money leaving the platform, plus the staff grants. In a one-person launch this is the same human, which is exactly why dual control has to be designed rather than assumed.',
+        opens: 'A-18 refund queue and A-21 ledger inspector — the two places where a wrong number becomes a real loss.',
+        cannot: 'Bypass the requester ≠ approver rule; approve without a reason; delete anything; be the second signature on a request they raised.'
+      }
+    ];
+
+    const flow = [
+      { n: '1', title: 'Sign in', surface: 'A-01 · phone OTP + platform_staff', action: 'Supabase phone OTP, then capability resolution. A profile with no active platform_staff row lands on ไม่มีสิทธิ์เข้าถึง, not on a dashboard.', constraint: 'A capability read that fails must fail closed — CapabilitiesService throws rather than returning "no memberships".' },
+      { n: '2', title: 'Read the counters', surface: 'A-02 · ภาพรวม', action: 'Nine counters, each with a named source. Anything above zero in the exception column is a link into a queue, not a metric to admire.', constraint: 'No counter without a source table or index. No revenue chart (SETTLEMENT_MODEL § 11).' },
+      { n: '3', title: 'Work the alert queue', surface: 'A-13 · การแจ้งเตือน', action: 'Rows with an owner and an age: deliveries searching too long, orders past the accept window, unprocessed payment events, dead-lettered jobs, open reconciliation cases.', constraint: 'A queue, not a feed — a row leaves only when a human resolves it (UX-SPEC § A-13).' },
+      { n: '4', title: 'Find the entity', surface: 'A-03 / A-16 · lookup', action: 'One search field per surface: order reference, customer phone, payment_reference, provider_transaction_id, refund_reference.', constraint: 'Search is server-side; admin has no direct read path (DEC-APP-008).' },
+      { n: '5', title: 'Investigate on one page', surface: 'A-04 / A-17 / A-20', action: 'Order detail carries order + payment + delivery + history in four stacked regions; payment detail carries attempts, events, transactions and refunds; a case carries its own evidence.', constraint: 'Read-only until the operator opens an action. Nothing is mutated by opening a screen.' },
+      { n: '6', title: 'Choose one action', surface: 'action bar', action: 'At most three actions per entity, each named as a command: cancel and refund, reassign the delivery, request a refund, open or resolve a case.', constraint: 'UX-SPEC § A-04: never more than three (DEC-032). Actions the state does not permit are absent, not disabled-with-a-tooltip.' },
+      { n: '7', title: 'Confirm with a reason', surface: 'confirmation dialog', action: 'Restate what will happen, in Thai, with the entity reference; require a reason; require a typed confirmation for anything irreversible.', constraint: 'The reason column is CHECK-enforced. A blank reason cannot reach the database, so it must not reach the button.' },
+      { n: '8', title: 'Submit once', surface: 'command endpoint', action: 'Every command carries an Idempotency-Key; the button locks on first submit and stays locked until the response resolves.', constraint: 'idempotency_records keys on (idempotency_key, endpoint); the same key with a different body is a 422, not a replay.' },
+      { n: '9', title: 'See the outcome, not the assumption', surface: 'result state', action: 'Success states name what actually changed. A refund shows ส่งคำขอแล้ว, never คืนเงินสำเร็จ — the platform never announces a refund before the bank confirms it.', constraint: 'PAYMENT_LIFECYCLE § 4. REFUNDED arrives by webhook or not at all.' },
+      { n: '10', title: 'Leave the trail', surface: 'A-14 · ประวัติการดำเนินการ', action: 'The action, the actor, the reason, the before and after, and the correlation id — readable from the entity it touched and from the operator who did it.', constraint: 'audit_logs is append-only for every role including service_role. There is no edit and no delete.' }
+    ];
+
+    const screenMap = this.withTag([
+      { id: 'A-01', route: '/login', kind: 'PAGE', owns: 'Phone OTP, capability gate, unauthorized, forbidden, session expiry, sign-out.', status: 'PROPOSED' },
+      { id: 'A-02', route: '/', kind: 'PAGE', owns: 'ภาพรวม — nine sourced counters plus the top of each exception queue.', status: 'PROPOSED' },
+      { id: 'A-03', route: '/orders', kind: 'PAGE', owns: 'Order table, state filter, search by reference and phone, age column.', status: 'PROPOSED' },
+      { id: 'A-04', route: '/orders/[id]', kind: 'PAGE', owns: 'Order state + timeline, payment situation, delivery situation, action bar (max three).', status: 'PROPOSED' },
+      { id: 'A-13', route: '/alerts', kind: 'PAGE', owns: 'Operator queue: no-rider, stuck orders, unprocessed events, dead-lettered jobs, open cases.', status: 'PROPOSED' },
+      { id: 'A-14', route: '/audit', kind: 'PAGE', owns: 'audit_logs viewer by entity and by actor, with before/after diff.', status: 'PROPOSED' },
+      { id: 'A-16', route: '/payments', kind: 'PAGE · NEW', owns: 'Payment lookup by payment_reference, order, provider_transaction_id; state and method filters.', status: 'PROPOSED' },
+      { id: 'A-17', route: '/payments/[id]', kind: 'PAGE · NEW', owns: 'Attempts, webhook events, transactions, refunds, provider references, per-payment audit.', status: 'PROPOSED' },
+      { id: 'A-18', route: '/refunds', kind: 'PAGE · NEW', owns: 'Refund queue by state, obligation source, age; dual-control status per row.', status: 'PROPOSED' },
+      { id: 'A-19', route: '/refunds/[id]', kind: 'DRAWER · NEW', owns: 'Refund review: amount, reason, requester, approver, mechanism availability, retry.', status: 'DECISION REQUIRED' },
+      { id: 'A-20', route: '/reconciliation', kind: 'PAGE · NEW', owns: 'Case queue and case detail for all five kinds; assign, investigate, resolve, close.', status: 'PROPOSED' },
+      { id: 'A-21', route: '/ledger', kind: 'PAGE · NEW', owns: 'Ledger group inspector: entries, signed amounts, zero-sum verdict, imbalance list.', status: 'PROPOSED' },
+      { id: 'A-22', route: '/settlement', kind: 'PAGE · NEW', owns: 'Merchant and rider payable preview from the ledger; settlement run designed, not runnable.', status: 'BLOCKED' },
+      { id: 'A-05…A-12', route: '/restaurants · /riders · /staff', kind: 'OUT OF SCOPE', owns: 'Directory and onboarding surfaces — named here so the navigation map is complete.', status: 'NOT BUILT' },
+      { id: 'A-15', route: '/settings', kind: 'OUT OF SCOPE', owns: 'Timer and configuration editor — LATER in the UX spec (DEC-031).', status: 'NOT BUILT' },
+      { id: '—', route: 'global', kind: 'OVERLAY', owns: 'Confirmation dialog, reason field, irreversible-action warning, submit lock, toast.', status: 'PROPOSED' }
+    ]);
+
+    const navGroups = [
+      { group: 'OPERATIONS', items: [{ th: 'ภาพรวม', id: 'A-02' }, { th: 'การแจ้งเตือน', id: 'A-13' }, { th: 'ออเดอร์', id: 'A-03' }] },
+      { group: 'MONEY', items: [{ th: 'การชำระเงิน', id: 'A-16' }, { th: 'คืนเงิน', id: 'A-18' }, { th: 'กระทบยอด', id: 'A-20' }, { th: 'บัญชีแยกประเภท', id: 'A-21' }, { th: 'รอบโอนเงิน', id: 'A-22' }] },
+      { group: 'DIRECTORY — out of scope', items: [{ th: 'ร้านค้า', id: 'A-05' }, { th: 'ไรเดอร์', id: 'A-08' }, { th: 'ลูกค้า', id: 'A-10' }, { th: 'ผู้ดูแลระบบ', id: 'A-11' }] },
+      { group: 'TRAIL', items: [{ th: 'ประวัติการดำเนินการ', id: 'A-14' }] }
+    ];
+
+    const navRules = [
+      { title: 'The dashboard is a router, not a destination', body: 'Every counter on A-02 links to the queue that produced it, pre-filtered. An operator who lands on ภาพรวม and finds nothing above zero is finished; there is no second screen to check.' },
+      { title: 'Alerts and reconciliation are different queues on purpose', body: 'A-13 holds operational exceptions (no rider, stuck order, dead-lettered job). A-20 holds financial cases from reconciliation_cases. A payment problem that also blocks an order appears in both, linked to the same order — a duplicate row is correct here, because two different people may be resolving two different halves.' },
+      { title: 'Every money screen deep-links to the order and back', body: 'payment → order and order → payment are both one click. reconciliation_cases already carries payment_id, order_id, payment_event_id and delivery_id, so no join has to be invented for the breadcrumb.' },
+      { title: 'A-19 is a drawer over A-18, never a page of its own', body: 'A refund review needs the queue visible behind it: the approver must be able to see whether the same customer already has a refund in flight before signing. Same scrim and focus-trap pattern the merchant order detail already uses.' },
+      { title: 'The audit trail is reachable from the entity, not only from the menu', body: 'Every detail screen carries a ประวัติการดำเนินการ region that queries audit_logs by (entity_type, entity_id) — the exact shape of audit_logs_entity_idx.' },
+      { title: 'Navigation never depends on a capability the client asserted', body: 'The sidebar renders from the capabilities the API returned for this request. A revoked grant collapses the menu on the next navigation, and the endpoint refuses regardless of what the client drew.' },
+      { title: 'No global search across domains', body: 'One search field per surface, each keyed on a column that is actually indexed and unique. A single omnibox would promise a cross-domain query the read path does not have.' }
+    ];
+
+    const stateMatrix = this.withTag([
+      { domain: 'Session', state: 'authenticated · no platform_staff row', sees: 'ไม่มีสิทธิ์เข้าถึง with the signed-in phone number and a sign-out control.', may: 'Sign out. Nothing else — the shell does not render.', status: 'LOCKED' },
+      { domain: 'Session', state: 'access token expired', sees: 'เซสชันหมดอายุ · เข้าสู่ระบบอีกครั้ง over the current screen, with unsaved reason text preserved in the field.', may: 'Re-authenticate and return to the same route.', status: 'PROPOSED' },
+      { domain: 'Session', state: 'grant revoked mid-session', sees: '403 on the next command, then the forbidden screen. The session is not cleared — a 403 is not a session problem (§ 10 of the architecture).', may: 'Read nothing further. Sign out.', status: 'LOCKED' },
+      { domain: 'Order', state: 'PENDING_PAYMENT', sees: 'Order, its payment attempt and expiry, and how long it has been waiting.', may: 'Nothing. A failed or expired payment leaves the order here by design (DEC-019).', status: 'LOCKED' },
+      { domain: 'Order', state: 'PAID · past accept window', sees: 'Age since paid_at against the 3-minute accept timer, and the merchant it is waiting on.', may: 'Cancel and refund (with reason). Auto-reject versus operator escalation is BQ-013.', status: 'OPEN' },
+      { domain: 'Order', state: 'PREPARING / READY_FOR_PICKUP · delivery RIDER_SEARCHING', sees: 'Search duration, rounds attempted from rider_assignment_attempts, and that the order state is deliberately unchanged.', may: 'Keep searching, or cancel and refund. Which options, in what order, is UX-Q-006.', status: 'OPEN' },
+      { domain: 'Order', state: 'CANCELLED · payment still SUCCESS', sees: 'Both facts side by side, plus the refund obligation this creates.', may: 'Raise a refund request. This coexistence is correct, not a defect (DEC-018 / DEC-027).', status: 'LOCKED' },
+      { domain: 'Order', state: 'PAYMENT_FAILED · MERCHANT_REJECTED · DELIVERY_FAILED', sees: 'Nothing — these states are unimplemented and no order can hold them.', may: 'Nothing. Named here so no screen is built expecting them (DEC-APP-006).', status: 'OPEN' },
+      { domain: 'Payment', state: 'PENDING · attempt live', sees: 'attempt_no, expires_at, and the countdown to expiry.', may: 'Nothing. Regeneration belongs to the customer path.', status: 'LOCKED' },
+      { domain: 'Payment', state: 'SUCCESS', sees: 'succeeded_at, the transaction that caused it, provider and provider_payment_id (partially masked).', may: 'Raise a refund request; open a case if the amount is wrong.', status: 'LOCKED' },
+      { domain: 'Payment', state: 'SUCCESS + second transaction', sees: 'จ่ายซ้ำ — both transactions, and the SURPLUS_PAYMENT case already opened by the processing service.', may: 'Resolve the case by raising a refund for the duplicate (DEC-030).', status: 'LOCKED' },
+      { domain: 'Payment', state: 'EXPIRED + late verified event', sees: 'ชำระล่าช้า — which attempt it resolved to, and the order state at the moment it arrived.', may: 'Investigate and record. Accept / refund / manual review is undecided (DEC-029).', status: 'OPEN' },
+      { domain: 'Payment event', state: 'signature_verified = false', sees: 'The event, its provider, its type, and that nothing was written from it.', may: 'Read only. A failed signature changes nothing, ever.', status: 'LOCKED' },
+      { domain: 'Payment event', state: 'processed_at IS NULL, aged', sees: 'Queue depth from the unprocessed partial index, oldest first, with processing_error if the tick recorded one.', may: 'Escalate. No manual replay control is designed — the tick owns processing.', status: 'PROPOSED' },
+      { domain: 'Refund', state: 'REFUND_REQUESTED', sees: 'Amount, reason, requested_by, and that no approver has signed.', may: 'Approve (if not the requester) or reject with a reason.', status: 'PROPOSED' },
+      { domain: 'Refund', state: 'REFUND_PENDING', sees: 'Approved, awaiting a mechanism. The screen states plainly that automatic return is not available.', may: 'Nothing until Q-020 lands. Record an out-of-band transfer as evidence — shape undecided.', status: 'DECISION REQUIRED' },
+      { domain: 'Refund', state: 'REFUND_PROCESSING → REFUNDED', sees: 'provider_refund_id and completed_at, once the webhook confirms.', may: 'Read only. REFUNDED is webhook-only (CON-002).', status: 'LOCKED' },
+      { domain: 'Refund', state: 'REFUND_FAILED', sees: 'The failure, the attempt history, and that failure is the expected path while Q-020 is open.', may: 'Retry, or switch to a manual mechanism — both PROPOSED in the lifecycle document.', status: 'OPEN' },
+      { domain: 'Reconciliation', state: 'OPEN / IN_PROGRESS / RESOLVED / CLOSED', sees: 'kind, age, assignee, linked entities, resolution_note.', may: 'Assign to self, add a note, resolve with a note, close.', status: 'PROPOSED' },
+      { domain: 'Ledger', state: 'group sum ≠ 0', sees: 'ยอดไม่สมดุล — the group, its entries, its signed total, and its correlation id.', may: 'Nothing corrective in-app. This is the most important alert in the system and it escalates to engineering.', status: 'LOCKED' },
+      { domain: 'Settlement', state: 'every state', sees: 'Payables derived from ledger_entries, and a blocked banner naming the six deferred tables.', may: 'Read the preview. No run can be created.', status: 'BLOCKED' },
+      { domain: 'Job', state: 'dead_lettered_at IS NOT NULL', sees: 'job_type, attempts, last_error — a silently dropped job in a financial system is unacceptable (TQ-006).', may: 'Escalate. Re-enqueue is not designed in this package.', status: 'PROPOSED' }
+    ]);
+
+    const gateStates = [
+      { route: '/login', code: '—', title: 'เข้าสู่ระบบผู้ดูแล', body: 'ยืนยันตัวตนด้วยเบอร์โทรและรหัส OTP', fields: ['เบอร์โทรศัพท์ · 0XX-XXX-XXXX', 'รหัส OTP · 6 หลัก'], btn: 'เข้าสู่ระบบ', btnBg: '#1F1A16', note: 'Supabase phone OTP, same identity path as every other app. No password, no email login.' },
+      { route: '/login', code: '401', title: 'รหัสไม่ถูกต้อง', body: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว · ขอรหัสใหม่ได้ในอีก 42 วินาที', fields: ['รหัส OTP · 6 หลัก'], btn: 'ขอรหัสใหม่', btnBg: '#5A4E42', note: 'Attempt throttling and cooldown belong to the identity layer, not to this screen.' },
+      { route: '/login', code: '403', title: 'ไม่มีสิทธิ์เข้าถึง', body: 'บัญชี 08X-XXX-9902 ไม่มีสิทธิ์ผู้ดูแลระบบ · ติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์', fields: [], btn: 'ออกจากระบบ', btnBg: '#5A4E42', note: 'Authenticated but no active platform_staff row. The shell never renders — not even an empty sidebar.' },
+      { route: 'any', code: '401', title: 'เซสชันหมดอายุ', body: 'เซสชันหมดอายุแล้ว · เข้าสู่ระบบอีกครั้งเพื่อดำเนินการต่อ', fields: ['รหัส OTP · 6 หลัก'], btn: 'เข้าสู่ระบบอีกครั้ง', btnBg: '#1F1A16', note: 'Overlays the current route and returns to it. Any reason text already typed survives — losing it would cost the operator the investigation.' }
+    ];
+
+    const counters = [
+      { th: 'ออเดอร์ที่กำลังดำเนินการ', n: '23', unit: 'ออเดอร์', source: 'orders · state NOT IN terminal', bg: '#fff', border: '#E0D6C8', numColor: '#1F1A16' },
+      { th: 'รอร้านค้ารับออเดอร์', n: '2', unit: 'เกิน 3 นาที', source: 'orders_state_created_idx · paid_at', bg: '#FDF3E6', border: '#F0DFC4', numColor: '#9A6410' },
+      { th: 'ยังไม่มีไรเดอร์', n: '3', unit: 'งาน', source: 'deliveries · RIDER_SEARCHING', bg: '#FBEAEA', border: '#F0C9C9', numColor: '#B23030' },
+      { th: 'เหตุการณ์ชำระเงินที่ยังไม่ประมวลผล', n: '1', unit: 'รายการ', source: 'payment_events_unprocessed_idx', bg: '#FDF3E6', border: '#F0DFC4', numColor: '#9A6410' },
+      { th: 'คำขอคืนเงินที่รออนุมัติ', n: '4', unit: 'คำขอ', source: 'refunds · REFUND_REQUESTED', bg: '#FDF3E6', border: '#F0DFC4', numColor: '#9A6410' },
+      { th: 'เคสกระทบยอดที่เปิดอยู่', n: '6', unit: 'เคส', source: 'reconciliation_cases_open_idx', bg: '#FBEAEA', border: '#F0C9C9', numColor: '#B23030' },
+      { th: 'กลุ่มบัญชีที่ยอดไม่สมดุล', n: '1', unit: 'กลุ่ม', source: 'ledger_entries · group sum ≠ 0', bg: '#FBEAEA', border: '#F0C9C9', numColor: '#B23030' },
+      { th: 'งานที่ล้มเหลวถาวร', n: '0', unit: 'งาน', source: 'job_queue · dead_lettered_at', bg: '#fff', border: '#E0D6C8', numColor: '#1F1A16' },
+      { th: 'จ่ายซ้ำที่ยังไม่คืนเงิน', n: '1', unit: 'รายการ', source: 'cases · SURPLUS_PAYMENT', bg: '#FBEAEA', border: '#F0C9C9', numColor: '#B23030' }
+    ];
+
+    const alertRows = [
+      { kind: 'ไม่มีไรเดอร์', ref: 'BH-26090201-0147', detail: 'ค้นหาไรเดอร์ 14 นาที · 3 รอบ · ร้านครัวคุณแม่', age: '14 นาที', ageColor: '#B23030', owner: 'ยังไม่มีผู้รับ', status: 'OPEN' },
+      { kind: 'จ่ายซ้ำ', ref: 'PAY-26090201-0147', detail: 'ธุรกรรมที่สอง ฿428.00 · เปิดเคส SURPLUS_PAYMENT แล้ว', age: '26 นาที', ageColor: '#B23030', owner: 'ยังไม่มีผู้รับ', status: 'OPEN' },
+      { kind: 'ยอดไม่สมดุล', ref: 'RC-260902-0004', detail: 'กลุ่มบัญชีของออเดอร์ BH-26090118-0092 ผลรวมไม่เป็นศูนย์', age: '2 ชั่วโมง', ageColor: '#B23030', owner: 'ผู้ดูแลระบบ', status: 'OPEN' },
+      { kind: 'รอร้านรับ', ref: 'BH-26090201-0151', detail: 'ชำระเงินแล้ว 08:52 · ร้านยังไม่ตอบรับ', age: '4 นาที', ageColor: '#9A6410', owner: 'ยังไม่มีผู้รับ', status: 'OPEN' },
+      { kind: 'ชำระล่าช้า', ref: 'PAY-26090118-0092', detail: 'เหตุการณ์ยืนยันหลัง attempt หมดอายุ · ตรงกับ attempt_no 2', age: '1 วัน', ageColor: '#9A6410', owner: 'ผู้ดูแลระบบ', status: 'OPEN' }
+    ];
+
+    const orderRegions = [
+      { title: 'ออเดอร์', src: 'orders · order_items', rows: [
+        { k: 'สถานะ', v: 'กำลังเตรียมอาหาร · PREPARING' },
+        { k: 'ยอดรวม', v: '฿ 428.00' },
+        { k: 'รายการอาหาร', v: '4 รายการ' },
+        { k: 'ที่อยู่จัดส่ง', v: '88/12 ม.4 ต.สุเทพ อ.เมือง เชียงใหม่ · หลังร้านกาแฟ' },
+        { k: 'ผู้ยกเลิกได้', v: 'ลูกค้า · ร้านค้า · ผู้ดูแลระบบ' }
+      ], note: 'สถานะออเดอร์ไม่เปลี่ยนแม้หาไรเดอร์ไม่ได้ — "ไม่มีไรเดอร์" ไม่ใช่สถานะของออเดอร์ (DEC-022)' },
+      { title: 'การชำระเงิน', src: 'payments · payment_transactions', rows: [
+        { k: 'สถานะ', v: 'ชำระเงินสำเร็จ · SUCCESS' },
+        { k: 'วิธีชำระ', v: 'PROMPTPAY_QR' },
+        { k: 'เวลาสำเร็จ', v: '08:44:12' },
+        { k: 'อ้างอิงผู้ให้บริการ', v: 'ppay_••••_7731' },
+        { k: 'ภาระคืนเงิน', v: 'จ่ายซ้ำ ฿428.00 · รอคำขอคืนเงิน' }
+      ], note: 'ยกเลิกออเดอร์ไม่เปลี่ยนสถานะการชำระเงิน — ทั้งสองอยู่ร่วมกันได้และถูกต้อง (DEC-018 / DEC-027)' },
+      { title: 'การจัดส่ง', src: 'deliveries · rider_assignment_attempts', rows: [
+        { k: 'สถานะ', v: 'กำลังหาไรเดอร์ · RIDER_SEARCHING' },
+        { k: 'รอบที่พยายาม', v: '3 รอบ · 12 ไรเดอร์ที่เสนอไป' },
+        { k: 'ไรเดอร์ปัจจุบัน', v: 'ไม่มี' },
+        { k: 'รูปแบบการจ่ายงาน', v: 'Model C · broadcast แล้วใครรับก่อนได้ก่อน (DEC-020)' },
+        { k: 'แผนที่', v: 'ยังไม่มีผู้ให้บริการแผนที่ (Q-018) · ไม่แสดงตำแหน่ง' }
+      ], note: 'การปล่อยงานไรเดอร์ทำได้ผ่าน release_rider_assignment เท่านั้น และต้องมีเหตุผล (DEC-021)' },
+      { title: 'ลูกค้าและร้านค้า', src: 'profiles · restaurants', rows: [
+        { k: 'ลูกค้า', v: 'คุณสมชาย · 08X-XXX-2288' },
+        { k: 'ร้านค้า', v: 'ครัวคุณแม่ · 08X-XXX-6610' },
+        { k: 'เวลาที่ร้านตอบรับ', v: '08:45:31 · ภายใน 3 นาที' },
+        { k: 'ออเดอร์ก่อนหน้าของลูกค้า', v: '7 ออเดอร์ · ไม่มีคืนเงิน' },
+        { k: 'การติดต่อ', v: 'โทรออกจากหน้านี้ไม่ได้ · ใช้เบอร์ที่แสดง' }
+      ], note: '' }
+    ];
+
+    const timeline = [
+      { time: '08:41:02', what: 'สร้างออเดอร์ · รอชำระเงิน', actor: 'customer', dot: '#A2968A' },
+      { time: '08:41:04', what: 'สร้าง payment attempt ครั้งที่ 1 · หมดอายุ 08:56', actor: 'system', dot: '#A2968A' },
+      { time: '08:44:12', what: 'ชำระเงินสำเร็จ · webhook ผ่านการตรวจลายเซ็น', actor: 'webhook', dot: '#0A6B49' },
+      { time: '08:45:31', what: 'ร้านค้ารับออเดอร์ · เริ่มเตรียมอาหาร', actor: 'merchant', dot: '#0A6B49' },
+      { time: '08:45:33', what: 'เริ่มค้นหาไรเดอร์ · รอบที่ 1', actor: 'dispatch', dot: '#9A6410' },
+      { time: '08:52:10', what: 'ค้นหาไรเดอร์รอบที่ 3 · ยังไม่มีผู้รับ', actor: 'dispatch', dot: '#9A6410' },
+      { time: '09:07:48', what: 'ธุรกรรมที่สอง ฿428.00 · เปิดเคส SURPLUS_PAYMENT', actor: 'webhook', dot: '#B23030' }
+    ];
+
+    const paymentPanels = [
+      { title: 'ความพยายามชำระเงิน', src: 'payment_attempts', cols: '52px 1fr 118px 96px', head: ['ครั้ง', 'สถานะ', 'หมดอายุ', 'ยอด'], rows: [
+        { cells: ['1', 'SUCCESS', '08:56:04', '428.00'] },
+        { cells: ['—', 'ไม่มี attempt ที่ 2', '—', '—'] }
+      ], note: 'attempt เก็บตัวตนไว้หลังหมดอายุ จึงจับคู่การชำระล่าช้ากับ attempt ที่ถูกต้องได้ (DEC-029)' },
+      { title: 'เหตุการณ์จากผู้ให้บริการ', src: 'payment_events', cols: '118px 1fr 92px 78px', head: ['เวลา', 'ชนิด', 'ลายเซ็น', 'ประมวลผล'], rows: [
+        { cells: ['08:44:12', 'payment.succeeded', 'verified', 'yes'] },
+        { cells: ['09:07:48', 'payment.succeeded', 'verified', 'yes'] },
+        { cells: ['09:07:49', 'payment.succeeded', 'failed', 'no'] }
+      ], note: 'เหตุการณ์ที่ลายเซ็นไม่ผ่านจะไม่เขียนอะไรเลย และแสดงไว้เพื่อการตรวจสอบเท่านั้น' },
+      { title: 'ธุรกรรม', src: 'payment_transactions', cols: '118px 1fr 96px 108px', head: ['เวลา', 'ชนิด', 'ยอด', 'อ้างอิง'], rows: [
+        { cells: ['08:44:12', 'PAYMENT', '428.00', 'ppay_7731'] },
+        { cells: ['09:07:48', 'SURPLUS_PAYMENT', '428.00', 'ppay_8214'] }
+      ], note: 'ยอดของออเดอร์ไม่เปลี่ยนจากธุรกรรมที่สอง — ธุรกรรมนี้กลายเป็นภาระคืนเงิน (DEC-030)' },
+      { title: 'คืนเงิน', src: 'refunds', cols: '132px 1fr 96px 96px', head: ['อ้างอิง', 'สถานะ', 'ยอด', 'ผู้อนุมัติ'], rows: [
+        { cells: ['—', 'ยังไม่มีคำขอคืนเงิน', '—', '—'] }
+      ], note: 'สร้างคำขอได้จากหน้านี้ · การอนุมัติต้องเป็นผู้ดูแลระบบคนอื่น และกลไกการคืนเงินยังไม่ถูกกำหนด (Q-020)' }
+    ];
+
+    const refundQueue = [
+      { ref: 'RF-260902-0011', amount: '฿ 428.00', state: 'รออนุมัติ', style: 'background:#FDF3E6;color:#9A6410', approver: 'รอผู้อนุมัติ', age: '26 นาที', bg: '#FDFBF7' },
+      { ref: 'RF-260901-0009', amount: '฿ 215.00', state: 'อนุมัติแล้ว · รอกลไก', style: 'background:#FBEAEA;color:#B23030', approver: '08X-XXX-1120', age: '1 วัน', bg: '#fff' },
+      { ref: 'RF-260830-0004', amount: '฿ 640.00', state: 'ล้มเหลว · ลองใหม่ได้', style: 'background:#FBEAEA;color:#B23030', approver: '08X-XXX-1120', age: '3 วัน', bg: '#fff' },
+      { ref: 'RF-260829-0002', amount: '฿ 180.00', state: 'ปฏิเสธ', style: 'background:#F3EDE4;color:#6B5B49', approver: '08X-XXX-1120', age: '4 วัน', bg: '#fff' }
+    ];
+
+    const refundDrawer = [
+      { k: 'อ้างอิง', v: 'RF-260902-0011' },
+      { k: 'ออเดอร์', v: 'BH-26090201-0147' },
+      { k: 'ยอดที่ขอคืน', v: '฿ 428.00 · เท่ากับธุรกรรมที่จ่ายซ้ำ' },
+      { k: 'ที่มาของภาระ', v: 'จ่ายซ้ำ · SURPLUS_PAYMENT' },
+      { k: 'ผู้ขอ', v: '08X-XXX-4471 · 09:12' },
+      { k: 'เหตุผลของผู้ขอ', v: 'ลูกค้าจ่ายซ้ำสองครั้งจาก QR เดิม ต้องคืนยอดส่วนเกิน' }
+    ];
+
+    const caseKinds = [
+      { kind: 'DUPLICATE_PAYMENT', n: '1', th: 'จ่ายซ้ำ', color: '#B23030', border: '#F0C9C9' },
+      { kind: 'LATE_PAYMENT', n: '2', th: 'ชำระล่าช้า', color: '#9A6410', border: '#F0DFC4' },
+      { kind: 'LEDGER_IMBALANCE', n: '1', th: 'ยอดบัญชีไม่สมดุล', color: '#B23030', border: '#F0C9C9' },
+      { kind: 'RIDER_RELEASE_INVARIANT', n: '1', th: 'ปล่อยงานไรเดอร์ผิดเงื่อนไข', color: '#B23030', border: '#F0C9C9' },
+      { kind: 'PROVIDER_MISMATCH', n: '1', th: 'ยอดผู้ให้บริการไม่ตรง', color: '#9A6410', border: '#F0DFC4' }
+    ];
+
+    const caseRows = [
+      { id: 'RC-260902-0009', kind: 'RIDER_RELEASE_INVARIANT', rel: 'delivery ของ BH-26090201-0139', age: '3 ชม.', ageColor: '#B23030', state: 'เปิดอยู่', style: 'background:#FBEAEA;color:#B23030', bg: '#FDFBF7' },
+      { id: 'RC-260902-0008', kind: 'DUPLICATE_PAYMENT', rel: 'PAY-26090201-0147', age: '26 นาที', ageColor: '#9A6410', state: 'เปิดอยู่', style: 'background:#FBEAEA;color:#B23030', bg: '#fff' },
+      { id: 'RC-260902-0004', kind: 'LEDGER_IMBALANCE', rel: 'กลุ่มบัญชีของ BH-26090118-0092', age: '2 ชม.', ageColor: '#B23030', state: 'กำลังตรวจสอบ', style: 'background:#FDF3E6;color:#9A6410', bg: '#fff' },
+      { id: 'RC-260901-0007', kind: 'LATE_PAYMENT', rel: 'PAY-26090118-0092 · attempt 2', age: '1 วัน', ageColor: '#9A6410', state: 'กำลังตรวจสอบ', style: 'background:#FDF3E6;color:#9A6410', bg: '#fff' },
+      { id: 'RC-260830-0002', kind: 'PROVIDER_MISMATCH', rel: 'รายงานผู้ให้บริการ 30 ส.ค.', age: '3 วัน', ageColor: '#B23030', state: 'เปิดอยู่', style: 'background:#FBEAEA;color:#B23030', bg: '#fff' }
+    ];
+
+    const caseDetail = [
+      { k: 'เปิดเมื่อ', v: '06:12 · เปิดโดยระบบ' },
+      { k: 'เกี่ยวข้องกับ', v: 'delivery, order BH-26090201-0139' },
+      { k: 'สาเหตุที่บันทึก', v: 'P0001 · release invariant violated' },
+      { k: 'ไรเดอร์', v: '08X-XXX-3390' },
+      { k: 'ผู้รับผิดชอบ', v: 'ยังไม่มีผู้รับ' },
+      { k: 'correlation_id', v: 'c8f1e2a4-…-9b30' }
+    ];
+
+    const ledgerGroups = [
+      {
+        group: 'ledger group · BH-26090201-0147',
+        title: 'กลุ่มบัญชีสมดุล',
+        verdict: 'ยอดสมดุล',
+        verdictStyle: 'background:#E7F3EC;color:#0A6B49',
+        border: '#E0D6C8',
+        entries: [
+          { account: 'CUSTOMER_PAYMENT', type: 'CREDIT', amount: '+428.00', color: '#0A6B49' },
+          { account: 'MERCHANT_PAYABLE', type: 'DEBIT', amount: '−<Q-010>', color: '#9A6410' },
+          { account: 'RIDER_PAYABLE', type: 'DEBIT', amount: '−<Q-032>', color: '#9A6410' },
+          { account: 'PLATFORM_REVENUE', type: 'DEBIT', amount: '−<Q-010>', color: '#9A6410' }
+        ],
+        sum: '0.00',
+        sumColor: '#0A6B49',
+        note: 'ยอดจริงของแต่ละบัญชีขึ้นอยู่กับค่าคอมมิชชัน (Q-010) และค่าตอบแทนไรเดอร์ (Q-032) ที่ยังไม่ถูกกำหนด — หน้าจอนี้แสดงโครงสร้าง ไม่ใช่ตัวเลขที่คิดขึ้นเอง',
+        noteBg: '#FBF9F6',
+        noteColor: '#5A4E42'
+      },
+      {
+        group: 'ledger group · BH-26090118-0092',
+        title: 'กลุ่มบัญชีไม่สมดุล',
+        verdict: 'ยอดไม่สมดุล',
+        verdictStyle: 'background:#FBEAEA;color:#B23030',
+        border: '#F0C9C9',
+        entries: [
+          { account: 'CUSTOMER_PAYMENT', type: 'CREDIT', amount: '+615.00', color: '#0A6B49' },
+          { account: 'MERCHANT_PAYABLE', type: 'DEBIT', amount: '−492.00', color: '#B23030' },
+          { account: 'RIDER_PAYABLE', type: 'DEBIT', amount: '−45.00', color: '#B23030' },
+          { account: 'PLATFORM_REVENUE', type: 'DEBIT', amount: '−45.00', color: '#B23030' }
+        ],
+        sum: '+33.00',
+        sumColor: '#B23030',
+        note: 'ฐานข้อมูลไม่มี trigger บังคับผลรวมเป็นศูนย์ โดยเจตนา (DEC-034) หน้าจอนี้จึงเป็นกลไกควบคุมที่มาแทน · แก้ไขในแอปไม่ได้ ต้องส่งต่อทีมวิศวกรรมพร้อม correlation_id',
+        noteBg: '#FBEAEA',
+        noteColor: '#8F3A3A'
+      }
+    ];
+
+    const settlementPanels = [
+      { title: 'ยอดค้างจ่ายร้านค้า', src: 'ledger_entries · MERCHANT_PAYABLE', rows: [
+        { who: 'ครัวคุณแม่', orders: '18 ออเดอร์', amount: 'ขึ้นกับ Q-010' },
+        { who: 'ก๋วยเตี๋ยวป้านิด', orders: '11 ออเดอร์', amount: 'ขึ้นกับ Q-010' },
+        { who: 'ข้าวมันไก่ลุงหมี', orders: '7 ออเดอร์', amount: 'ขึ้นกับ Q-010' }
+      ], note: 'จำนวนออเดอร์มาจากบัญชีแยกประเภทได้จริง ยอดเงินยังไม่มี เพราะค่าคอมมิชชันยังไม่ถูกกำหนด (Q-010)' },
+      { title: 'ยอดค้างจ่ายไรเดอร์', src: 'ledger_entries · RIDER_PAYABLE', rows: [
+        { who: '08X-XXX-3390', orders: '24 งาน', amount: 'ขึ้นกับ Q-032' },
+        { who: '08X-XXX-7712', orders: '19 งาน', amount: 'ขึ้นกับ Q-032' },
+        { who: '08X-XXX-2041', orders: '9 งาน', amount: 'ขึ้นกับ Q-032' }
+      ], note: 'โครงสร้างค่าตอบแทนไรเดอร์ยังไม่ถูกกำหนด (Q-032) และรอบการโอนก็ยังไม่ถูกกำหนด — ไม่มีตัวเลขใดในหน้านี้ที่คิดขึ้นเอง' }
+    ];
+
+    const dialogs = [
+      {
+        title: 'ยกเลิกออเดอร์และคืนเงิน', tag: 'IRREVERSIBLE', tagStyle: 'background:#FBEAEA;color:#B23030', border: '#B23030',
+        body: 'ออเดอร์ BH-26090201-0147 จะถูกยกเลิก และจะสร้างคำขอคืนเงิน ฿428.00 · ลูกค้าจะได้รับการแจ้งเตือน',
+        warn: 'ย้อนกลับไม่ได้ · ออเดอร์ที่ยกเลิกแล้วไม่สามารถกลับมาดำเนินการต่อได้ และการยกเลิกไม่ได้คืนเงินโดยอัตโนมัติ — ต้องอนุมัติคำขอคืนเงินแยกอีกขั้น',
+        fieldLabel: 'เหตุผล', fieldHint: 'เช่น หาไรเดอร์ไม่ได้เกิน 15 นาที ลูกค้ายืนยันยกเลิก',
+        primary: 'ยืนยันยกเลิกและสร้างคำขอคืนเงิน', primaryBg: '#B23030', primaryColor: '#fff',
+        tech: 'Idempotency-Key required · audit_logs.reason NOT NULL · button locks on submit'
+      },
+      {
+        title: 'จัดหาไรเดอร์ใหม่', tag: 'REVERSIBLE', tagStyle: 'background:#FDF3E6;color:#9A6410', border: '#E0D6C8',
+        body: 'ปล่อยงานของไรเดอร์คนปัจจุบันและเริ่มค้นหาใหม่ · งานจะกลับไปสถานะกำลังหาไรเดอร์',
+        warn: '',
+        fieldLabel: 'เหตุผล', fieldHint: 'เช่น ไรเดอร์แจ้งรถเสีย ไม่สามารถไปรับอาหารได้',
+        primary: 'ยืนยันจัดหาไรเดอร์ใหม่', primaryBg: '#1F1A16', primaryColor: '#fff',
+        tech: 'release_rider_assignment(delivery_id, status, reason) · service_role only · P0001 opens a case'
+      },
+      {
+        title: 'กำลังส่งคำสั่ง', tag: 'SUBMITTING', tagStyle: 'background:#F3EDE4;color:#6B5B49', border: '#E0D6C8',
+        body: 'ส่งคำสั่งแล้ว กำลังรอผลจากระบบ · กดซ้ำไม่ได้จนกว่าจะได้ผลลัพธ์',
+        warn: '',
+        fieldLabel: 'เหตุผล (บันทึกแล้ว)', fieldHint: 'หาไรเดอร์ไม่ได้เกิน 15 นาที ลูกค้ายืนยันยกเลิก',
+        primary: 'กำลังดำเนินการ…', primaryBg: '#A2968A', primaryColor: '#fff',
+        tech: 'same Idempotency-Key on retry replays the response · different body on same key = 422'
+      }
+    ];
+
+    const specs = this.withTag([
+      { id: 'A-01', name: 'เข้าสู่ระบบ', status: 'PROPOSED', purpose: 'Authenticate a staff phone number and resolve capability before any shell renders. The gate, not a landing page.',
+        reads: ['auth.users (Supabase OTP)', 'platform_staff (active grant)', 'profiles.full_name, phone'],
+        shows: ['Phone + OTP form with cooldown', 'ไม่มีสิทธิ์เข้าถึง for authenticated-but-ungranted', 'เซสชันหมดอายุ overlay preserving typed reason text'],
+        writes: ['Session only', 'May not create, request or elevate a grant — staff grants live on A-11/A-12, out of scope here'] },
+      { id: 'A-02', name: 'ภาพรวม', status: 'PROPOSED', purpose: 'Nine counters, each traceable to a table or index, and the top five rows of the operator queue. If everything reads zero the operator is finished.',
+        reads: ['orders (state, created_at, paid_at)', 'deliveries (RIDER_SEARCHING)', 'payment_events_unprocessed_idx', 'refunds (REFUND_REQUESTED)', 'reconciliation_cases_open_idx', 'ledger group sums', 'job_queue.dead_lettered_at'],
+        shows: ['Counter + unit + source caption on every card', 'Exception counters coloured only when above zero', 'Queue preview linking to A-13'],
+        writes: ['Nothing', 'No revenue, GMV or growth metric — SETTLEMENT_MODEL § 11 has no numbers to draw'] },
+      { id: 'A-03', name: 'ออเดอร์', status: 'PROPOSED', purpose: 'Find one order fast. State filter, age column, search by reference or customer phone.',
+        reads: ['orders + orders_state_created_idx', 'restaurants.name', 'profiles.phone'],
+        shows: ['State chip using customer-facing Thai labels', 'Age since the state was entered', 'Payment and delivery situation as secondary chips'],
+        writes: ['Nothing', 'No bulk action of any kind — a financial system does not get a select-all'] },
+      { id: 'A-04', name: 'รายละเอียดออเดอร์', status: 'PROPOSED', purpose: 'One page holding order, payment, delivery, parties, timeline and at most three actions. The screen the whole phase exists for.',
+        reads: ['orders, order_items, order_state_history', 'payments, payment_transactions, refunds', 'deliveries, rider_assignment_attempts', 'audit_logs by (entity_type, entity_id)'],
+        shows: ['Four regions plus timeline plus audit region', 'Coexisting CANCELLED + SUCCESS shown as correct, not as an error', 'Delivery search rounds and duration'],
+        writes: ['Cancel with refund request; reassign delivery; keep searching', 'May not set any payment state; may not edit order_state_history; may not skip the reason field'] },
+      { id: 'A-13', name: 'การแจ้งเตือน', status: 'PROPOSED', purpose: 'The operator work queue. Rows have an owner and an age, and leave only when a human resolves them.',
+        reads: ['deliveries, orders (age thresholds)', 'payment_events (unprocessed)', 'job_queue (dead-lettered)', 'reconciliation_cases (open)'],
+        shows: ['Kind, reference, detail, age, owner', 'Oldest first, always', 'Same order deduplicated across kinds but shown per kind'],
+        writes: ['Assign to self', 'May not dismiss a row without a resolution — dismissal without record is how launches lose money'] },
+      { id: 'A-14', name: 'ประวัติการดำเนินการ', status: 'PROPOSED', purpose: 'The audit reader, by entity and by actor, with a before/after diff.',
+        reads: ['audit_logs (entity_type, entity_id, actor_id, created_at)'],
+        shows: ['Action, actor, reason, timestamp, correlation_id', 'before_state / after_state as a two-column diff', 'Filter by actor for a per-operator review'],
+        writes: ['Nothing, ever', 'audit_logs is append-only for every role including service_role — there is no edit and no delete path to expose'] },
+      { id: 'A-16', name: 'การชำระเงิน', status: 'PROPOSED', purpose: 'Payment lookup across the three references an operator is actually given by a customer or a provider report.',
+        reads: ['payments (payment_reference, state, method)', 'payment_transactions.provider_transaction_id'],
+        shows: ['State, method, amount, order link', 'Duplicate and late markers inline', 'Masked provider references'],
+        writes: ['Nothing', 'No state control exists on this surface'] },
+      { id: 'A-17', name: 'รายละเอียดการชำระเงิน', status: 'PROPOSED', purpose: 'The full evidential picture of one payment: attempts, provider events, transactions, refunds, audit.',
+        reads: ['payment_attempts', 'payment_events (incl. signature_verified = false)', 'payment_transactions', 'refunds', 'audit_logs'],
+        shows: ['Attempt identity preserved after expiry (DEC-029)', 'Failed-signature events listed as wrote-nothing', 'Surplus transaction as a refund obligation (DEC-030)'],
+        writes: ['Raise a refund request; open a reconciliation case', 'May not set SUCCESS or REFUNDED (CON-002); may not replay a webhook event — the tick owns processing'] },
+      { id: 'A-18', name: 'คืนเงิน', status: 'PROPOSED', purpose: 'The refund queue with dual-control status visible per row, oldest first.',
+        reads: ['refunds (state, amount, requested_by, approved_by)', 'payments.amount'],
+        shows: ['State, amount, approver, age', 'Whether the current user is the requester', 'Obligation source: cancellation or surplus'],
+        writes: ['Nothing directly — opens A-19', 'May not compute any split or fee; commission is undecided (Q-010)'] },
+      { id: 'A-19', name: 'ตรวจสอบคำขอคืนเงิน', status: 'DECISION REQUIRED', purpose: 'Approve or reject with a mandatory reason, under a dual-control rule, on a surface that states plainly that the return mechanism does not exist yet.',
+        reads: ['refunds, payments, orders', 'platform_staff (requester identity)', 'audit_logs for this refund'],
+        shows: ['DECISION REQUIRED — Q-020 panel in place of any execute control', 'Requester ≠ approver check resolved server-side and shown before the buttons', 'Retry history for REFUND_FAILED'],
+        writes: ['Approve → REFUND_PENDING; reject → REFUND_REJECTED', 'May not mark REFUNDED, may not record an out-of-band transfer until Q-020 defines the evidence shape, may not call a provider refund API — none is chosen (Q-001)'] },
+      { id: 'A-20', name: 'กระทบยอด', status: 'PROPOSED', purpose: 'One queue and one investigation shape for all five case kinds, including the release-invariant kind that currently has no reader anywhere.',
+        reads: ['reconciliation_cases (+ open partial index)', 'linked payment, order, payment_event, delivery'],
+        shows: ['Kind counts, age, assignee', 'Linked entities as working links', 'resolution_note history'],
+        writes: ['Assign, note, resolve, close', 'May not resolve without a note; may not delete a case'] },
+      { id: 'A-21', name: 'บัญชีแยกประเภท', status: 'PROPOSED', purpose: 'Inspect a ledger group and state its zero-sum verdict out loud. This is the compensating control DEC-034 assumes exists.',
+        reads: ['ledger_entries by group', 'correlation_id'],
+        shows: ['Signed entries, group total, verdict chip', 'Unbalanced groups listed first', 'Undecided amounts as Q-010 / Q-032 placeholders, never as numbers'],
+        writes: ['Nothing', 'No adjusting entry, no correction, no reversal — an imbalance escalates to engineering with a correlation id'] },
+      { id: 'A-22', name: 'รอบโอนเงิน', status: 'BLOCKED', purpose: 'Preview merchant and rider payables from the ledger, and show the settlement run that cannot yet be created.',
+        reads: ['ledger_entries (MERCHANT_PAYABLE, RIDER_PAYABLE)'],
+        shows: ['BLOCKED banner naming the six deferred tables and Q-002 legal review', 'Order and job counts, which are real', 'Amounts as decision dependencies'],
+        writes: ['Nothing', 'Create run, approve run and record transfer are visibly disabled with the reason on screen — hiding them would hide the missing step'] }
+    ]);
+
+    const interactions = [
+      { n: '01', title: 'One action per submit', body: 'A command touches one entity and does one thing. No batching, no select-all, no combined cancel-and-reassign.' },
+      { n: '02', title: 'Impossible actions are absent', body: 'If the state does not permit it, the button is not rendered. Disabled-with-a-tooltip is reserved for actions that exist but are blocked by a decision — A-22 is the only place it applies.' },
+      { n: '03', title: 'The reason field gates the primary button', body: 'Primary stays inert until the reason has content. The CHECK constraint would reject a blank reason anyway; the UI must not let the operator discover that after typing everything else.' },
+      { n: '04', title: 'Irreversible actions require a typed confirmation', body: 'Cancel-and-refund and refund rejection require the operator to type the entity reference, matching the destructive-action pattern already used in the merchant flows.' },
+      { n: '05', title: 'The submit button locks on first press', body: 'Locked until the response resolves. A double-click cannot produce two commands, independently of idempotency — that is the second line, not the first.' },
+      { n: '06', title: 'Every command carries an Idempotency-Key', body: 'Generated per dialog opening, not per click. A retry of the same intent replays; a different body under the same key is a 422 the UI surfaces as a conflict, not as a failure.' },
+      { n: '07', title: 'Success copy names what changed', body: 'ส่งคำขอคืนเงินแล้ว, never คืนเงินสำเร็จ. The platform does not announce money movement it has not observed.' },
+      { n: '08', title: 'Reads never mutate', body: 'Opening a case, a payment or an order writes nothing. Assignment is an explicit action with its own audit row.' },
+      { n: '09', title: 'Filters live in the URL', body: 'Every queue state is a shareable link, so an operator can hand an investigation to the approver without describing how to reproduce the view.' },
+      { n: '10', title: 'Amounts are monospace and right-aligned', body: 'Two decimals always, บาท symbol before the figure, minus sign for debits. A ledger read at speed cannot afford proportional digits.' },
+      { n: '11', title: 'Age, not timestamp, in queues', body: 'Queues show 14 นาที; detail screens show 08:45:31. Operators triage by elapsed time and investigate by clock time.' },
+      { n: '12', title: 'Provider references are masked in lists, full in detail', body: 'ppay_••••_7731 in a table, complete in the detail panel with a copy control. Full identifiers on a shared screen are an unnecessary exposure.' },
+      { n: '13', title: '403 is not a session problem', body: 'A forbidden response shows the forbidden screen and leaves the session intact. Only a 401 triggers re-authentication.' },
+      { n: '14', title: 'No auto-refresh on a screen holding a form', body: 'Lists poll at 30s; a screen with a typed reason or an open dialog stops polling and shows a มีข้อมูลใหม่ marker instead.' }
+    ];
+
+    const uiStates = [
+      { surface: 'A-02', loading: 'Nine counter skeletons at final size; layout never shifts.', empty: 'ไม่มีรายการที่ต้องดำเนินการ — the good outcome, stated plainly, not an illustration.', error: 'โหลดข้อมูลไม่สำเร็จ per card, with retry. A failed counter never renders as 0.', success: 'n/a — read-only surface.' },
+      { surface: 'A-03 / A-16', loading: 'Eight skeleton rows, header and filters interactive immediately.', empty: 'ไม่พบออเดอร์ตามเงื่อนไขที่เลือก + clear-filters control.', error: 'ค้นหาไม่สำเร็จ · ลองอีกครั้ง, filters preserved.', success: 'n/a.' },
+      { surface: 'A-04 / A-17', loading: 'Region-by-region skeletons; the action bar renders last, never before its state is known.', empty: 'ไม่พบออเดอร์นี้ with a back link — a 404 on a reference the operator was given is itself information.', error: 'Per-region error; a failed payment region does not blank the order region.', success: 'Toast + the changed region refetched and visually marked.' },
+      { surface: 'A-18 / A-19', loading: 'Queue skeletons; the drawer opens only with data loaded.', empty: 'ไม่มีคำขอคืนเงินที่รออนุมัติ.', error: 'Approve failure keeps the drawer open with the reason text intact and shows the server message verbatim.', success: 'ส่งคำขออนุมัติแล้ว / ปฏิเสธคำขอแล้ว — never a completion claim.' },
+      { surface: 'A-20', loading: 'Kind counters then rows.', empty: 'ไม่มีเคสที่เปิดอยู่ — the strongest signal in the system.', error: 'Case load failure blocks resolution controls rather than allowing a blind resolve.', success: 'บันทึกการแก้ไขแล้ว, row moves out of the open filter.' },
+      { surface: 'A-21', loading: 'Entries skeleton; the verdict chip renders only after the sum is computed.', empty: 'ไม่มีรายการในกลุ่มนี้ — treated as an anomaly worth reading, not as nothing.', error: 'ไม่สามารถคำนวณผลรวมได้ — the verdict is withheld rather than guessed. Never show ยอดสมดุล on incomplete data.', success: 'n/a — no writes.' },
+      { surface: 'A-22', loading: 'Payable skeletons under a banner that is present from first paint.', empty: 'ไม่มียอดค้างจ่ายในช่วงนี้.', error: 'Preview failure with retry; the blocked banner is unaffected.', success: 'n/a — nothing can be executed.' },
+      { surface: 'A-14', loading: 'Rows skeleton, filters live.', empty: 'ยังไม่มีการดำเนินการโดยผู้ดูแลระบบ.', error: 'โหลดประวัติไม่สำเร็จ · ลองอีกครั้ง.', success: 'n/a — append-only, read-only.' }
+    ];
+
+    const safety = this.withTag([
+      { control: 'Mandatory reason', behaviour: 'Every operator write carries free-text reason, captured before the action and shown in the audit row.', enforcement: 'audit_logs_operator_reason_check', status: 'LOCKED' },
+      { control: 'Dual control on refunds', behaviour: 'requested_by and approved_by must differ. The check is server-side; the UI states the block before the buttons are reached.', enforcement: 'refunds.requested_by / approved_by · proposed API rule', status: 'PROPOSED' },
+      { control: 'Idempotency on every command', behaviour: 'Key generated per dialog opening. Replay returns the first response; a mismatched body is a 422 conflict.', enforcement: 'idempotency_records (idempotency_key, endpoint)', status: 'LOCKED' },
+      { control: 'Double-submit lock', behaviour: 'Primary button disables on press and stays disabled through the response. Independent of idempotency.', enforcement: 'client-side · UI requirement', status: 'PROPOSED' },
+      { control: 'Typed confirmation for irreversible actions', behaviour: 'Operator types the order or refund reference to confirm. Applies to cancel-and-refund and refund rejection.', enforcement: 'client-side · UI requirement', status: 'PROPOSED' },
+      { control: 'No client-side payment authority', behaviour: 'No screen offers a control that writes payments.state. Surplus, late and mismatched payments produce cases and refund requests instead.', enforcement: 'CON-002 · webhook-only writes', status: 'LOCKED' },
+      { control: 'Ledger is read-only in-app', behaviour: 'No adjusting entry, correction or reversal from any admin surface. An imbalance escalates with its correlation id.', enforcement: 'DEC-034 · no in-app write path', status: 'LOCKED' },
+      { control: 'Append-only audit', behaviour: 'No edit and no delete for any role including service_role, so no UI affordance for either can exist.', enforcement: 'audit_logs append-only', status: 'LOCKED' },
+      { control: 'Fail-closed capability resolution', behaviour: 'A capability read that errors denies access. It never degrades to an empty capability set, which would silently look like a valid unprivileged user.', enforcement: 'CapabilitiesService · no caching', status: 'LOCKED' }
+    ]);
+
+    const yes = { v: 'ทำได้', c: '#0A6B49' };
+    const no = { v: 'ไม่ได้', c: '#B23030' };
+    const permissions = [
+      { cap: 'Read orders, payments, deliveries, cases, ledger, audit', o: yes, a: yes, rule: 'active platform_staff row required' },
+      { cap: 'Cancel an order with a reason', o: yes, a: yes, rule: 'OPERATOR | ADMIN · reason NOT NULL' },
+      { cap: 'Reassign or release a delivery', o: yes, a: yes, rule: 'release_rider_assignment · service_role executes' },
+      { cap: 'Keep searching for a rider', o: yes, a: yes, rule: 'dispatch re-trigger · UX-Q-006 open' },
+      { cap: 'Raise a refund request', o: yes, a: yes, rule: 'refunds.requested_by = actor' },
+      { cap: 'Approve a refund request', o: no, a: yes, rule: 'ADMIN only · approved_by ≠ requested_by' },
+      { cap: 'Reject a refund request', o: no, a: yes, rule: 'ADMIN only · reason NOT NULL' },
+      { cap: 'Retry a failed refund', o: no, a: yes, rule: 'ADMIN only · mechanism undecided (Q-020)' },
+      { cap: 'Open, assign and note a reconciliation case', o: yes, a: yes, rule: 'OPERATOR | ADMIN' },
+      { cap: 'Resolve or close a reconciliation case', o: yes, a: yes, rule: 'resolution_note required' },
+      { cap: 'Set any payment state', o: no, a: no, rule: 'webhook-only · CON-002' },
+      { cap: 'Write, correct or reverse a ledger entry', o: no, a: no, rule: 'no write path exists · DEC-034' },
+      { cap: 'Edit or delete an audit row', o: no, a: no, rule: 'append-only for all roles' },
+      { cap: 'Create or approve a settlement run', o: no, a: no, rule: 'no schema · Q-002 legal review' },
+      { cap: 'Grant or revoke a staff role', o: no, a: yes, rule: 'ADMIN only · A-11/A-12, out of scope here' }
+    ].map((p) => ({ cap: p.cap, op: p.o.v, opColor: p.o.c, ad: p.a.v, adColor: p.a.c, rule: p.rule }));
+
+    const step = (label, body) => ({ label, body });
+    const incidents = this.withTag([
+      { n: 'INC-01', title: 'Payment succeeded but the order cannot proceed', th: 'ชำระเงินสำเร็จแต่ออเดอร์ไปต่อไม่ได้', status: 'OPEN', steps: [
+        step('DETECTION', 'A-02 counter รอร้านค้ารับออเดอร์ above zero, or A-13 row aged past the 3-minute accept window.'),
+        step('INVESTIGATION', 'A-04: payment SUCCESS, order PAID, merchant has not responded. Timeline shows paid_at and silence after it.'),
+        step('ACTION', 'Cancel and refund with a reason. Whether the platform auto-rejects instead is BQ-013 and is not decided here.'),
+        step('CONFIRMATION', 'ยกเลิกออเดอร์แล้ว · ส่งคำขอคืนเงินแล้ว. The order is CANCELLED and the payment is still SUCCESS, which is correct.'),
+        step('AUDIT', 'ORDER_CANCELLED_BY_OPERATOR + REFUND_REQUESTED, both with reason and before/after state.')
+      ] },
+      { n: 'INC-02', title: 'Duplicate payment', th: 'จ่ายซ้ำ', status: 'LOCKED', steps: [
+        step('DETECTION', 'The processing service records the second transaction as SURPLUS_PAYMENT and opens the case. The counter appears on A-02 without a human noticing anything.'),
+        step('INVESTIGATION', 'A-17 shows both transactions with distinct provider references and identical amounts. The order value is unchanged.'),
+        step('ACTION', 'Raise a refund request for the surplus amount only, linked to the case.'),
+        step('CONFIRMATION', 'ส่งคำขอคืนเงินแล้ว, and the case moves to กำลังตรวจสอบ with the refund linked.'),
+        step('AUDIT', 'REFUND_REQUESTED with the case id in metadata; the case resolution note references the refund reference.')
+      ] },
+      { n: 'INC-03', title: 'Late payment after expiry', th: 'ชำระล่าช้า', status: 'OPEN', steps: [
+        step('DETECTION', 'A verified event arrives for an expired attempt; a LATE_PAYMENT case is opened.'),
+        step('INVESTIGATION', 'A-17 resolves the event to a specific attempt_no because attempts keep their identity (DEC-029), and shows the order state at arrival.'),
+        step('ACTION', 'Record findings on the case. Accept, refund or manual review is undecided — no button claims the choice.'),
+        step('CONFIRMATION', 'บันทึกการตรวจสอบแล้ว. The case stays open until the policy exists.'),
+        step('AUDIT', 'CASE_NOTE_ADDED with reason; no payment or order write occurs.')
+      ] },
+      { n: 'INC-04', title: 'Merchant rejection', th: 'ร้านค้าปฏิเสธออเดอร์', status: 'OPEN', steps: [
+        step('DETECTION', 'A rejection is visible on A-04 through order_state_history, not through an order state — MERCHANT_REJECTED is unimplemented (DEC-APP-006).'),
+        step('INVESTIGATION', 'History entry, actor and timestamp; payment state read alongside.'),
+        step('ACTION', 'Cancel and refund. No transition into MERCHANT_REJECTED is offered anywhere.'),
+        step('CONFIRMATION', 'ยกเลิกออเดอร์แล้ว · ส่งคำขอคืนเงินแล้ว.'),
+        step('AUDIT', 'Cancellation reason records that the merchant rejected, since the state itself cannot.')
+      ] },
+      { n: 'INC-05', title: 'No rider found', th: 'ไม่มีไรเดอร์รับงาน', status: 'OPEN', steps: [
+        step('DETECTION', 'A-02 counter and A-13 row with search duration and round count.'),
+        step('INVESTIGATION', 'A-04 delivery region: rounds attempted, riders offered, duration. Order state deliberately unchanged (DEC-022).'),
+        step('ACTION', 'Keep searching, or cancel and refund. The threshold and the default are UX-Q-006.'),
+        step('CONFIRMATION', 'The chosen outcome is named exactly; nothing implies the customer was told more than they were.'),
+        step('AUDIT', 'DELIVERY_SEARCH_EXTENDED or ORDER_CANCELLED_BY_OPERATOR, with reason.')
+      ] },
+      { n: 'INC-06', title: 'Failed delivery', th: 'จัดส่งไม่สำเร็จ', status: 'OPEN', steps: [
+        step('DETECTION', 'A rider-reported failure surfaces on the delivery, not as an order state — DELIVERY_FAILED is unimplemented, and the rider app has no failure path either (an open item in the driver package).'),
+        step('INVESTIGATION', 'Delivery status, last rider event, proof-of-delivery evidence if any was captured.'),
+        step('ACTION', 'Cancel and refund, or resolve out of band and record. No new order state is introduced.'),
+        step('CONFIRMATION', 'States what happened to the money and to the order, separately.'),
+        step('AUDIT', 'Reason must describe the physical outcome, since no state encodes it.')
+      ] },
+      { n: 'INC-07', title: 'Refund failure', th: 'คืนเงินไม่สำเร็จ', status: 'DECISION REQUIRED', steps: [
+        step('DETECTION', 'refunds.state = REFUND_FAILED on A-18, or a stalled REFUND_PENDING with no mechanism.'),
+        step('INVESTIGATION', 'A-19 shows attempt history and the failure recorded by the payment domain.'),
+        step('ACTION', 'Retry, or switch to a manual mechanism. Both are PROPOSED, and the manual evidence shape is Q-020.'),
+        step('CONFIRMATION', 'No completion copy exists on this path. REFUNDED arrives by webhook or not at all (CON-002).'),
+        step('AUDIT', 'REFUND_RETRY_REQUESTED with reason; the failure history is never overwritten.')
+      ] },
+      { n: 'INC-08', title: 'Settlement failure', th: 'โอนเงินรอบไม่สำเร็จ', status: 'BLOCKED', steps: [
+        step('DETECTION', 'Not detectable — no settlement table exists to hold a failure.'),
+        step('INVESTIGATION', 'Out of band, from bank records against the ledger payables preview.'),
+        step('ACTION', 'None in-app. A-22 exposes no executable control.'),
+        step('CONFIRMATION', 'n/a.'),
+        step('AUDIT', 'The audit requirement is specified here so it ships with the schema rather than after it.')
+      ] },
+      { n: 'INC-09', title: 'Reconciliation mismatch', th: 'กระทบยอดไม่ตรง', status: 'PROPOSED', steps: [
+        step('DETECTION', 'A-02 imbalance counter, or a PROVIDER_MISMATCH case from a provider report comparison.'),
+        step('INVESTIGATION', 'A-21 shows the group, its signed entries, its non-zero total and its correlation id.'),
+        step('ACTION', 'Assign, note, escalate to engineering. No corrective entry is available from any admin surface.'),
+        step('CONFIRMATION', 'บันทึกการแก้ไขแล้ว records what was found, not that the ledger was fixed.'),
+        step('AUDIT', 'Case history plus correlation id; the ledger itself is untouched.')
+      ] }
+    ]);
+
+    const auditFields = [
+      { field: 'actor_id · actor_type', body: 'The staff profile and OPERATOR as actor type, never a shared service identity for a human action.' },
+      { field: 'action', body: 'A verb naming the command, matching the endpoint one-to-one.' },
+      { field: 'entity_type · entity_id', body: 'The entity the operator touched, indexed for the per-entity audit region on every detail screen.' },
+      { field: 'reason', body: 'NOT NULL for operator rows, CHECK-enforced. Free text, entered before the action, never auto-filled.' },
+      { field: 'before_state · after_state', body: 'JSON snapshots of the affected fields, rendered as a two-column diff on A-14.' },
+      { field: 'correlation_id', body: 'Ties the UI action to the API request and to any case it opened.' },
+      { field: 'created_at', body: 'Server time. The client never supplies a timestamp for an audit row.' },
+      { field: 'ip_address · user_agent', body: 'Recorded for financial actions where the origin of the request matters later.' },
+      { field: 'idempotency_key', body: 'Stored in metadata so a replayed command is provably one action, not two.' }
+    ];
+
+    const auditRules = [
+      { title: 'One command, one audit row', body: 'A cancel-and-refund writes two rows because it is two commands — the cancellation and the refund request — sharing a correlation id. Compounding them into one row would hide which half failed.' },
+      { title: 'The reason is the operator\'s words', body: 'No dropdown of canned reasons, no template. In six months the question will be why this decision was made, and a picked category does not answer it.' },
+      { title: 'Audit is readable from both ends', body: 'By entity, on every detail screen, and by actor, on A-14. A per-operator review is a launch requirement, not a later feature.' },
+      { title: 'A failed command is also audited', body: 'A rejected or errored command records the attempt with its reason. An audit trail that only holds successes cannot explain a dispute.' },
+      { title: 'Nothing is ever removed', body: 'No archive, no purge, no soft delete in the UI. Retention policy is a data-governance decision outside this package.' },
+      { title: 'System actions are distinguishable from operator actions', body: 'actor_type separates webhook, tick and operator. An operator must never be able to read a system write as their own, or the other way round.' }
+    ];
+
+    const a11y = [
+      { title: 'Thai line-height never below 1.6', body: 'Tables at 1.6, prose at 1.75. Thai upper and lower vowels collide at anything tighter, and a misread digit in a ledger is a real cost.' },
+      { title: 'Status is never colour alone', body: 'Every chip carries a Thai word. Red plus ยอดไม่สมดุล, amber plus รออนุมัติ. A red dot on its own is not a state.' },
+      { title: 'Amounts in a monospace face', body: 'Right-aligned, two decimals, sign always shown for ledger entries. Column scanning depends on fixed advance widths.' },
+      { title: 'Minimum 12.5px body text, 11px for captions only', body: 'This is a dense operator tool, not a marketing page, but no readable value sits below 11px and no value at all sits below it.' },
+      { title: 'Full keyboard path to every command', body: 'Tab into a queue row, Enter to open, Tab to the action bar. Dialogs trap focus and return it to the trigger on close.' },
+      { title: 'Escape never discards a typed reason', body: 'It asks. Losing an investigation write-up to a stray key is how operators stop writing reasons properly.' },
+      { title: 'Live regions for queue changes', body: 'A new row announces politely. A new imbalance announces assertively — it is the one alert allowed to interrupt.' },
+      { title: 'Contrast at 4.5:1 for text, 3:1 for chips and borders', body: 'The amber and red chip backgrounds are chosen against their own text, not against white.' },
+      { title: 'No hover-only information', body: 'Every tooltip has a visible equivalent. Masked references have a copy control, not a hover reveal.' },
+      { title: 'Errors name the field and the fix', body: 'ต้องระบุเหตุผลก่อนดำเนินการ next to the field, plus the summary at the top of the dialog for screen-reader order.' }
+    ];
+
+    const copy = [
+      { key: 'admin.login.title', th: 'เข้าสู่ระบบผู้ดูแล', when: 'A-01' },
+      { key: 'admin.login.otp_invalid', th: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว', when: 'A-01 · 401' },
+      { key: 'admin.login.no_access', th: 'ไม่มีสิทธิ์เข้าถึง', when: 'Authenticated, no platform_staff row' },
+      { key: 'admin.login.no_access_detail', th: 'บัญชีนี้ไม่มีสิทธิ์ผู้ดูแลระบบ · ติดต่อผู้ดูแลระบบเพื่อขอสิทธิ์', when: 'A-01 · 403' },
+      { key: 'admin.session.expired', th: 'เซสชันหมดอายุแล้ว · เข้าสู่ระบบอีกครั้งเพื่อดำเนินการต่อ', when: 'Any route · 401' },
+      { key: 'admin.session.forbidden', th: 'สิทธิ์ของคุณไม่ครอบคลุมการดำเนินการนี้', when: 'Any command · 403' },
+      { key: 'admin.nav.overview', th: 'ภาพรวม', when: 'Sidebar · A-02' },
+      { key: 'admin.nav.alerts', th: 'การแจ้งเตือน', when: 'Sidebar · A-13' },
+      { key: 'admin.nav.orders', th: 'ออเดอร์', when: 'Sidebar · A-03' },
+      { key: 'admin.nav.payments', th: 'การชำระเงิน', when: 'Sidebar · A-16' },
+      { key: 'admin.nav.refunds', th: 'คืนเงิน', when: 'Sidebar · A-18' },
+      { key: 'admin.nav.reconciliation', th: 'กระทบยอด', when: 'Sidebar · A-20' },
+      { key: 'admin.nav.ledger', th: 'บัญชีแยกประเภท', when: 'Sidebar · A-21' },
+      { key: 'admin.nav.settlement', th: 'รอบโอนเงิน', when: 'Sidebar · A-22' },
+      { key: 'admin.nav.audit', th: 'ประวัติการดำเนินการ', when: 'Sidebar · A-14' },
+      { key: 'admin.metric.active_orders', th: 'ออเดอร์ที่กำลังดำเนินการ', when: 'A-02' },
+      { key: 'admin.metric.awaiting_merchant', th: 'รอร้านค้ารับออเดอร์', when: 'A-02' },
+      { key: 'admin.metric.no_rider', th: 'ยังไม่มีไรเดอร์', when: 'A-02 · A-13' },
+      { key: 'admin.metric.unprocessed_events', th: 'เหตุการณ์ชำระเงินที่ยังไม่ประมวลผล', when: 'A-02' },
+      { key: 'admin.metric.pending_refunds', th: 'คำขอคืนเงินที่รออนุมัติ', when: 'A-02 · A-18' },
+      { key: 'admin.metric.open_cases', th: 'เคสกระทบยอดที่เปิดอยู่', when: 'A-02 · A-20' },
+      { key: 'admin.metric.ledger_imbalance', th: 'กลุ่มบัญชีที่ยอดไม่สมดุล', when: 'A-02 · A-21' },
+      { key: 'admin.metric.dead_lettered_jobs', th: 'งานที่ล้มเหลวถาวร', when: 'A-02' },
+      { key: 'admin.order.state.pending_payment', th: 'รอชำระเงิน', when: 'Order chip' },
+      { key: 'admin.order.state.paid', th: 'ชำระเงินแล้ว', when: 'Order chip' },
+      { key: 'admin.order.state.preparing', th: 'กำลังเตรียมอาหาร', when: 'Order chip' },
+      { key: 'admin.order.state.ready_for_pickup', th: 'พร้อมให้ไปรับ', when: 'Order chip' },
+      { key: 'admin.order.state.delivering', th: 'กำลังจัดส่ง', when: 'Order chip' },
+      { key: 'admin.order.state.delivered', th: 'จัดส่งสำเร็จ', when: 'Order chip' },
+      { key: 'admin.order.state.cancelled', th: 'ยกเลิกแล้ว', when: 'Order chip' },
+      { key: 'admin.delivery.searching', th: 'กำลังหาไรเดอร์', when: 'Delivery chip' },
+      { key: 'admin.delivery.no_rider_duration', th: 'ยังไม่มีไรเดอร์ · {นาที} นาที', when: 'A-13 · A-04' },
+      { key: 'admin.payment.success', th: 'ชำระเงินสำเร็จ', when: 'Payment chip' },
+      { key: 'admin.payment.duplicate', th: 'จ่ายซ้ำ', when: 'A-17 · A-20' },
+      { key: 'admin.payment.late', th: 'ชำระล่าช้า', when: 'A-17 · A-20' },
+      { key: 'admin.payment.readonly', th: 'อ่านอย่างเดียว', when: 'A-17 header' },
+      { key: 'admin.action.cancel_refund', th: 'ยกเลิกและคืนเงิน', when: 'A-04 action bar' },
+      { key: 'admin.action.reassign_rider', th: 'จัดหาไรเดอร์ใหม่', when: 'A-04 action bar' },
+      { key: 'admin.action.keep_searching', th: 'ค้นหาไรเดอร์ต่อ', when: 'A-04 action bar' },
+      { key: 'admin.action.request_refund', th: 'ขอคืนเงิน', when: 'A-04 · A-17' },
+      { key: 'admin.action.open_case', th: 'เปิดเคสกระทบยอด', when: 'A-17' },
+      { key: 'admin.reason.label', th: 'เหตุผล', when: 'Every confirmation dialog' },
+      { key: 'admin.reason.required', th: 'ต้องระบุเหตุผลก่อนดำเนินการ', when: 'Validation' },
+      { key: 'admin.reason.permanent', th: 'บันทึกถาวรและแก้ไขไม่ได้', when: 'Under the reason field' },
+      { key: 'admin.confirm.irreversible', th: 'ย้อนกลับไม่ได้', when: 'Destructive dialog tag' },
+      { key: 'admin.confirm.type_reference', th: 'พิมพ์เลขอ้างอิงเพื่อยืนยัน', when: 'Destructive dialog' },
+      { key: 'admin.submit.in_progress', th: 'กำลังดำเนินการ…', when: 'Locked button' },
+      { key: 'admin.refund.requested', th: 'ส่งคำขอคืนเงินแล้ว', when: 'Success · never a completion claim' },
+      { key: 'admin.refund.awaiting_approval', th: 'รออนุมัติ', when: 'A-18 chip' },
+      { key: 'admin.refund.approved_no_mechanism', th: 'อนุมัติแล้ว · รอกลไกการคืนเงิน', when: 'A-18 · Q-020 open' },
+      { key: 'admin.refund.dual_control', th: 'ผู้ขอและผู้อนุมัติต้องไม่ใช่คนเดียวกัน', when: 'A-19' },
+      { key: 'admin.refund.decision_required', th: 'กลไกการคืนเงินยังไม่ถูกกำหนด', when: 'A-19 · Q-020' },
+      { key: 'admin.case.assign_self', th: 'รับเคสนี้', when: 'A-20' },
+      { key: 'admin.case.resolved', th: 'แก้ไขแล้ว', when: 'A-20' },
+      { key: 'admin.case.resolution_note', th: 'บันทึกการแก้ไข', when: 'A-20 · required' },
+      { key: 'admin.ledger.balanced', th: 'ยอดสมดุล', when: 'A-21 verdict' },
+      { key: 'admin.ledger.imbalanced', th: 'ยอดไม่สมดุล', when: 'A-21 verdict · escalation' },
+      { key: 'admin.settlement.blocked', th: 'ยังใช้ไม่ได้', when: 'A-22 · disabled controls' },
+      { key: 'admin.empty.no_action_needed', th: 'ไม่มีรายการที่ต้องดำเนินการ', when: 'A-02 · A-13 empty' },
+      { key: 'admin.error.load_failed', th: 'โหลดข้อมูลไม่สำเร็จ · ลองอีกครั้ง', when: 'Any read failure' },
+      { key: 'admin.error.duplicate_submit', th: 'คำสั่งนี้ถูกส่งไปแล้ว', when: '409 / 422 on idempotency conflict' }
+    ];
+
+    const method = (m) => ({ GET: '#0A6B49', POST: '#C2431F', PATCH: '#9A6410' }[m] || '#5A4E42');
+    const api = this.withTag([
+      { method: 'GET', path: '/admin/overview', note: 'Nine counters in one response; each field named after its source so a zero is distinguishable from a failure.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/alerts', note: 'Union queue: no-rider deliveries, orders past accept window, unprocessed events, dead-lettered jobs, open cases. Sorted by age.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/orders', note: 'Filter by state, search by reference or phone. Backed by orders_state_created_idx.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/orders/:id', note: 'Order + items + state history + payment + delivery + attempts in one payload — A-04 must not assemble itself from six requests.', status: 'PROPOSED' },
+      { method: 'POST', path: '/admin/orders/:id/cancel', note: 'reason required; creates the refund request as a linked command sharing a correlation id. Idempotency-Key required.', status: 'PROPOSED' },
+      { method: 'POST', path: '/admin/deliveries/:id/release', note: 'Wraps release_rider_assignment(delivery_id, status, reason). A P0001 raise must surface as a case, not as a 500.', status: 'PROPOSED' },
+      { method: 'POST', path: '/admin/deliveries/:id/redispatch', note: 'Re-triggers the dispatch round. Threshold and default behaviour depend on UX-Q-006.', status: 'OPEN' },
+      { method: 'GET', path: '/admin/payments', note: 'Lookup by payment_reference, order_id or provider_transaction_id.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/payments/:id', note: 'Attempts, events (including signature failures), transactions, refunds, audit. Read-only by construction.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/refunds', note: 'Queue with dual-control status per row and the current actor\'s relationship to each request.', status: 'PROPOSED' },
+      { method: 'POST', path: '/admin/refunds', note: 'Create a request. amount ≤ payment amount, obligation source required, reason required.', status: 'PROPOSED' },
+      { method: 'POST', path: '/admin/refunds/:id/approve', note: 'ADMIN only; rejects when approver = requester. Moves REFUND_REQUESTED → REFUND_PENDING and stops there while Q-020 is open.', status: 'DECISION REQUIRED' },
+      { method: 'POST', path: '/admin/refunds/:id/reject', note: 'ADMIN only, reason required, typed confirmation on the client.', status: 'PROPOSED' },
+      { method: 'POST', path: '/admin/refunds/:id/retry', note: 'Shape unknown until the refund mechanism is chosen. Listed so it is not invented ad hoc later.', status: 'DECISION REQUIRED' },
+      { method: 'GET', path: '/admin/reconciliation/cases', note: 'Filter by kind and state, backed by the open partial index.', status: 'PROPOSED' },
+      { method: 'PATCH', path: '/admin/reconciliation/cases/:id', note: 'Assign, note, resolve, close. resolution_note required to resolve.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/ledger/groups/:key', note: 'Entries with signed amounts and a server-computed sum. The verdict is computed server-side so two screens cannot disagree.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/ledger/imbalances', note: 'Groups whose sum ≠ 0. This is the compensating control DEC-034 relies on and it has no reader today.', status: 'PROPOSED' },
+      { method: 'GET', path: '/admin/settlement/preview', note: 'Payables grouped by merchant and rider from ledger_entries. Counts are real; amounts depend on Q-010 and Q-032.', status: 'BLOCKED' },
+      { method: 'GET', path: '/admin/audit', note: 'By entity or by actor, paginated, with before/after payloads. No write verb exists on this resource.', status: 'PROPOSED' }
+    ]).map((a) => ({ ...a, mColor: method(a.method) }));
+
+    const data = this.withTag([
+      { table: 'orders · orders_state_created_idx', by: 'A-02 A-03 A-04', need: 'State, created_at, paid_at, totals, cancellation actor.', status: 'LOCKED' },
+      { table: 'order_state_history', by: 'A-04', need: 'The timeline, including merchant rejection which has no order state.', status: 'LOCKED' },
+      { table: 'payments · payment_attempts', by: 'A-16 A-17', need: 'State, method, amount, attempt_no, expires_at — attempt identity survives expiry.', status: 'LOCKED' },
+      { table: 'payment_events (+ unprocessed idx)', by: 'A-02 A-17', need: 'Type, signature_verified, processed_at, processing_error. Queue depth from the partial index.', status: 'LOCKED' },
+      { table: 'payment_transactions', by: 'A-17 A-20', need: 'PAYMENT and SURPLUS_PAYMENT rows with provider references.', status: 'LOCKED' },
+      { table: 'refunds', by: 'A-18 A-19', need: 'State, amount, requested_by, approved_by, provider_refund_id, failure history.', status: 'LOCKED' },
+      { table: 'reconciliation_cases (+ open idx)', by: 'A-02 A-20', need: 'Kind, state, assignee, linked entity ids, resolution_note.', status: 'LOCKED' },
+      { table: 'ledger_entries', by: 'A-21 A-22', need: 'Account, direction, amount, group key, correlation_id. No zero-sum trigger exists (DEC-034).', status: 'LOCKED' },
+      { table: 'deliveries · rider_assignment_attempts', by: 'A-02 A-04 A-13', need: 'Status, current rider, rounds attempted, riders offered, search duration.', status: 'LOCKED' },
+      { table: 'audit_logs (+ entity idx)', by: 'every detail screen · A-14', need: 'Actor, action, reason, before/after, correlation_id. Append-only.', status: 'LOCKED' },
+      { table: 'idempotency_records', by: 'every command', need: 'Replay detection on (idempotency_key, endpoint) with body comparison.', status: 'LOCKED' },
+      { table: 'platform_staff', by: 'A-01 · all commands', need: 'staff_role and active grant, resolved per request with no caching.', status: 'LOCKED' },
+      { table: 'job_queue', by: 'A-02 A-13', need: 'job_type, attempts, last_error, dead_lettered_at.', status: 'LOCKED' },
+      { table: 'settlement_runs · settlement_items', by: 'A-22', need: 'Nothing to read — deferred by SETTLEMENT_MODEL § 6.', status: 'BLOCKED' },
+      { table: 'merchant_payouts · rider_payouts', by: 'A-22', need: 'Deferred. Payout account collection is itself undecided.', status: 'BLOCKED' },
+      { table: 'commission_rules', by: 'A-21 A-22', need: 'Deferred. Every split amount renders as a Q-010 placeholder until it exists.', status: 'BLOCKED' }
+    ]);
+
+    const od = (id, title, status, question, blocks, mitigation) => {
+      const tone = status === 'LEGAL_REVIEW_REQUIRED'
+        ? { border: '#E4D0EA', bg: '#FCF8FD' }
+        : (status === 'DECISION REQUIRED' || status === 'BLOCKED')
+          ? { border: '#F0C9C9', bg: '#FDF6F5' }
+          : { border: '#E0D6C8', bg: '#fff' };
+      return { id, title, status, question, blocks, mitigation, style: this.tag(status), ...tone };
+    };
+    const openDecisions = [
+      od('Q-001', 'Payment provider is unselected', 'OPEN',
+        'Which provider, and therefore which webhook shape, refund API, settlement report format and reference scheme.',
+        'Provider reference display, refund execution, and any reconciliation against a provider report (INC-09, A-20).',
+        'Provider fields render generically from payment_transactions. No provider-specific control, payload or naming appears on any screen.'),
+      od('Q-002', 'Money flow model is unresolved', 'LEGAL_REVIEW_REQUIRED',
+        'Whether BANHAO calculating splits and running transfer rounds constitutes regulated payment facilitation in Thailand.',
+        'The entire settlement surface (A-22) and the meaning of the payable accounts on A-21.',
+        'A-22 ships as a ledger-derived preview with visibly disabled controls. Nothing in this package assumes BANHAO may move money.'),
+      od('Q-010', 'Commission model is undefined', 'OPEN',
+        'Rate, base, whether it varies by merchant, and how it appears in the ledger.',
+        'Every merchant payable and platform revenue amount on A-21 and A-22.',
+        'Amounts render as Q-010 placeholders in the exact position a number will occupy. Layout will not change when the rate lands.'),
+      od('Q-020', 'Refund mechanism is undefined', 'DECISION REQUIRED',
+        'Provider API, manual transfer, or a hybrid — and what evidence a manual transfer must carry.',
+        'A-19 execution, retry (INC-07), and any completion state for a refund.',
+        'A-19 approves to REFUND_PENDING and stops, with a DECISION REQUIRED — Q-020 panel where the execute control will go. No mechanism is implied by any copy.'),
+      od('Q-032', 'Rider earnings model is undefined', 'OPEN',
+        'Per-delivery fee, distance component, incentives, and the payout cycle.',
+        'Rider payable amounts on A-21 and A-22.',
+        'Job counts are shown because they are real; amounts are decision dependencies. No figure is invented.'),
+      od('UX-Q-006', 'No-rider operator options are unspecified', 'OPEN',
+        'Which actions the operator gets, in what order, and after how long the escalation appears.',
+        'The A-04 action bar for RIDER_SEARCHING orders, and INC-05.',
+        'Three actions are drawn with the ordering question marked on the screen itself. The maximum of three is respected regardless of the answer.'),
+      od('BQ-013', 'Merchant non-response handling is undecided', 'OPEN',
+        'Whether the platform auto-rejects after the accept window or escalates to an operator.',
+        'The A-02 awaiting-merchant counter\'s meaning and the A-04 action for a PAID order past the window.',
+        'The counter reports the fact and A-04 offers cancel-and-refund. Neither implies an automatic policy.'),
+      od('DEC-029', 'Late payment business handling is undecided', 'OPEN',
+        'Accept the payment, refund it, or route to manual review.',
+        'INC-03 action step; the LATE_PAYMENT case cannot be closed by policy.',
+        'A-17 and A-20 record and investigate. No action button claims a policy that does not exist.'),
+      od('DEC-APP-006', 'Four order exception states are unimplemented', 'OPEN',
+        'Whether PAYMENT_FAILED, PAYMENT_EXPIRED, MERCHANT_REJECTED and DELIVERY_FAILED will ever be used.',
+        'INC-04 and INC-06 detection, and how failures are read on A-04.',
+        'No screen offers a transition into them; failures are read from history and delivery status instead.'),
+      od('Q-018', 'Maps provider is unselected', 'OPEN',
+        'Which provider for geocoding and rider position display.',
+        'Any geographic view of a delivery on A-04.',
+        'A-04 states plainly that no position is shown, rather than reserving an empty map frame.'),
+      od('A-ADMIN-01', 'Dual control with one staff member', 'PROPOSED',
+        'At launch the operator and the admin may be the same person. Does the requester ≠ approver rule block all refunds until a second grant exists?',
+        'Every refund at launch (A-18, A-19, INC-07).',
+        'A-19 shows the block explicitly rather than failing at submit. This package recommends keeping the rule and granting a second ADMIN before launch, and flags it as a decision rather than deciding it.'),
+      od('A-ADMIN-02', 'Reconciliation source for provider mismatch', 'PROPOSED',
+        'How a provider settlement report enters the system — manual upload, scheduled fetch, or out-of-band comparison.',
+        'The PROVIDER_MISMATCH case kind on A-20 has no defined input path.',
+        'The case kind is displayed and investigable; how it gets created is left open, with no upload control invented.')
+    ];
+
+    const acceptance = this.withTag([
+      { n: '01', body: 'A staff phone number with an active grant reaches ภาพรวม; one without a grant reaches ไม่มีสิทธิ์เข้าถึง and no shell renders.', status: 'PROPOSED' },
+      { n: '02', body: 'A revoked grant produces a 403 on the next command without clearing the session.', status: 'LOCKED' },
+      { n: '03', body: 'Every A-02 counter has a source caption naming a real table or index, and a failed counter shows an error rather than 0.', status: 'PROPOSED' },
+      { n: '04', body: 'An operator resolves a stuck PAID order from A-02 to a written audit row without opening a database client.', status: 'PROPOSED' },
+      { n: '05', body: 'No screen anywhere contains a control that writes payments.state.', status: 'LOCKED' },
+      { n: '06', body: 'No screen offers a transition into PAYMENT_FAILED, PAYMENT_EXPIRED, MERCHANT_REJECTED or DELIVERY_FAILED.', status: 'LOCKED' },
+      { n: '07', body: 'A CANCELLED order with a SUCCESS payment renders both facts as correct, plus the refund obligation.', status: 'LOCKED' },
+      { n: '08', body: 'Every operator command submits with a mandatory reason and an Idempotency-Key, and the primary button locks on first press.', status: 'PROPOSED' },
+      { n: '09', body: 'A double-submit produces exactly one audit row.', status: 'PROPOSED' },
+      { n: '10', body: 'Cancel-and-refund and refund rejection require a typed reference confirmation.', status: 'PROPOSED' },
+      { n: '11', body: 'A refund cannot be approved by its requester, and the block is stated before the buttons are reached.', status: 'PROPOSED' },
+      { n: '12', body: 'No refund surface claims completion; approval ends at REFUND_PENDING while Q-020 is open.', status: 'DECISION REQUIRED' },
+      { n: '13', body: 'A duplicate payment shows both transactions, an unchanged order value, and a refund obligation for the surplus only.', status: 'LOCKED' },
+      { n: '14', body: 'A late payment resolves to a specific attempt_no on A-17.', status: 'LOCKED' },
+      { n: '15', body: 'A signature-failed event is visible and annotated as having written nothing.', status: 'LOCKED' },
+      { n: '16', body: 'All five reconciliation case kinds are listable and investigable, including RIDER_RELEASE_INVARIANT.', status: 'PROPOSED' },
+      { n: '17', body: 'An unbalanced ledger group shows its non-zero sum, its correlation id, and no corrective control.', status: 'LOCKED' },
+      { n: '18', body: 'A-21 never renders ยอดสมดุล on incomplete data; the verdict is withheld instead.', status: 'PROPOSED' },
+      { n: '19', body: 'A-22 renders every settlement control disabled with the blocking reason on screen, and creates nothing.', status: 'BLOCKED' },
+      { n: '20', body: 'Every operator action appears on A-14 with actor, reason, before/after and correlation id, and no edit or delete affordance exists.', status: 'LOCKED' },
+      { n: '21', body: 'Every amount in the package is either read from a real column or rendered as a Q-010 / Q-032 placeholder. No invented figure appears anywhere.', status: 'LOCKED' },
+      { n: '22', body: 'Thai line-height is 1.6 or greater on every text surface, and no status is conveyed by colour alone.', status: 'PROPOSED' }
+    ]);
+
+    const buildOrder = [
+      { step: 'STEP 1', title: 'Auth and shell', body: 'A-01 plus the capability-gated layout. CapabilitiesService already resolves per request — wire it, do not cache it, and fail closed on error. Nothing else can be tested until the gate is real.' },
+      { step: 'STEP 2', title: 'Read path first', body: 'A-03, A-04, A-16, A-17, A-14. All read-only, all new endpoints under the admin module. This is the largest chunk of work and it carries no financial risk.' },
+      { step: 'STEP 3', title: 'The command primitives', body: 'Reason capture, Idempotency-Key generation, submit lock, typed confirmation, audit write. Build these once as shared primitives before the first command exists, or they will be reimplemented per screen inconsistently.' },
+      { step: 'STEP 4', title: 'Order commands', body: 'Cancel with refund request, release, redispatch. release must wrap the existing RPC and turn P0001 into a reconciliation case rather than a 500.' },
+      { step: 'STEP 5', title: 'Reconciliation and ledger', body: 'A-20 and A-21. The imbalance reader is the highest-value screen in the package: DEC-034 assumes it exists and today nothing reads those groups.' },
+      { step: 'STEP 6', title: 'Refunds up to REFUND_PENDING', body: 'A-18 and A-19 including dual control. Stop at REFUND_PENDING. Do not build an execute path, a provider call or a manual-evidence form until Q-020 lands.' },
+      { step: 'STEP 7', title: 'Settlement preview only', body: 'A-22 reading ledger payables, every control disabled with its reason visible. No settlement table, no run, no payout.' }
+    ];
+
+    const doNotBuild = [
+      'Any control that writes payments.state — SUCCESS and REFUNDED are webhook-only (CON-002).',
+      'Any transition into PAYMENT_FAILED, PAYMENT_EXPIRED, MERCHANT_REJECTED or DELIVERY_FAILED (DEC-APP-006).',
+      'Any ledger write, adjustment, correction or reversal (DEC-034).',
+      'Any settlement table, run, payout or commission calculation (SETTLEMENT_MODEL § 6, Q-002, Q-010).',
+      'Any refund execution, provider refund call or manual-transfer evidence form (Q-020, Q-001).',
+      'Any audit edit, delete, archive or purge path.',
+      'Any direct Supabase read from the admin app (DEC-APP-008).',
+      'Any invented amount, rate, fee or cycle anywhere in the UI.'
+    ];
+
+    const conventions = [
+      'Admin is the API-only app by design; every screen here needs a named endpoint under apps/api/src/modules/admin.',
+      'Copy lives in one keyed module per app. No i18n library for a single language, per CLAUDE.md.',
+      'Identifiers stay exactly as deployed. No table, column, RPC or endpoint is renamed by this package.',
+      'Thai for operator-facing copy, English for every code identifier, comment and log line.',
+      'Reuse the destructive-confirmation and drawer patterns already established in the merchant flows rather than inventing new ones.',
+      'Amounts are stored in the smallest unit and displayed with two decimals and a leading บาท symbol.'
+    ];
+
+    return { nav, legend, inScope, outScope, recon, deps, personas, flow, screenMap, navGroups, navRules, stateMatrix,
+      gateStates, counters, alertRows, orderRegions, timeline, paymentPanels, refundQueue, refundDrawer,
+      caseKinds, caseRows, caseDetail, ledgerGroups, settlementPanels, dialogs, specs, interactions, uiStates,
+      safety, permissions, incidents, auditFields, auditRules, a11y, copy, api, data, openDecisions, acceptance,
+      buildOrder, doNotBuild, conventions };
+  }
+}
+</script>
+</body>
+</html>
