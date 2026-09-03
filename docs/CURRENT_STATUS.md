@@ -2,8 +2,10 @@
 
 ## Last Updated
 
-2026-09-01 — after M-11 menu management and M-12 opening hours (`8da83eaf`),
-which complete the merchant app's MUST scope.
+2026-09-03 — after Phase J's first two AI Operations vertical slices
+(merchant acceptance timeout, no-rider triage). Previously 2026-09-01, after
+M-11 menu management and M-12 opening hours (`8da83eaf`), which complete the
+merchant app's MUST scope.
 
 > **Historical note.** This file has been rewritten in full each time it fell
 > too far behind the repository to patch incrementally — 2026-08-09 ("No
@@ -51,6 +53,7 @@ wins**. A `DEC-NNN` business decision outranks both.
 | **G** — Rider & delivery | Broadcast dispatch, offer accept/decline, arrival, pickup, en-route, completion, release + reconciliation, proof of delivery end to end | Implemented; POD has never run against a real R2 bucket or on hardware |
 | **H** — Notification | `outbox` table, `OutboxDispatchService` as a tick phase, `NotificationChannel` with an in-app channel, `GET/PATCH /me/notifications` wired to the customer app | Implemented **without a push channel** — web has none by DEC-APP-003, and FCM is unimplemented (TQ-002 `OPEN`) |
 | **I** — Admin operations | — | **Not started.** `apps/admin` is the default Next.js scaffold, and no admin design artifact exists (§13) |
+| **J** — AI Operations + Human Supervisor | Authorized by DEC-040, positioned after Phase I. Two vertical slices built in `apps/api/src/modules/ai-ops`: **merchant acceptance timeout** (`44abab39`) and **no-rider triage** (`0726b269`), both running as tick phases | **Started, deliberately partial.** The pipeline shape is complete end to end — normalize, deterministic router, policy gate, agent port, command catalog, dispatcher with domain revalidation, verification, `actor_type = 'AI'` audit. The merchant playbook **escalates rather than acting** in production because BQ-013 supplies no deadline; the no-rider playbook resolves DEC-022 and escalates by design, because it has no command at all. **No model vendor is selected** — the agent adapter is deterministic. Every remaining playbook in the design package is blocked on an open business decision (§13) |
 
 ## 4. Implemented is not verified
 

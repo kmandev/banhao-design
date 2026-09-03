@@ -49,7 +49,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-037** | **Phase 1 dispatch parameters: 60 s accept window, one active delivery per rider, no eligibility radius** | **ACCEPTED** | **2026-08-24** | `docs/RIDER_LIFECYCLE.md` § 6, BQ-020, BQ-021, BQ-022 (part) |
 | **DEC-038** | **Proof of delivery is a mandatory photo, stored in a private bucket, with no no-photo completion path** | **ACCEPTED** | **2026-08-26** | `docs/RIDER_LIFECYCLE.md` § 10, BQ-018 |
 | **DEC-039** | **POD retention: 90 days (referenced) / 7 days (orphan), automatic purge via the tick — Q-012's lawful basis stays `LEGAL_REVIEW_REQUIRED`** | **ACCEPTED — DURATION ONLY · NOT A PDPA/GO-LIVE APPROVAL** | **2026-08-26** | `apps/api/src/modules/rider/pod-retention-policy.ts`, Q-012 |
-| **DEC-040** | **Phase J — AI Operations + Human Supervisor is an authorized future phase, after Phase I; AI orchestrates within an explicit command catalog and never holds domain, database or financial authority** | **ACCEPTED — PHASE AUTHORIZATION ONLY · IMPLEMENTATION NOT STARTED** | **2026-09-03** | `docs/design/BANHAO AI OPERATIONS - Agent + Human Supervisor - Design Package.dc.html`, `supabase/migrations/20260903000001_audit_logs_ai_actor_type.sql` |
+| **DEC-040** | **Phase J — AI Operations + Human Supervisor is an authorized future phase, after Phase I; AI orchestrates within an explicit command catalog and never holds domain, database or financial authority** | **ACCEPTED — PHASE AUTHORIZATION · IMPLEMENTATION STARTED 2026-09-03 (see the entry's implementation-status section)** | **2026-09-03** | `docs/design/BANHAO AI OPERATIONS - Agent + Human Supervisor - Design Package.dc.html`, `supabase/migrations/20260903000001_audit_logs_ai_actor_type.sql` |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -2875,8 +2875,10 @@ Q-013, Q-001 · BQ-018 · `docs/RIDER_LIFECYCLE.md` § 10 ·
 
 ## DEC-040 — Phase J: AI Operations + Human Supervisor is an authorized future phase
 
-**Status:** ACCEPTED — **PHASE AUTHORIZATION ONLY** · **IMPLEMENTATION NOT
-STARTED** · **Date:** 2026-09-03 · **Owner:** PRODUCT_OWNER
+**Status:** ACCEPTED — **PHASE AUTHORIZATION** · **IMPLEMENTATION STARTED
+2026-09-03**, separately authorized by the Product Owner after this entry was
+written; see *Implementation status* at the end. · **Date:** 2026-09-03 ·
+**Owner:** PRODUCT_OWNER
 
 ### Decision
 
@@ -3019,10 +3021,13 @@ supervisor action with a recorded reason until a decision supplies the number.
 
 ### What this decision does NOT authorize or answer
 
-- **It does not start Phase J.** No AI implementation code is authorized by this
-  entry: no normalizer, router, policy engine, agent runtime, command handler,
-  provider integration, supervisor UI, AI endpoint, AI database client or AI
-  table. Phase G remains the current work on `feature/g7-driver-availability`,
+- **It does not start Phase J.** No AI implementation code was authorized by
+  this entry when it was written: no normalizer, router, policy engine, agent
+  runtime, command handler, provider integration, supervisor UI, AI endpoint,
+  AI database client or AI table. **The Product Owner authorized the start
+  separately on 2026-09-03** — see *Implementation status* below. The ten
+  constraints above bind that work unchanged; what lapsed is the "not yet",
+  not a single boundary. Phase G remains the current work on `feature/g7-driver-availability`,
   and Phase I remains "not started" with no admin design artifact.
 - **It does not resolve any open business policy.** Safe drop-off eligibility
   (OD-04, `UX-Q-006`), the failed-delivery outcome and who bears the cost of
@@ -3042,6 +3047,37 @@ supervisor action with a recorded reason until a decision supplies the number.
   its AI-01 item ("the founder's call") is answered by this decision plus the
   merged migration, and its AI-02 and AI-05 items remain open exactly as
   written.
+
+### Implementation status (added 2026-09-03, after the entry above)
+
+Phase J implementation was authorized by the Product Owner on 2026-09-03 and
+started the same day, on `feature/g7-driver-availability`. What exists:
+
+| Slice | Commit | State |
+|---|---|---|
+| **J-01 — Merchant acceptance timeout** | `44abab39` (fix `44eed3fc`) | Full pipeline, running as a tick phase. In production the policy stage resolves `MISSING` and every routed event escalates `ESC-UNKNOWN` **without reaching the agent**, because BQ-013 supplies no deadline. That is constraint 5 working, not an unfinished path |
+| **J-02 — No-rider triage** | `0726b269` | The design package's § 10 "No rider found" playbook. Policy **resolves** from DEC-022's approved decision point; the playbook has **no command at all**, so `ESC-NORIDER` is the only outcome reachable — it can never cancel a delivery, fail it, or say anything to a customer |
+| **Agent-failure containment** | `dede3719` | An unavailable or unparseable agent escalates `ESC-UNKNOWN` with the failure recorded, per design package § 11 — never a silent loss, never a retry of the same prompt, and no cheaper-model fallback tier (that would be selecting a vendor) |
+
+Held to the ten constraints, and verifiable as such: the agent is constructed
+with no Supabase client, credential or HTTP client; its projections carry no
+financial field; the command catalog contains no financial or state-changing
+command; no table, column, RLS policy or migration was added; and every audit
+row is written with `actor_type = 'AI'`.
+
+Not built, and each blocked rather than deferred by preference:
+
+- **Every remaining playbook in the design package § 10** — safe drop-off,
+  failed delivery, customer-unavailable resolution, repeated rider
+  cancellation, repeated merchant non-response and merchant auto-pause — is
+  blocked on an open business decision (`UX-Q-006`, BQ-015, BQ-013, the
+  repeated-cancellation counts and windows, Q-032). Constraint 5 forbids
+  supplying any of those numbers to unblock the work.
+- **The supervisor console** (design package § 09, S-01 … S-07) depends on
+  Phase I, which has not started and has no admin design artifact. Escalations
+  are durable and queryable in `audit_logs` in the meantime.
+- **A model vendor.** The agent port is bound to a deterministic adapter; no
+  provider, model or region is selected, exactly as this decision requires.
 
 ### The distinction this decision is making
 

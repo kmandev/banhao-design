@@ -119,6 +119,7 @@ explicit instruction" rule.
 | EVENT-027 | 2 further migrations merged (`orders` Realtime publication, `orders.prep_minutes`), bringing the total to **21**, all applied live; API `tick`/`webhook` e2e suites repaired — full suite green |
 | EVENT-028 | API contract published and guarded (`docs/06-api/openapi.json` + drift test); rider controller HTTP-boundary suite; three test/build flakes removed (cross-worker port collision, a tampered-signature test passing by luck, Next typed-routes racing its own build); CI now runs the database domain suite; Phase A observability completed bar Sentry — structured JSON logging, one log line per request, `/health` database ping. `docs/CURRENT_STATUS.md` rewritten to reality |
 | EVENT-029 | **M-11 menu management and M-12 opening hours built**, from the two committed design artifacts. One additive migration (**22 total**) adding four transactional catalog-write functions; 11 new merchant API endpoints; the real five-item merchant nav; both screens with their dialogs, drawers and the option editor. `day_of_week` confirmed as **0 = Sunday**, matching every existing reader — no reinterpretation, no migration (this update) |
+| EVENT-031 | **Phase J started.** Three AI Operations units on `feature/g7-driver-availability`, no migration and no schema change in any of them: **J-01 merchant acceptance timeout** (`44abab39`, starvation fix `44eed3fc`), which fails closed on BQ-013 and escalates without ever reaching the agent; **J-02 no-rider triage** (`0726b269`), the design package's § 10 "No rider found" playbook, whose policy resolves from DEC-022 and which has **no command at all** so `ESC-NORIDER` is its only reachable outcome; and **agent-failure containment** (`dede3719`), escalating an unavailable or unparseable agent instead of losing the event. Both playbooks run as tick phases. Every remaining designed playbook is blocked on an open business decision — see §12 |
 | EVENT-030 | **AI-01 locked, then Phase J authorized.** One additive migration (**24 total**) widening `audit_logs.actor_type` to accept `'AI'` — every existing actor type, the append-only trigger, the DEC-032 operator-reason CHECK, RLS and grants all preserved, proven by 6 assertions in the domain suite (`95cc0dc4`). Then **DEC-040** added AI Operations + Human Supervisor to the roadmap as **Phase J, after Phase I — authorized, not started**: architecture direction only, no implementation code, no open business policy answered |
 
 ## 5. Current implementation status
@@ -140,6 +141,7 @@ explicit instruction" rule.
 | Dispatch / delivery | Implemented in the API's rider module (broadcast dispatch, pickup/en-route/arrival/completion transitions, release + reconciliation) and the Driver app's delivery flow |
 | Proof of delivery (G7) | Implemented end-to-end: driver camera capture → client-side compression + EXIF strip → presigned upload to a private R2 bucket → server-side 2 MB size enforcement → signed download URL → Customer app proof read API and viewer. Retention/purge mechanism exists, **default OFF**. See §9/§10 for phase status |
 | Settlement | **Not started** — still hard-locked, see §9/§10 |
+| AI Operations (Phase J) | **Started, deliberately partial** — `apps/api/src/modules/ai-ops`. Two playbooks run as tick phases; the pipeline shape (normalize → deterministic router → policy gate → agent port → command catalog → dispatcher with domain revalidation → verify → `actor_type = 'AI'` audit → escalate) is complete. No model vendor, no AI database client, no new table or migration. See §12 |
 
 **This is implemented functionality, not a verified-complete business flow.**
 The presence of these modules and screens means the corresponding code exists
@@ -349,7 +351,7 @@ this file summarises it.
 | **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
 | **I** | Admin operations | Not started — Admin app is still a shell (§5), and no admin design artifact exists |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
-| **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION NOT STARTED.** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4` and **applied and verified live 2026-09-03**, see §7). **No AI code exists.** Read DEC-040 before any Phase J work |
+| **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION STARTED 2026-09-03, two playbooks built (§12).** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4` and **applied and verified live 2026-09-03**, see §7). Read DEC-040 — including its *Implementation status* section — before any Phase J work |
 
 **Current branch context:** this branch (`feature/g7-driver-availability`) is
 mid-Phase-G work (driver availability, delivery, and proof-of-delivery). The
@@ -471,10 +473,9 @@ that they are built **in phase order, one phase at a time**, not opportunistical
   `e471ec1d` checkpoint — see §3/§7/§10 above). No opportunistic migration or
   schema change outside that.
 - Merchant's approved target is **Next.js web**, not Expo (DEC-APP-003).
-- **Phase J (AI Operations + Human Supervisor) is authorized but not started**
-  (DEC-040). It sits **after Phase I** — authorization is not a licence to
-  start it early, and nothing in it may be built into Phase G. When it does
-  start, DEC-040's ten constraints bind it: no database client, credential, SQL
+- **Phase J (AI Operations + Human Supervisor) is authorized and started**
+  (DEC-040; start authorized separately 2026-09-03). Two playbooks exist — see
+  §12. DEC-040's ten constraints bind every further unit: no database client, credential, SQL
   or PostgREST access in the AI runtime; every mutation through the command
   catalog into an existing guarded domain service; no new business state; no
   invented threshold, timer or cooldown (missing policy escalates); no
@@ -612,3 +613,83 @@ financial or settlement input. Their provisioning SQL is
 `catalog_dev_seed.sql` and `g71_offer_fixture.sql` — the same reviewed,
 idempotent, hand-run convention (`docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md`
 §5.2). Nothing runs it automatically and it is in no workflow.
+
+---
+
+## 12. Phase J — AI Operations: built scope, boundaries, and open blockers
+
+Added 2026-09-03 (EVENT-031). Phase J is **started, deliberately partial**.
+§5's table is the summary; this section is the detail. Read
+`docs/design/BANHAO AI OPERATIONS - Agent + Human Supervisor - Design Package.dc.html`
+and DEC-040 (including its *Implementation status* section) before adding to it.
+
+### What is built
+
+Everything lives in `apps/api/src/modules/ai-ops` and runs from
+`POST /internal/tick`. There is **no controller, no route and no client-facing
+surface** — AI Operations is never on a customer, merchant or rider request
+path.
+
+| Unit | Commit | What it does |
+|---|---|---|
+| J-01 merchant acceptance timeout | `44abab39` | The full pipeline. In production the policy stage resolves `MISSING` and every routed event escalates `ESC-UNKNOWN` **without reaching the agent**, because BQ-013 supplies no deadline. The stages below the policy gate are implemented and tested against an injected fixture policy |
+| J-01 candidate-ordering fix | `44eed3fc` | The outbox is read newest-first. Oldest-first let the same settled rows fill the batch forever, so the pipeline stopped working at order `BATCH_SIZE + 1` |
+| J-02 no-rider triage | `0726b269` | The design package's § 10 "No rider found" playbook. Turns a delivery past DEC-022's 8-minute decision point into a durable `audit_logs` escalation with round history and the current eligible-rider count |
+| Agent-failure containment | `dede3719` | An unavailable or unparseable agent escalates `ESC-UNKNOWN` with the failure recorded — design package § 11 |
+
+### The boundaries, and how each is actually enforced
+
+Not by convention, and not by a prompt — by construction. Weakening any of
+these is a DEC-040 violation, not a refactor:
+
+- **The agent holds no database client, credential or HTTP client.** It cannot
+  execute SQL because it is handed nothing that can. `AgentPort`'s only input
+  is a scoped projection and its only output is a typed decision.
+- **Projections carry no financial field.** No amount, fee, ledger reference,
+  payout or payment detail, asserted by test on both playbooks.
+- **The command catalog is an allowlist with no financial and no
+  state-changing entry.** The one command is an L2 notification. The dispatcher
+  refuses any name it cannot resolve, revalidates authoritative state
+  immediately before acting, and verifies the effect by reading it back.
+- **No policy value is invented.** BQ-013 resolves `MISSING` and fails closed;
+  DEC-022's decision point is *imported* from `NoRiderEscalationService` rather
+  than restated, because it is the same actor, decision and clock. Borrowing an
+  unrelated approved number — the rider offer window for a merchant deadline,
+  say — is aliasing two decisions and is refused explicitly in
+  `merchant-acceptance-policy.ts`.
+- **Audit is `actor_type = 'AI'`, never `SYSTEM`**, on an append-only table
+  nothing in Phase J updates or deletes.
+- **No table, column, RLS policy, RPC or migration was added.** The migration
+  count is unchanged at 24.
+
+### Known, recorded limitations — do not "fix" these silently
+
+- **Escalations land in `audit_logs`, not `reconciliation_cases`.** That
+  table's `kind` CHECK has no AI-operations value and widening it is a
+  migration Phase J is not authorized to make.
+- **Idempotency is one `audit_logs` row per (action, aggregate).** Sequential
+  re-runs are suppressed; genuinely concurrent ticks are not, which would need
+  a unique constraint — again a migration. Same bound `NoRiderEscalationService`
+  documents for itself.
+- **Candidate selection is bounded by throughput, not by a cursor.** An event
+  is missed only if more than `BATCH_SIZE` (25) qualifying events are written
+  inside one 60-second tick. A consumer cursor column would close it.
+- **The agent adapter is deterministic.** No vendor, model or region is
+  selected — DEC-040 requires that choice to be its own decision.
+
+### Open blockers — read before planning further Phase J work
+
+1. **Every remaining playbook in the design package § 10 is blocked on an open
+   business decision**, and DEC-040 §5 forbids supplying the missing value to
+   unblock it: merchant auto-pause thresholds and the merchant acceptance
+   deadline (**BQ-013**), the no-rider terminal outcome (**UX-Q-006**), safe
+   drop-off eligibility and the customer-unavailable resolution (**OD-04**,
+   `UX-Q-006`), the failed-delivery outcome and who bears the cost of wasted
+   food (**BQ-015**, plus `DELIVERY_FAILED` being deliberately unimplemented
+   under DEC-APP-006), and repeated-cancellation counts, windows and
+   consequences (rider earnings are **Q-032**-open). What is implementable
+   without them is already implemented.
+2. **The Human Supervisor console (design package § 09, S-01 … S-07) depends on
+   Phase I**, which has not started and has no admin design artifact. Until it
+   exists, an escalation is durable and queryable but has no UI: it is an
+   `audit_logs` row with `actor_type = 'AI'` and an `AI_OPS_*` action.
