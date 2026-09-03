@@ -271,7 +271,7 @@ supabase/migrations/*.sql          24 migrations (16 at checkpoint + 8 since) �
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
-| Migrations | **24 in the repository · 21 recorded as applied live (EVENT-027) · 3 not recorded as applied** (16 at the `e471ec1d` V1.1 checkpoint + 8 merged since for Phase C/E/G, M-05, M-11/M-12 and AI-01). Explicitly **not applied to `banhao-dev`**: `20260901000002_merchant_catalog_write_functions.sql` (additive, 38 assertions against a throwaway Postgres) and `20260903000001_audit_logs_ai_actor_type.sql` (additive CHECK widening for `actor_type = 'AI'`, 6 assertions). `20260902000001_order_item_options_drop_menu_option_fk.sql` (`aabf14f8`) has **no recorded live status in this repository** — treat it as unverified against `banhao-dev` and check before assuming either way. Applying any migration is an explicit instruction, never a side effect of other work |
+| Migrations | **24 in the repository · 24 applied live · 0 pending** (16 at the `e471ec1d` V1.1 checkpoint + 8 merged since for Phase C/E/G, M-05, M-11/M-12 and AI-01). **Verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -349,7 +349,7 @@ this file summarises it.
 | **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
 | **I** | Admin operations | Not started — Admin app is still a shell (§5), and no admin design artifact exists |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
-| **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION NOT STARTED.** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4`, not yet applied live). **No AI code exists.** Read DEC-040 before any Phase J work |
+| **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION NOT STARTED.** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4` and **applied and verified live 2026-09-03**, see §7). **No AI code exists.** Read DEC-040 before any Phase J work |
 
 **Current branch context:** this branch (`feature/g7-driver-availability`) is
 mid-Phase-G work (driver availability, delivery, and proof-of-delivery). The
@@ -551,7 +551,7 @@ between "implemented" and "verified live" applies here in full.
 
 | | |
 |---|---|
-| Database | `20260901000002_merchant_catalog_write_functions.sql` — four `SECURITY INVOKER`, `service_role`-only functions: `replace_restaurant_hours`, `reorder_menu_categories`, `reorder_menu_items`, `replace_menu_item_option_groups`. **Merged but NOT applied to `banhao-dev`** (§7) |
+| Database | `20260901000002_merchant_catalog_write_functions.sql` — four `SECURITY INVOKER`, `service_role`-only functions: `replace_restaurant_hours`, `reorder_menu_categories`, `reorder_menu_items`, `replace_menu_item_option_groups`. **Merged and applied to `banhao-dev`** — live-verified 2026-09-03, all four functions present with matching signatures (§7) |
 | Grants | **Unchanged.** No write grant was added to `authenticated` — DEC-APP-008 keeps writes in the API, and two assertions pin that the client still cannot write `menu_items` or `restaurant_hours` directly |
 | API | 11 endpoints under `/api/v1/merchant/`, in the OpenAPI contract |
 | Reads | Client → Supabase under the existing `_select_member` policies. No read endpoint was added, deliberately |
