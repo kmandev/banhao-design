@@ -49,6 +49,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-037** | **Phase 1 dispatch parameters: 60 s accept window, one active delivery per rider, no eligibility radius** | **ACCEPTED** | **2026-08-24** | `docs/RIDER_LIFECYCLE.md` § 6, BQ-020, BQ-021, BQ-022 (part) |
 | **DEC-038** | **Proof of delivery is a mandatory photo, stored in a private bucket, with no no-photo completion path** | **ACCEPTED** | **2026-08-26** | `docs/RIDER_LIFECYCLE.md` § 10, BQ-018 |
 | **DEC-039** | **POD retention: 90 days (referenced) / 7 days (orphan), automatic purge via the tick — Q-012's lawful basis stays `LEGAL_REVIEW_REQUIRED`** | **ACCEPTED — DURATION ONLY · NOT A PDPA/GO-LIVE APPROVAL** | **2026-08-26** | `apps/api/src/modules/rider/pod-retention-policy.ts`, Q-012 |
+| **DEC-040** | **Phase J — AI Operations + Human Supervisor is an authorized future phase, after Phase I; AI orchestrates within an explicit command catalog and never holds domain, database or financial authority** | **ACCEPTED — PHASE AUTHORIZATION ONLY · IMPLEMENTATION NOT STARTED** | **2026-09-03** | `docs/design/BANHAO AI OPERATIONS - Agent + Human Supervisor - Design Package.dc.html`, `supabase/migrations/20260903000001_audit_logs_ai_actor_type.sql` |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -2869,3 +2870,236 @@ DEC-038, DEC-APP-010, DEC-037 (the constants-not-env precedent) · Q-012,
 Q-013, Q-001 · BQ-018 · `docs/RIDER_LIFECYCLE.md` § 10 ·
 `docs/OPEN_BUSINESS_QUESTIONS.md` (BQ-018, Q-012) ·
 `docs/OPEN_DATABASE_QUESTIONS.md` DBQ-008 (retention windows, gated on Q-012)
+
+---
+
+## DEC-040 — Phase J: AI Operations + Human Supervisor is an authorized future phase
+
+**Status:** ACCEPTED — **PHASE AUTHORIZATION ONLY** · **IMPLEMENTATION NOT
+STARTED** · **Date:** 2026-09-03 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+**Phase J — AI Operations + Human Supervisor** is added to the Phase 1 roadmap
+as an approved future phase, positioned **after Phase I**. The nine existing
+phases (A–I) and F′ keep their meaning, their order and their current status
+unchanged; nothing about Phase G, the branch it is being built on, or Phase I's
+"not started" status is altered by this decision.
+
+This decision resolves a governance gap, not an engineering one. The design
+package
+`docs/design/BANHAO AI OPERATIONS - Agent + Human Supervisor - Design Package.dc.html`
+was committed (`3d6a7752`) and its AI-01 prerequisite was implemented and
+merged (`95cc0dc4`, `supabase/migrations/20260903000001_audit_logs_ai_actor_type.sql`),
+but AI Operations existed nowhere in the approved phase list — so an
+implementation request for it collided with `CLAUDE.md` §10's "build only the
+current phase" rule and with V1.1's "any deviation from V1.1 requires a new
+Architecture Decision, not an improvisation". That collision is what this entry
+removes. It authorizes an **architecture direction**; it does not start the
+work, and it does not answer a single open business policy.
+
+**What Phase J is.** One pipeline, in this fixed order:
+
+```
+outbox event → normalize → deterministic router → policy evaluation
+  → agent (only if unresolved) → command request → guarded domain service
+  → verify → audit → resolve / escalate
+```
+
+The ten constraints below are the authorization. A Phase J implementation that
+violates any of them is not authorized by this decision.
+
+**1 — AI is orchestration, never domain authority.** The agent may classify a
+situation, correlate evidence and select an action **from an explicit command
+catalog**. It may not implement domain behaviour, and it may not replace,
+duplicate or wrap around an existing guarded domain service. The domain service
+remains the final authority on every mutation, including the authority to
+refuse one.
+
+**2 — No database access from the AI runtime, at all.** The agent process must
+not execute SQL, must not reach PostgREST or Supabase directly, must not hold a
+database credential of any kind, and must not mutate the database directly. This
+is the load-bearing safety property and it is enforced by **absence**, which the
+design package's own AI-05 states plainly: every write path in the shipped API
+uses the `service_role` client, which bypasses RLS by platform default, so an
+agent is safe from RLS bypass *only* because it is handed no client whatsoever.
+Least privilege for Phase J therefore lives in the command allowlist and in
+scoped read projections — **not** in RLS. Any future proposal to give an agent
+process a database client voids this decision's safety model and requires its
+own architecture decision before it may be built.
+
+**3 — No financial autonomy.** Refunds, payments, ledger writes, settlement,
+commission, rider earnings, merchant payables and any other financial
+adjustment are **L5 — never autonomous**, and are absent from the agent's
+command catalog entirely rather than merely gated. CON-002 is unchanged: only a
+signature-verified provider webhook may confirm a payment, and no agent, tick or
+console may set `SUCCESS` or `REFUNDED`. Phase J authorizes **no** payment
+behaviour and **no** financial control surface.
+
+**4 — No new business state machines.** Phase J introduces no order, delivery,
+payment, rider or merchant state. DEC-018's four separate state domains and
+DEC-019's order lifecycle are untouched, and DEC-APP-006's "the nine ACCEPTED
+states plus `CANCELLED`, nothing else" continues to hold. An agent that would
+need a state the application does not implement (for example `DELIVERY_FAILED`,
+deliberately unimplemented) must escalate, never invent the transition.
+
+**5 — Policy is owned by decisions, never by the agent or a prompt.** Phase J
+may not introduce a threshold, retry limit, cooldown, timer duration,
+cancellation count, confidence cutoff, auto-pause threshold or any financial
+rule that is not already an approved decision or an existing cited code
+constant (DEC-037's `dispatch-policy.ts` and DEC-039's `pod-retention-policy.ts`
+are the established shape: an approved number lives in the decision log and in
+the code that cites it). Where a policy input does not exist, the required
+behaviour is **escalate or block** — a missing decision is never a licence to
+choose a default. Every action must record the policy version that authorized
+it.
+
+**6 — Autonomy levels, and confidence is not authorization.** The six levels in
+the design package are authorized as the model: **L0 observe · L1 recommend ·
+L2 low-risk operational mutation · L3 deterministic policy action · L4 human
+approval required · L5 never autonomous.** Authorization to act comes from the
+level attached to the *command*, never from the model's own confidence score. A
+high-confidence model output does not promote an action's level, and no
+configuration may promote an L5 action to anything else. L4 must **revalidate
+the current domain state at execution time**; an approval whose underlying state
+has since changed must **fail closed** and re-escalate, never execute stale.
+
+**7 — Human Supervisor is an exceptions surface, not an admin CRUD app.** Phase
+J includes a supervisor surface scoped to escalations, L4 approvals, blocked
+actions, failed commands, operational incidents, AI recommendations needing
+human judgement, and the audit context behind each. It is **not** authorized as
+a general admin CRUD application, and it is explicitly **not** authorized to
+contain any financial control (no refund, no payout, no fee adjustment). It
+remains subject to DEC-032: an operator action carries a recorded reason, which
+`audit_logs`' own CHECK already enforces for `actor_type = 'OPERATOR'`.
+
+**8 — AI audit identity is `AI`, never `SYSTEM`.** Every autonomous action
+writes `audit_logs.actor_type = 'AI'`, distinguishing an agent decision from the
+tick, the dispatch round and the payment processor, which all legitimately write
+`SYSTEM`. This prerequisite is **already satisfied and locked**: the additive
+CHECK widening in `supabase/migrations/20260903000001_audit_logs_ai_actor_type.sql`
+(commit `95cc0dc4`) added `'AI'` while preserving every existing actor type, the
+append-only mutation-rejecting trigger, the DEC-032 operator-reason CHECK, RLS
+and grants — proven by six assertions in
+`supabase/tests/audit_logs_ai_actor_test.sql`, run in the domain suite. The
+migration is **merged but not yet applied to `banhao-dev`**; applying it stays a
+separate explicit instruction. Append-only semantics are not weakened by Phase
+J: a correction is a compensating record, never an `UPDATE`.
+
+**9 — Existing infrastructure first; no speculative infrastructure.** Phase J
+reuses `outbox` (ADR-005), `jobs` (ADR-006, already the retry/attempt/dead-letter
+substrate), the single Cloudflare Worker tick (DEC-APP-010 — AI operations
+becomes another tick consumer, not a second scheduler), `dispatch-policy.ts`,
+the existing guarded domain services, `audit_logs`, `reconciliation_cases` (a
+generic operational queue since DEC-039's neighbouring work — see the
+`RIDER_RELEASE_INVARIANT` precedent) and the existing notification
+infrastructure. This decision authorizes **no** vector database, **no** Redis or
+cache, **no** new message broker, **no** second database and **no**
+`ai_operations_cases` table. The design package's own AI-02 records that the V1
+console is designed against a *projection* of `jobs` + `audit_logs` +
+`reconciliation_cases` precisely so that no migration is needed; a case table
+remains a V2 recommendation requiring its own decision. Any new escalation
+`kind` value would itself be an additive CHECK widening under the existing
+migration rule in `CLAUDE.md` §10 — explicitly instructed, never opportunistic.
+
+**10 — Driver/Delivery compatibility.** Phase J inherits, and may not silently
+redefine, the delivery decisions the design package lists as locked: **OD-04**
+(delivery failure and resolution — arrival, contact, timer, resolution; the
+rider decides no financial outcome), **OD-05** (external Google Maps
+navigation; navigation never mutates delivery state, `ARRIVED` stays a
+server-side transition, no geofence — so an agent may never infer arrival from a
+location ping: position is evidence, never a state change) and **OD-06** (no
+unrestricted rider cancel; a required reason; release/reassign before pickup via
+`release_rider_assignment()` as the sole sanctioned path, controlled resolution
+after pickup, with the financial outcome outside rider and agent authority).
+**BQ-013** (merchant acceptance timeout) remains an `OPEN` business question:
+its deadline must stay server-side and configurable, and its auto-pause
+threshold does not exist, so Phase J may not hard-code one — auto-pause is a
+supervisor action with a recorded reason until a decision supplies the number.
+
+### What this decision does NOT authorize or answer
+
+- **It does not start Phase J.** No AI implementation code is authorized by this
+  entry: no normalizer, router, policy engine, agent runtime, command handler,
+  provider integration, supervisor UI, AI endpoint, AI database client or AI
+  table. Phase G remains the current work on `feature/g7-driver-availability`,
+  and Phase I remains "not started" with no admin design artifact.
+- **It does not resolve any open business policy.** Safe drop-off eligibility
+  (OD-04, `UX-Q-006`), the failed-delivery outcome and who bears the cost of
+  wasted food (BQ-015), merchant auto-pause thresholds (BQ-013), the no-rider
+  terminal outcome, repeated-cancellation counts and windows, and every
+  financial policy (Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-027) all remain
+  exactly as open as they were before this entry. Phase J's required behaviour
+  when it meets one of them is to escalate.
+- **It selects no vendor, model or region.** The design package deliberately
+  locks none, and this decision locks none. Phase J must be built behind a
+  provider seam so a model implementation can be plugged in later; choosing one
+  is a separate decision, not an implementation detail.
+- **It does not authorize a new table, a schema change or a live migration.**
+  The database rule in `CLAUDE.md` §10 is unchanged, and the already-merged
+  AI-01 migration is still unapplied to `banhao-dev` by design.
+- **It does not rewrite the design package.** That artifact stays as authored;
+  its AI-01 item ("the founder's call") is answered by this decision plus the
+  merged migration, and its AI-02 and AI-05 items remain open exactly as
+  written.
+
+### The distinction this decision is making
+
+It authorizes **"AI may operate within explicit policy and command
+boundaries."** It does **not** authorize **"AI may decide business policy."**
+Those are different claims and only the first is approved here.
+
+### Alternatives considered
+
+- **Implement AI Operations without a decision entry, treating the committed
+  design package as authorization.** Rejected — a design package is analysis,
+  not approval; `CLAUDE.md`'s source-of-truth hierarchy makes the approved
+  architecture and phase list authoritative over any design artifact, and V1.1
+  requires a decision for a deviation. Building first would have inverted that.
+- **Insert AI Operations into Phase G, where the work is currently happening.**
+  Rejected — it would silently redefine an in-flight phase and break the
+  one-phase-at-a-time rule that the phase list exists to enforce.
+- **Renumber the phases so AI Operations lands earlier.** Rejected — every
+  document, commit message and handoff cites phases by letter; renumbering
+  would invalidate that history for no gain.
+- **Authorize an `ai_operations_cases` table now, as the design package
+  recommends for V2.** Rejected for this decision — the V1 console is
+  explicitly designed against a projection so that no migration is required.
+  A case table can be decided on its own evidence later.
+- **Defer the decision until Phase I is finished.** Rejected — the AI-01
+  migration is already merged, so the repository would keep carrying an
+  implemented prerequisite for a phase that officially did not exist. The
+  governance record should not lag the schema.
+
+### Consequences
+
+- The Phase 1 roadmap is now **A–I, F′, and J**. Phase J sits after Phase I and
+  depends on the phases whose events, jobs, domain services and notifications it
+  orchestrates (E, G and H in particular).
+- `CLAUDE.md` §9 and `docs/ROADMAP.md` gain Phase J as **AUTHORIZED — NOT
+  STARTED**. No other phase's status changes.
+- A future Phase J implementation task starts from this entry plus the design
+  package, and must produce its own slice-level decisions for anything this
+  entry leaves open.
+- `docs/TODO.md` is deliberately untouched: it tracks engineering tasks, and
+  Phase J has no authorized task yet.
+
+### Evidence
+
+`docs/design/BANHAO AI OPERATIONS - Agent + Human Supervisor - Design Package.dc.html`
+(committed `3d6a7752`; its AI-01/AI-02/AI-05 items, the L0–L5 autonomy table,
+the ESC-* escalation identifiers, and the "locked" OD-04/OD-05/OD-06 list) ·
+`supabase/migrations/20260903000001_audit_logs_ai_actor_type.sql` and
+`supabase/tests/audit_logs_ai_actor_test.sql` (commit `95cc0dc4`) ·
+`docs/BANHAO-APP-ARCHITECTURE-V1.md` §19 (the nine phases + F′) · `CLAUDE.md`
+§9/§10.
+
+### Related
+
+DEC-018, DEC-019, DEC-APP-006 (no new state) · DEC-032 (operator reason),
+DEC-031 · CON-001, CON-002, CON-003, CON-005 · DEC-APP-005, DEC-APP-007,
+DEC-APP-008 (writes go client → API → Supabase), DEC-APP-010 (one tick) ·
+DEC-037, DEC-039 (approved-number-as-cited-constant precedent) · DEC-021,
+DEC-022 · ADR-005 (outbox), ADR-006 (jobs) · OD-04, OD-05, OD-06 (Driver +
+Delivery design package) · BQ-013, BQ-015, Q-001, Q-002, Q-020 (all still
+open)

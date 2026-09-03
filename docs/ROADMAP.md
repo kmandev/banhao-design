@@ -11,8 +11,16 @@ status this roadmap is derived from.
 
 ## Phase 1 — Food Delivery
 
-Nine lettered phases (A–I) plus F′, per V1.1 §19. Each depends on the one
-before it unless noted.
+Nine lettered phases (A–I) plus F′, per V1.1 §19, and **Phase J** added
+2026-09-03 by **DEC-040** (AI Operations + Human Supervisor — authorized,
+after Phase I, **not started**). Each depends on the one before it unless
+noted.
+
+> **Phase-status staleness:** the ✅/⏳ sections below were last reconciled
+> 2026-08-19 and still show Phase E as next. They are not current — Phases E–H
+> have since been substantially built and Phase G is the work in flight. Use
+> `CLAUDE.md` §9 and `CURRENT_STATUS.md` for live phase status; this file's
+> Phase J row and the blocked list below are current.
 
 ### ✅ COMPLETED
 
@@ -60,6 +68,7 @@ before it unless noted.
 | **H — Notification** | F, G | Outbox dispatch via the tick, channel adapters (Expo Push, SMS, LINE) |
 | **I — Admin operations** | — | Admin app, operator fallback tooling |
 | **F′ — Real payment provider** | F | Externally blocked (§ Blocked below); may land any time after F |
+| **J — AI Operations + Human Supervisor** | After I (orchestrates E, G, H) | **AUTHORIZED 2026-09-03 by DEC-040 — NOT STARTED, no code exists.** `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate`, plus a supervisor surface for escalations and L4 approvals. Authorization is of an architecture direction only: AI never holds domain, database or financial authority, adds no business state, invents no policy value (missing policy escalates), and audits as `actor_type = 'AI'`. Prerequisite AI-01 is merged (`95cc0dc4`) and not yet applied live. Read DEC-040 before any Phase J work |
 
 ### 🔴 BLOCKED / ⚠️ DECISION REQUIRED
 

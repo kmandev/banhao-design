@@ -76,12 +76,15 @@ main @ 14289652                   ← YOU ARE HERE — everything below is merge
 in `main`. **Branch new work from `main`.**
 
 `e471ec1d` is the **database checkpoint** — the commit V1.1 was reviewed against.
-Six further migrations have since been merged on top of that checkpoint as
-part of Phase C/E/G, merchant M-05 and merchant M-11/M-12 work (catalog
-availability visibility, the order creation function, the rider
-release/reconciliation invariant, the `orders` Realtime publication,
-`orders.prep_minutes`, and the four merchant catalog-write functions — see §7),
-bringing the total to 22. The **table/RLS design itself is still the one V1.1 reviewed**
+Eight further migrations have since been merged on top of that checkpoint as
+part of Phase C/E/G, merchant M-05, merchant M-11/M-12 and the AI-01 audit
+identity lock (catalog availability visibility, the order creation function, the
+rider release/reconciliation invariant, the `orders` Realtime publication,
+`orders.prep_minutes`, the four merchant catalog-write functions, the
+`order_item_options` menu-option FK drop, and the `audit_logs.actor_type`
+widening that adds `'AI'` — see §7), bringing the total to 24. **Counts in this
+file were one short until 2026-09-03** — `20260902000001` was merged (`aabf14f8`)
+without the count being updated; corrected here. The **table/RLS design itself is still the one V1.1 reviewed**
 — see §10 for the still-current "do not add a table/RLS policy/RPC without an
 explicit instruction" rule.
 
@@ -116,6 +119,7 @@ explicit instruction" rule.
 | EVENT-027 | 2 further migrations merged (`orders` Realtime publication, `orders.prep_minutes`), bringing the total to **21**, all applied live; API `tick`/`webhook` e2e suites repaired — full suite green |
 | EVENT-028 | API contract published and guarded (`docs/06-api/openapi.json` + drift test); rider controller HTTP-boundary suite; three test/build flakes removed (cross-worker port collision, a tampered-signature test passing by luck, Next typed-routes racing its own build); CI now runs the database domain suite; Phase A observability completed bar Sentry — structured JSON logging, one log line per request, `/health` database ping. `docs/CURRENT_STATUS.md` rewritten to reality |
 | EVENT-029 | **M-11 menu management and M-12 opening hours built**, from the two committed design artifacts. One additive migration (**22 total**) adding four transactional catalog-write functions; 11 new merchant API endpoints; the real five-item merchant nav; both screens with their dialogs, drawers and the option editor. `day_of_week` confirmed as **0 = Sunday**, matching every existing reader — no reinterpretation, no migration (this update) |
+| EVENT-030 | **AI-01 locked, then Phase J authorized.** One additive migration (**24 total**) widening `audit_logs.actor_type` to accept `'AI'` — every existing actor type, the append-only trigger, the DEC-032 operator-reason CHECK, RLS and grants all preserved, proven by 6 assertions in the domain suite (`95cc0dc4`). Then **DEC-040** added AI Operations + Human Supervisor to the roadmap as **Phase J, after Phase I — authorized, not started**: architecture direction only, no implementation code, no open business policy answered |
 
 ## 5. Current implementation status
 
@@ -176,9 +180,9 @@ Three `T0` technical questions block backend work: TQ-008, TQ-011, TQ-012.
 **The database is designed AND implemented as migrations** (EVENT-016 design →
 EVENT-017 DEC-033/034 lock → EVENT-018 migration). **16 migration files, 40
 tables, merged to `main` at `e471ec1d` and applied to `banhao-dev`** — this was
-the schema V1.1 was reviewed against. **6 further migrations have since been
-merged** (EVENT-023/024/027/029) for Phase C/E/G, M-05 and M-11/M-12 needs,
-bringing the current total to **22 migration files**. Verified by two Docker-based test
+the schema V1.1 was reviewed against. **8 further migrations have since been
+merged** (EVENT-023/024/027/029/030) for Phase C/E/G, M-05, M-11/M-12 and AI-01
+needs, bringing the current total to **24 migration files**. Verified by two Docker-based test
 suites: **60/60 assertions pass**, including the rider race condition proven
 with two genuinely concurrent `psql` processes (see
 `docs/DATABASE_MIGRATION_V1_REPORT.md`). The live `profiles` RLS pattern
@@ -221,7 +225,7 @@ apps/driver/                  Status/availability, offer inbox, active delivery,
 apps/merchant/                Next.js: order board, menu management (M-11),
                                opening hours (M-12); see §11
 apps/admin/                   Still a shell — see §5
-supabase/migrations/          22 migration files (16 at the `e471ec1d` checkpoint + 6 since)
+supabase/migrations/          24 migration files (16 at the `e471ec1d` checkpoint + 8 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -251,7 +255,7 @@ docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-0
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
 docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          22 migrations (16 at checkpoint + 6 since) — do not
+supabase/migrations/*.sql          24 migrations (16 at checkpoint + 8 since) — do not
                                     edit an existing file; do not add a new one without
                                     an explicit instruction (see §10)
 ```
@@ -267,7 +271,7 @@ supabase/migrations/*.sql          22 migrations (16 at checkpoint + 6 since) �
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
-| Migrations | **22 in the repository · 21 applied live · 1 pending** (16 at the `e471ec1d` V1.1 checkpoint + 6 merged since for Phase C/E/G, M-05 and M-11/M-12). The pending one is `20260901000002_merchant_catalog_write_functions.sql` — additive, verified against a throwaway Postgres by 38 assertions, **not yet applied to `banhao-dev`** (applying it is an explicit instruction, not a side effect of this work) |
+| Migrations | **24 in the repository · 21 recorded as applied live (EVENT-027) · 3 not recorded as applied** (16 at the `e471ec1d` V1.1 checkpoint + 8 merged since for Phase C/E/G, M-05, M-11/M-12 and AI-01). Explicitly **not applied to `banhao-dev`**: `20260901000002_merchant_catalog_write_functions.sql` (additive, 38 assertions against a throwaway Postgres) and `20260903000001_audit_logs_ai_actor_type.sql` (additive CHECK widening for `actor_type = 'AI'`, 6 assertions). `20260902000001_order_item_options_drop_menu_option_fk.sql` (`aabf14f8`) has **no recorded live status in this repository** — treat it as unverified against `banhao-dev` and check before assuming either way. Applying any migration is an explicit instruction, never a side effect of other work |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -345,6 +349,7 @@ this file summarises it.
 | **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
 | **I** | Admin operations | Not started — Admin app is still a shell (§5), and no admin design artifact exists |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
+| **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION NOT STARTED.** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4`, not yet applied live). **No AI code exists.** Read DEC-040 before any Phase J work |
 
 **Current branch context:** this branch (`feature/g7-driver-availability`) is
 mid-Phase-G work (driver availability, delivery, and proof-of-delivery). The
@@ -427,8 +432,8 @@ migration explicitly instructed for the current phase — see §10.
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **22 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
-  plus 6 since for Phase C/E/G, M-05 and M-11/M-12 — see §3/§7). Read
+- **24 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 8 since for Phase C/E/G, M-05, M-11/M-12 and AI-01 — see §3/§7). Read
   `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
   edit an existing migration, and do not add a table, view, RLS policy, RPC, or
   new migration, and never run `supabase db push` or `supabase link`, without
@@ -462,10 +467,20 @@ that they are built **in phase order, one phase at a time**, not opportunistical
 - Build only the current phase. Do not start the next one early.
 - **Still hard-locked:** Phase F′ (real payment provider) and settlement.
 - **Still hard-locked:** the database, except where phase work has needed a
-  new migration under explicit instruction (5 have been merged since the
+  new migration under explicit instruction (8 have been merged since the
   `e471ec1d` checkpoint — see §3/§7/§10 above). No opportunistic migration or
   schema change outside that.
 - Merchant's approved target is **Next.js web**, not Expo (DEC-APP-003).
+- **Phase J (AI Operations + Human Supervisor) is authorized but not started**
+  (DEC-040). It sits **after Phase I** — authorization is not a licence to
+  start it early, and nothing in it may be built into Phase G. When it does
+  start, DEC-040's ten constraints bind it: no database client, credential, SQL
+  or PostgREST access in the AI runtime; every mutation through the command
+  catalog into an existing guarded domain service; no new business state; no
+  invented threshold, timer or cooldown (missing policy escalates); no
+  financial autonomy and no financial UI; `actor_type = 'AI'`, never `SYSTEM`;
+  no `ai_operations_cases`, vector DB, cache or broker; L4 revalidates domain
+  state and stale approvals fail closed.
 
 ---
 
