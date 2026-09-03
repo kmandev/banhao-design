@@ -17,6 +17,8 @@ import {
   OutboxDispatchService,
   type OutboxDispatchResult,
 } from '../notifications/outbox-dispatch.service';
+import { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-acceptance-timeout.service';
+import type { AiOpsRunResult } from '../ai-ops/ai-ops.types';
 
 export interface TickAcceptedResponse {
   accepted: true;
@@ -32,6 +34,8 @@ export interface TickAcceptedResponse {
   podRetention: ProofPhotoRetentionResult;
   /** H-2 — the outbox notification dispatch round this tick ran (ADR-005, ADR-011). */
   outboxDispatch: OutboxDispatchResult;
+  /** Phase J (DEC-040) — the AI operations merchant-acceptance-timeout pipeline run this tick. */
+  aiOps: AiOpsRunResult;
 }
 
 /**
@@ -72,9 +76,17 @@ export interface TickAcceptedResponse {
  * this same tick rather than waiting for the next one. It follows the same
  * never-throws contract `NoRiderEscalationService` documents on itself.
  *
- * `outboxDispatch` (H-2, ADR-005/ADR-011) runs last, additive in the same
+ * `outboxDispatch` (H-2, ADR-005/ADR-011) runs next, additive in the same
  * way, and follows the same never-throws contract `OutboxDispatchService`
  * documents on itself.
+ *
+ * `aiOps` (Phase J, DEC-040) runs last — the merchant-acceptance-timeout
+ * pipeline, attached here for the same "no scheduler of its own" reason as
+ * every phase above it. It is additive in exactly the same way and follows
+ * the same never-throws contract. It reads the outbox rather than claiming
+ * from it, so it neither competes with nor blocks `outboxDispatch`, and with
+ * BQ-013 unresolved it escalates rather than acting — see
+ * `MerchantAcceptanceTimeoutService`'s own header.
  */
 @Controller('internal/tick')
 export class TickController {
@@ -85,6 +97,7 @@ export class TickController {
     private readonly noRiderEscalation: NoRiderEscalationService,
     private readonly podRetention: ProofPhotoRetentionService,
     private readonly outboxDispatch: OutboxDispatchService,
+    private readonly aiOps: MerchantAcceptanceTimeoutService,
   ) {}
 
   @Public()
@@ -99,6 +112,7 @@ export class TickController {
     const noRiderEscalation = await this.noRiderEscalation.run();
     const podRetention = await this.podRetention.run();
     const outboxDispatch = await this.outboxDispatch.dispatchPending();
+    const aiOps = await this.aiOps.run();
     return {
       accepted: true,
       paymentEvents,
@@ -107,6 +121,7 @@ export class TickController {
       noRiderEscalation,
       podRetention,
       outboxDispatch,
+      aiOps,
     };
   }
 }

@@ -5,6 +5,7 @@ import type { DispatchService } from '../rider/dispatch.service';
 import type { NoRiderEscalationService } from '../rider/no-rider-escalation.service';
 import type { ProofPhotoRetentionService } from '../rider/proof-photo-retention.service';
 import type { OutboxDispatchService } from '../notifications/outbox-dispatch.service';
+import type { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-acceptance-timeout.service';
 
 /**
  * F-2b: `POST /internal/tick` invokes `PaymentEventProcessingService`. Now
@@ -12,8 +13,9 @@ import type { OutboxDispatchService } from '../notifications/outbox-dispatch.ser
  * DEC-029), `DispatchService` (G-2 broadcast dispatch, DEC-020/DEC-037),
  * `NoRiderEscalationService` (DEC-022 no-rider escalation, Phase H final gap),
  * `ProofPhotoRetentionService` (POD retention, DEC-039), and
- * `OutboxDispatchService` (H-2 outbox notification dispatch, ADR-005/ADR-011).
- * All six services are plain stubs here — their own logic is each one's own
+ * `OutboxDispatchService` (H-2 outbox notification dispatch, ADR-005/ADR-011),
+ * and `MerchantAcceptanceTimeoutService` (Phase J AI operations, DEC-040).
+ * All seven services are plain stubs here — their own logic is each one's own
  * `*.spec.ts` file's job. This file proves only the wiring: the tick handler
  * calls every processor and reports what each did, additively to the
  * original `{ accepted: true }` shape.
@@ -33,6 +35,7 @@ describe('TickController', () => {
     },
     outboxDispatchResult = { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
     noRiderEscalationResult = { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
+    aiOpsResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
   ) {
     const processPendingEvents = jest.fn().mockResolvedValue(paymentEventsResult);
     const processExpiredAttempts = jest.fn().mockResolvedValue(expiryResult);
@@ -46,6 +49,8 @@ describe('TickController', () => {
     const podRetention = { run } as unknown as ProofPhotoRetentionService;
     const dispatchPending = jest.fn().mockResolvedValue(outboxDispatchResult);
     const outboxDispatch = { dispatchPending } as unknown as OutboxDispatchService;
+    const runAiOps = jest.fn().mockResolvedValue(aiOpsResult);
+    const aiOps = { run: runAiOps } as unknown as MerchantAcceptanceTimeoutService;
     const controller = new TickController(
       paymentEvents,
       paymentAttemptExpiry,
@@ -53,6 +58,7 @@ describe('TickController', () => {
       noRiderEscalation,
       podRetention,
       outboxDispatch,
+      aiOps,
     );
     return {
       controller,
@@ -62,6 +68,7 @@ describe('TickController', () => {
       runNoRiderEscalation,
       run,
       dispatchPending,
+      runAiOps,
     };
   }
 
@@ -86,6 +93,7 @@ describe('TickController', () => {
         failed: 0,
       },
       outboxDispatch: { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
+      aiOps: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
     });
   });
 
@@ -127,6 +135,7 @@ describe('TickController', () => {
       'noRiderEscalation',
       'podRetention',
       'outboxDispatch',
+      'aiOps',
     ]);
   });
 
@@ -187,5 +196,22 @@ describe('TickController', () => {
     expect(dispatchPending).toHaveBeenCalledWith();
     expect(result.outboxDispatch).toEqual(outboxDispatchResult);
     expect(result.accepted).toBe(true);
+  });
+
+  it('runs the Phase J AI operations pipeline exactly once per tick, additive to the existing response shape — DEC-040', async () => {
+    const { controller, runAiOps } = build(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { examined: 3, acted: 0, escalated: 3, skipped: 0, failed: 0 },
+    );
+
+    const result = await controller.handle();
+
+    expect(runAiOps).toHaveBeenCalledTimes(1);
+    expect(result.aiOps).toEqual({ examined: 3, acted: 0, escalated: 3, skipped: 0, failed: 0 });
   });
 });

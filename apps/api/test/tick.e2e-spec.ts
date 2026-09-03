@@ -25,6 +25,7 @@ import { DispatchService } from '../src/modules/rider/dispatch.service';
 import { NoRiderEscalationService } from '../src/modules/rider/no-rider-escalation.service';
 import { ProofPhotoRetentionService } from '../src/modules/rider/proof-photo-retention.service';
 import { OutboxDispatchService } from '../src/modules/notifications/outbox-dispatch.service';
+import { MerchantAcceptanceTimeoutService } from '../src/modules/ai-ops/merchant-acceptance-timeout.service';
 import { SupabaseModule } from '../src/supabase/supabase.module';
 import { UsersModule } from '../src/modules/users/users.module';
 
@@ -56,6 +57,7 @@ const PHASE_RESULTS = {
     failed: 0,
   },
   outboxDispatch: { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
+  aiOps: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
 } as const;
 
 function sign(body: string): string {
@@ -143,6 +145,8 @@ describe('POST /internal/tick (integration)', () => {
       .useValue({ run: async () => PHASE_RESULTS.podRetention })
       .overrideProvider(OutboxDispatchService)
       .useValue({ dispatchPending: async () => PHASE_RESULTS.outboxDispatch })
+      .overrideProvider(MerchantAcceptanceTimeoutService)
+      .useValue({ run: async () => PHASE_RESULTS.aiOps })
       .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });
