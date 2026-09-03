@@ -1,4 +1,4 @@
-import type { OperationalEvent } from './ai-ops.types';
+import { PLAYBOOK_ACTIONS, type OperationalEvent, type PlaybookId } from './ai-ops.types';
 
 /** The `outbox` columns this slice reads. Read-only — AI Operations never writes or claims an outbox row. */
 export interface OutboxRowForNormalization {
@@ -10,17 +10,30 @@ export interface OutboxRowForNormalization {
 }
 
 /**
- * The event types this slice recognizes.
+ * The shipped `outbox` event types AI Operations recognizes, each mapped to
+ * the playbook whose dedupe key it carries.
  *
- * `PaymentSucceeded` is the shipped event that marks the moment an order
- * becomes `PAID` — which is exactly when the merchant-acceptance clock starts.
- * It is written by `PaymentEventProcessingService.writePaymentSucceededOutboxEvent`
- * with `aggregate_type: 'order'`. No new event type is introduced by this
- * slice, and no domain service is modified to emit one.
+ * Both are events the domain already writes. No new event type is introduced
+ * and no domain service is modified to emit one:
+ *
+ * - `PaymentSucceeded` (`aggregate_type: 'order'`) is written by
+ *   `PaymentEventProcessingService.writePaymentSucceededOutboxEvent` and marks
+ *   the moment an order becomes `PAID` — exactly when the merchant-acceptance
+ *   clock starts under DEC-019.
+ * - `OrderNoRiderFound` (`aggregate_type: 'delivery'`) is written by
+ *   `NoRiderEscalationService` when a delivery crosses DEC-022's 5-minute
+ *   notice window still searching. It is the shipped signal that a broadcast
+ *   is not converting.
+ *
+ * The mapped playbook is used only to derive the dedupe key. Routing itself
+ * stays in {@link PlaybookRouter} — this stage decides *what happened*, never
+ * *what to do about it*.
  */
-const RECOGNIZED_EVENT_TYPES = new Set(['PaymentSucceeded']);
-
-const RECOGNIZED_AGGREGATE_TYPES = new Set(['order', 'delivery']);
+const RECOGNIZED_EVENTS: Readonly<Record<string, { aggregateType: 'order' | 'delivery'; playbook: PlaybookId }>> =
+  Object.freeze({
+    PaymentSucceeded: { aggregateType: 'order', playbook: 'MERCHANT_ACCEPTANCE_TIMEOUT' },
+    OrderNoRiderFound: { aggregateType: 'delivery', playbook: 'NO_RIDER_TRIAGE' },
+  });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -49,8 +62,11 @@ function asIsoTimestamp(value: unknown): string | null {
  * the case DEC-040 §5 says must fail closed rather than be guessed at.
  */
 export class EventNormalizer {
-  /** The action name this slice's dedupe key is built from — also the `audit_logs.action` value. */
-  static readonly MERCHANT_ACCEPTANCE_ACTION = 'AI_OPS_MERCHANT_ACCEPTANCE_TIMEOUT';
+  /** The action name the merchant-acceptance playbook audits and dedupes under. */
+  static readonly MERCHANT_ACCEPTANCE_ACTION = PLAYBOOK_ACTIONS.MERCHANT_ACCEPTANCE_TIMEOUT;
+
+  /** The action name the no-rider triage playbook audits and dedupes under. */
+  static readonly NO_RIDER_TRIAGE_ACTION = PLAYBOOK_ACTIONS.NO_RIDER_TRIAGE;
 
   normalize(row: OutboxRowForNormalization): OperationalEvent | null {
     const sourceEventId = asUuid(row.id);
@@ -61,21 +77,33 @@ export class EventNormalizer {
       return null;
     }
 
-    if (typeof row.event_type !== 'string' || !RECOGNIZED_EVENT_TYPES.has(row.event_type)) {
+    if (typeof row.event_type !== 'string') {
       return null;
     }
 
-    if (typeof row.aggregate_type !== 'string' || !RECOGNIZED_AGGREGATE_TYPES.has(row.aggregate_type)) {
+    const recognized = Object.prototype.hasOwnProperty.call(RECOGNIZED_EVENTS, row.event_type)
+      ? RECOGNIZED_EVENTS[row.event_type]
+      : undefined;
+
+    if (!recognized) {
+      return null;
+    }
+
+    // The aggregate type is checked against the one this event type is known
+    // to carry, not against a permissive set: an `OrderNoRiderFound` row
+    // claiming to be about an order is malformed, and guessing which half is
+    // right is exactly what this stage must not do.
+    if (row.aggregate_type !== recognized.aggregateType) {
       return null;
     }
 
     return {
       sourceEventId,
       eventType: row.event_type,
-      aggregateType: row.aggregate_type as 'order' | 'delivery',
+      aggregateType: recognized.aggregateType,
       aggregateId,
       occurredAt,
-      dedupeKey: `${EventNormalizer.MERCHANT_ACCEPTANCE_ACTION}:${aggregateId}`,
+      dedupeKey: `${PLAYBOOK_ACTIONS[recognized.playbook]}:${aggregateId}`,
     };
   }
 }

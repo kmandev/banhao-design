@@ -26,6 +26,7 @@ import { NoRiderEscalationService } from '../src/modules/rider/no-rider-escalati
 import { ProofPhotoRetentionService } from '../src/modules/rider/proof-photo-retention.service';
 import { OutboxDispatchService } from '../src/modules/notifications/outbox-dispatch.service';
 import { MerchantAcceptanceTimeoutService } from '../src/modules/ai-ops/merchant-acceptance-timeout.service';
+import { NoRiderTriageService } from '../src/modules/ai-ops/no-rider-triage.service';
 import { SupabaseModule } from '../src/supabase/supabase.module';
 import { UsersModule } from '../src/modules/users/users.module';
 
@@ -58,6 +59,7 @@ const PHASE_RESULTS = {
   },
   outboxDispatch: { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
   aiOps: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
+  aiOpsNoRider: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
 } as const;
 
 function sign(body: string): string {
@@ -147,6 +149,8 @@ describe('POST /internal/tick (integration)', () => {
       .useValue({ dispatchPending: async () => PHASE_RESULTS.outboxDispatch })
       .overrideProvider(MerchantAcceptanceTimeoutService)
       .useValue({ run: async () => PHASE_RESULTS.aiOps })
+      .overrideProvider(NoRiderTriageService)
+      .useValue({ run: async () => PHASE_RESULTS.aiOpsNoRider })
       .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });

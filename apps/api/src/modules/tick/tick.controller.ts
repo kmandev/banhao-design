@@ -18,6 +18,7 @@ import {
   type OutboxDispatchResult,
 } from '../notifications/outbox-dispatch.service';
 import { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-acceptance-timeout.service';
+import { NoRiderTriageService } from '../ai-ops/no-rider-triage.service';
 import type { AiOpsRunResult } from '../ai-ops/ai-ops.types';
 
 export interface TickAcceptedResponse {
@@ -36,6 +37,8 @@ export interface TickAcceptedResponse {
   outboxDispatch: OutboxDispatchResult;
   /** Phase J (DEC-040) — the AI operations merchant-acceptance-timeout pipeline run this tick. */
   aiOps: AiOpsRunResult;
+  /** Phase J (DEC-040) — the AI operations no-rider triage pipeline run this tick (DEC-022's decision point). */
+  aiOpsNoRider: AiOpsRunResult;
 }
 
 /**
@@ -87,6 +90,13 @@ export interface TickAcceptedResponse {
  * from it, so it neither competes with nor blocks `outboxDispatch`, and with
  * BQ-013 unresolved it escalates rather than acting — see
  * `MerchantAcceptanceTimeoutService`'s own header.
+ *
+ * `aiOpsNoRider` (Phase J, DEC-040) runs after it, on the same terms. It reads
+ * the `OrderNoRiderFound` events `noRiderEscalation` writes earlier in this
+ * same tick, and turns a delivery that has crossed DEC-022's 8-minute decision
+ * point into a durable `audit_logs` escalation for a supervisor. It has no
+ * command at all, so it can only escalate — never cancel, never fail a
+ * delivery, never message a customer. See `NoRiderTriageService`'s own header.
  */
 @Controller('internal/tick')
 export class TickController {
@@ -98,6 +108,7 @@ export class TickController {
     private readonly podRetention: ProofPhotoRetentionService,
     private readonly outboxDispatch: OutboxDispatchService,
     private readonly aiOps: MerchantAcceptanceTimeoutService,
+    private readonly aiOpsNoRider: NoRiderTriageService,
   ) {}
 
   @Public()
@@ -113,6 +124,7 @@ export class TickController {
     const podRetention = await this.podRetention.run();
     const outboxDispatch = await this.outboxDispatch.dispatchPending();
     const aiOps = await this.aiOps.run();
+    const aiOpsNoRider = await this.aiOpsNoRider.run();
     return {
       accepted: true,
       paymentEvents,
@@ -122,6 +134,7 @@ export class TickController {
       podRetention,
       outboxDispatch,
       aiOps,
+      aiOpsNoRider,
     };
   }
 }

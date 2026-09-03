@@ -6,6 +6,7 @@ import type { NoRiderEscalationService } from '../rider/no-rider-escalation.serv
 import type { ProofPhotoRetentionService } from '../rider/proof-photo-retention.service';
 import type { OutboxDispatchService } from '../notifications/outbox-dispatch.service';
 import type { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-acceptance-timeout.service';
+import type { NoRiderTriageService } from '../ai-ops/no-rider-triage.service';
 
 /**
  * F-2b: `POST /internal/tick` invokes `PaymentEventProcessingService`. Now
@@ -14,8 +15,9 @@ import type { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-accept
  * `NoRiderEscalationService` (DEC-022 no-rider escalation, Phase H final gap),
  * `ProofPhotoRetentionService` (POD retention, DEC-039), and
  * `OutboxDispatchService` (H-2 outbox notification dispatch, ADR-005/ADR-011),
- * and `MerchantAcceptanceTimeoutService` (Phase J AI operations, DEC-040).
- * All seven services are plain stubs here — their own logic is each one's own
+ * `MerchantAcceptanceTimeoutService` and `NoRiderTriageService` (Phase J AI
+ * operations, DEC-040).
+ * All eight services are plain stubs here — their own logic is each one's own
  * `*.spec.ts` file's job. This file proves only the wiring: the tick handler
  * calls every processor and reports what each did, additively to the
  * original `{ accepted: true }` shape.
@@ -36,6 +38,7 @@ describe('TickController', () => {
     outboxDispatchResult = { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
     noRiderEscalationResult = { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
     aiOpsResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
+    aiOpsNoRiderResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
   ) {
     const processPendingEvents = jest.fn().mockResolvedValue(paymentEventsResult);
     const processExpiredAttempts = jest.fn().mockResolvedValue(expiryResult);
@@ -51,6 +54,8 @@ describe('TickController', () => {
     const outboxDispatch = { dispatchPending } as unknown as OutboxDispatchService;
     const runAiOps = jest.fn().mockResolvedValue(aiOpsResult);
     const aiOps = { run: runAiOps } as unknown as MerchantAcceptanceTimeoutService;
+    const runAiOpsNoRider = jest.fn().mockResolvedValue(aiOpsNoRiderResult);
+    const aiOpsNoRider = { run: runAiOpsNoRider } as unknown as NoRiderTriageService;
     const controller = new TickController(
       paymentEvents,
       paymentAttemptExpiry,
@@ -59,6 +64,7 @@ describe('TickController', () => {
       podRetention,
       outboxDispatch,
       aiOps,
+      aiOpsNoRider,
     );
     return {
       controller,
@@ -69,6 +75,7 @@ describe('TickController', () => {
       run,
       dispatchPending,
       runAiOps,
+      runAiOpsNoRider,
     };
   }
 
@@ -94,6 +101,7 @@ describe('TickController', () => {
       },
       outboxDispatch: { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
       aiOps: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
+      aiOpsNoRider: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
     });
   });
 
@@ -136,6 +144,7 @@ describe('TickController', () => {
       'podRetention',
       'outboxDispatch',
       'aiOps',
+      'aiOpsNoRider',
     ]);
   });
 
@@ -213,5 +222,33 @@ describe('TickController', () => {
 
     expect(runAiOps).toHaveBeenCalledTimes(1);
     expect(result.aiOps).toEqual({ examined: 3, acted: 0, escalated: 3, skipped: 0, failed: 0 });
+  });
+
+  it('runs the Phase J no-rider triage pipeline exactly once per tick, reported separately — DEC-040 / DEC-022', async () => {
+    const { controller, runAiOpsNoRider, runNoRiderEscalation } = build(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { examined: 2, acted: 0, escalated: 1, skipped: 1, failed: 0 },
+    );
+
+    const result = await controller.handle();
+
+    expect(runAiOpsNoRider).toHaveBeenCalledTimes(1);
+    expect(result.aiOpsNoRider).toEqual({
+      examined: 2,
+      acted: 0,
+      escalated: 1,
+      skipped: 1,
+      failed: 0,
+    });
+    // The deterministic ladder still runs, and runs first: AI triage reads the
+    // events it writes, and never replaces it.
+    expect(runNoRiderEscalation).toHaveBeenCalledTimes(1);
+    expect(result.noRiderEscalation).toBeDefined();
   });
 });

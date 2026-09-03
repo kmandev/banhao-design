@@ -43,21 +43,40 @@ export abstract class AgentPort {
 @Injectable()
 export class DeterministicAgentAdapter extends AgentPort {
   async decide(projection: ScopedOperationalProjection): Promise<AgentDecision> {
-    if (projection.playbook !== 'MERCHANT_ACCEPTANCE_TIMEOUT') {
+    if (projection.playbook === 'MERCHANT_ACCEPTANCE_TIMEOUT') {
+      return {
+        kind: 'COMMAND',
+        command: {
+          name: COMMAND_NOTIFY_MERCHANT_ACCEPTANCE_DEADLINE,
+          orderId: projection.orderId,
+          reason: `Order has been awaiting merchant acceptance for ${projection.elapsedSeconds}s`,
+        },
+      };
+    }
+
+    if (projection.playbook === 'NO_RIDER_TRIAGE') {
+      // The design package's § 10 "No rider found" playbook stops here by
+      // construction: the agent detects that rounds are producing no
+      // acceptance and escalates with the round history attached. It must not
+      // cancel, must not fail the delivery, and must not say anything new to
+      // the customer — UX-Q-006 leaves the terminal outcome open and DEC-020
+      // forbids auto-cancellation. So there is no command to return, and no
+      // catalog entry for one to name.
       return {
         kind: 'ESCALATE',
-        escalation: 'ESC-UNKNOWN',
-        reason: `No agent behaviour is defined for playbook ${projection.playbook}`,
+        escalation: 'ESC-NORIDER',
+        reason:
+          `Delivery has been searching for ${projection.elapsedSeconds}s across ` +
+          `${projection.roundsBroadcast} round(s): ${projection.offersMade} offer(s) to ` +
+          `${projection.ridersOffered} rider(s), ${projection.offersExpired} expired, ` +
+          `${projection.offersDeclined} declined; ${projection.ridersEligibleNow} rider(s) eligible now`,
       };
     }
 
     return {
-      kind: 'COMMAND',
-      command: {
-        name: COMMAND_NOTIFY_MERCHANT_ACCEPTANCE_DEADLINE,
-        orderId: projection.orderId,
-        reason: `Order has been awaiting merchant acceptance for ${projection.elapsedSeconds}s`,
-      },
+      kind: 'ESCALATE',
+      escalation: 'ESC-UNKNOWN',
+      reason: 'No agent behaviour is defined for this playbook',
     };
   }
 }

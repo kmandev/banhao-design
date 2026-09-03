@@ -22,6 +22,14 @@ export class PlaybookRouter {
       return 'MERCHANT_ACCEPTANCE_TIMEOUT';
     }
 
+    if (event.aggregateType === 'delivery' && event.eventType === 'OrderNoRiderFound') {
+      // A delivery has crossed DEC-022's 5-minute notice window still
+      // searching. Whether it has also crossed the 8-minute decision point —
+      // the moment DEC-022 hands it to a person — is a *policy* comparison,
+      // answered by the next stage against an approved constant.
+      return 'NO_RIDER_TRIAGE';
+    }
+
     return null;
   }
 }

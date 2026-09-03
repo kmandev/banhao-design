@@ -5,6 +5,17 @@ import { uuidSchema } from '@banhao/validation';
 import type { EscalationId } from './ai-ops.types';
 
 /**
+ * What an AI-operations audit row points at.
+ *
+ * `audit_logs.entity_type` is free text with no CHECK constraint, so this
+ * union is the only thing keeping it a convention rather than a typo: the
+ * supervisor console resolves the live record from `(entity_type, entity_id)`
+ * and a third spelling would silently orphan a row. Order and delivery are the
+ * two aggregates Phase J's playbooks are triggered by.
+ */
+export type AuditEntityType = 'order' | 'delivery';
+
+/**
  * Phase J — stage 9 (audit) and stage 10 (escalate).
  *
  * ## `actor_type = 'AI'`, never `SYSTEM`
@@ -84,12 +95,14 @@ export class AiAuditService {
   async recordAction(params: {
     action: string;
     entityId: string;
+    entityType?: AuditEntityType;
     reason: string;
     after: Record<string, unknown>;
   }): Promise<void> {
     await this.insert({
       action: params.action,
       entityId: params.entityId,
+      entityType: params.entityType,
       reason: params.reason,
       after: params.after,
     });
@@ -103,6 +116,7 @@ export class AiAuditService {
   async recordEscalation(params: {
     action: string;
     entityId: string;
+    entityType?: AuditEntityType;
     escalation: EscalationId;
     reason: string;
     context?: Record<string, unknown>;
@@ -114,6 +128,7 @@ export class AiAuditService {
     await this.insert({
       action: params.action,
       entityId: params.entityId,
+      entityType: params.entityType,
       reason: `${params.escalation}: ${params.reason}`,
       after: { escalation: params.escalation, ...(params.context ?? {}) },
     });
@@ -122,6 +137,7 @@ export class AiAuditService {
   private async insert(params: {
     action: string;
     entityId: string;
+    entityType?: AuditEntityType;
     reason: string;
     after: Record<string, unknown>;
   }): Promise<void> {
@@ -135,7 +151,7 @@ export class AiAuditService {
       // the design package names this as the remaining half of AI-01.
       actor_id: null,
       action: params.action,
-      entity_type: 'order',
+      entity_type: params.entityType ?? 'order',
       entity_id: params.entityId,
       before: null,
       after: params.after,

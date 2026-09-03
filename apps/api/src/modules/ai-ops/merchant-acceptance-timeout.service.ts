@@ -8,9 +8,9 @@ import { MerchantAcceptancePolicySource } from './merchant-acceptance-policy';
 import { PlaybookRouter } from './playbook-router';
 import type {
   AiOpsRunResult,
+  MerchantAcceptanceProjection,
   OperationalEvent,
   PipelineOutcome,
-  ScopedOperationalProjection,
 } from './ai-ops.types';
 
 /** How many candidate events one tick examines. A bound, not a policy value — see the class header. */
@@ -135,12 +135,12 @@ export class MerchantAcceptanceTimeoutService {
     // for an unroutable event none ever will.
     const playbook = this.router.route(event);
 
-    if (!playbook) {
+    if (playbook !== 'MERCHANT_ACCEPTANCE_TIMEOUT') {
       await this.audit.recordEscalation({
         action: EventNormalizer.MERCHANT_ACCEPTANCE_ACTION,
         entityId: event.aggregateId,
         escalation: 'ESC-UNKNOWN',
-        reason: `No playbook routes ${event.eventType} on ${event.aggregateType}`,
+        reason: `No merchant-acceptance playbook routes ${event.eventType} on ${event.aggregateType}`,
         context: { sourceEventId: event.sourceEventId },
       });
       return 'ESCALATED';
@@ -293,7 +293,7 @@ export class MerchantAcceptanceTimeoutService {
    * columns — DEC-040 §3 means no `grand_total_satang`, no fee column, no
    * payment reference, deliberately.
    */
-  private async buildProjection(event: OperationalEvent): Promise<ScopedOperationalProjection | null> {
+  private async buildProjection(event: OperationalEvent): Promise<MerchantAcceptanceProjection | null> {
     const { data: order, error } = await this.supabase.admin
       .from('orders')
       .select('id, state, restaurant_id, paid_at, created_at')

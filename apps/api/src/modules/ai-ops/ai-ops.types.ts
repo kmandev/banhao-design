@@ -1,7 +1,7 @@
 /**
  * Phase J (DEC-040) — AI Operations shared types.
  *
- * Vertical slice #1: Merchant Acceptance Timeout. These types are the seams
+ * These types are the seams
  * DEC-040's ten constraints are enforced at, so read them as the boundary
  * definition rather than as data-shape convenience:
  *
@@ -41,10 +41,10 @@ export type AutonomyLevel =
 /**
  * Escalation identifiers, as named by the AI Operations design package
  * (`docs/design/BANHAO AI OPERATIONS - Agent + Human Supervisor - Design
- * Package.dc.html` § 08). Only the four this slice can actually reach are
- * defined; the package's others (`ESC-LOW-CONF`, `ESC-L4`, `ESC-NORIDER`,
+ * Package.dc.html` § 08). Only the ones an implemented playbook can actually
+ * reach are defined; the package's others (`ESC-LOW-CONF`, `ESC-L4`,
  * `ESC-REPEAT`, `ESC-INVARIANT`, `ESC-SAFETY`, `ESC-NOTIFY`) belong to
- * playbooks this slice does not implement, and inventing a new id here is
+ * playbooks that are not implemented, and inventing a new id here is
  * forbidden by DEC-040 §5.
  */
 export type EscalationId =
@@ -55,10 +55,37 @@ export type EscalationId =
   /** Attempts exhausted against a transient failure. */
   | 'ESC-RETRY-EXHAUSTED'
   /** The same action recurring on the same entity — runaway automation guard. */
-  | 'ESC-LOOP';
+  | 'ESC-LOOP'
+  /**
+   * A delivery has been searching past DEC-022's decision point and needs a
+   * person. Named by the design package § 08, not invented here — and it is
+   * deliberately the *only* outcome the no-rider playbook can reach: DEC-020
+   * forbids auto-cancellation and UX-Q-006 leaves the terminal outcome open.
+   */
+  | 'ESC-NORIDER';
 
-/** The playbooks this slice knows. One, deliberately. */
-export type PlaybookId = 'MERCHANT_ACCEPTANCE_TIMEOUT';
+/**
+ * The playbooks implemented so far, each from the design package § 10.
+ *
+ * Adding one is an architectural change: it needs a trigger event that is
+ * already shipped, a policy whose value is already approved (or a fail-closed
+ * `MISSING`), and an entry in {@link PLAYBOOK_ACTIONS} so its audit action and
+ * dedupe key are fixed in one place.
+ */
+export type PlaybookId = 'MERCHANT_ACCEPTANCE_TIMEOUT' | 'NO_RIDER_TRIAGE';
+
+/**
+ * The `audit_logs.action` string each playbook writes, and the prefix of its
+ * dedupe key. One AI operation per playbook per aggregate.
+ *
+ * These are conventions the supervisor console reads back (design package
+ * § 07 / § 12), so they live in one table rather than being spelled inline at
+ * each write site.
+ */
+export const PLAYBOOK_ACTIONS: Readonly<Record<PlaybookId, string>> = Object.freeze({
+  MERCHANT_ACCEPTANCE_TIMEOUT: 'AI_OPS_MERCHANT_ACCEPTANCE_TIMEOUT',
+  NO_RIDER_TRIAGE: 'AI_OPS_NO_RIDER_TRIAGE',
+});
 
 /**
  * A normalized operational event.
@@ -92,8 +119,8 @@ export interface OperationalEvent {
  * detail. If a future playbook needs a financial fact, that is a decision
  * about financial autonomy, not a field addition.
  */
-export interface ScopedOperationalProjection {
-  readonly playbook: PlaybookId;
+export interface MerchantAcceptanceProjection {
+  readonly playbook: 'MERCHANT_ACCEPTANCE_TIMEOUT';
   readonly orderId: string;
   readonly orderState: string;
   readonly restaurantId: string;
@@ -103,6 +130,38 @@ export interface ScopedOperationalProjection {
   /** Whether a delivery already exists for this order. Presence only — no rider identity. */
   readonly hasDelivery: boolean;
 }
+
+/**
+ * The no-rider triage projection (design package § 10, "No rider found").
+ *
+ * Counts and states only. No rider id, no rider name, no phone, no location
+ * and — as everywhere else in Phase J — no financial field: the agent is
+ * being asked to recognize a pattern in a broadcast that is not converting,
+ * not to choose between riders. `ridersEligibleNow` is the size of the pool
+ * the shipped dispatch strategy would broadcast to right now, which is what
+ * makes "nobody is online" distinguishable from "everybody is ignoring it".
+ */
+export interface NoRiderTriageProjection {
+  readonly playbook: 'NO_RIDER_TRIAGE';
+  readonly deliveryId: string;
+  readonly orderId: string;
+  readonly deliveryState: string;
+  /** `deliveries.created_at` — the same search-start clock dispatch itself uses. */
+  readonly searchingSince: string;
+  readonly elapsedSeconds: number;
+  /** The highest broadcast round this delivery has reached. */
+  readonly roundsBroadcast: number;
+  readonly offersMade: number;
+  readonly offersExpired: number;
+  readonly offersDeclined: number;
+  /** How many distinct riders have been offered this delivery. A count, never an identity. */
+  readonly ridersOffered: number;
+  /** How many riders the shipped dispatch strategy considers eligible right now. */
+  readonly ridersEligibleNow: number;
+}
+
+/** Everything an agent may ever be shown. A union, so a new playbook's projection is a visible type change. */
+export type ScopedOperationalProjection = MerchantAcceptanceProjection | NoRiderTriageProjection;
 
 /** What an agent is allowed to return. Nothing else is accepted. */
 export type AgentDecision =

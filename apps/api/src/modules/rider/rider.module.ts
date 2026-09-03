@@ -61,6 +61,16 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
     NoRiderEscalationService,
     ProofPhotoRetentionService,
   ],
-  exports: [DispatchService, NoRiderEscalationService, ProofPhotoRetentionService],
+  exports: [
+    DispatchService,
+    NoRiderEscalationService,
+    ProofPhotoRetentionService,
+    // Exported for Phase J's no-rider triage projection, which needs the size
+    // of the pool dispatch would broadcast to right now. Exporting the seam
+    // rather than the concrete class keeps DEC-020's swap point intact: a
+    // Stage 2 strategy is still bound on one line above, and AI Operations
+    // learns nothing about which class it is.
+    DISPATCH_STRATEGY,
+  ],
 })
 export class RiderModule {}
