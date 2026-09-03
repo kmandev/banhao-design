@@ -1525,6 +1525,117 @@
           "notifications"
         ]
       }
+    },
+    "/api/v1/admin/supervisor/cases": {
+      "get": {
+        "operationId": "SupervisorController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI operations cases, projected from audit_logs"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/supervisor/cases/{id}": {
+      "get": {
+        "operationId": "SupervisorController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One case with live domain state and timeline"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          },
+          "404": {
+            "description": "No AI operations case with this id"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/supervisor/cases/{id}/resolve": {
+      "post": {
+        "operationId": "SupervisorController_resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Case resolved; one append-only audit row written"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          },
+          "404": {
+            "description": "No AI operations case with this id"
+          },
+          "409": {
+            "description": "Case was already resolved"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
     }
   },
   "info": {

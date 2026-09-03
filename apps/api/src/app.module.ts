@@ -13,6 +13,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { RiderModule } from './modules/rider/rider.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { TickModule } from './modules/tick/tick.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -54,6 +55,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
     WebhooksModule,
     RiderModule,
     NotificationsModule,
+    AdminModule,
     TickModule,
   ],
   providers: [

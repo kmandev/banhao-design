@@ -10,3 +10,4 @@ export * from './menu-item-image';
 export * from './menu';
 export * from './restaurant-hours';
 export * from './restaurant-profile';
+export * from './supervisor';

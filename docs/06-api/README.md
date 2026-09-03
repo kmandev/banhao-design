@@ -6,7 +6,7 @@ the code.**
 
 Written 2026-09-01, replacing the 2026-08-09 placeholder that said no backend
 existed. It does: `apps/api` is a NestJS modular monolith (DEC-009, DEC-011)
-serving 44 client-facing operations across 41 paths.
+serving 48 client-facing operations across 45 paths.
 
 ---
 
