@@ -42,6 +42,7 @@ interface Recorded {
   op: 'select' | 'insert';
   eq: Record<string, unknown>;
   payload?: Record<string, unknown>;
+  order?: { column: string; ascending?: boolean };
 }
 
 const ORDER_ID = 'aa000000-0000-4000-8000-000000000001';
@@ -71,7 +72,10 @@ function supabaseStub(results: Result[]) {
           call.eq[column] = value;
           return builder;
         },
-        order: () => builder,
+        order(column: string, options?: { ascending?: boolean }) {
+          call.order = { column, ascending: options?.ascending };
+          return builder;
+        },
         limit: () => builder,
         maybeSingle: () => Promise.resolve(nextResult()),
         returns: () => Promise.resolve(nextResult()),
@@ -522,5 +526,20 @@ describe('Phase J — failure safety (DEC-040: AI failure is not an operational 
 
     expect(result.failed).toBe(1);
     expect(result.acted).toBe(0);
+  });
+});
+
+describe('Phase J — candidate selection', () => {
+  it('reads the outbox newest-first, so a settled backlog cannot starve new events', async () => {
+    const { pipeline, calls } = buildService({
+      results: [{ data: [], error: null }],
+    });
+
+    await pipeline.run();
+
+    const read = calls.find((c) => c.table === 'outbox' && c.op === 'select');
+
+    expect(read?.eq).toMatchObject({ event_type: 'PaymentSucceeded', aggregate_type: 'order' });
+    expect(read?.order).toEqual({ column: 'created_at', ascending: false });
   });
 });

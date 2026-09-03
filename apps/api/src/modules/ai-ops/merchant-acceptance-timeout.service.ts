@@ -253,6 +253,23 @@ export class MerchantAcceptanceTimeoutService {
    * claimer of it — `OutboxDispatchService` alone owns `dispatched_at`. No
    * cursor column is added; the dedupe key checked against `audit_logs` is
    * what prevents reprocessing.
+   *
+   * ## Why newest-first
+   *
+   * Because this consumer marks nothing, the candidate set is the *whole*
+   * `PaymentSucceeded` history on every tick. Reading it oldest-first means
+   * the same `BATCH_SIZE` long-settled rows fill the batch forever and no
+   * order paid after them is ever examined — the pipeline would silently stop
+   * working at order `BATCH_SIZE + 1`. Newest-first inverts that: an event is
+   * examined on the tick after it is written, which is the only tick that
+   * matters, since one examination is all the `audit_logs` dedupe key allows.
+   *
+   * The residual bound is throughput, not correctness: an event is missed only
+   * if more than `BATCH_SIZE` orders are paid inside one 60-second tick. That
+   * is the same family of bound as `BATCH_SIZE` itself — it changes how much
+   * is examined, never what is decided — and it is far above Phase 1 volume.
+   * Closing it properly needs a consumer cursor, which is a column this slice
+   * is not authorized to add. Recorded as a deferred dependency.
    */
   private async listCandidateEvents(): Promise<OutboxRowForNormalization[]> {
     const { data, error } = await this.supabase.admin
@@ -260,7 +277,7 @@ export class MerchantAcceptanceTimeoutService {
       .select('id, aggregate_type, aggregate_id, event_type, created_at')
       .eq('event_type', 'PaymentSucceeded')
       .eq('aggregate_type', 'order')
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(BATCH_SIZE)
       .returns<OutboxRowForNormalization[]>();
 
