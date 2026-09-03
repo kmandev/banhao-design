@@ -3,7 +3,8 @@
 ## Last Updated
 
 2026-09-03 — after Phase J's first two AI Operations vertical slices
-(merchant acceptance timeout, no-rider triage). Previously 2026-09-01, after
+(merchant acceptance timeout, no-rider triage) and Phase I's Human Supervisor
+console, the human-on-exception counterpart to them. Previously 2026-09-01, after
 M-11 menu management and M-12 opening hours (`8da83eaf`), which complete the
 merchant app's MUST scope.
 
@@ -52,7 +53,7 @@ wins**. A `DEC-NNN` business decision outranks both.
 | **F′** — Real payment provider | — | **Hard-locked.** Q-001 and Q-002 are `OPEN` |
 | **G** — Rider & delivery | Broadcast dispatch, offer accept/decline, arrival, pickup, en-route, completion, release + reconciliation, proof of delivery end to end | Implemented; POD has never run against a real R2 bucket or on hardware |
 | **H** — Notification | `outbox` table, `OutboxDispatchService` as a tick phase, `NotificationChannel` with an in-app channel, `GET/PATCH /me/notifications` wired to the customer app | Implemented **without a push channel** — web has none by DEC-APP-003, and FCM is unimplemented (TQ-002 `OPEN`) |
-| **I** — Admin operations | — | **Not started.** `apps/admin` is the default Next.js scaffold, and no admin design artifact exists (§13) |
+| **I** — Admin operations | The Human Supervisor console: three guarded endpoints under `/api/v1/admin/supervisor` plus the console screens, projecting AI Operations escalations out of `audit_logs` | **Started — the exception half only.** Inbox, case detail and case closure work end to end, with the HTTP boundary proven at 401/403/200 per route. The financial half (payments, refunds, reconciliation, ledger, settlement) is designed and unbuilt behind Q-001, Q-002, Q-010, Q-020, Q-032. See `docs/HUMAN_SUPERVISOR_CONTRACT.md` |
 | **J** — AI Operations + Human Supervisor | Authorized by DEC-040, positioned after Phase I. Two vertical slices built in `apps/api/src/modules/ai-ops`: **merchant acceptance timeout** (`44abab39`) and **no-rider triage** (`0726b269`), both running as tick phases | **Started, deliberately partial.** The pipeline shape is complete end to end — normalize, deterministic router, policy gate, agent port, command catalog, dispatcher with domain revalidation, verification, `actor_type = 'AI'` audit. The merchant playbook **escalates rather than acting** in production because BQ-013 supplies no deadline; the no-rider playbook resolves DEC-022 and escalates by design, because it has no command at all. **No model vendor is selected** — the agent adapter is deterministic. Every remaining playbook in the design package is blocked on an open business decision (§13) |
 
 ## 4. Implemented is not verified
@@ -77,12 +78,12 @@ not the same claim.
 | **Customer** (Expo) | 31/31 design states, screenshot-verified. Every one of the nine repository bindings is live — catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. `mockRepositories` survives only as test fixtures |
 | **Merchant** (Next.js, DEC-APP-003) | **MUST scope complete.** M-01 login, M-02 scope resolution, M-03 live board with Realtime and audible arrival alerting, M-04 detail panel, M-05 accept with prep time, M-07/M-08 board actions, **M-11 menu management, M-12 opening hours**, and the five-item nav the UX specification fixes. Unbuilt: M-06/M-09/M-10 (`SHOULD`) and M-13/M-14 (`LATER`), all still without a design artifact |
 | **Driver** (Expo) | Status/availability, offer inbox with the 15 s foreground poll, active delivery, proof camera/review/upload, navigation. The gap list in `BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` §4 is closed except the items that need a product decision (D-13 money, D-14 push, D-17 icons) |
-| **Admin** (Next.js) | **Shell.** `layout.tsx` and `page.tsx` from the scaffold, no admin UI |
+| **Admin** (Next.js) | **Human Supervisor console.** Phone-OTP login, `platform_staff` gate, operations inbox (S-02), case detail with live domain state and append-only timeline (S-03), close-case-with-reason (S-06). No Supabase data read at all — every screen goes through `/api/v1/admin/supervisor` (DEC-APP-008). The Admin package's financial screens (A-16…A-22) are **not built**: the money decisions gate them |
 | **tick-worker** (Cloudflare Worker) | Present, typechecks, bundles via dry-run, **never deployed** |
 
 ## 6. API
 
-44 operations across 41 paths, all under `/api/v1` except `GET /health`. The contract
+49 operations across 46 paths, all under `/api/v1` except `GET /health`. The contract
 is [`06-api/openapi.json`](06-api/openapi.json), generated from the real
 `AppModule` by `pnpm --filter @banhao/api openapi` and compared against the
 code by `apps/api/test/openapi.contract.spec.ts` on every test run — a route
@@ -232,7 +233,8 @@ effort alone.
 
 | # | Blocked | Class | What would unblock it |
 |---|---|---|---|
-| 1 | The whole Admin app (Phase I) — A-01 through A-13 | **Missing design artifact** | Only A-02, A-03 and A-12 exist as wireframes. UX-SPEC §8 specifies admin *behaviour* — nine sections, the four A-04 regions, the A-13 queue's four sources — but specifies no screens, and every merchant screen built so far had a committed `.dc.html` first. **This is now the only `MUST` scope blocked on a design artifact** |
+| 1 | The Admin app's financial half — A-16 through A-22 (payments, refunds, reconciliation, ledger, settlement) | **Business decision** | Q-001, Q-002, Q-010/BQ-028, Q-020 and Q-032. The screens are fully designed in `BANHAO ADMIN - Operations - Phase I.dc.html`; what is missing is the numbers, the provider, the legal model and the refund mechanism. The design package's own § 19 says the same. **The exception half — the Human Supervisor console — is built**, since the AI Operations package § 09 designs it and it needs none of those decisions |
+| 1b | Phase I's operational commands from a case (cancel, release, redispatch, pause) | **Business decision** | BQ-013, UX-Q-006, OD-04, BQ-015, Q-032. Each case detail names the specific decision blocking it rather than rendering a control the platform cannot back |
 | 2 | Merchant M-06, M-09, M-10 (`SHOULD`), M-13, M-14 (`LATER`) | Missing design artifact | Same. None is launch-critical |
 | 3 | Customer C-14 prep-time caption | **Missing credential** | The fixture orders belong to `+66811110009`, for which no Test OTP pair is documented. A Supabase Dashboard action, or a fixture pointed at an onboarded identity. Do not guess an OTP |
 | 4 | Sentry (the last Phase A item) | **External account** | An account and a DSN. Free tier is single-user; $26/month on the second developer |

@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#F4EEE5;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#E4572E}
+  a:hover{color:#C2431F}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+
+<div style="max-width:1420px;margin:0 auto;padding:56px 40px 96px;color:#1F1A16">
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+    <div style="width:34px;height:34px;border-radius:11px;background:#E4572E;display:flex;align-items:center;justify-content:center;font-size:17px">🏠</div>
+    <div>
+      <div style="font-size:14px;font-weight:700;letter-spacing:.14em">BANHAO</div>
+      <div style="font-size:11px;color:#7A6E64;margin-top:-1px">Customer App · Phase E-3F unblock</div>
+    </div>
+  </div>
+
+  <div style="font-size:44px;font-weight:700;letter-spacing:-.01em;line-height:1.15">DQ-04 — Address Create / Edit UX</div>
+  <div style="font-size:17px;color:#5A4E42;margin-top:12px;max-width:820px;line-height:1.65;text-wrap:pretty">Design specification for the missing customer address creation and edit experience. The backend contract, database and RLS are unchanged; this document defines only the customer-facing screens, states and copy needed so an authenticated account can establish a default address and complete an ONLINE order.</div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:20px">
+    <sc-for list="{{ metaChips }}" as="c" hint-placeholder-count="5">
+      <div style="{{ c.style }}">{{ c.t }}</div>
+    </sc-for>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px">
+    <sc-for list="{{ summaryCards }}" as="s" hint-placeholder-count="3">
+      <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:20px 22px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">{{ s.kicker }}</div>
+        <div style="font-size:17px;font-weight:700;margin-top:8px">{{ s.title }}</div>
+        <div style="font-size:13.5px;color:#5A4E42;line-height:1.65;margin-top:6px">{{ s.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="height:1px;background:#E4DACB;margin:52px 0 0"></div>
+
+  <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#9A8C7E;margin-top:44px">01</div>
+  <div style="font-size:30px;font-weight:700;margin-top:6px">Navigation</div>
+  <div style="font-size:15px;color:#5A4E42;margin-top:8px;max-width:760px;line-height:1.65">One new route. Add and Edit share a single screen driven by a mode argument, so there is no third route to maintain and no duplicated validation.</div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:22px;padding:22px;border-radius:20px;background:#fff;border:1px solid #E9E0D5">
+    <sc-for list="{{ flow }}" as="f" hint-placeholder-count="7">
+      <div style="{{ f.style }}">{{ f.t }}</div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#9A8C7E;margin-top:64px">02</div>
+  <div style="font-size:30px;font-weight:700;margin-top:6px">Screens</div>
+  <div style="font-size:15px;color:#5A4E42;margin-top:8px;max-width:760px;line-height:1.65">Frames reuse the existing customer shell: cream surface, white cards, 16 px radius controls, IBM Plex Sans Thai, and the same 52 px primary button. Nothing in the application shell changes.</div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:36px;margin-top:28px">
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;padding:0 0 18px">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 14px">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">เลือกที่อยู่จัดส่ง</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin:0 16px">
+            <sc-for list="{{ listRows }}" as="a" hint-placeholder-count="2">
+              <div style="{{ a.card }}">
+                <span style="font-size:20px">{{ a.icon }}</span>
+                <div style="flex:1">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="font-size:15px;font-weight:600">{{ a.label }}</div>
+                    <div style="{{ a.badge }}">{{ a.badgeText }}</div>
+                  </div>
+                  <div style="font-size:12px;color:#7A6E64;margin-top:3px;line-height:1.55">{{ a.detail }}</div>
+                  <div style="font-size:12px;color:#7A6E64;margin-top:3px">{{ a.person }}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+                  <span style="{{ a.dot }}"></span>
+                  <span style="font-size:12.5px;font-weight:600;color:#E4572E">แก้ไข</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin:12px 16px 0;height:52px;border-radius:16px;border:1.5px dashed #D9CDBE;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600;color:#7A6E64">+ เพิ่มที่อยู่ใหม่</div>
+          <div style="margin:14px 16px 0;padding:12px 14px;border-radius:14px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:12.5px;color:#7A6E64;line-height:1.6">ที่อยู่หลักจะถูกใช้อัตโนมัติตอนยืนยันการสั่ง</div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11 · EXISTING SCREEN</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">AddressScreen — three deltas only</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">1 · <b>+ เพิ่มที่อยู่ใหม่</b> gets a tap handler → AddressFormScreen(mode: create).<br>2 · Each row gains a trailing <b>แก้ไข</b> text action → AddressFormScreen(mode: edit, id).<br>3 · The default address shows a <b>ค่าเริ่มต้น</b> badge. Layout, selection behaviour and the map preview are untouched.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 12px">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">เพิ่มที่อยู่ใหม่</div>
+          </div>
+          <div style="flex:1;overflow:hidden;padding:0 16px">
+            <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:8px">ชื่อที่อยู่ <span style="color:#9A8C7E;font-weight:400">(ตัวเลือก)</span></div>
+            <div style="display:flex;gap:8px;margin-bottom:16px">
+              <sc-for list="{{ chipsEmpty }}" as="c" hint-placeholder-count="3">
+                <div style="{{ c.style }}">{{ c.t }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ fieldsEmpty }}" as="f" hint-placeholder-count="5">
+              <div style="margin-bottom:14px">
+                <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:6px">{{ f.label }}<span style="color:#E4572E">{{ f.star }}</span><span style="color:#9A8C7E;font-weight:400">{{ f.opt }}</span></div>
+                <div style="{{ f.box }}">{{ f.text }}</div>
+              </div>
+            </sc-for>
+            <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;background:#fff;border:1px solid #E9E0D5">
+              <div style="flex:1">
+                <div style="font-size:14px;font-weight:600">ตั้งเป็นที่อยู่หลัก</div>
+                <div style="font-size:11.5px;color:#7A6E64;margin-top:2px;line-height:1.5">{{ defaultHintCreate }}</div>
+              </div>
+              <div style="{{ toggleOnLocked }}"><span style="{{ knobRight }}"></span></div>
+            </div>
+          </div>
+          <div style="padding:12px 16px 18px;background:#FBF7F1;border-top:1px solid #F0E8DD">
+            <div style="height:52px;border-radius:16px;background:#EFE7DC;color:#B0A294;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึกที่อยู่</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11a · NEW SCREEN · STATE 1</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">AddressFormScreen — empty</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Field order follows how a Thai user dictates a delivery: who receives it, how the rider calls, where it is, how to find it. The primary CTA sits on a pinned footer and is disabled until the three required fields are non-empty.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 12px">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">เพิ่มที่อยู่ใหม่</div>
+          </div>
+          <div style="flex:1;overflow:hidden;padding:0 16px">
+            <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:8px">ชื่อที่อยู่ <span style="color:#9A8C7E;font-weight:400">(ตัวเลือก)</span></div>
+            <div style="display:flex;gap:8px;margin-bottom:16px">
+              <sc-for list="{{ chipsFilled }}" as="c" hint-placeholder-count="3">
+                <div style="{{ c.style }}">{{ c.t }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ fieldsFilled }}" as="f" hint-placeholder-count="5">
+              <div style="margin-bottom:14px">
+                <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:6px">{{ f.label }}<span style="color:#E4572E">{{ f.star }}</span><span style="color:#9A8C7E;font-weight:400">{{ f.opt }}</span></div>
+                <div style="{{ f.box }}">{{ f.text }}</div>
+              </div>
+            </sc-for>
+            <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;background:#fff;border:1px solid #E9E0D5">
+              <div style="flex:1">
+                <div style="font-size:14px;font-weight:600">ตั้งเป็นที่อยู่หลัก</div>
+                <div style="font-size:11.5px;color:#7A6E64;margin-top:2px;line-height:1.5">ใช้ที่อยู่นี้เป็นค่าเริ่มต้นตอนสั่งอาหาร</div>
+              </div>
+              <div style="{{ toggleOff }}"><span style="{{ knobLeft }}"></span></div>
+            </div>
+          </div>
+          <div style="padding:12px 16px 18px;background:#FBF7F1;border-top:1px solid #F0E8DD">
+            <div style="height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึกที่อยู่</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11a · STATE 2</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">AddressFormScreen — filled</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Second address onwards: the default toggle is interactive and off by default, so saving a work address never silently moves the customer's home default.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 12px">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">เพิ่มที่อยู่ใหม่</div>
+          </div>
+          <div style="flex:1;overflow:hidden;padding:0 16px">
+            <sc-for list="{{ fieldsError }}" as="f" hint-placeholder-count="4">
+              <div style="margin-bottom:14px">
+                <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:6px">{{ f.label }}<span style="color:#E4572E">{{ f.star }}</span><span style="color:#9A8C7E;font-weight:400">{{ f.opt }}</span></div>
+                <div style="{{ f.box }}">{{ f.text }}</div>
+                <div style="{{ f.msgStyle }}">{{ f.msg }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:12px 16px 18px;background:#FBF7F1;border-top:1px solid #F0E8DD">
+            <div style="height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึกที่อยู่</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11a · STATE 3</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">Validation error</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Inline only, one message per field, no summary banner. Fields validate on blur after first submit; on submit the form scrolls to the first invalid field and focuses it. Error border #D94A3D on a #FFF6F4 fill.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 12px;opacity:.45">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">เพิ่มที่อยู่ใหม่</div>
+          </div>
+          <div style="flex:1;overflow:hidden;padding:0 16px;opacity:.5">
+            <sc-for list="{{ fieldsFilled }}" as="f" hint-placeholder-count="5">
+              <div style="margin-bottom:14px">
+                <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:6px">{{ f.label }}<span style="color:#E4572E">{{ f.star }}</span><span style="color:#9A8C7E;font-weight:400">{{ f.opt }}</span></div>
+                <div style="{{ f.box }}">{{ f.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:12px 16px 18px;background:#FBF7F1;border-top:1px solid #F0E8DD">
+            <div style="height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;font-weight:600;opacity:.85">
+              <span style="width:17px;height:17px;border-radius:9px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;animation:spin .9s linear infinite;display:inline-block"></span>
+              กำลังบันทึก…
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11a · STATE 4</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">Saving</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Fields and back action are disabled for the duration of the request. No full-screen overlay and no skeleton — the request is a single POST and the button carries the whole loading signal, matching the QR screen's spinner treatment.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 12px">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">เพิ่มที่อยู่ใหม่</div>
+          </div>
+          <div style="margin:0 16px 14px;padding:13px 15px;border-radius:14px;background:#FFF1EE;border:1px solid #F3CFC7;display:flex;align-items:flex-start;gap:10px">
+            <span style="font-size:16px">⚠️</span>
+            <div style="flex:1;font-size:13px;color:#A6322A;line-height:1.6">บันทึกที่อยู่ไม่สำเร็จ กรุณาลองอีกครั้ง</div>
+            <span style="font-size:13px;font-weight:600;color:#E4572E">ลองใหม่</span>
+          </div>
+          <div style="flex:1;overflow:hidden;padding:0 16px">
+            <sc-for list="{{ fieldsFilled }}" as="f" hint-placeholder-count="5">
+              <div style="margin-bottom:14px">
+                <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:6px">{{ f.label }}<span style="color:#E4572E">{{ f.star }}</span><span style="color:#9A8C7E;font-weight:400">{{ f.opt }}</span></div>
+                <div style="{{ f.box }}">{{ f.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:12px 16px 18px;background:#FBF7F1;border-top:1px solid #F0E8DD">
+            <div style="height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึกที่อยู่</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11a · STATE 5</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">API failure</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Entered data is never discarded. Banner copy varies by cause: network <b>ไม่มีสัญญาณอินเทอร์เน็ต ลองอีกครั้ง</b>, 4xx validation echoes the field message inline instead, 5xx uses the copy shown. 401 routes to login and returns to the form.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 12px">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">แก้ไขที่อยู่</div>
+          </div>
+          <div style="flex:1;overflow:hidden;padding:0 16px">
+            <div style="display:flex;gap:8px;margin-bottom:16px">
+              <sc-for list="{{ chipsFilled }}" as="c" hint-placeholder-count="3">
+                <div style="{{ c.style }}">{{ c.t }}</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ fieldsEdit }}" as="f" hint-placeholder-count="4">
+              <div style="margin-bottom:14px">
+                <div style="font-size:12.5px;font-weight:600;color:#5A4E42;margin-bottom:6px">{{ f.label }}<span style="color:#E4572E">{{ f.star }}</span><span style="color:#9A8C7E;font-weight:400">{{ f.opt }}</span></div>
+                <div style="{{ f.box }}">{{ f.text }}</div>
+              </div>
+            </sc-for>
+            <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;background:#F7F2EA;border:1px solid #E9E0D5">
+              <div style="flex:1">
+                <div style="font-size:14px;font-weight:600;color:#5A4E42">ที่อยู่หลัก</div>
+                <div style="font-size:11.5px;color:#7A6E64;margin-top:2px;line-height:1.5">ตั้งที่อยู่อื่นเป็นหลักเพื่อเปลี่ยน</div>
+              </div>
+              <div style="{{ toggleOnLocked }}"><span style="{{ knobRight }}"></span></div>
+            </div>
+            <div style="text-align:center;font-size:14px;font-weight:600;color:#C0392B;margin-top:18px">ลบที่อยู่นี้</div>
+          </div>
+          <div style="padding:12px 16px 18px;background:#FBF7F1;border-top:1px solid #F0E8DD">
+            <div style="height:52px;border-radius:16px;background:#E4572E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">บันทึกการแก้ไข</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11a · STATE 6</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">Edit — same screen, mode: edit</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Title and CTA change; everything else is identical. On the current default the toggle is locked on, because one-default-per-user means it can only move, never disappear.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;position:relative;overflow:hidden;display:flex;flex-direction:column;background:rgba(31,26,22,.42)">
+          <div style="position:absolute;left:0;right:0;bottom:0;background:#FBF7F1;border-radius:28px 28px 0 0;padding:24px 20px 22px">
+            <div style="width:38px;height:4px;border-radius:2px;background:#E0D6C8;margin:0 auto 18px"></div>
+            <div style="font-size:19px;font-weight:700">ลบที่อยู่นี้?</div>
+            <div style="font-size:14px;color:#5A4E42;line-height:1.7;margin-top:8px">ที่อยู่ “บ้านของฉัน” จะถูกนำออกจากรายการของคุณ ออเดอร์ที่สั่งไปแล้วยังเก็บที่อยู่เดิมไว้ตามปกติ</div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
+              <div style="height:52px;border-radius:16px;background:#C0392B;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">ลบที่อยู่</div>
+              <div style="height:52px;border-radius:16px;border:1.5px solid #E0D6C8;color:#5A4E42;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">ยกเลิก</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11a · STATE 7</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">Remove confirmation</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">DELETE is archive semantics, and the copy says exactly that without exposing the word “archive”: it leaves your list, past orders keep their address. Blocked with an inline note when the address is the default and other addresses exist.</div>
+      </div>
+    </div>
+
+    <div style="width:390px;flex:0 0 390px">
+      <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1px solid #E4DACB;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+        <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+        <div style="flex:1;overflow:hidden;position:relative;padding:0 0 18px">
+          <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 14px">
+            <div style="font-size:22px">←</div>
+            <div style="font-size:20px;font-weight:700">เลือกที่อยู่จัดส่ง</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin:0 16px">
+            <sc-for list="{{ listRowsAfter }}" as="a" hint-placeholder-count="3">
+              <div style="{{ a.card }}">
+                <span style="font-size:20px">{{ a.icon }}</span>
+                <div style="flex:1">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="font-size:15px;font-weight:600">{{ a.label }}</div>
+                    <div style="{{ a.badge }}">{{ a.badgeText }}</div>
+                  </div>
+                  <div style="font-size:12px;color:#7A6E64;margin-top:3px;line-height:1.55">{{ a.detail }}</div>
+                  <div style="font-size:12px;color:#7A6E64;margin-top:3px">{{ a.person }}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+                  <span style="{{ a.dot }}"></span>
+                  <span style="font-size:12.5px;font-weight:600;color:#E4572E">แก้ไข</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin:12px 16px 0;height:52px;border-radius:16px;border:1.5px dashed #D9CDBE;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600;color:#7A6E64">+ เพิ่มที่อยู่ใหม่</div>
+          <div style="position:absolute;left:16px;right:16px;bottom:16px;padding:13px 15px;border-radius:14px;background:#1F1A16;color:#FBF7F1;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:9px">
+            <span>✓</span> บันทึกที่อยู่แล้ว
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">C-11 · STATE 8</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">Return after success</div>
+        <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Pop back to C-11, refetch the list, select the address that was just saved, and show a 2 s toast. From here Checkout already has a valid default and the ONLINE order path is unblocked.</div>
+      </div>
+    </div>
+
+    <sc-if value="{{ showFutureMap }}" hint-placeholder-val="{{ false }}">
+      <div style="width:390px;flex:0 0 390px">
+        <div style="height:868px;border-radius:38px;background:#FBF7F1;overflow:hidden;position:relative;border:1.5px dashed #C9A227;box-shadow:0 18px 40px rgba(31,26,22,.10);display:flex;flex-direction:column">
+          <div style="height:44px;flex:0 0 44px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 6px;font-size:12px;font-weight:600"><span>18:42</span><span style="letter-spacing:2px">▮▮▮ ᯤ 🔋</span></div>
+          <div style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:12px;padding:6px 20px 12px">
+              <div style="font-size:22px">←</div>
+              <div style="font-size:20px;font-weight:700">เพิ่มที่อยู่ใหม่</div>
+            </div>
+            <div style="margin:0 16px 8px;display:inline-flex;align-self:flex-start;padding:5px 10px;border-radius:9px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:11px;font-weight:600;color:#9A7810;letter-spacing:.08em">OPTIONAL / FUTURE</div>
+            <div style="margin:6px 16px 14px;height:150px;border-radius:16px;border:1px solid #E9E0D5;overflow:hidden;position:relative">
+              <iframe src="tracking-map.html" style="width:100%;height:100%;border:0"></iframe>
+              <div style="position:absolute;left:12px;right:12px;bottom:12px;height:42px;border-radius:12px;background:#fff;border:1px solid #E9E0D5;display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:600;color:#5A4E42">ปักหมุดตำแหน่งบ้าน</div>
+            </div>
+            <div style="padding:0 16px;font-size:13px;color:#5A4E42;line-height:1.7">If a pin is ever added, it writes only the existing <b>lat</b> / <b>lng</b> columns, stays skippable, and never blocks saving. It is out of scope for V1 — no map provider, tiles budget or geocoding decision is taken here.</div>
+          </div>
+        </div>
+        <div style="margin-top:16px">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">NOT IN V1</div>
+          <div style="font-size:16px;font-weight:700;margin-top:4px">Location pin — deferred</div>
+          <div style="font-size:13px;color:#5A4E42;line-height:1.7;margin-top:6px">Shown for completeness of DECISION DQ-04-07. Toggle it off with the <b>showFutureMap</b> prop.</div>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#9A8C7E;margin-top:64px">03</div>
+  <div style="font-size:30px;font-weight:700;margin-top:6px">Field specification</div>
+  <div style="border-radius:20px;border:1px solid #E9E0D5;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:flex;padding:13px 20px;background:#F7F2EA;font-size:11px;font-weight:600;letter-spacing:.1em;color:#7A6E64">
+      <div style="width:170px;flex:0 0 170px">API FIELD</div>
+      <div style="width:190px;flex:0 0 190px">LABEL</div>
+      <div style="width:96px;flex:0 0 96px">REQUIRED</div>
+      <div style="width:110px;flex:0 0 110px">CONTROL</div>
+      <div style="flex:1">PLACEHOLDER / NOTE</div>
+    </div>
+    <sc-for list="{{ fieldSpec }}" as="r" hint-placeholder-count="7">
+      <div style="display:flex;padding:14px 20px;border-top:1px solid #F5EEE4;font-size:13px;line-height:1.6">
+        <div style="width:170px;flex:0 0 170px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5A4E42">{{ r.api }}</div>
+        <div style="width:190px;flex:0 0 190px;font-weight:600">{{ r.label }}</div>
+        <div style="width:96px;flex:0 0 96px"><span style="{{ r.reqStyle }}">{{ r.req }}</span></div>
+        <div style="width:110px;flex:0 0 110px;color:#5A4E42">{{ r.control }}</div>
+        <div style="flex:1;color:#5A4E42">{{ r.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#9A8C7E;margin-top:64px">04</div>
+  <div style="font-size:30px;font-weight:700;margin-top:6px">Validation</div>
+  <div style="font-size:15px;color:#5A4E42;margin-top:8px;max-width:760px;line-height:1.65">Client rules mirror the existing backend schema and never exceed it. Phone input accepts digits, spaces, dashes and a leading +66; the client normalises before sending so a legitimate number is never rejected for formatting.</div>
+  <div style="border-radius:20px;border:1px solid #E9E0D5;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:flex;padding:13px 20px;background:#F7F2EA;font-size:11px;font-weight:600;letter-spacing:.1em;color:#7A6E64">
+      <div style="width:170px;flex:0 0 170px">FIELD</div>
+      <div style="width:330px;flex:0 0 330px">RULE</div>
+      <div style="flex:1">MESSAGE (TH)</div>
+    </div>
+    <sc-for list="{{ validation }}" as="v" hint-placeholder-count="7">
+      <div style="display:flex;padding:14px 20px;border-top:1px solid #F5EEE4;font-size:13px;line-height:1.6">
+        <div style="width:170px;flex:0 0 170px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5A4E42">{{ v.f }}</div>
+        <div style="width:330px;flex:0 0 330px;color:#5A4E42">{{ v.rule }}</div>
+        <div style="flex:1;font-weight:600">{{ v.msg }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#9A8C7E;margin-top:64px">05</div>
+  <div style="font-size:30px;font-weight:700;margin-top:6px">States</div>
+  <div style="border-radius:20px;border:1px solid #E9E0D5;background:#fff;overflow:hidden;margin-top:20px">
+    <div style="display:flex;padding:13px 20px;background:#F7F2EA;font-size:11px;font-weight:600;letter-spacing:.1em;color:#7A6E64">
+      <div style="width:210px;flex:0 0 210px">STATE</div>
+      <div style="width:250px;flex:0 0 250px">TRIGGER</div>
+      <div style="flex:1">BEHAVIOUR</div>
+    </div>
+    <sc-for list="{{ states }}" as="s" hint-placeholder-count="8">
+      <div style="display:flex;padding:14px 20px;border-top:1px solid #F5EEE4;font-size:13px;line-height:1.6">
+        <div style="width:210px;flex:0 0 210px;font-weight:600">{{ s.name }}</div>
+        <div style="width:250px;flex:0 0 250px;color:#5A4E42">{{ s.trigger }}</div>
+        <div style="flex:1;color:#5A4E42">{{ s.behaviour }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#9A8C7E;margin-top:64px">06</div>
+  <div style="font-size:30px;font-weight:700;margin-top:6px">Design decisions</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px">
+    <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="7">
+      <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:22px 24px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:#E4572E">{{ d.id }}</div>
+          <div style="font-size:11px;font-weight:600;letter-spacing:.1em;color:#9A8C7E">{{ d.topic }}</div>
+        </div>
+        <div style="font-size:17px;font-weight:700;margin-top:8px;line-height:1.4">{{ d.title }}</div>
+        <div style="font-size:13.5px;color:#5A4E42;line-height:1.7;margin-top:8px">{{ d.body }}</div>
+        <div style="font-size:12.5px;color:#7A6E64;line-height:1.65;margin-top:10px;padding-top:10px;border-top:1px solid #F0E8DD"><b style="color:#5A4E42">Why · </b>{{ d.why }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:11px;font-weight:600;letter-spacing:.16em;color:#9A8C7E;margin-top:64px">07</div>
+  <div style="font-size:30px;font-weight:700;margin-top:6px">Claude Code handoff</div>
+  <div style="font-size:15px;color:#5A4E42;margin-top:8px;max-width:760px;line-height:1.65">Implementation-ready scope. No API, database, RLS, migration or auth change is required — every endpoint below already exists and is already covered by the deployed policies.</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px">
+    <sc-for list="{{ handoff }}" as="h" hint-placeholder-count="6">
+      <div style="border-radius:20px;background:#fff;border:1px solid #E9E0D5;padding:22px 24px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#9A8C7E">{{ h.kicker }}</div>
+        <div style="font-size:17px;font-weight:700;margin-top:6px">{{ h.title }}</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">
+          <sc-for list="{{ h.lines }}" as="l" hint-placeholder-count="4">
+            <div style="{{ l.style }}">{{ l.t }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="border-radius:20px;background:#1F1A16;color:#F5EFE7;padding:26px 28px;margin-top:24px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A8988A">FINAL CHECK</div>
+    <div style="font-size:19px;font-weight:700;margin-top:8px">No new backend architecture is required</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px 28px;margin-top:14px">
+      <sc-for list="{{ finalCheck }}" as="c" hint-placeholder-count="6">
+        <div style="display:flex;gap:10px;font-size:13.5px;line-height:1.6;color:#E4DACB"><span style="color:#7FBF6A">✓</span><span>{{ c }}</span></div>
+      </sc-for>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showFutureMap&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Scope&quot;},&quot;labelFieldStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;chips&quot;,&quot;text&quot;],&quot;default&quot;:&quot;chips&quot;,&quot;tsType&quot;:&quot;'chips' | 'text'&quot;,&quot;section&quot;:&quot;Form&quot;},&quot;requireDefaultOnFirst&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Form&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const labelStyle = this.props.labelFieldStyle ?? 'chips';
+    const firstIsDefault = this.props.requireDefaultOnFirst ?? true;
+
+    const chip = (bg, col, bd) => 'padding:6px 10px;border-radius:9px;font-size:11px;font-weight:600;background:' + bg + ';color:' + col + ';border:1px solid ' + bd;
+    const box = (extra) => 'border:1.5px solid #E9E0D5;border-radius:14px;background:#fff;padding:12px 14px;font-size:14.5px;line-height:1.55;' + (extra || '');
+    const ph = box('color:#B0A294');
+    const val = box('color:#1F1A16');
+    const err = box('color:#1F1A16;border-color:#D94A3D;background:#FFF6F4');
+    const msg = 'font-size:12px;color:#C0392B;margin-top:6px;line-height:1.5';
+
+    const f = (label, star, opt, text, b, m) => ({
+      label, star: star ? ' *' : '', opt: opt ? '  (ตัวเลือก)' : '',
+      text, box: b, msg: m || '', msgStyle: m ? msg : 'display:none'
+    });
+
+    const emptyFields = [
+      f('ผู้รับ', 1, 0, 'ชื่อผู้รับอาหาร', ph),
+      f('เบอร์โทร', 1, 0, '08X-XXX-XXXX', ph),
+      f('ที่อยู่', 1, 0, 'บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด', box('color:#B0A294;min-height:78px')),
+      f('จุดสังเกต', 0, 1, 'เช่น ตรงข้ามตลาดสดบุณฑริก', ph),
+      f('ข้อความถึงไรเดอร์', 0, 1, 'เช่น โทรก่อนถึง 5 นาที', ph)
+    ];
+    const filledFields = [
+      f('ผู้รับ', 1, 0, 'สมหญิง ใจดี', val),
+      f('เบอร์โทร', 1, 0, '081-234-5678', val),
+      f('ที่อยู่', 1, 0, '88 หมู่ 4 บ้านบุณฑริก ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี 34230', box('color:#1F1A16;min-height:78px')),
+      f('จุดสังเกต', 0, 1, 'ตรงข้ามตลาดสดบุณฑริก บ้านรั้วเขียว', val),
+      f('ข้อความถึงไรเดอร์', 0, 1, 'โทรก่อนถึง 5 นาที มีสุนัขหน้าบ้าน', val)
+    ];
+    const errorFields = [
+      f('ผู้รับ', 1, 0, 'สมหญิง ใจดี', val),
+      f('เบอร์โทร', 1, 0, '0812345', err, 'เบอร์โทรไม่ถูกต้อง ใส่เบอร์มือถือ 10 หลัก'),
+      f('ที่อยู่', 1, 0, '88', box('color:#1F1A16;border-color:#D94A3D;background:#FFF6F4;min-height:78px'), 'ใส่ที่อยู่ให้ครบ เช่น บ้านเลขที่ หมู่ ตำบล อำเภอ'),
+      f('จุดสังเกต', 0, 1, 'เช่น ตรงข้ามตลาดสดบุณฑริก', ph)
+    ];
+    const editFields = [
+      f('ผู้รับ', 1, 0, 'สมหญิง ใจดี', val),
+      f('เบอร์โทร', 1, 0, '081-234-5678', val),
+      f('ที่อยู่', 1, 0, '88 หมู่ 4 บ้านบุณฑริก ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี 34230', box('color:#1F1A16;min-height:78px')),
+      f('จุดสังเกต', 0, 1, 'ตรงข้ามตลาดสดบุณฑริก บ้านรั้วเขียว', val)
+    ];
+
+    const chipStyle = (on) => 'padding:9px 15px;border-radius:12px;font-size:13.5px;font-weight:600;border:1.5px solid ' +
+      (on ? '#E4572E;background:#FCECE6;color:#C2431F' : '#E9E0D5;background:#fff;color:#7A6E64');
+    const chipsFor = (sel) => labelStyle === 'text'
+      ? [{ t: 'เช่น บ้านแม่', style: box('color:#B0A294;flex:1') }]
+      : ['บ้าน', 'ที่ทำงาน', 'อื่นๆ'].map(t => ({ t, style: chipStyle(t === sel) }));
+
+    const row = (icon, label, detail, person, sel, def) => ({
+      icon, label, detail, person,
+      card: 'display:flex;align-items:flex-start;gap:11px;padding:14px 15px;border-radius:16px;background:#fff;border:1.5px solid ' + (sel ? '#E4572E' : '#E9E0D5'),
+      badge: def ? 'padding:3px 8px;border-radius:7px;background:#F3E7D6;color:#8A6B2E;font-size:10.5px;font-weight:600' : 'display:none',
+      badgeText: 'ค่าเริ่มต้น',
+      dot: 'width:20px;height:20px;border-radius:10px;border:2px solid ' + (sel ? '#E4572E;background:#E4572E;box-shadow:inset 0 0 0 3px #fff' : '#DCD1C2')
+    });
+
+    const toggle = (on, locked) => 'width:46px;height:27px;border-radius:14px;padding:2px;display:flex;align-items:center;box-sizing:border-box;background:' +
+      (on ? '#E4572E' : '#DCD1C2') + (locked ? ';opacity:.6' : '');
+    const knob = 'width:23px;height:23px;border-radius:12px;background:#fff;display:block';
+
+    const hline = (t, mono) => ({ t, style: mono
+      ? "font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#5A4E42;line-height:1.6"
+      : 'font-size:13.5px;color:#5A4E42;line-height:1.6' });
+
+    return {
+      showFutureMap: this.props.showFutureMap ?? false,
+      chipsEmpty: chipsFor(null),
+      chipsFilled: chipsFor('บ้าน'),
+      fieldsEmpty: emptyFields,
+      fieldsFilled: filledFields,
+      fieldsError: errorFields,
+      fieldsEdit: editFields,
+      toggleOnLocked: toggle(true, true),
+      toggleOff: toggle(false, false),
+      knobRight: knob + ';margin-left:auto',
+      knobLeft: knob,
+      defaultHintCreate: firstIsDefault
+        ? 'ที่อยู่แรกของคุณจะเป็นที่อยู่หลักโดยอัตโนมัติ'
+        : 'เลือกได้ว่าจะให้ที่อยู่นี้เป็นค่าเริ่มต้นหรือไม่',
+
+      metaChips: [
+        ['DQ-04 · CLASS B', '#FCECE6', '#C2431F', '#F3D3C6'],
+        ['DESIGN ONLY', '#fff', '#5A4E42', '#E9E0D5'],
+        ['BACKEND UNCHANGED', '#fff', '#5A4E42', '#E9E0D5'],
+        ['DB / RLS UNCHANGED', '#fff', '#5A4E42', '#E9E0D5'],
+        ['UNBLOCKS E-3F ONLINE', '#EAF6EE', '#0F8B5F', '#CFE7D8']
+      ].map(([t, bg, col, bd]) => ({ t, style: chip(bg, col, bd) })),
+
+      summaryCards: [
+        { kicker: 'PROBLEM', title: 'No way to create an address', body: 'listAddresses() is the only implemented repository method, and the + เพิ่มที่อยู่ใหม่ affordance has no handler. An authenticated account with zero addresses cannot reach a default address, so ONLINE order creation is blocked.' },
+        { kicker: 'SOLUTION', title: 'One screen, two modes', body: 'A single AddressFormScreen serves create and edit, wired to the four endpoints that already exist. Three required fields, three optional ones, one default toggle.' },
+        { kicker: 'SCOPE', title: 'Customer UI and repository only', body: 'Four repository methods, one route, one confirmation sheet. Nothing in orders, payment, tracking, cart, rider, merchant or maps infrastructure is touched.' }
+      ],
+
+      flow: [
+        ['C-11 AddressScreen', 1], ['→', 0], ['+ เพิ่มที่อยู่ใหม่', 0], ['→', 0],
+        ['C-11a AddressFormScreen (create | edit)', 1], ['→', 0], ['POST / PATCH', 0], ['→', 0],
+        ['pop + refetch + select', 0], ['→', 0], ['C-10 Checkout', 1]
+      ].map(([t, strong]) => ({ t, style: strong
+        ? 'padding:11px 15px;border-radius:13px;background:#FCECE6;border:1px solid #F3D3C6;font-size:13.5px;font-weight:600;color:#C2431F'
+        : (t === '→' ? 'font-size:15px;color:#B0A294' : 'padding:11px 15px;border-radius:13px;background:#F7F2EA;border:1px solid #E9E0D5;font-size:13.5px;color:#5A4E42') })),
+
+      listRows: [
+        row('🏠', 'บ้านของฉัน', '88 หมู่ 4 บ้านบุณฑริก ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี 34230', 'สมหญิง · 081-234-5678', true, true),
+        row('🏢', 'ที่ทำงาน', '12 ถ.เทศบาล 1 ต.โพนงาม อ.บุณฑริก จ.อุบลราชธานี 34230', 'สมหญิง · 081-234-5678', false, false)
+      ],
+      listRowsAfter: [
+        row('🏠', 'บ้านของฉัน', '88 หมู่ 4 บ้านบุณฑริก ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี 34230', 'สมหญิง · 081-234-5678', false, true),
+        row('🏢', 'ที่ทำงาน', '12 ถ.เทศบาล 1 ต.โพนงาม อ.บุณฑริก จ.อุบลราชธานี 34230', 'สมหญิง · 081-234-5678', false, false),
+        row('📍', 'บ้านแม่', '5 หมู่ 9 บ้านหนองแสง ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี 34230', 'สมหญิง · 081-234-5678', true, false)
+      ],
+
+      fieldSpec: [
+        { api: 'label', label: 'ชื่อที่อยู่', req: 'optional', control: 'chips + text', note: 'บ้าน / ที่ทำงาน / อื่นๆ. Choosing อื่นๆ reveals a free text input. Falls back to the first line of addressLine when empty.' },
+        { api: 'recipientName', label: 'ผู้รับ', req: 'required', control: 'text', note: 'ชื่อผู้รับอาหาร — prefilled from the profile name when available, still editable.' },
+        { api: 'recipientPhone', label: 'เบอร์โทร', req: 'required', control: 'tel', note: '08X-XXX-XXXX — numeric keypad, prefilled from the logged-in phone, displayed 0XX-XXX-XXXX and stored E.164.' },
+        { api: 'addressLine', label: 'ที่อยู่', req: 'required', control: 'multiline', note: 'บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด — 3 visible rows, grows to 6.' },
+        { api: 'landmark', label: 'จุดสังเกต', req: 'optional', control: 'text', note: 'เช่น ตรงข้ามตลาดสดบุณฑริก — the single most useful field for rural rider navigation.' },
+        { api: 'instructions', label: 'ข้อความถึงไรเดอร์', req: 'optional', control: 'text', note: 'เช่น โทรก่อนถึง 5 นาที — 120 char soft cap.' },
+        { api: 'isDefault', label: 'ตั้งเป็นที่อยู่หลัก', req: 'optional', control: 'toggle', note: 'Locked on for the first address and for the current default in edit mode.' },
+        { api: 'lat / lng', label: '—', req: 'not in V1', control: '—', note: 'Sent as null. See DECISION DQ-04-07.' }
+      ].map(r => ({ ...r, reqStyle: r.req === 'required'
+        ? chip('#FCECE6', '#C2431F', '#F3D3C6')
+        : (r.req === 'optional' ? chip('#F7F2EA', '#7A6E64', '#E9E0D5') : chip('#FDF3E6', '#9A7810', '#F0DFC4')) })),
+
+      validation: [
+        { f: 'recipientName', rule: 'Trimmed length ≥ 2', msg: 'กรุณากรอกชื่อผู้รับ' },
+        { f: 'recipientPhone', rule: 'Required', msg: 'กรุณากรอกเบอร์โทร' },
+        { f: 'recipientPhone', rule: 'Strip spaces, dashes, +66 → leading 0; must be 9–10 digits starting with 0', msg: 'เบอร์โทรไม่ถูกต้อง ใส่เบอร์มือถือ 10 หลัก' },
+        { f: 'addressLine', rule: 'Required', msg: 'กรุณากรอกที่อยู่' },
+        { f: 'addressLine', rule: 'Trimmed length ≥ 10 (warn-level, blocks submit)', msg: 'ใส่ที่อยู่ให้ครบ เช่น บ้านเลขที่ หมู่ ตำบล อำเภอ' },
+        { f: 'label / landmark', rule: 'Max 60 chars, no format constraint', msg: '—' },
+        { f: 'instructions', rule: 'Max 120 chars, counter appears from 100', msg: '—' },
+        { f: 'form', rule: '4xx from API with a field code', msg: 'echoed on the matching field' },
+        { f: 'form', rule: '5xx / network', msg: 'บันทึกที่อยู่ไม่สำเร็จ กรุณาลองอีกครั้ง' }
+      ],
+
+      states: [
+        { name: '1 · Empty form', trigger: 'Enter in create mode', behaviour: 'Placeholders only; CTA disabled until the three required fields are non-empty. ผู้รับ and เบอร์โทร prefilled from profile when available, which usually leaves one field to type.' },
+        { name: '2 · Filled', trigger: 'Required fields present', behaviour: 'CTA enabled at #E4572E. No validation shown yet.' },
+        { name: '3 · Validation error', trigger: 'Submit or blur after first submit', behaviour: 'Inline message under each invalid field, error styling on the input, scroll and focus the first invalid field. No dialog.' },
+        { name: '4 · Saving', trigger: 'Valid submit', behaviour: 'CTA becomes a spinner with กำลังบันทึก…; inputs and back disabled; a second tap is ignored (idempotent guard on the request).' },
+        { name: '5 · Success', trigger: '201 / 200', behaviour: 'Pop to C-11, refetch the list, select the saved address, 2 s toast บันทึกที่อยู่แล้ว.' },
+        { name: '6 · API failure', trigger: 'Network, 5xx, unexpected', behaviour: 'Dismissible banner above the form with ลองใหม่; entered values retained; CTA returns to enabled.' },
+        { name: '7 · Edit existing', trigger: 'แก้ไข on a list row', behaviour: 'Same screen prefilled; title แก้ไขที่อยู่; CTA บันทึกการแก้ไข; ลบที่อยู่นี้ appears below the form.' },
+        { name: '8 · Default address', trigger: 'Address has isDefault true', behaviour: 'ค่าเริ่มต้น badge in the list; in edit the toggle is locked on with the hint ตั้งที่อยู่อื่นเป็นหลักเพื่อเปลี่ยน; removal is blocked while other addresses exist.' }
+      ],
+
+      decisions: [
+        { id: 'DQ-04-01', topic: 'ENTRY POINT', title: 'The existing dashed button is the only new entry point', body: 'Wire + เพิ่มที่อยู่ใหม่ on C-11 to push AddressFormScreen(mode: create). The same push is reused by the empty-list state and by บัญชี → ที่อยู่ของฉัน. No new tab, sheet or step is introduced.', why: 'The affordance already exists in the shipped design and in the UX spec; the defect is a missing handler, not a missing concept.' },
+        { id: 'DQ-04-02', topic: 'REQUIRED FIELDS', title: 'recipientName, recipientPhone, addressLine', body: 'Exactly the three fields the backend schema already requires. The CTA stays disabled until all three are non-empty, then blocking validation runs on submit.', why: 'Client and server requirements stay identical, so no request can fail for a rule the user was never shown.' },
+        { id: 'DQ-04-03', topic: 'OPTIONAL FIELDS', title: 'label, landmark, instructions — no others', body: 'label as three chips with a free-text fallback, landmark and instructions as single-line inputs, all below the required block so they can be skipped by scrolling straight to the CTA.', why: 'In บุณฑริก a house number is often not enough to find a door; จุดสังเกต is what riders actually navigate by. No field is invented beyond the existing contract.' },
+        { id: 'DQ-04-04', topic: 'DEFAULT ADDRESS', title: 'First address is default automatically; later ones opt in', body: 'Zero existing addresses: toggle rendered on and locked, with the hint ที่อยู่แรกของคุณจะเป็นที่อยู่หลักโดยอัตโนมัติ. One or more existing: toggle interactive, off by default. Editing the current default: locked on.', why: 'Checkout requires a default for ONLINE orders, so the first save must produce one without asking. Later saves must not silently move a default the customer relies on, and one-default-per-user means the flag can move but never be cleared.' },
+        { id: 'DQ-04-05', topic: 'EDIT', title: 'Yes — one screen shared with create, via a mode argument', body: 'แก้ไข is a trailing text action on each C-11 row. It opens the same screen prefilled, with the title and CTA swapped and the archive action added. PATCH sends changed fields only.', why: 'A separate EditAddressScreen would duplicate the form, its validation and its states with no behavioural difference. A phone number typo must be fixable without deleting and retyping the address.' },
+        { id: 'DQ-04-06', topic: 'DELETE / ARCHIVE', title: 'Exposed in edit mode only, described as removal from the list', body: 'ลบที่อยู่นี้ opens a confirmation sheet stating that past orders keep their address. It calls the existing DELETE, which is archive on the server. Blocked with an inline note when the address is the default and other addresses exist; allowed when it is the only address, returning the customer to the empty state.', why: 'Deletion is real enough to need confirmation but is not destructive to order history, and the copy must not promise erasure the backend does not perform. Guarding the default prevents leaving the account with no default and a broken checkout.' },
+        { id: 'DQ-04-07', topic: 'LOCATION', title: 'No map picker in V1 — lat and lng are sent as null', body: 'Text address plus จุดสังเกต is the V1 input. A pin remains OPTIONAL / FUTURE and would write only the existing columns without ever blocking a save.', why: 'No existing requirement, screen or delivery-fee rule depends on coordinates, and adding a picker would force a map provider, tile-cost and geocoding decision that is explicitly out of scope for DQ-04.' }
+      ],
+
+      handoff: [
+        { kicker: 'SCREENS & ROUTES', title: 'One new route', lines: [
+          hline('/addresses/new  → AddressFormScreen(mode: create)', 1),
+          hline('/addresses/:id/edit  → AddressFormScreen(mode: edit)', 1),
+          hline('C-11 AddressScreen — modified: add button handler, per-row แก้ไข action, ค่าเริ่มต้น badge', 0),
+          hline('Confirmation sheet — child of AddressFormScreen, not a route', 0)
+        ]},
+        { kicker: 'REPOSITORY', title: 'Four methods on the existing address repository', lines: [
+          hline('listAddresses()  — already implemented', 1),
+          hline('createAddress(input): Address', 1),
+          hline('updateAddress(id, patch): Address', 1),
+          hline('archiveAddress(id): void', 1),
+          hline('Invalidate and refetch the address list after each mutation.', 0)
+        ]},
+        { kicker: 'API — ALREADY AVAILABLE', title: 'No endpoint work', lines: [
+          hline('GET    /api/v1/me/addresses', 1),
+          hline('POST   /api/v1/me/addresses', 1),
+          hline('PATCH  /api/v1/me/addresses/:id', 1),
+          hline('DELETE /api/v1/me/addresses/:id', 1),
+          hline('Existing validation schemas and RLS policies apply unchanged.', 0)
+        ]},
+        { kicker: 'FORM STATE', title: 'Local form controller', lines: [
+          hline('Fields: label, recipientName, recipientPhone, addressLine, landmark, instructions, isDefault', 0),
+          hline('isDefault forced true and locked when the list is empty, or when editing the current default', 0),
+          hline('Phone normalised to E.164 on submit, displayed as 0XX-XXX-XXXX', 0),
+          hline('Unsaved-changes guard on back in edit mode: ทิ้งการแก้ไข? / แก้ไขต่อ', 0)
+        ]},
+        { kicker: 'NAVIGATION', title: 'Pop and refresh', lines: [
+          hline('Create success → pop to C-11, refetch, select the new address, toast บันทึกที่อยู่แล้ว', 0),
+          hline('Edit success → pop to C-11, refetch, keep the current selection, toast บันทึกการแก้ไขแล้ว', 0),
+          hline('Archive success → pop to C-11, refetch, toast ลบที่อยู่แล้ว', 0),
+          hline('C-11 selection behaviour and its return to Checkout are unchanged', 0)
+        ]},
+        { kicker: 'TESTS REQUIRED', title: 'Widget and integration', lines: [
+          hline('CTA disabled until the three required fields are filled', 0),
+          hline('Phone accepts 0812345678, 081-234-5678, +66812345678; rejects 0812345', 0),
+          hline('First address saved with isDefault true when the list is empty', 0),
+          hline('Editing the current default cannot clear the default flag', 0),
+          hline('POST failure keeps entered values and shows the retry banner', 0),
+          hline('Archive blocked on the default address while other addresses exist', 0),
+          hline('E2E: login → address → add → save → checkout → POST /orders succeeds', 0)
+        ]}
+      ],
+
+      finalCheck: [
+        'No new API endpoint',
+        'No API contract change',
+        'No database migration',
+        'No RLS policy change',
+        'No new table or column',
+        'No auth change',
+        'No new map or geocoding provider',
+        'No change to orders, payment, tracking, cart, rider or merchant surfaces'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#C2431F;text-decoration:none}
+  a:hover{color:#8F3116}
+</style>
+</helmet>
+
+<div style="max-width:1560px;margin:0 auto;padding:48px 40px 140px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#C2431F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:0 0 auto">D</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">DRIVER + DELIVERY — COMPLETE FLOW</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · design package for <span style="font-family:'IBM Plex Mono',monospace">docs/design/</span> · design only, no implementation</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1100px">
+    One package for the whole rider journey: sign in, availability, offer, the four delivery steps, proof of delivery, completion, and every architecture-supported failure between them. Read against <span style="font-family:'IBM Plex Mono',monospace">docs/RIDER_LIFECYCLE.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/DRIVER_APP_DESIGN_QUESTIONS.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/CURRENT_STATUS.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/TODO.md</span> and the shipped <span style="font-family:'IBM Plex Mono',monospace">apps/driver/src</span> at branch <span style="font-family:'IBM Plex Mono',monospace">feature/g7-driver-availability</span>. In-product copy is Thai and is quoted from the shipped screens wherever it already exists; all annotation is English.
+  </div>
+
+  <div style="margin-top:14px;padding:16px 18px;border-radius:16px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:13.5px;line-height:1.75;color:#8F3A3A;max-width:1100px">
+    <strong style="color:#B23030">Locked architecture governs every screen here.</strong> Dispatch is broadcast, first accept wins (DEC-020) with a 60 s accept window and a 60 s re-broadcast round (DEC-037). A rider holds one active delivery (BQ-021). The four rider transitions are the only ones drawn, and a completion is refused without a proof photo (DEC-038) — the rule lives in the API, never in the client. No money appears on any rider surface: BQ-029 is OPEN and <span style="font-family:'IBM Plex Mono',monospace">rider_earning_satang</span> is NULL by instruction.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="14">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- 00 SCOPE -->
+  <div id="s0" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — SCOPE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">One rider, one delivery, start to proof</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#0A6B49;margin-bottom:14px">IN SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ inScope }}" as="i" hint-placeholder-count="10">
+          <div style="font-size:13.5px;line-height:1.65;color:#3D342C">{{ i }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #F0C9C9;background:#FDF6F5;padding:22px">
+      <div style="font-size:12px;font-weight:600;letter-spacing:.14em;color:#B23030;margin-bottom:14px">OUT OF SCOPE</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ outScope }}" as="o" hint-placeholder-count="10">
+          <div style="font-size:13.5px;line-height:1.65;color:#8F3A3A">{{ o }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 USER FLOW -->
+  <div id="s1" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — USER FLOW</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The happy path is nine taps; every branch returns to it</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;max-width:1200px">
+    <sc-for list="{{ flowSteps }}" as="f" hint-placeholder-count="9">
+      <div style="display:grid;grid-template-columns:44px 210px 1fr 1fr;gap:16px;align-items:start;border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:14px 18px">
+        <div style="width:32px;height:32px;border-radius:10px;background:#EFE7DC;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:#5A4E42">{{ f.n }}</div>
+        <div>
+          <div style="font-size:14.5px;font-weight:700">{{ f.title }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64;margin-top:3px">{{ f.state }}</div>
+        </div>
+        <div style="font-size:13px;line-height:1.7;color:#3D342C">{{ f.action }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#8F3A3A">{{ f.branch }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 02 SCREEN MAP -->
+  <div id="s2" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — SCREEN MAP</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Six routes, one stack, plus inline states and one system permission</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px">
+    <div style="display:grid;grid-template-columns:120px 190px 130px 1fr;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>ID</div><div>ROUTE / SURFACE</div><div>KIND</div><div>OWNS</div>
+    </div>
+    <sc-for list="{{ screenMap }}" as="sm" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:120px 190px 130px 1fr;gap:12px;padding:13px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;color:#C2431F">{{ sm.id }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#3D342C;word-break:break-all">{{ sm.route }}</div>
+        <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;{{ sm.kindStyle }};align-self:start;white-space:nowrap">{{ sm.kind }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ sm.owns }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 03 CANVASES -->
+  <div id="s3" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — SCREEN CANVASES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Mobile · 360pt · one primary action per screen</div>
+  <div style="font-size:15px;line-height:1.7;color:#5A4E42;max-width:960px;margin-bottom:24px">Every primary control is at least 52pt tall and sits in the lower third, reachable one-handed on a bike stand. Fills use <span style="font-family:'IBM Plex Mono',monospace">action.primary #C2431F</span> rather than the brand orange, because white on <span style="font-family:'IBM Plex Mono',monospace">#E4572E</span> measures 3.68:1 and fails AA at the shipped label size (UX-FINDING-02).</div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:26px">
+    <sc-for list="{{ frames }}" as="fr" hint-placeholder-count="14">
+      <div style="width:360px">
+        <div style="border-radius:30px;background:#211B16;padding:10px;box-shadow:0 18px 44px rgba(31,26,22,.22)">
+          <div style="border-radius:22px;overflow:hidden;height:690px;display:flex;flex-direction:column;background:{{ fr.bg }}">
+            <div style="height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:11.5px;font-family:'IBM Plex Mono',monospace;color:{{ fr.metaColor }};flex:0 0 auto">
+              <div>18:42</div><div>{{ fr.statusRight }}</div>
+            </div>
+            <div style="padding:6px 18px 0;flex:0 0 auto">
+              <div style="font-size:20px;font-weight:700;line-height:1.4;color:{{ fr.titleColor }}">{{ fr.title }}</div>
+              <div style="font-size:13px;color:{{ fr.metaColor }};margin-top:2px">{{ fr.sub }}</div>
+            </div>
+            <div style="flex:1;overflow:hidden;padding:14px 18px;display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ fr.blocks }}" as="b" hint-placeholder-count="3">
+                <div style="{{ b.boxStyle }}">
+                  <sc-if value="{{ b.tag }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:.08em;{{ b.tagStyle }}">{{ b.tag }}</div>
+                  </sc-if>
+                  <sc-if value="{{ b.title }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ b.titleStyle }}">{{ b.title }}</div>
+                  </sc-if>
+                  <sc-for list="{{ b.lines }}" as="ln" hint-placeholder-count="2">
+                    <div style="{{ ln.style }}">{{ ln.text }}</div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="padding:0 18px 18px;display:flex;flex-direction:column;gap:10px;flex:0 0 auto">
+              <sc-if value="{{ fr.note }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12px;line-height:1.7;color:{{ fr.metaColor }}">{{ fr.note }}</div>
+              </sc-if>
+              <sc-if value="{{ fr.primary }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ fr.primaryStyle }}">{{ fr.primary }}</div>
+              </sc-if>
+              <sc-if value="{{ fr.secondary }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ fr.secondaryStyle }}">{{ fr.secondary }}</div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:700;color:#C2431F">{{ fr.id }}</span>
+          <span style="font-size:12.5px;color:#5A4E42;line-height:1.6">{{ fr.caption }}</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 04 SCREEN SPECS -->
+  <div id="s4" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — SCREEN SPECIFICATIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What each screen reads, decides, and refuses to do</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;max-width:1200px">
+    <sc-for list="{{ specs }}" as="sp" hint-placeholder-count="8">
+      <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;padding:18px 22px">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#C2431F">{{ sp.id }}</span>
+          <span style="font-size:16px;font-weight:700">{{ sp.name }}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ sp.route }}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px">
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#A2968A;margin-bottom:5px">READS</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ sp.reads }}</div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#A2968A;margin-bottom:5px">PRIMARY ACTION</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ sp.primary }}</div>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#A2968A;margin-bottom:5px">DELIBERATELY ABSENT</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#8F3A3A">{{ sp.absent }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 05 STATE MATRIX -->
+  <div id="s5" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — STATE MATRIX</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every state a rider can be stopped in</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px">
+    <div style="display:grid;grid-template-columns:150px 1fr 150px 130px 1fr 1fr;gap:12px;padding:12px 18px;background:#F3EDE4;font-size:11px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>STATE</div><div>UI</div><div>PRIMARY</div><div>SECONDARY</div><div>FAILURE</div><div>ACCESSIBILITY</div>
+    </div>
+    <sc-for list="{{ stateMatrix }}" as="st" hint-placeholder-count="16">
+      <div style="display:grid;grid-template-columns:150px 1fr 150px 130px 1fr 1fr;gap:12px;padding:13px 18px;border-top:1px solid #F0EAE1;align-items:start;font-size:12px;line-height:1.65">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#3D342C;word-break:break-word">{{ st.state }}</div>
+        <div style="color:#3D342C">{{ st.ui }}</div>
+        <div style="font-weight:600;color:#1F1A16">{{ st.primary }}</div>
+        <div style="color:#5A4E42">{{ st.secondary }}</div>
+        <div style="color:#8F3A3A">{{ st.failure }}</div>
+        <div style="color:#5A4E42">{{ st.a11y }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 06 INTERACTION -->
+  <div id="s6" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — INTERACTION RULES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Deterministic: the server decides, the screen reports</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px">
+    <sc-for list="{{ interactions }}" as="ix" hint-placeholder-count="12">
+      <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:16px 18px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:5px">{{ ix.title }}</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#3D342C">{{ ix.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 07 FAILURES -->
+  <div id="s7" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — FAILURE AND EXCEPTION FLOWS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Every one keeps the job open and says so</div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">
+    <sc-for list="{{ failures }}" as="fl" hint-placeholder-count="14">
+      <div style="border-radius:16px;border:1px solid #F0C9C9;background:#fff;border-left:4px solid #D93A3A;padding:14px 20px;display:grid;grid-template-columns:190px 1fr 1fr;gap:18px;align-items:start">
+        <div style="font-size:13.5px;font-weight:700;color:#B23030">{{ fl.case }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#3D342C">{{ fl.ui }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ fl.recovery }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 08 ACCESSIBILITY -->
+  <div id="s8" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — ACCESSIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Outdoor, gloved, one-handed, in a hurry</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px">
+    <sc-for list="{{ a11y }}" as="ax" hint-placeholder-count="10">
+      <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:16px 18px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:5px">{{ ax.control }}</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#3D342C">{{ ax.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 09 COPY -->
+  <div id="s9" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — THAI COPY INVENTORY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Quoted from the shipped screens where it exists</div>
+  <div style="display:flex;flex-direction:column;gap:7px;margin-top:18px">
+    <sc-for list="{{ copyRows }}" as="cp" hint-placeholder-count="30">
+      <div style="border-radius:12px;border:1px solid #E0D6C8;background:#fff;padding:11px 18px;display:grid;grid-template-columns:210px 1fr 90px;gap:16px;align-items:center">
+        <div style="font-size:12px;color:#7A6E64">{{ cp.context }}</div>
+        <div style="font-size:14px;font-weight:600;line-height:1.6">{{ cp.thai }}</div>
+        <div style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:7px;{{ cp.originStyle }};white-space:nowrap;justify-self:end">{{ cp.origin }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 10 CROSS-APP -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — CROSS-APP CONSISTENCY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">The same vocabulary the customer and merchant already use</div>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px;max-width:1200px">
+    <sc-for list="{{ consistency }}" as="cs" hint-placeholder-count="8">
+      <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:14px 20px;display:grid;grid-template-columns:170px 1fr;gap:18px">
+        <div style="font-size:13.5px;font-weight:700">{{ cs.topic }}</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#3D342C">{{ cs.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 11 ARCHITECTURE -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — ARCHITECTURE AND API ASSUMPTIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">What this design consumes, and its status</div>
+  <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;margin-top:18px">
+    <div style="display:grid;grid-template-columns:1fr 250px 130px 1fr;gap:12px;padding:12px 20px;background:#F3EDE4;font-size:11.5px;font-weight:600;color:#7A6E64;letter-spacing:.05em">
+      <div>CAPABILITY</div><div>SURFACE</div><div>STATUS</div><div>NOTE</div>
+    </div>
+    <sc-for list="{{ apiRows }}" as="ap" hint-placeholder-count="12">
+      <div style="display:grid;grid-template-columns:1fr 250px 130px 1fr;gap:12px;padding:13px 20px;border-top:1px solid #F0EAE1;align-items:start">
+        <div style="font-size:12.5px;font-weight:600;line-height:1.6">{{ ap.capability }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#3D342C;word-break:break-all;line-height:1.6">{{ ap.surface }}</div>
+        <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;{{ ap.statusStyle }};align-self:start;white-space:nowrap">{{ ap.status }}</div>
+        <div style="font-size:12px;line-height:1.65;color:#5A4E42">{{ ap.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 12 OPEN DECISIONS -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — OPEN DECISIONS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">Not resolvable from the current documents</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:18px;max-width:1200px">
+    <sc-for list="{{ openDecisions }}" as="od" hint-placeholder-count="7">
+      <div style="border-radius:16px;border:1px solid #F0C9C9;background:#FDF6F5;padding:16px 20px">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:5px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#B23030">{{ od.id }}</span>
+          <span style="font-size:14.5px;font-weight:700">{{ od.title }}</span>
+        </div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42">{{ od.body }}</div>
+        <div style="font-size:12.5px;line-height:1.75;color:#8F3A3A;margin-top:6px"><strong>What this design does meanwhile:</strong> {{ od.interim }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 13 ACCEPTANCE -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — ACCEPTANCE CRITERIA</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px">How to tell the built flow matches this package</div>
+  <div style="display:flex;flex-direction:column;gap:8px;margin-top:18px;max-width:1200px">
+    <sc-for list="{{ acceptance }}" as="ac" hint-placeholder-count="16">
+      <div style="border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:12px 20px;display:grid;grid-template-columns:70px 1fr;gap:16px;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#0A6B49">{{ ac.id }}</div>
+        <div style="font-size:13px;line-height:1.75;color:#3D342C">{{ ac.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:44px;padding:18px 20px;border-radius:16px;background:#211B16;color:#F5EFE7;font-size:13.5px;line-height:1.8;max-width:1200px">
+    <strong>Design only.</strong> No application source, migration, RLS policy, API route or environment file was created or modified for this package. Companion artifacts: <a href="./BANHAO Driver App Redesign.dc.html" style="color:#E4572E">Driver App Redesign</a> (semantic token layer, R-01 to R-06 frames) and <a href="./BANHAO POD UX Design.dc.html" style="color:#E4572E">POD UX Design</a> (P-01 to P-14). This package supersedes neither; it joins them into one journey and adds the state matrix, interaction rules and acceptance criteria that span both.
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1600,&quot;height&quot;:1100}}">
+const OK = 'background:#E7F4EE;color:#0A6B49';
+const WARN = 'background:#FDF3E6;color:#8A6A0B';
+const BAD = 'background:#FBEAEA;color:#B23030';
+const NEUTRAL = 'background:#EFE7DC;color:#5A4E42';
+
+const CARD = 'border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:14px 16px;display:flex;flex-direction:column;gap:6px';
+const CARD_OK = 'border-radius:16px;border:1px solid #BFE3D3;background:#E7F4EE;padding:14px 16px;display:flex;flex-direction:column;gap:6px';
+const CARD_BAD = 'border-radius:16px;border:1px solid #F0C9C9;background:#FBEAEA;padding:14px 16px;display:flex;flex-direction:column;gap:6px';
+const CARD_INSET = 'border-radius:16px;background:#EFE7DC;padding:14px 16px;display:flex;flex-direction:column;gap:6px';
+const CARD_DARK = 'border-radius:16px;background:rgba(255,255,255,.08);padding:14px 16px;display:flex;flex-direction:column;gap:6px';
+const ROW = 'border-radius:14px;border:1px solid #E0D6C8;background:#fff;padding:13px 16px;display:flex;flex-direction:column;gap:4px';
+
+const T_CARD = 'font-size:16px;font-weight:700;color:#1F1A16;line-height:1.45';
+const T_BAD = 'font-size:16px;font-weight:700;color:#B23030;line-height:1.45';
+const T_OK = 'font-size:16px;font-weight:700;color:#0A6B49;line-height:1.45';
+const T_DARK = 'font-size:15px;font-weight:700;color:#fff;line-height:1.5';
+const L_BODY = 'font-size:13.5px;line-height:1.7;color:#5A4E42';
+const L_META = 'font-size:12.5px;line-height:1.7;color:#7A6E64';
+const L_MONO = "font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#3D342C";
+const L_STRONG = 'font-size:14px;font-weight:600;color:#1F1A16;line-height:1.6';
+const L_DANGER = 'font-size:13px;line-height:1.7;color:#8F3A3A';
+const L_DARKBODY = 'font-size:13px;line-height:1.7;color:rgba(255,255,255,.78)';
+
+const BTN = 'height:56px;border-radius:16px;background:#C2431F;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700';
+const BTN2 = 'height:52px;border-radius:16px;border:1px solid #E0D6C8;background:#fff;color:#5A4E42;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600';
+const BTN_BUSY = 'height:56px;border-radius:16px;background:#8F3116;color:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700';
+const BTN_DARK2 = 'height:52px;border-radius:16px;border:1px solid rgba(255,255,255,.4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600';
+
+const LIGHT = { bg: '#FBF7F1', titleColor: '#1F1A16', metaColor: '#7A6E64' };
+const DARK = { bg: '#141210', titleColor: '#FFFFFF', metaColor: 'rgba(255,255,255,.78)' };
+
+class Component extends DCLogic {
+  renderVals() {
+    const frame = (o) => Object.assign({ statusRight: 'LTE 84%', note: null, primary: null, primaryStyle: BTN, secondary: null, secondaryStyle: BTN2 }, o.dark ? DARK : LIGHT, o);
+
+    return {
+      nav: [
+        { href: '#s0', label: '00 Scope' }, { href: '#s1', label: '01 User flow' },
+        { href: '#s2', label: '02 Screen map' }, { href: '#s3', label: '03 Canvases' },
+        { href: '#s4', label: '04 Screen specs' }, { href: '#s5', label: '05 State matrix' },
+        { href: '#s6', label: '06 Interaction' }, { href: '#s7', label: '07 Failures' },
+        { href: '#s8', label: '08 Accessibility' }, { href: '#s9', label: '09 Thai copy' },
+        { href: '#s10', label: '10 Cross-app' }, { href: '#s11', label: '11 Architecture' },
+        { href: '#s12', label: '12 Open decisions' }, { href: '#s13', label: '13 Acceptance' },
+      ],
+
+      inScope: [
+        'Sign in with phone and OTP, session restore, and the not-approved rider gate.',
+        'Availability: offline, going online, online, unable to go online, and the location precondition.',
+        'The offer inbox: live offer, countdown, accept, decline, expired, and the empty inbox.',
+        'The active delivery and its four steps: ไปที่ร้าน, รับอาหารที่ร้าน, ออกเดินทางไปส่ง, ส่งถึงลูกค้า.',
+        'Proof of delivery end to end: permission rationale, viewfinder, review, retake, three-stage submission, success.',
+        'Completion and the return to home, including why the active-delivery screen is empty afterwards.',
+        'Every architecture-supported failure, and what each one leaves open.',
+        'State matrix, interaction rules, accessibility semantics, and the Thai copy inventory.',
+        'Cross-app consistency with the customer and merchant surfaces already built.',
+        'Acceptance criteria a build can be checked against.',
+      ],
+      outScope: [
+        'Rider earnings and any money on a rider surface — BQ-029 is OPEN and the column is NULL by instruction.',
+        'Maps, routing, live tracking or a distance readout — no map library exists in this app.',
+        'Rider onboarding: document submission, vehicle details, and approval — BQ-022 remainder, LEGAL_REVIEW_REQUIRED.',
+        'Rider-initiated cancellation or release — DEC-021 exists as a command but has no approved rider-facing copy.',
+        'The FAILED delivery path — the state exists in the machine but its rider-facing resolution is not designed.',
+        'Push notifications — TQ-002 is OPEN, so nothing here promises an offer will arrive unattended.',
+        'Zones, service radius, working areas — DEC-037 removes all of them from Phase 1.',
+        'Operator and admin surfaces, including force-unassign, which is an admin capability.',
+        'Cash handling, change calculation, remittance limits — dormant under DEC-016.',
+        'The customer and merchant screens themselves — referenced for consistency, not redesigned.',
+      ],
+
+      flowSteps: [
+        { n: '1', title: 'Sign in', state: 'no session', action: 'Phone number, then a six-digit OTP. A persisted session skips both and lands on home.', branch: 'Wrong code, expired code, or a failed send each stay on the OTP screen with the code preserved.' },
+        { n: '2', title: 'Home, offline', state: 'rider APPROVED, is_online false', action: 'The availability card is the whole screen. เปิดรับงาน records a position and sets the flag.', branch: 'Not APPROVED renders the status strip with no toggle in the tree at all (DEC-UX-006).' },
+        { n: '3', title: 'Online, waiting', state: 'ONLINE_IDLE', action: 'The card states that new work will be sent when it arrives. The offer row carries a count when there is one.', branch: 'Location permission refused, or a failed write, leaves the rider offline and says so.' },
+        { n: '4', title: 'Offer arrives', state: 'OFFERED', action: 'งานที่เสนอ lists each pending offer with its round number and a live countdown to its 60 s expiry.', branch: 'Expired offers stay visible and still actionable — the server decides expiry, not the client.' },
+        { n: '5', title: 'Accept', state: 'RIDER_ASSIGNED', action: 'รับงาน claims the delivery. First accept wins; a loser sees the claim refused, not an error.', branch: 'Already-claimed, already-holding-a-delivery, and expired are three distinct refusals.' },
+        { n: '6', title: 'Ride to the shop', state: 'RIDER_ASSIGNED to AT_MERCHANT', action: 'ขั้นที่ 1 จาก 4. The dropoff card carries the shop name, the address snapshot and the landmark. ถึงร้านแล้ว advances.', branch: 'A reassignment away shows the delivery as being re-allocated, with no action button.' },
+        { n: '7', title: 'Collect the food', state: 'AT_MERCHANT to PICKED_UP', action: 'ขั้นที่ 2 จาก 4. รับอาหารแล้ว is the confirmation, and it is the only tap.', branch: 'A duplicate tap is refused by the server; the screen re-reads and shows the true step.' },
+        { n: '8', title: 'Ride to the customer', state: 'PICKED_UP to EN_ROUTE', action: 'ขั้นที่ 3 จาก 4. ออกไปส่ง. The recipient name, address, landmark and phone are on screen.', branch: 'A failed transition keeps the previous step and reports the server message.' },
+        { n: '9', title: 'Proof and complete', state: 'EN_ROUTE to DELIVERED', action: 'ส่งสำเร็จ opens the camera, not the API. Capture, review, then a three-stage submission closes the job.', branch: 'Abandoning the POD leg returns to a delivery still EN_ROUTE, still open, unchanged.' },
+      ],
+
+      screenMap: [
+        { id: 'R-00', route: 'SplashScreen', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'Session restore only. Shown while the persisted session is read so a signed-in rider never sees login flash.' },
+        { id: 'R-01', route: 'auth / Login', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'Phone entry and OTP request.' },
+        { id: 'R-02', route: 'auth / Otp', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'Six-digit verification, resend, and the invalid-code state.' },
+        { id: 'R-03', route: 'Home', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'Rider identity, the availability panel, the two navigation rows, sign out. No header.' },
+        { id: 'R-03s', route: 'Home / StatusScreen', kind: 'INLINE STATE', kindStyle: WARN, owns: 'The non-approved branch. Four strip variants, no toggle anywhere in the tree.' },
+        { id: 'R-04', route: 'Home / AvailabilityPanel', kind: 'INLINE STATE', kindStyle: WARN, owns: 'Offline, going online, online, load failure, and the action-error box beneath it.' },
+        { id: 'R-05', route: 'OfferInbox — งานที่เสนอ', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'Pending offers, per-card countdown, accept, decline, expired, empty, and the refresh.' },
+        { id: 'R-06', route: 'ActiveDelivery — งานที่กำลังทำ', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'The step header, the four-step list, the dropoff and shop card, and the one step button.' },
+        { id: 'SYS-1', route: 'OS location permission', kind: 'SYSTEM', kindStyle: BAD, owns: 'Requested by เปิดรับงาน, never on mount. A refusal leaves the rider offline.' },
+        { id: 'P-03', route: 'ProofCamera — rationale', kind: 'INLINE STATE', kindStyle: WARN, owns: 'What the camera is for, what it is not for, who sees the photo. The only path to the OS prompt.' },
+        { id: 'SYS-2', route: 'OS camera permission', kind: 'SYSTEM', kindStyle: BAD, owns: 'Triggered only by อนุญาตใช้กล้อง.' },
+        { id: 'P-04', route: 'ProofCamera — viewfinder', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'Dark, headerless. Guidance on a scrim, an 82pt shutter, inline capture errors.' },
+        { id: 'P-10', route: 'ProofCamera — blocked', kind: 'INLINE STATE', kindStyle: WARN, owns: 'Permanently denied permission. Offers settings and a human, never a completion path.' },
+        { id: 'P-05', route: 'ProofReview — ตรวจรูปก่อนยืนยัน', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'The privacy control: look, then retake freely. Nothing is uploaded from here.' },
+        { id: 'P-06', route: 'DeliveryConfirm — ยืนยันการส่ง', kind: 'SCREEN', kindStyle: NEUTRAL, owns: 'Confirm, the three submission stages, the failure state, and the success state. Four renderings, one route.' },
+      ],
+
+      frames: [
+        frame({
+          id: 'R-01', title: 'เข้าสู่ระบบ', sub: 'BANHAO ไรเดอร์', caption: 'Phone entry. One field, one action, and the OTP is requested only on tap.',
+          blocks: [
+            { boxStyle: CARD, title: 'เบอร์โทรศัพท์', titleStyle: 'font-size:13px;font-weight:600;color:#5A4E42', lines: [
+              { text: '081-234-5678', style: "font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:#1F1A16;padding:8px 0" },
+              { text: 'ใช้เบอร์ที่ลงทะเบียนไว้กับ BANHAO', style: L_META },
+            ]},
+          ],
+          primary: 'ขอรหัสยืนยัน',
+        }),
+        frame({
+          id: 'R-02', title: 'ใส่รหัสยืนยัน', sub: 'ส่งไปที่ 081-234-5678', caption: 'Invalid code keeps the digits and the focus. Resend is a secondary action, never the primary.',
+          blocks: [
+            { boxStyle: CARD_BAD, title: 'รหัสไม่ถูกต้อง', titleStyle: T_BAD, lines: [
+              { text: 'ตรวจรหัสอีกครั้ง หรือขอรหัสใหม่', style: L_DANGER },
+            ]},
+            { boxStyle: CARD, lines: [
+              { text: '· 6 หลัก · หมดอายุใน 4:12', style: L_MONO },
+              { text: 'ยังไม่ได้รับรหัส ขอรหัสใหม่ได้ในอีก 28 วินาที', style: L_META },
+            ]},
+          ],
+          primary: 'ยืนยัน', secondary: 'ขอรหัสใหม่',
+        }),
+        frame({
+          id: 'R-03a', title: 'หน้าหลัก', sub: 'สมชาย พงษ์ทอง', caption: 'Home, offline. StateCard variant offline: one headline with a faint status dot beside it. Both rows are navigation only and carry no state of their own.',
+          blocks: [
+            { boxStyle: CARD_INSET, title: 'ปิดรับงาน', titleStyle: T_CARD, lines: [
+              { text: 'ยังไม่ได้เปิดรับงาน จะไม่มีงานใหม่ส่งมา', style: L_BODY },
+              { text: 'ระบบยังไม่มีตำแหน่งของคุณ', style: L_META },
+            ]},
+            { boxStyle: ROW, lines: [{ text: 'งานที่กำลังทำ', style: L_STRONG }] },
+            { boxStyle: ROW, lines: [{ text: 'งานที่เสนอ', style: L_STRONG }, { text: 'ไม่มีงานรอการตอบรับ', style: L_META }] },
+          ],
+          note: 'ระบบบันทึกเฉพาะตำแหน่งล่าสุดเมื่อคุณกดเปิดรับงานหรือกดรีเฟรชเท่านั้น ไม่มีการติดตามขณะปิดแอป',
+          primary: 'เปิดรับงาน',
+        }),
+        frame({
+          id: 'R-03b', title: 'หน้าหลัก', sub: 'สมชาย พงษ์ทอง', caption: 'Online. StateCard variant online: one headline with a green status dot beside it. Presence, not freshness — the recorded position is an absolute time, never a relative age (DQ-G7-03).',
+          blocks: [
+            { boxStyle: CARD_OK, title: 'กำลังรับงาน', titleStyle: T_OK, lines: [
+              { text: 'ระบบจะส่งงานใหม่มาให้เมื่อมีงานเข้า', style: 'font-size:13.5px;line-height:1.7;color:#2C5F4C' },
+              { text: 'ตำแหน่งล่าสุดที่ระบบบันทึกไว้ 2/9/2569 18:39:04', style: 'font-size:12.5px;line-height:1.7;color:#3F6B58' },
+            ]},
+            { boxStyle: ROW, lines: [{ text: 'งานที่กำลังทำ', style: L_STRONG }] },
+            { boxStyle: 'border-radius:14px;border:2px solid #C2431F;background:#fff;padding:13px 16px;display:flex;flex-direction:column;gap:4px', lines: [
+              { text: 'งานที่เสนอ · 1', style: 'font-size:14px;font-weight:700;color:#C2431F;line-height:1.6' },
+              { text: '1 งานรอการตอบรับ', style: L_META },
+            ]},
+          ],
+          primary: 'ปิดรับงาน', primaryStyle: BTN2,
+        }),
+        frame({
+          id: 'R-03s', title: 'สถานะไรเดอร์', sub: 'สมชาย พงษ์ทอง', caption: 'Not approved. Factual and non-directive: no screen invents a resolution process nobody has decided (DQ-G7-01).',
+          blocks: [
+            { boxStyle: CARD_INSET, tag: 'รอตรวจสอบ', tagStyle: 'color:#8A6A0B', title: 'ยังรับงานไม่ได้', titleStyle: T_CARD, lines: [
+              { text: 'สถานะบัญชี PENDING_APPROVAL', style: L_MONO },
+              { text: 'เมื่อสถานะเปลี่ยน ปุ่มเปิดรับงานจะปรากฏที่หน้าหลัก', style: L_BODY },
+            ]},
+            { boxStyle: CARD, lines: [{ text: 'ไม่มีปุ่มเปิดรับงานในหน้านี้ ตามข้อกำหนด DEC-UX-006 — ไรเดอร์ที่ยังไม่ผ่านอนุมัติจะไม่เห็นปุ่มแบบกดไม่ได้', style: L_META }] },
+          ],
+          primary: 'รีเฟรชสถานะ', primaryStyle: BTN2, secondary: 'ออกจากระบบ',
+        }),
+        frame({
+          id: 'R-05', title: 'งานที่เสนอ', sub: '1 งานรอการตอบรับ', caption: 'Offer inbox. The countdown is the 60 s DEC-037 window. An expired card stays actionable, because the server owns expiry.',
+          blocks: [
+            { boxStyle: 'border-radius:20px;border:2px solid #C2431F;background:#fff;overflow:hidden;display:flex;flex-direction:column', lines: [
+              { text: 'งานใหม่ · 41 วิ', style: 'background:#C2431F;color:#fff;font-size:14px;font-weight:700;padding:12px 16px' },
+              { text: 'งานรอบที่ 1', style: 'font-size:17px;font-weight:700;padding:14px 16px 4px' },
+              { text: 'รายละเอียดร้านและจุดส่งจะแสดงเมื่อรับงานแล้ว', style: 'font-size:12.5px;line-height:1.7;color:#7A6E64;padding:0 16px 14px' },
+            ]},
+            { boxStyle: 'border-radius:20px;border:1.5px solid #E0D6C8;background:#fff;overflow:hidden;display:flex;flex-direction:column;opacity:.7', lines: [
+              { text: 'หมดเวลารับ', style: 'background:#EFE7DC;color:#5A4E42;font-size:14px;font-weight:700;padding:12px 16px' },
+              { text: 'งานรอบที่ 3', style: 'font-size:17px;font-weight:700;padding:14px 16px 4px' },
+              { text: 'งานนี้เลยเวลารับแล้ว จะหายไปจากรายการเมื่อระบบอัปเดตรอบถัดไป', style: 'font-size:12.5px;line-height:1.7;color:#5A4E42;background:#EFE7DC;border-radius:14px;margin:0 16px 14px;padding:10px 12px' },
+            ]},
+          ],
+          primary: 'รับงาน', secondary: 'ปฏิเสธ',
+        }),
+        frame({
+          id: 'R-06a', title: 'งานที่กำลังทำ', sub: 'ขั้นที่ 1 จาก 4 · ไปที่ร้าน', caption: 'Step 1. The step comes from the server state, never from a local counter, so the list and the button can never disagree.',
+          blocks: [
+            { boxStyle: CARD, title: 'ขั้นที่ 1 จาก 4 · ไปที่ร้าน', titleStyle: T_CARD, lines: [
+              { text: 'สถานะงาน RIDER_ASSIGNED', style: L_MONO },
+              { text: 'ออเดอร์ BH-260902-0148', style: L_MONO },
+            ]},
+            { boxStyle: CARD, lines: [
+              { text: '1. ไปที่ร้าน', style: 'font-size:14px;font-weight:700;color:#1F1A16' },
+              { text: '2. รับอาหารที่ร้าน', style: L_META },
+              { text: '3. ออกเดินทางไปส่ง', style: L_META },
+              { text: '4. ส่งถึงลูกค้า', style: L_META },
+            ]},
+            { boxStyle: CARD, tag: 'ร้าน', tagStyle: 'color:#A2968A', lines: [
+              { text: 'ร้านตามสั่งป้าสมร', style: L_STRONG },
+              { text: 'ตลาดสดบุณฑริก · ต.บุณฑริก', style: L_BODY },
+            ]},
+          ],
+          primary: 'ถึงร้านแล้ว',
+        }),
+        frame({
+          id: 'R-06d', title: 'งานที่กำลังทำ', sub: 'ขั้นที่ 4 จาก 4 · ส่งถึงลูกค้า', caption: 'Step 4. ส่งสำเร็จ opens the POD leg instead of calling the API — a completion needs a photo first (DEC-038).',
+          blocks: [
+            { boxStyle: CARD, title: 'ขั้นที่ 4 จาก 4 · ส่งถึงลูกค้า', titleStyle: T_CARD, lines: [
+              { text: 'สถานะงาน EN_ROUTE', style: L_MONO },
+              { text: 'ออเดอร์ BH-260902-0148', style: L_MONO },
+            ]},
+            { boxStyle: CARD, tag: 'จุดส่ง', tagStyle: 'color:#A2968A', lines: [
+              { text: 'คุณมาลี ศรีสุข', style: L_STRONG },
+              { text: '128 หมู่ 4 ต.บุณฑริก อ.บุณฑริก จ.อุบลราชธานี', style: L_BODY },
+              { text: 'จุดสังเกต: ตรงข้ามร้านขายยา บ้านรั้วเขียว', style: L_BODY },
+              { text: 'โทร 082-111-0009', style: L_MONO },
+            ]},
+          ],
+          note: 'ต้องถ่ายรูปหลักฐานก่อนปิดงาน',
+          primary: 'ส่งสำเร็จ',
+        }),
+        frame({
+          id: 'P-03', title: 'ขออนุญาตใช้กล้อง', sub: 'ก่อนถ่ายรูปหลักฐาน', caption: 'The rationale precedes the OS prompt, and only อนุญาตใช้กล้อง triggers it. A rider with no reason to say yes is never asked.',
+          blocks: [
+            { boxStyle: CARD, lines: [
+              { text: 'BANHAO ใช้กล้องเพื่อถ่ายรูปหลักฐานการส่งเท่านั้น ระบบไม่เปิดกล้องเองและไม่ถ่ายรูปโดยที่คุณไม่ได้กด', style: L_BODY },
+            ]},
+            { boxStyle: CARD, lines: [
+              { text: '· รูปถูกส่งไปเก็บที่ระบบ ไม่ได้เก็บในคลังรูปของเครื่อง', style: L_BODY },
+              { text: '· ลูกค้าเห็นรูปนี้ในรายละเอียดออเดอร์ของตัวเอง', style: L_BODY },
+              { text: '· คุณถ่ายใหม่ได้ก่อนกดยืนยัน', style: L_BODY },
+            ]},
+          ],
+          primary: 'อนุญาตใช้กล้อง', secondary: 'ไม่ใช่ตอนนี้',
+        }),
+        frame({
+          id: 'P-04', title: 'ถ่ายรูปหลักฐาน', sub: 'กล้องหลัง · ไม่มีคลังรูป', dark: true, statusRight: 'LTE 84%',
+          caption: 'Viewfinder, headerless so light chrome never flashes over a dark scene. Guidance sits on a scrim; the shutter is 82pt.',
+          blocks: [
+            { boxStyle: 'flex:1;border-radius:16px;border:1px dashed rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center', lines: [
+              { text: 'ภาพจากกล้อง', style: 'font-size:12.5px;color:rgba(255,255,255,.5)' },
+            ]},
+            { boxStyle: CARD_DARK, title: 'ถ่ายรูปอาหาร/พัสดุที่วางไว้ ณ จุดส่ง', titleStyle: T_DARK, lines: [
+              { text: 'ให้เห็นจุดวางพอเป็นหลักฐาน · ไม่ต้องมีคนอยู่ในรูป', style: L_DARKBODY },
+              { text: 'ไม่ต้องถ่ายหน้าลูกค้า ไม่ต้องถ่ายบัตรหรือเอกสาร', style: L_DARKBODY },
+            ]},
+          ],
+          primary: 'ถ่ายรูป', primaryStyle: 'height:82px;width:82px;border-radius:41px;border:5px solid #fff;background:rgba(255,255,255,.78);color:#1F1A16;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;align-self:center',
+        }),
+        frame({
+          id: 'P-05', title: 'ตรวจรูปก่อนยืนยัน', sub: 'ถ่ายเมื่อ 18:42:07', dark: true,
+          caption: 'The privacy control. No blur or face detection — a look and an unlimited retake instead. Nothing uploads from here.',
+          blocks: [
+            { boxStyle: 'flex:1;border-radius:16px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center', lines: [
+              { text: 'รูปที่ถ่ายไว้', style: 'font-size:12.5px;color:rgba(255,255,255,.5)' },
+            ]},
+            { boxStyle: 'display:flex;flex-direction:column;gap:6px', lines: [
+              { text: 'เห็นอาหารและจุดวางชัดเจนไหม ถ้าไม่ชัด ถ่ายใหม่ได้', style: 'font-size:14px;color:#fff;line-height:1.7' },
+            ]},
+          ],
+          primary: 'ใช้รูปนี้', secondary: 'ถ่ายใหม่', secondaryStyle: BTN_DARK2,
+        }),
+        frame({
+          id: 'P-07', title: 'ยืนยันการส่ง', sub: 'กำลังส่งรูปหลักฐาน', caption: 'In flight. Three named stages, an inert CTA, and copy that refuses to call it delivered before the server does.',
+          blocks: [
+            { boxStyle: CARD, tag: 'รูปหลักฐาน', tagStyle: 'color:#A2968A', lines: [
+              { text: 'รูปหลักฐานพร้อมแล้ว', style: L_STRONG },
+              { text: 'ถ่ายเมื่อ 18:42:07', style: L_META },
+            ]},
+            { boxStyle: CARD_INSET, title: 'กำลังส่งรูปหลักฐาน', titleStyle: T_CARD, lines: [
+              { text: 'อย่าปิดแอปจนกว่าจะเสร็จ', style: L_BODY },
+              { text: 'ยังไม่ถือว่าส่งสำเร็จ จนกว่าระบบจะตอบรับ', style: L_BODY },
+            ]},
+          ],
+          note: 'กดยืนยันแล้วงานนี้จะปิดและแก้ไขรูปไม่ได้',
+          primary: 'กำลังส่ง…', primaryStyle: BTN_BUSY,
+        }),
+        frame({
+          id: 'P-08', title: 'ยืนยันการส่ง', sub: 'ส่งรูปไม่สำเร็จ', caption: 'Failure. The job stays open, the photo stays on the device, and the retry hint distinguishes bytes-uploaded from not.',
+          blocks: [
+            { boxStyle: CARD_BAD, title: 'ส่งรูปไม่สำเร็จ', titleStyle: T_BAD, lines: [
+              { text: 'เชื่อมต่อระบบไม่ได้', style: L_DANGER },
+              { text: 'ยังไม่ได้ยืนยันการส่ง งานนี้ยังเปิดอยู่', style: L_DANGER },
+              { text: 'รูปที่ถ่ายไว้ยังอยู่ในเครื่อง ไม่ต้องถ่ายใหม่', style: L_DANGER },
+            ]},
+            { boxStyle: CARD, tag: 'รูปหลักฐาน', tagStyle: 'color:#A2968A', lines: [
+              { text: 'รูปหลักฐานพร้อมแล้ว', style: L_STRONG },
+              { text: 'ถ่ายเมื่อ 18:42:07', style: L_META },
+            ]},
+          ],
+          primary: 'ลองส่งอีกครั้ง', secondary: 'ถ่ายใหม่',
+        }),
+        frame({
+          id: 'P-09', title: 'ส่งสำเร็จ', sub: 'ปิดงานเรียบร้อย', caption: 'Success, reached only from a 200 carrying delivered_at. กลับหน้าหลัก resets the stack so back cannot reopen a closed delivery.',
+          blocks: [
+            { boxStyle: CARD_OK, title: 'ส่งสำเร็จ', titleStyle: T_OK, lines: [
+              { text: 'ปิดเรียบร้อย ระบบบันทึกรูปหลักฐานไว้แล้ว', style: 'font-size:13.5px;line-height:1.7;color:#2C5F4C' },
+              { text: 'เวลาส่งสำเร็จ 18:43:11', style: "font-family:'IBM Plex Mono',monospace;font-size:13px;color:#2C5F4C" },
+              { text: 'คุณพร้อมรับงานใหม่แล้ว', style: 'font-size:13.5px;line-height:1.7;color:#2C5F4C' },
+            ]},
+          ],
+          primary: 'กลับหน้าหลัก',
+        }),
+        frame({
+          id: 'P-10', title: 'แอปยังไม่ได้รับอนุญาตใช้กล้อง', sub: 'สิทธิ์ถูกปิดไว้', caption: 'Permanently denied. Two exits — settings, or a human — and deliberately no way to close the delivery without a photo.',
+          blocks: [
+            { boxStyle: CARD, lines: [
+              { text: 'เปิดสิทธิ์กล้องในตั้งค่าของเครื่อง แล้วกลับมาถ่ายรูปหลักฐาน', style: L_BODY },
+              { text: 'ตั้งค่า › BANHAO Driver › กล้อง', style: L_MONO },
+            ]},
+            { boxStyle: CARD_INSET, lines: [
+              { text: 'งานนี้ยังไม่ปิด และยังอยู่ในรายการงานของคุณ · ถ้าถ่ายรูปไม่ได้จริง ๆ ให้ติดต่อผู้ดูแล', style: L_BODY },
+            ]},
+          ],
+          primary: 'เปิดตั้งค่า', secondary: 'กลับไปหน้างาน',
+        }),
+      ],
+
+      specs: [
+        { id: 'R-01/R-02', name: 'Sign in', route: 'auth stack, headerShown false', reads: 'Supabase phone auth only. The rider record is not read here — whether the signed-in user is an approved rider is a separate question answered on home.', primary: 'ขอรหัสยืนยัน, then ยืนยัน. A persisted session bypasses both via the splash.', absent: 'No registration, no document upload, no vehicle form — BQ-022 remainder is LEGAL_REVIEW_REQUIRED.' },
+        { id: 'R-03', name: 'หน้าหลัก', route: 'Home, no header', reads: 'The rider record fresh on every mount (never the cached session, per DEC-APP-004), availability, and one offer count per focus.', primary: 'เปิดรับงาน or ปิดรับงาน. Everything else on the screen is navigation.', absent: 'No earnings, no map, no delivery detail, no badge on งานที่กำลังทำ — that screen owns its own read.' },
+        { id: 'R-03s', name: 'สถานะไรเดอร์', route: 'Home / StatusScreen', reads: 'riders.status, projected onto the four DEC-UX-006 strip variants.', primary: 'รีเฟรชสถานะ. There is no availability control in the tree at all.', absent: 'No copy that describes a review, a resubmission or a support route — none of those processes is decided.' },
+        { id: 'R-05', name: 'งานที่เสนอ', route: 'OfferInbox', reads: 'Pending offer attempts: offer id, round number, offered-at, expires-at. This is the whole payload the rider read path carries.', primary: 'รับงาน per card, ปฏิเสธ beside it at roughly a third of the width.', absent: 'No pickup distance, no dropoff, no fee, no ETA — see OD-02, which records the conflict this creates with the honest-offer principle.' },
+        { id: 'R-06', name: 'งานที่กำลังทำ', route: 'ActiveDelivery', reads: 'The delivery row (id and state) plus the rider order projection for the shop, recipient, address snapshot, landmark and phone.', primary: 'Exactly one step button, whose label and command come from the server state.', absent: 'No money, no map, no cancel or release control, no dialer intent yet, and no button at all while a delivery is being re-allocated.' },
+        { id: 'P-04', name: 'ถ่ายรูปหลักฐาน', route: 'ProofCamera', reads: 'The camera permission state. Nothing about the delivery beyond its id.', primary: 'The 82pt shutter. One capture, validated mechanically before the screen changes.', absent: 'No gallery import, no flash toggle in this slice, no blur or face detection, no quality score.' },
+        { id: 'P-05', name: 'ตรวจรูปก่อนยืนยัน', route: 'ProofReview', reads: 'The captured photo and its capture time, held on the device.', primary: 'ใช้รูปนี้ advances to confirm; ถ่ายใหม่ replaces the camera screen rather than pushing another.', absent: 'No upload. Capture, review and submission stay three distinct acts so an abandoned attempt costs nothing.' },
+        { id: 'P-06', name: 'ยืนยันการส่ง', route: 'DeliveryConfirm', reads: 'The photo, and the submission stage machine: presigning, uploading, confirming, then delivered-at from the response.', primary: 'ส่งสำเร็จ, becoming ลองส่งอีกครั้ง after a failure. Retake is disabled mid-flight.', absent: 'No optimistic success, no local clock, no partial-success state, and no way back to a delivery already closed.' },
+      ],
+
+      stateMatrix: [
+        { state: 'auth / loading', ui: 'Splash while the persisted session is read.', primary: 'none', secondary: 'none', failure: 'A failed restore falls through to login, not to an error screen.', a11y: 'No focus trap; nothing announced until a real screen mounts.' },
+        { state: 'auth / invalid OTP', ui: 'Danger card above the field; digits preserved.', primary: 'ยืนยัน', secondary: 'ขอรหัสใหม่', failure: 'Repeated failures never clear the field or bounce the rider back to phone entry.', a11y: 'Error announced assertively and linked to the field.' },
+        { state: 'home / loading', ui: 'Spinner with กำลังโหลดสถานะไรเดอร์…', primary: 'none', secondary: 'none', failure: 'A failed read renders an error, never a not-approved state.', a11y: 'role status, polite live region.' },
+        { state: 'home / not approved', ui: 'Status strip with the account state, factual copy.', primary: 'รีเฟรชสถานะ', secondary: 'ออกจากระบบ', failure: 'A read failure keeps the previous strip and states the failure separately.', a11y: 'Status is text, never colour alone.' },
+        { state: 'availability / OFFLINE', ui: 'Inset card, ปิดรับงาน headline, no-position note.', primary: 'เปิดรับงาน', secondary: 'รีเฟรชสถานะ', failure: 'A failed write leaves the rider offline and shows the reason in the action-error box.', a11y: 'Toggle is a 56pt button with an explicit label, not a switch.' },
+        { state: 'availability / going online', ui: 'Button in loading state; card unchanged.', primary: 'inert', secondary: 'none', failure: 'Location refused, no position recorded, or a server refusal all end offline.', a11y: 'Busy state announced; duplicate taps ignored while in flight.' },
+        { state: 'availability / ONLINE', ui: 'Success card, plus the absolute recorded-position time.', primary: 'ปิดรับงาน', secondary: 'รีเฟรชสถานะ', failure: 'Online with no position states that the rider is undispatchable rather than hiding it.', a11y: 'Online state carries a text label; the offer count is text, not only a dot.' },
+        { state: 'offers / empty', ui: 'ไม่มีงานรอการตอบรับ, with a refresh.', primary: 'รีเฟรช', secondary: 'none', failure: 'A failed list read shows an error with retry, never an empty list.', a11y: 'Empty and error are distinct announcements.' },
+        { state: 'offers / live', ui: 'Bordered card, orange header, live countdown.', primary: 'รับงาน', secondary: 'ปฏิเสธ', failure: 'Accept refused for expiry, an existing delivery, or another rider winning — three distinct messages.', a11y: 'Countdown is polite, not assertive, so it does not interrupt every second.' },
+        { state: 'offers / acting', ui: 'Header becomes กำลังส่งคำขอรับงาน; other cards dim.', primary: 'inert', secondary: 'inert', failure: 'The card returns to live with the refusal stated inline.', a11y: 'Only one action can be in flight; the rest are disabled with reasons.' },
+        { state: 'offers / expired', ui: 'Neutral header, หมดเวลารับ, note about the next round.', primary: 'รับงาน still enabled', secondary: 'ปฏิเสธ', failure: 'The server decides; a late accept that fails says so plainly.', a11y: 'Expiry is stated in text, and the card is not removed under the rider thumb.' },
+        { state: 'delivery / empty', ui: 'ไม่มีงานที่กำลังทำ with an explanation of where work appears.', primary: 'รีเฟรช', secondary: 'none', failure: 'A read failure is an error state, distinct from empty.', a11y: 'Both are announced; neither is implied by an empty screen.' },
+        { state: 'delivery / step 1-3', ui: 'Step header, four-step list, shop and dropoff card.', primary: 'The one step button', secondary: 'รีเฟรช', failure: 'A refused transition keeps the step and shows the server message above the card.', a11y: 'Step position announced as ขั้นที่ N จาก 4 on change.' },
+        { state: 'delivery / reassigning', ui: 'กำลังจัดสรรงานใหม่ with no action button.', primary: 'none', secondary: 'รีเฟรช', failure: 'No button is offered from a state no endpoint accepts.', a11y: 'The absence of an action is stated in words, not inferred from a missing button.' },
+        { state: 'POD / submitting', ui: 'Named stage, do-not-close warning, inert CTA.', primary: 'inert', secondary: 'retake disabled', failure: 'Any stage failure keeps the photo and the open job.', a11y: 'Each stage change is a polite live-region update.' },
+        { state: 'POD / delivered', ui: 'Success card with the server delivered-at time.', primary: 'กลับหน้าหลัก', secondary: 'none', failure: 'Unreachable — the state is entered only from a successful response.', a11y: 'Success announced; the stack resets so back cannot revisit.' },
+      ],
+
+      interactions: [
+        { title: 'One primary action per screen', body: 'Every screen has exactly one filled control. Where two actions are genuinely peer — accept and decline — the secondary is outlined and roughly a third of the width, so a wrong tap under time pressure is unlikely.' },
+        { title: 'The server owns state', body: 'No screen advances a local step counter. Every step label, button label and command comes from the delivery state the server last returned, so a stale screen shows the truth after one refresh rather than a wrong step.' },
+        { title: 'Duplicate-action prevention', body: 'Any in-flight action disables its own control and every peer control on the screen. A duplicate transition that still reaches the API is refused there, and the screen re-reads rather than guessing which of the two won.' },
+        { title: 'Back navigation', body: 'Back is always available except in the middle of a submission. From the POD leg, back returns to a delivery still EN_ROUTE and still open. After a completion the stack resets, so back cannot reach a confirm screen for a closed job.' },
+        { title: 'Retake replaces, never pushes', body: 'ถ่ายใหม่ replaces the current screen with the camera. A rider who retakes five times has a stack one level deep, not five, and cannot get lost inside their own attempts.' },
+        { title: 'Confirmation only where it is destructive', body: 'The four step transitions ask nothing: they are ordinary progress and are individually recoverable by the server. The single confirmation in the flow is the POD warning, because a completion is irreversible and the photo cannot be changed afterwards.' },
+        { title: 'Timeout behaviour', body: 'The only timer in the product is the 60 s accept window (DEC-037), rendered as a per-card countdown. Expiry does not remove the card, disable its buttons, or navigate anywhere — the server decides, and a late accept is a legitimate request.' },
+        { title: 'Permissions are asked, never assumed', body: 'Location is requested by เปิดรับงาน; the camera by อนุญาตใช้กล้อง. Neither is requested on mount, and a refusal never leaves the rider in a state they cannot back out of.' },
+        { title: 'Retry preserves work', body: 'A failed transition keeps the screen. A failed POD submission keeps the photo, states whether the bytes already reached storage, and offers one retry that sends only what still needs sending.' },
+        { title: 'No aggressive polling', body: 'Offers refresh on focus and on an explicit pull, plus the existing foreground poll. Nothing in the copy promises an offer will arrive while the app is closed, because no push channel exists yet (TQ-002).' },
+        { title: 'External navigation', body: 'Not wired. The rider navigates by the address snapshot and the landmark, which is what the read path carries. A maps hand-off is an addition, not a redesign, and is recorded as OD-05 rather than drawn.' },
+        { title: 'Sign out is never adjacent to a primary action', body: 'It sits at the bottom of home as a secondary control, and never appears on a screen that holds an active delivery step or an in-flight submission.' },
+      ],
+
+      failures: [
+        { case: 'Offer expired', ui: 'Header turns neutral, หมดเวลารับ, and a note explains the card will disappear on the next round.', recovery: 'Buttons stay enabled. A late accept is sent and its refusal is reported honestly.' },
+        { case: 'Offer already claimed', ui: 'Inline refusal on the card that was tapped; other cards return from dimmed to live.', recovery: 'The list re-reads. First accept wins is DEC-020, and losing is not an error the rider caused.' },
+        { case: 'Rider declines', ui: 'The card leaves the list on the next read. Nothing else changes.', recovery: 'DEC-021 makes a decline routine; no penalty copy appears anywhere.' },
+        { case: 'Already holding a delivery', ui: 'Accept is refused with the reason: one active delivery per rider (BQ-021).', recovery: 'The rider is pointed at งานที่กำลังทำ rather than left guessing.' },
+        { case: 'Merchant not ready at pickup', ui: 'No dedicated state exists in the delivery machine, so none is invented. The rider stays on ขั้นที่ 1 or 2.', recovery: 'Recorded as OD-03. The step button is not disabled and no waiting timer is shown.' },
+        { case: 'Order cancelled or unavailable', ui: 'The delivery leaves the active set and the screen shows ไม่มีงานที่กำลังทำ.', recovery: 'Refresh confirms. No dialog interrupts a rider mid-ride.' },
+        { case: 'Delivery re-allocated away', ui: 'กำลังจัดสรรงานใหม่, no action button, and the reason stated in words.', recovery: 'A re-allocation the rider did not cause is never presented as their failure (RIDER_LIFECYCLE §11.5).' },
+        { case: 'Customer unavailable', ui: 'The FAILED state exists in the machine but has no rider-facing path in this design.', recovery: 'Recorded as OD-04. No in-app failure button is drawn, because no approved copy or authorization exists.' },
+        { case: 'Network failure, transition', ui: 'The step is unchanged and a single line above the card carries the server or connection message.', recovery: 'The same button retries. Nothing is queued silently.' },
+        { case: 'Location unavailable when going online', ui: 'The rider stays offline; the action-error box states that no position was recorded.', recovery: 'เปิดรับงาน retries. Presence, not freshness, is what dispatch needs (DEC-037).' },
+        { case: 'Camera permission denied once', ui: 'The rationale screen remains, with อนุญาตใช้กล้อง and ไม่ใช่ตอนนี้.', recovery: 'Back returns to an untouched delivery.' },
+        { case: 'Camera permission denied permanently', ui: 'The blocked screen: settings deep link, back to the job, and a line about contacting an operator.', recovery: 'There is deliberately no completion path without a photo (DEC-038, POD-Q-02).' },
+        { case: 'Capture failed or unreadable file', ui: 'One inline line under the guidance; the viewfinder stays live and the shutter re-arms.', recovery: 'No dialog and no navigation away from the camera.' },
+        { case: 'POD upload or confirm failed', ui: 'Danger card naming the failure, that the job is still open, and whether the photo already reached storage.', recovery: 'ลองส่งอีกครั้ง sends only the remaining work; ถ่ายใหม่ is available when nothing is in flight.' },
+        { case: 'Session expired mid-flow', ui: 'The stack returns to login; no half-finished screen is left mounted behind it.', recovery: 'After signing in the rider lands on home, and the active delivery is re-read from the server, not from anything cached.' },
+      ],
+
+      a11y: [
+        { control: 'Touch targets', body: 'Nothing interactive is under 44pt, and every primary action is 52 to 56pt tall. The shutter is 82pt, sized to be pressed with a glove on a bike stand.' },
+        { control: 'Contrast', body: 'Fills use action.primary #C2431F at 5.07:1 on white rather than the brand orange at 3.68:1. Danger headlines use #B23030 at 5.9:1 on cream; brand orange appears only as a mark or a tint, never behind small white text.' },
+        { control: 'Never colour alone', body: 'Online, offline, expired and blocked all carry a text label beside any colour or dot. The offer count is a number, not just a badge.' },
+        { control: 'Live announcements', body: 'Availability changes, step changes, each POD stage and every failure are announced. Stage and countdown updates are polite; failures are assertive, since they can arrive after focus has moved.' },
+        { control: 'Disabled and busy states', body: 'An in-flight control reports busy and disabled rather than silently ignoring taps, and the reason is text a screen reader can reach.' },
+        { control: 'Camera accessibility', body: 'The shutter has an explicit label, ถ่ายรูปหลักฐาน, and reports its busy state. Guidance sits on a scrim so it stays readable against any scene, and is real text rather than baked into an image.' },
+        { control: 'Photo alt text', body: 'The review image is labelled with what it is and when it was taken, so a screen-reader user is told the photo exists and can still choose to retake.' },
+        { control: 'Absolute times', body: 'Every timestamp is absolute local time. A relative age would read as a freshness judgement, and no staleness rule is decided (DQ-G7-03).' },
+        { control: 'Error messaging', body: 'Every failure states what failed, what is still true, and what to do next. No failure copy invents a support process or a phone number that is not decided.' },
+        { control: 'One-handed reach', body: 'Primary actions sit in the lower third on every screen. Nothing destructive shares an edge with a frequently tapped control, and sign out is never on an active-delivery screen.' },
+      ],
+
+      copyRows: [
+        { context: 'Login title', thai: 'เข้าสู่ระบบ', origin: 'DESIGN', originStyle: WARN },
+        { context: 'Request OTP', thai: 'ขอรหัสยืนยัน', origin: 'DESIGN', originStyle: WARN },
+        { context: 'Home title', thai: 'หน้าหลัก', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Home loading', thai: 'กำลังโหลดสถานะไรเดอร์…', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Home read failure', thai: 'โหลดสถานะไรเดอร์ไม่สำเร็จ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Availability off', thai: 'ปิดรับงาน', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Availability off detail', thai: 'ยังไม่ได้เปิดรับงาน จะไม่มีงานใหม่ส่งมา', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Availability on', thai: 'กำลังรับงาน', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Availability on detail', thai: 'ระบบจะส่งงานใหม่มาให้เมื่อมีงานเข้า', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Go online', thai: 'เปิดรับงาน', origin: 'SHIPPED', originStyle: OK },
+        { context: 'No recorded position', thai: 'ระบบยังไม่มีตำแหน่งของคุณ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Location privacy note', thai: 'ระบบบันทึกเฉพาะตำแหน่งล่าสุดเมื่อคุณกดเปิดรับงานหรือกดรีเฟรชเท่านั้น ไม่มีการติดตามขณะปิดแอป', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Offer inbox title', thai: 'งานที่เสนอ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Offer header, live', thai: 'งานใหม่', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Offer header, expired', thai: 'หมดเวลารับ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Offer expired note', thai: 'งานนี้เลยเวลารับแล้ว จะหายไปจากรายการเมื่อระบบอัปเดตรอบถัดไป', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Accept / decline', thai: 'รับงาน · ปฏิเสธ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Accept in flight', thai: 'กำลังส่งคำขอรับงาน', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Active delivery title', thai: 'งานที่กำลังทำ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Active delivery empty', thai: 'ไม่มีงานที่กำลังทำ · เมื่อคุณรับงานจากหน้างานที่เสนอ งานจะแสดงที่นี่', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Step 1 to 4 titles', thai: 'ไปที่ร้าน · รับอาหารที่ร้าน · ออกเดินทางไปส่ง · ส่งถึงลูกค้า', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Step 1 to 4 buttons', thai: 'ถึงร้านแล้ว · รับอาหารแล้ว · ออกไปส่ง · ส่งสำเร็จ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Reassigning', thai: 'งานนี้กำลังถูกจัดสรรใหม่ ยังทำรายการต่อไม่ได้', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Camera rationale title', thai: 'ขออนุญาตใช้กล้อง', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Camera guidance', thai: 'ถ่ายรูปอาหาร/พัสดุที่วางไว้ ณ จุดส่ง', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Camera exclusions', thai: 'ไม่ต้องถ่ายหน้าลูกค้า ไม่ต้องถ่ายบัตรหรือเอกสาร', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Review title and question', thai: 'ตรวจรูปก่อนยืนยัน · เห็นอาหารและจุดวางชัดเจนไหม ถ้าไม่ชัด ถ่ายใหม่ได้', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Retake / use photo', thai: 'ถ่ายใหม่ · ใช้รูปนี้', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Submission stages', thai: 'กำลังเตรียมอัปโหลด · กำลังส่งรูปหลักฐาน · กำลังยืนยันการส่ง', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Submission warnings', thai: 'อย่าปิดแอปจนกว่าจะเสร็จ · ยังไม่ถือว่าส่งสำเร็จ จนกว่าระบบจะตอบรับ', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Irreversibility warning', thai: 'กดยืนยันแล้วงานนี้จะปิดและแก้ไขรูปไม่ได้', origin: 'SHIPPED', originStyle: OK },
+        { context: 'POD failure', thai: 'ส่งรูปไม่สำเร็จ · ยังไม่ได้ยืนยันการส่ง งานนี้ยังเปิดอยู่', origin: 'SHIPPED', originStyle: OK },
+        { context: 'POD retry hints', thai: 'รูปที่ถ่ายไว้ยังอยู่ในเครื่อง ไม่ต้องถ่ายใหม่ · เมื่อสัญญาณกลับมา กดลองส่งอีกครั้ง', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Completion', thai: 'ส่งสำเร็จ · ปิดเรียบร้อย ระบบบันทึกรูปหลักฐานไว้แล้ว · คุณพร้อมรับงานใหม่แล้ว', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Camera blocked', thai: 'แอปยังไม่ได้รับอนุญาตใช้กล้อง · งานนี้ยังไม่ปิด และยังอยู่ในรายการงานของคุณ · ถ้าถ่ายรูปไม่ได้จริง ๆ ให้ติดต่อผู้ดูแล', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Generic retry', thai: 'ลองอีกครั้ง', origin: 'SHIPPED', originStyle: OK },
+        { context: 'Back label', thai: 'กลับ', origin: 'SHIPPED', originStyle: OK },
+      ],
+
+      consistency: [
+        { topic: 'Typography', body: 'IBM Plex Sans Thai at the shared weights, with the driver type scale one step larger than the customer app for outdoor reading. Thai line-height stays at 1.55 to 1.75 so upper and lower vowels never collide.' },
+        { topic: 'Colour', body: 'The driver semantic layer over the shared tokens: action.primary #C2431F for fills, brand.accent #E4572E for marks and tints, state.dangerText #B23030 for error headlines. No new hue is introduced by this package.' },
+        { topic: 'Buttons', body: 'The shared Button component in its primary, secondary and ghost variants at size lg. Nothing here needs a fourth variant.' },
+        { topic: 'Order identity', body: 'Orders are named by their order number exactly as the merchant board and the customer app render them. The rider never sees a delivery id or a raw uuid.' },
+        { topic: 'Status language', body: 'The rider step names are the rider-facing vocabulary; the raw delivery state is shown once, as monospace supporting text, for support calls. The customer sees their own state names, and the two are never mixed on one surface.' },
+        { topic: 'Error patterns', body: 'The same shape every app uses: a headline naming what failed, a detail line, the server message when there is one, and one retry. Nothing claims an operation succeeded, and nothing clears the rider work.' },
+        { topic: 'Absent-data convention', body: 'A value that cannot be loaded is stated, never faked with a dash or a placeholder — the same rule the merchant order panel and the driver redesign already follow.' },
+        { topic: 'Navigation', body: 'One stack, Thai back label กลับ, and headers only on screens where going back is meaningful. The camera and review screens are headerless so light chrome never flashes over a dark viewfinder.' },
+      ],
+
+      apiRows: [
+        { capability: 'Availability toggle', surface: 'rider_availability update (is_online), client write under RLS', status: 'EXISTS', statusStyle: OK, note: 'The only client-writable rider surface. Location is recorded through the API before the flag is set.' },
+        { capability: 'Recorded position', surface: 'rider location service, presence only', status: 'EXISTS', statusStyle: OK, note: 'DEC-037 eligibility is APPROVED, online, and a recorded location. No radius, no zone, no staleness rule.' },
+        { capability: 'Offer list', surface: 'rider_assignment_attempts select, own rows', status: 'EXISTS', statusStyle: OK, note: 'The rider read path before accepting. Carries offer id, round, offered-at and expires-at, and no order detail — see OD-02.' },
+        { capability: 'Accept / decline', surface: 'rider offer accept and decline commands', status: 'EXISTS', statusStyle: OK, note: 'Atomic claim; first accept wins (DEC-020). Losing is a refusal, not an error state.' },
+        { capability: 'Active delivery read', surface: 'deliveries select, scoped by assigned rider', status: 'EXISTS', statusStyle: OK, note: 'Carries the delivery id and state that the rider order projection does not, so the step survives an app restart.' },
+        { capability: 'Order detail for a held delivery', surface: 'rider order projection', status: 'EXISTS', statusStyle: OK, note: 'Shop name, recipient name, address snapshot, landmark, phone. Money columns exist in the row and are deliberately not projected.' },
+        { capability: 'Four step transitions', surface: 'arrived · pickedUp · enRoute · delivered', status: 'EXISTS', statusStyle: OK, note: 'All four rider commands exist. The fourth carries the proof and is refused without it.' },
+        { capability: 'Proof upload', surface: 'presigned upload to the private bucket, then the delivered command', status: 'EXISTS', statusStyle: OK, note: 'Server-templated keys, a MIME allow-list and a 2 MB server-side size check. Never exercised against a real bucket.' },
+        { capability: 'Proof read back', surface: 'short-lived signed URL, per request', status: 'EXISTS', statusStyle: OK, note: 'No public URL for a proof photo. Retention is 90 days referenced, 7 days orphan (DEC-039), purge default off.' },
+        { capability: 'Offer push', surface: 'no push channel', status: 'MISSING', statusStyle: BAD, note: 'TQ-002 is OPEN. Nothing in the copy promises an offer will arrive while the app is closed.' },
+        { capability: 'Rider cancel or release', surface: 'delivery cancel command (DEC-021)', status: 'NO RIDER COPY', statusStyle: WARN, note: 'The command exists; the rider-facing wording and authorization do not. Not drawn — OD-06.' },
+        { capability: 'Rider earnings', surface: 'rider_earning_satang', status: 'BLOCKED', statusStyle: BAD, note: 'NULL by instruction until BQ-029 resolves. No screen in this package renders money in any form.' },
+      ],
+
+      openDecisions: [
+        { id: 'OD-01', title: 'Which strip variant each non-approved rider status wears', body: 'DQ-G7-01, OPEN. Four strip variants exist for seven status values plus a signed-in user with no rider record. DOCUMENTS_REJECTED is the sharp case: waiting copy would be false, sanction copy would be wrong.', interim: 'Keeps the shipped interim mapping and factual, non-directive copy. No screen describes a review, a resubmission or a support route, because none of those processes is decided.' },
+        { id: 'OD-02', title: 'What an offer may show before the accept tap', body: 'RIDER_LIFECYCLE §11.1 asks for the whole job before the tap — pickup, dropoff, distance, time, fee. The rider read path before accepting carries none of that, and the fee is BQ-029. Both cannot be true at once.', interim: 'Shows only what the read path carries — round number and countdown — and states plainly that the shop and dropoff appear after accepting. No distance, time or fee is invented.' },
+        { id: 'OD-03', title: 'What a rider does when the food is not ready', body: 'No waiting state exists in the delivery machine and no waiting-fee rule exists (BQ-024, OPEN). A merchant-not-ready state would be a new state and a new business rule.', interim: 'No waiting timer, no new state, no disabled step button. The rider stays on the current step, which is the honest description of what the system knows.' },
+        { id: 'OD-04', title: 'The rider-facing path to a FAILED delivery', body: 'FAILED exists in the machine for a customer who is unreachable or refuses, and its order-side name is still PROPOSED (BQ-017). Who may set it, what evidence is required, and what the rider is told are all undecided.', interim: 'Drawn nowhere. The only in-app completion is a successful handover with a photo; anything else routes to an operator, per the same rule POD-Q-02 already fixes for a rider who cannot photograph.' },
+        { id: 'OD-05', title: 'Whether the app hands off to an external maps application', body: 'No map library exists in this app and no decision authorises a maps hand-off. The rider navigates by the address snapshot and the landmark today.', interim: 'No navigation button is drawn. If the hand-off is approved it is an addition to the dropoff card, not a change to any flow in this package.' },
+        { id: 'OD-06', title: 'Rider-initiated cancellation wording and authorization', body: 'DEC-021 makes reassignment routine and the cancel command exists, but no approved rider-facing copy exists and cancellation compensation is BQ-024, OPEN.', interim: 'No cancel control appears on any rider screen. A re-allocation the rider did not cause is shown as an allocation, never as their failure.' },
+        { id: 'OD-07', title: 'Evidential weight of a proof photo in a dispute', body: 'Q-013, OPEN, and the PDPA lawful-basis half of Q-012 is LEGAL_REVIEW_REQUIRED. Nothing in the current record authorises storing real proof photos in production.', interim: 'The capture flow limits exposure by what it asks for: the subject is named, the exclusions are stated in the same breath, and the review screen plus free retakes are the control. No face detection, no blurring, no claim about what the photo proves.' },
+      ],
+
+      acceptance: [
+        { id: 'AC-01', body: 'A rider who is not APPROVED sees no availability control anywhere in the tree — not a disabled one, not a hidden one.' },
+        { id: 'AC-02', body: 'เปิดรับงาน records a position before setting the flag, and any failure in that sequence leaves the rider offline with the reason on screen.' },
+        { id: 'AC-03', body: 'The online card never states a relative position age, and never promises an interval or an ETA for the next offer.' },
+        { id: 'AC-04', body: 'Each offer card counts down to its own 60 s expiry, and an expired card keeps both buttons enabled.' },
+        { id: 'AC-05', body: 'While one accept or decline is in flight, every other offer action on the screen is disabled and visibly dimmed.' },
+        { id: 'AC-06', body: 'Accept refusals for expiry, an existing delivery, and another rider winning are three distinguishable messages, none of them a generic error.' },
+        { id: 'AC-07', body: 'The active-delivery screen renders exactly one step button, whose label matches the server state, and no button at all while the delivery is being re-allocated.' },
+        { id: 'AC-08', body: 'ส่งสำเร็จ on step 4 opens the camera and calls no completion endpoint.' },
+        { id: 'AC-09', body: 'Neither the camera nor the location permission is requested on mount; each is requested only by its own named control.' },
+        { id: 'AC-10', body: 'There is no gallery import anywhere in the proof flow, and retakes are unlimited before confirmation and impossible after.' },
+        { id: 'AC-11', body: 'The success state is reached only from a response carrying the server delivered-at, never from a local clock and never optimistically.' },
+        { id: 'AC-12', body: 'A failure at any submission stage leaves the delivery open, the photo on the device, and states which of the two retry cases applies.' },
+        { id: 'AC-13', body: 'After a completion, back cannot return to the confirm screen, and the active-delivery screen reads empty.' },
+        { id: 'AC-14', body: 'No screen in the flow renders a currency symbol, an earning, a fee or a distance.' },
+        { id: 'AC-15', body: 'Every interactive control measures at least 44pt, every primary action at least 52pt, and the shutter 82pt.' },
+        { id: 'AC-16', body: 'Availability changes, step changes, submission stages and failures are each announced, and no state is conveyed by colour alone.' },
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>
