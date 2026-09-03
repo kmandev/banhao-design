@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#C2431F;text-decoration:none}
+  a:hover{color:#8F3116}
+</style>
+</helmet>
+
+<div style="max-width:1620px;margin:0 auto;padding:48px 40px 160px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#1F1A16;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex:0 0 auto;font-family:'IBM Plex Mono',monospace">L4</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">HUMAN SUPERVISOR — L4 PAUSE MERCHANT — FLOW</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · the one L4 command, end to end: AI escalation → case review → policy → live-state revalidation → human decision → guarded command → verification → audit · design only</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1240px">
+    Read-only recon against <span style="font-family:'IBM Plex Mono',monospace">kmandev/banhao-design@main</span> (tree <span style="font-family:'IBM Plex Mono',monospace">bc6e468e</span>, read 2026-09-03): <span style="font-family:'IBM Plex Mono',monospace">CLAUDE.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/CURRENT_STATUS.md</span>, <span style="font-family:'IBM Plex Mono',monospace">supabase/migrations/</span> (full listing), <span style="font-family:'IBM Plex Mono',monospace">apps/**</span> tree, plus a repository-wide search for <span style="font-family:'IBM Plex Mono',monospace">supervisor</span>. Continues the active S-series direction from the <a href="#s01">AI Operations</a> package: this file expands <span style="font-family:'IBM Plex Mono',monospace">S-02 → S-03 → S-04</span> for a single command and adds no new screen series. Supervisor-facing copy is Thai; every annotation is English. No repository file, migration, schema object, endpoint, guard or config was created or modified.
+  </div>
+
+  <div style="margin-top:14px;padding:16px 18px;border-radius:16px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:13.5px;line-height:1.75;color:#8F3A3A;max-width:1240px">
+    <strong style="color:#B23030">Two things this package refuses to do.</strong> It does not choose a BQ-013 value. Acceptance deadline, retry count, auto-pause threshold, cooldown, pause duration and reliability window all render as <span style="font-family:'IBM Plex Mono',monospace">[BQ-013 DECISION REQUIRED]</span> and the approve control is <em>fail-closed</em> behind them — a supervisor cannot approve a threshold-derived action while the threshold is undefined. And it does not present the AI recommendation as an authorization: the recommendation is evidence a human reads, never a decision a human confirms.
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="17">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- 00 RECON CONFLICT -->
+  <div id="s00" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — RECON: REPOSITORY CONFLICT, RECORDED NOT RESOLVED</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">The brief describes a completed Human Supervisor implementation. At <span style="font-family:'IBM Plex Mono',monospace;font-size:22px">main</span>, none of it is present.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Design integrity rule §16 says stop and report rather than silently override. The design proceeds — nothing below depends on the disputed code existing — but the divergence is large enough that the Product Owner must say which branch is authoritative before Claude Code implements anything from this package. Every row is what the read actually returned, not a summary of it.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1500px">
+    <div style="display:grid;grid-template-columns:1.05fr 1.15fr 1.3fr;gap:0;padding:13px 20px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>CLAIM IN BRIEF</div><div>WHAT THE READ RETURNED</div><div>CONSEQUENCE FOR THIS DESIGN</div>
+    </div>
+    <sc-for list="{{ conflicts }}" as="c" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:1.05fr 1.15fr 1.3fr;gap:0;padding:15px 20px;border-bottom:1px solid #F0EAE1;font-size:13px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:18px;color:#3D342C;font-weight:600">{{ c.claim }}</div>
+        <div style="padding-right:18px">{{ c.found }}</div>
+        <div>{{ c.effect }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1500px">
+    <div style="border-radius:18px;border:1px solid #F0C9C9;background:#FBEAEA;padding:20px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#B23030">MIGRATION COUNT — EVIDENCE, NOT ARBITRATION</div>
+      <div style="font-size:13.5px;line-height:1.75;color:#8F3A3A;margin-top:10px">Three figures are in play and this package changes none of them. <strong>CLAUDE.md</strong> (project instructions and repository copy alike) states <strong>16/16 applied, schema LOCKED at <span style="font-family:'IBM Plex Mono',monospace">e471ec1d</span></strong>. <strong>docs/CURRENT_STATUS.md</strong> §12, last updated 2026-08-19, states <strong>17 files on disk</strong> — 16 locked plus one additive policy-only migration — and explicitly corrects its own earlier count. The <strong>directory listing at <span style="font-family:'IBM Plex Mono',monospace">main</span></strong> returns <strong>19 files</strong>: the 16 locked, plus <span style="font-family:'IBM Plex Mono',monospace">20260817000001</span>, <span style="font-family:'IBM Plex Mono',monospace">20260819000001</span> and <span style="font-family:'IBM Plex Mono',monospace">20260825000001</span>. The brief's <strong>24</strong> matches nothing at <span style="font-family:'IBM Plex Mono',monospace">main</span>.</div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;padding:20px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">HOW THE THREE RECONCILE</div>
+      <div style="font-size:13.5px;line-height:1.75;color:#5A4E42;margin-top:10px">16 is the <em>locked checkpoint</em>, 17 was the count on 2026-08-19, 19 is the count today — the difference is three additive migrations added under explicit instruction after the lock, exactly the exception CLAUDE.md carves out. So 16 and 19 are both true statements about different things and neither is wrong. 24 has no support at <span style="font-family:'IBM Plex Mono',monospace">main</span>; if it is real it belongs to an unmerged branch. <strong>Nothing here authorizes migration number 20.</strong></div>
+    </div>
+    <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;padding:20px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">WHY IT MATTERS TO THIS PACKAGE</div>
+      <div style="font-size:13.5px;line-height:1.75;color:#5A4E42;margin-top:10px">The AI Operations package raised <span style="font-family:'IBM Plex Mono',monospace">AI-02</span>: there is no <span style="font-family:'IBM Plex Mono',monospace">ai_*</span> table, so a case must be projected from <span style="font-family:'IBM Plex Mono',monospace">jobs</span> + <span style="font-family:'IBM Plex Mono',monospace">audit_logs</span> + <span style="font-family:'IBM Plex Mono',monospace">reconciliation_cases</span> unless one additive table is authorized. If the disputed branch already added case tables, this whole flow reads them instead of projecting. <strong>The screens below are drawn against the projection</strong>, because that is what the authoritative tree supports.</div>
+    </div>
+  </div>
+
+  <!-- 01 RATIONALE -->
+  <div id="s01" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — DESIGN RATIONALE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">A recommendation and an authorization look identical on screen unless the design works to separate them.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">The failure mode is not that a supervisor approves the wrong thing. It is that the interface makes approving feel like acknowledging — a card that says what the AI decided, and one button that agrees. Five rules keep the two apart, and each one costs the supervisor something: a read, a click, a typed reason. That cost is the design.</div>
+
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:24px;max-width:1560px">
+    <sc-for list="{{ rules }}" as="r" hint-placeholder-count="5">
+      <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;padding:20px;display:flex;flex-direction:column">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">{{ r.id }}</div>
+        <div style="font-size:15.5px;font-weight:700;margin-top:8px;line-height:1.4">{{ r.name }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#5A4E42;margin-top:9px">{{ r.body }}</div>
+        <div style="margin-top:auto;padding-top:14px;font-size:12px;line-height:1.6;color:#A2968A;font-style:italic">{{ r.cost }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 02 FLOW MAP -->
+  <div id="s02" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — FLOW MAP</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Eight stages. Six of them can end the flow without a mutation.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Read left to right for the success path. The red line under each stage is what happens when that stage fails — and in every case it terminates without touching <span style="font-family:'IBM Plex Mono',monospace">restaurants</span>. Only stage 6 writes, and only after stage 5 has re-read live state within the same interaction.</div>
+
+  <div style="margin-top:24px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:1560px">
+    <sc-for list="{{ flow }}" as="f" hint-placeholder-count="8">
+      <div style="border-radius:18px;border:1px solid {{ f.border }};background:{{ f.bg }};padding:18px;display:flex;flex-direction:column;min-height:196px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;background:#1F1A16;color:#fff">{{ f.n }}</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;{{ f.chip }}">{{ f.actor }}</div>
+        </div>
+        <div style="font-size:15px;font-weight:700;margin-top:10px;line-height:1.4">{{ f.name }}</div>
+        <div style="font-size:12.5px;line-height:1.65;color:#5A4E42;margin-top:8px">{{ f.body }}</div>
+        <div style="margin-top:auto;padding-top:12px;border-top:1px dashed #E0D6C8;font-size:11.5px;line-height:1.6;color:#B23030">{{ f.fail }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;padding:16px 18px;border-radius:16px;background:#fff;border:1px solid #E0D6C8;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1240px">
+    <strong>Stage 5 is the stage that does not exist in a normal approval UI.</strong> The AI wrote its recommendation at some earlier moment; the supervisor reads it now. Between those two moments the merchant may have accepted an order, been paused by someone else, or gone <span style="font-family:'IBM Plex Mono',monospace">INACTIVE</span> on their own. Stage 5 re-reads the domain immediately before the write and shows the supervisor what changed — and the approve control is bound to that read, not to the case.
+  </div>
+
+  <!-- 03 AUTHORIZATION -->
+  <div id="s03" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — AUTHORIZATION MODEL · NO NEW ROLE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">"Supervisor" is a job, not a role. The role is <span style="font-family:'IBM Plex Mono',monospace;font-size:22px">OPERATOR</span> or <span style="font-family:'IBM Plex Mono',monospace;font-size:22px">ADMIN</span>.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">The deployed model is membership-based: <span style="font-family:'IBM Plex Mono',monospace">platform_staff</span> → capability resolution → route guard. DEC-033 is implemented with zero <span style="font-family:'IBM Plex Mono',monospace">profiles.role</span> references in any policy, and Phase B shipped the guards that way. This design adds no role, no scope, no temporary grant and no capability string that does not already follow from that chain.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:1.25fr 1fr;gap:20px;max-width:1500px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">THE CHAIN, AS DEPLOYED</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+        <sc-for list="{{ authChain }}" as="a" hint-placeholder-count="5">
+          <div style="display:flex;gap:12px;align-items:baseline;padding:12px 14px;border-radius:13px;background:#FBF7F1;border:1px solid #F0EAE1">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#C2431F;font-weight:600;flex:0 0 auto">{{ a.step }}</div>
+            <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ a.body }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="font-size:13px;line-height:1.75;color:#7A6E64;margin-top:16px">The console shows a supervisor identity strip because the audit record needs a named actor, not because a new identity exists. It reads whatever the capability resolution already returns for the signed-in staff member — one profile, one display name, one role chip.</div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #F0C9C9;background:#FBEAEA;padding:24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#B23030">NOT INVENTED — DO NOT ADD</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">
+        <sc-for list="{{ noRoles }}" as="r" hint-placeholder-count="6">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 11px;border-radius:9px;background:#fff;border:1px solid #F0C9C9;color:#8F3A3A;text-decoration:line-through">{{ r }}</div>
+        </sc-for>
+      </div>
+      <div style="font-size:13px;line-height:1.75;color:#8F3A3A;margin-top:16px">One consequence carried forward from the Admin package as <span style="font-family:'IBM Plex Mono',monospace">A-ADMIN-01</span>: with a single staff member, any dual-control requirement blocks the action entirely. <strong>Pause is designed as single-control</strong> — one OPERATOR approves — because no decision requires two approvers for a non-financial command. If the Product Owner wants dual control on pause, that is a new decision and a different approve panel.</div>
+    </div>
+  </div>
+
+  <!-- 04 S-02 QUEUE -->
+  <div id="s04" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — S-02 · CASE QUEUE (DESKTOP 1360)</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">A queue that sorts by what is blocked, not by what arrived.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Every row states its origin (AI Operations, never ambiguous), its severity, its age, the last relevant event and its <span style="font-family:'IBM Plex Mono',monospace">blockedBy</span>. A case whose <span style="font-family:'IBM Plex Mono',monospace">blockedBy</span> is a decision id is visibly not actionable from the queue — the supervisor should learn that before opening it, not after reading three panels.</div>
+
+  <div style="margin-top:20px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;width:1360px;box-shadow:0 1px 3px rgba(31,26,22,.04)">
+    <div style="padding:18px 24px;border-bottom:1px solid #F0EAE1;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:16px;font-weight:700">กล่องงาน — Operations</div>
+        <div style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:8px;background:#F3EDE4;color:#5A4E42">ต้องมีคนตัดสินใจ · —</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:12px;color:#A2968A">ผู้ดูแล</div>
+        <div style="font-size:12.5px;font-weight:600;color:#3D342C">— (โปรไฟล์เจ้าหน้าที่)</div>
+        <div style="font-size:10.5px;font-weight:600;padding:4px 9px;border-radius:8px;background:#EDE6F5;color:#5B4A87;font-family:'IBM Plex Mono',monospace">OPERATOR</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:150px 1fr">
+      <div style="border-right:1px solid #F0EAE1;padding:16px 0;background:#FCFAF7">
+        <sc-for list="{{ queueFilters }}" as="q" hint-placeholder-count="5">
+          <div style="padding:9px 18px;font-size:12.5px;font-weight:{{ q.weight }};color:{{ q.color }};border-left:3px solid {{ q.mark }}">{{ q.label }}</div>
+        </sc-for>
+      </div>
+      <div>
+        <div style="display:grid;grid-template-columns:104px 1fr 172px 150px 92px;padding:11px 20px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.08em;color:#A2968A">
+          <div>ความสำคัญ</div><div>เรื่อง</div><div>ติดอยู่ที่</div><div>เหตุการณ์ล่าสุด</div><div>อายุเคส</div>
+        </div>
+        <sc-for list="{{ queueRows }}" as="r" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:104px 1fr 172px 150px 92px;padding:15px 20px;border-bottom:1px solid #F0EAE1;align-items:start;background:{{ r.bg }}">
+            <div><div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ r.sevStyle }}">{{ r.sev }}</div></div>
+            <div style="padding-right:16px">
+              <div style="font-size:13.5px;font-weight:600;color:#3D342C;line-height:1.5">{{ r.title }}</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">
+                <div style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:#EDE6F5;color:#5B4A87;font-family:'IBM Plex Mono',monospace">AI OPERATIONS</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A2968A">{{ r.ref }}</div>
+                <div style="font-size:11px;color:#A2968A">{{ r.scope }}</div>
+              </div>
+            </div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.6;color:{{ r.blockColor }}">{{ r.blockedBy }}</div>
+            <div style="font-size:12px;line-height:1.6;color:#7A6E64">{{ r.last }}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7A6E64">—</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1360px">
+    <sc-for list="{{ queueNotes }}" as="n" hint-placeholder-count="3">
+      <div style="border-radius:16px;border:1px solid #E0D6C8;background:#fff;padding:18px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#C2431F;font-weight:600">{{ n.id }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#5A4E42;margin-top:8px">{{ n.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 05 S-03 CASE DETAIL -->
+  <div id="s05" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — S-03 · CASE DETAIL (DESKTOP 1360)</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Three questions, in this order: what happened, why it escalated, what the AI proposes.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">The recommendation is last on purpose. A supervisor who reads the proposal first reads the evidence looking for confirmation; a supervisor who reads the timeline first forms their own view and then compares. The AI panel is also the only panel on the screen with a coloured border and a label in Latin capitals — it should look like a quotation from another system, because that is what it is.</div>
+
+  <div style="margin-top:20px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;width:1360px;box-shadow:0 1px 3px rgba(31,26,22,.04)">
+    <div style="padding:20px 26px;border-bottom:1px solid #F0EAE1;display:flex;align-items:flex-start;justify-content:space-between">
+      <div>
+        <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+          <div style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:8px;background:#EDE6F5;color:#5B4A87;font-family:'IBM Plex Mono',monospace">AI OPERATIONS</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:8px;background:#FDF3E6;color:#8A6A3A">L4 · ต้องอนุมัติ</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#A2968A">ESC-REPEAT · case —</div>
+        </div>
+        <div style="font-size:19px;font-weight:700;margin-top:10px">ร้านไม่ตอบรับออเดอร์ซ้ำหลายครั้ง</div>
+        <div style="font-size:13px;color:#7A6E64;margin-top:4px">ร้าน — · สถานะปัจจุบัน <span style="font-family:'IBM Plex Mono',monospace">ACTIVE</span> · เปิดเคสเมื่อ — · อายุเคส —</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#A2968A">ติดอยู่ที่</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#B23030;font-weight:600;margin-top:3px">BQ-013</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.05fr 1fr">
+      <div style="border-right:1px solid #F0EAE1;padding:24px 26px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">เกิดอะไรขึ้น — WHAT HAPPENED</div>
+        <div style="margin-top:16px;display:flex;flex-direction:column">
+          <sc-for list="{{ timeline }}" as="t" hint-placeholder-count="6">
+            <div style="display:grid;grid-template-columns:76px 18px 1fr;gap:0;align-items:start">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#A2968A;padding-top:1px">{{ t.time }}</div>
+              <div style="display:flex;flex-direction:column;align-items:center;height:100%">
+                <div style="width:9px;height:9px;border-radius:50%;background:{{ t.dot }};flex:0 0 auto;margin-top:4px"></div>
+                <div style="width:1px;flex:1;background:#EAE1D6;min-height:26px"></div>
+              </div>
+              <div style="padding-bottom:16px;padding-left:2px">
+                <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+                  <div style="font-size:13px;font-weight:600;color:#3D342C">{{ t.title }}</div>
+                  <div style="font-size:9.5px;font-weight:600;padding:2px 6px;border-radius:6px;{{ t.chip }};font-family:'IBM Plex Mono',monospace">{{ t.actor }}</div>
+                </div>
+                <div style="font-size:12.5px;line-height:1.65;color:#7A6E64;margin-top:3px">{{ t.body }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:6px;padding:14px 16px;border-radius:13px;background:#FBF7F1;border:1px solid #F0EAE1">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:#A2968A">สถานะโดเมนปัจจุบัน — LIVE DOMAIN STATE</div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px">
+            <sc-for list="{{ domainState }}" as="d" hint-placeholder-count="4">
+              <div>
+                <div style="font-size:11px;color:#A2968A">{{ d.k }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#3D342C;margin-top:2px">{{ d.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="padding:24px 26px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">ทำไมถึงส่งต่อให้คน — WHY IT ESCALATED</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+          <sc-for list="{{ whyRows }}" as="w" hint-placeholder-count="4">
+            <div style="padding:13px 15px;border-radius:13px;background:#FBF7F1;border:1px solid #F0EAE1">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+                <div style="font-size:12.5px;font-weight:600;color:#3D342C">{{ w.k }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:{{ w.color }};text-align:right">{{ w.v }}</div>
+              </div>
+              <div style="font-size:12px;line-height:1.65;color:#7A6E64;margin-top:5px">{{ w.body }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:20px;border-radius:15px;border:1.5px solid #C9B8E8;background:#F8F5FD;padding:18px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:7px;background:#5B4A87;color:#fff;letter-spacing:.08em">AI RECOMMENDATION</div>
+            <div style="font-size:11.5px;color:#5B4A87;font-weight:600">ไม่ใช่การอนุมัติ · ยังไม่มีผลกับระบบ</div>
+          </div>
+          <div style="font-size:14px;font-weight:600;color:#3D342C;margin-top:12px;line-height:1.6">เสนอให้หยุดรับออเดอร์ของร้านนี้ชั่วคราว</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5B4A87;margin-top:8px;line-height:1.7">pause_merchant { restaurantId: —, until: [BQ-013 DECISION REQUIRED] }</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:12px">เหตุผลของ AI: ร้านนี้ไม่ตอบรับออเดอร์ — ครั้งในช่วง — และมีออเดอร์ที่หมดเวลารับ — รายการ ผลกระทบคือลูกค้ารอแล้วต้องยกเลิก</div>
+          <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+            <div style="font-size:11px;padding:4px 10px;border-radius:8px;background:#fff;border:1px solid #C9B8E8;color:#5B4A87;font-family:'IBM Plex Mono',monospace">confidence: —</div>
+            <div style="font-size:11px;padding:4px 10px;border-radius:8px;background:#fff;border:1px solid #C9B8E8;color:#5B4A87;font-family:'IBM Plex Mono',monospace">policy: BQ-013 · undefined</div>
+            <div style="font-size:11px;padding:4px 10px;border-radius:8px;background:#fff;border:1px solid #C9B8E8;color:#5B4A87;font-family:'IBM Plex Mono',monospace">model: —</div>
+          </div>
+          <div style="font-size:12px;line-height:1.7;color:#5B4A87;margin-top:12px;padding-top:12px;border-top:1px solid #E4DAF5">AI ไม่ได้ทำอะไรกับร้านนี้ และไม่สามารถทำได้ คำสั่งนี้จะทำงานเมื่อเจ้าหน้าที่อนุมัติเท่านั้น</div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:10px">
+          <a href="#s07" style="font-size:13.5px;font-weight:600;padding:12px 20px;border-radius:12px;background:#C2431F;color:#fff">ไปหน้าอนุมัติ</a>
+          <div style="font-size:13.5px;font-weight:600;padding:12px 20px;border-radius:12px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">เข้าควบคุมเอง</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 06 POLICY + EVIDENCE -->
+  <div id="s06" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — POLICY PANEL &amp; EVIDENCE BOUNDARY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">An undefined threshold is a visible fact on the screen, not an empty field.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Six values govern this command and none of them exists. Rendering them as blanks would read as "not loaded"; rendering them as zero would be a fabrication. They render as their decision id, in the colour the design reserves for blocked, and the panel states plainly which of them the approve control is waiting on.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:1.15fr 1fr;gap:20px;max-width:1500px">
+    <div style="border-radius:20px;border:1px solid #F0C9C9;background:#fff;overflow:hidden">
+      <div style="padding:16px 22px;background:#FBEAEA;border-bottom:1px solid #F0C9C9;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:700;color:#B23030">นโยบายที่เกี่ยวข้อง — POLICY</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:4px 10px;border-radius:8px;background:#B23030;color:#fff">BQ-013 · OPEN</div>
+      </div>
+      <sc-for list="{{ policyRows }}" as="p" hint-placeholder-count="6">
+        <div style="padding:14px 22px;border-bottom:1px solid #F0EAE1;display:grid;grid-template-columns:1fr 240px;gap:16px;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#3D342C">{{ p.k }}</div>
+            <div style="font-size:12px;line-height:1.6;color:#7A6E64;margin-top:3px">{{ p.note }}</div>
+          </div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#B23030;background:#FBEAEA;border:1px solid #F0C9C9;border-radius:9px;padding:7px 10px;text-align:center">[BQ-013 DECISION REQUIRED]</div>
+        </div>
+      </sc-for>
+      <div style="padding:16px 22px;background:#FBF7F1;font-size:12.5px;line-height:1.75;color:#5A4E42">What BQ-013 <em>does</em> say, and all it says: a server-side acceptance deadline exists, with notification, countdown, a pre-deadline reminder and automatic timeout at expiry; downstream dispatch stops where appropriate; and merchant auto-pause is <strong>possible and configurable</strong>. Configurable is not a value. Every number above is the configuration BQ-013 defers.</div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+      <div style="padding:16px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:14px;font-weight:700">หลักฐาน — EVIDENCE BOUNDARY</div>
+      <sc-for list="{{ evidence }}" as="e" hint-placeholder-count="9">
+        <div style="padding:12px 22px;border-bottom:1px solid #F0EAE1;display:flex;justify-content:space-between;gap:14px;align-items:center">
+          <div style="font-size:12.5px;color:#3D342C;line-height:1.6">{{ e.field }}</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:7px;flex:0 0 auto;{{ e.style }}">{{ e.verdict }}</div>
+        </div>
+      </sc-for>
+      <div style="padding:16px 22px;background:#FBF7F1;font-size:12.5px;line-height:1.75;color:#5A4E42">The withheld rows are not withheld because they are secret. They are withheld because <strong>this decision does not need them</strong>, and a case surface that carries amounts and payment references becomes the financial browser the S-series was specifically designed not to be. A supervisor who needs the money view goes to the Admin financial surfaces under their own authorization.</div>
+    </div>
+  </div>
+
+  <!-- 07 L4 APPROVAL -->
+  <div id="s07" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — S-04 · L4 APPROVAL SURFACE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Four gates before the button, and the button is bound to the fourth.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Eligibility, policy, live state, reason. Each gate shows its own verdict and the approve control reads all four. The panel drawn here is the <strong>blocked</strong> state, because that is the state the system is in today — and it is the state Claude Code will build first.</div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;width:1360px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+      <div style="padding:18px 22px;border-bottom:1px solid #F0EAE1;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:8px;background:#FDF3E6;color:#8A6A3A">L4 · รออนุมัติ</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#A2968A">pause_merchant</div>
+        <div style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:8px;background:#FBEAEA;color:#B23030">S-04.A · BLOCKED</div>
+      </div>
+      <div style="padding:22px">
+        <div style="font-size:16px;font-weight:700;line-height:1.5">หยุดรับออเดอร์ของร้าน — ต้องการการอนุมัติจากเจ้าหน้าที่</div>
+        <div style="font-size:13px;line-height:1.7;color:#5A4E42;margin-top:8px">การอนุมัติของคุณคือสิ่งที่ทำให้คำสั่งนี้ทำงาน ไม่ใช่การยืนยันสิ่งที่ AI ทำไปแล้ว AI ยังไม่ได้ทำอะไรกับร้านนี้</div>
+
+        <div style="margin-top:18px;display:flex;flex-direction:column;gap:9px">
+          <sc-for list="{{ gates }}" as="g" hint-placeholder-count="4">
+            <div style="display:flex;gap:12px;align-items:flex-start;padding:13px 15px;border-radius:13px;background:{{ g.bg }};border:1px solid {{ g.border }}">
+              <div style="width:20px;height:20px;border-radius:50%;background:{{ g.iconBg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;font-family:'IBM Plex Mono',monospace">{{ g.icon }}</div>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#3D342C">{{ g.name }}</div>
+                <div style="font-size:12px;line-height:1.65;color:#7A6E64;margin-top:3px">{{ g.body }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:16px;padding:14px 16px;border-radius:13px;background:#FBF7F1;border:1px solid #F0EAE1">
+          <div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:#A2968A">คำสั่งที่จะทำงานเมื่ออนุมัติ</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#3D342C;margin-top:6px;line-height:1.7">pause_merchant { restaurantId: —, until: [BQ-013 DECISION REQUIRED], reason: &lt;required&gt; }</div>
+          <div style="font-size:12px;line-height:1.65;color:#7A6E64;margin-top:8px">แสดงคำสั่งจริงที่จะถูกเรียก ไม่ใช่คำอธิบาย — เจ้าหน้าที่ต้องเห็นว่าอนุมัติอะไร</div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div style="font-size:12.5px;font-weight:600;color:#3D342C">เหตุผล <span style="color:#B23030">*</span> <span style="font-weight:400;color:#A2968A">— บังคับกรอก บันทึกลง audit</span></div>
+          <div style="margin-top:7px;border:1px solid #E0D6C8;border-radius:12px;background:#FCFAF7;padding:12px 14px;font-size:13px;color:#C4B8AC;min-height:52px">เขียนเหตุผลของคุณ ไม่ใช่คัดลอกจาก AI</div>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:16px;align-items:center;flex-wrap:wrap">
+          <div style="font-size:13.5px;font-weight:600;padding:12px 22px;border-radius:12px;background:#E8E0D6;color:#A2968A">อนุมัติและสั่งหยุดร้าน</div>
+          <div style="font-size:13.5px;font-weight:600;padding:12px 20px;border-radius:12px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">ปฏิเสธคำเสนอ</div>
+        </div>
+        <div style="font-size:12px;line-height:1.7;color:#B23030;margin-top:12px;font-weight:600">อนุมัติไม่ได้: ยังไม่มีเกณฑ์และระยะเวลาหยุดร้านตาม BQ-013 — ถ้าอนุมัติตอนนี้ ระบบจะไม่รู้ว่าต้องหยุดนานเท่าไร</div>
+        <div style="font-size:12px;line-height:1.7;color:#7A6E64;margin-top:8px">ปฏิเสธคำเสนอทำได้เสมอ — การปฏิเสธไม่เปลี่ยนสถานะร้าน และปิดเคสด้วยผลลัพธ์ที่บันทึกไว้</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+        <div style="padding:16px 22px;border-bottom:1px solid #F0EAE1;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:14px;font-weight:700">ตรวจสถานะสด — LIVE REVALIDATION</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:8px;background:#FDF3E6;color:#8A6A3A;font-family:'IBM Plex Mono',monospace">S-04.C</div>
+        </div>
+        <div style="padding:20px 22px">
+          <div style="font-size:13px;line-height:1.75;color:#5A4E42">อ่านสถานะจริงอีกครั้งก่อนอนุมัติ ปุ่มอนุมัติผูกกับการอ่านครั้งนี้ ไม่ใช่กับเคส ถ้าสถานะเปลี่ยนหลังการอ่าน คำสั่งจะถูกปฏิเสธและไม่มีการแก้ไขข้อมูลใด</div>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ revalidate }}" as="v" hint-placeholder-count="4">
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 13px;border-radius:11px;background:#FBF7F1;border:1px solid #F0EAE1;align-items:center">
+                <div style="font-size:12.5px;color:#3D342C">{{ v.k }}</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#7A6E64">{{ v.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+            <div style="font-size:13px;font-weight:600;padding:10px 16px;border-radius:11px;background:#fff;border:1px solid #C2431F;color:#C2431F">อ่านสถานะใหม่</div>
+            <div style="font-size:11.5px;color:#A2968A">อ่านล่าสุด — · หมดอายุการอ่านหลัง —</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+        <div style="padding:16px 22px;border-bottom:1px solid #F0EAE1;font-size:14px;font-weight:700">ผลลัพธ์ที่เจ้าหน้าที่จะเห็นหลังกดอนุมัติ</div>
+        <sc-for list="{{ resultStages }}" as="r" hint-placeholder-count="4">
+          <div style="padding:15px 22px;border-bottom:1px solid #F0EAE1">
+            <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;background:#F3EDE4;color:#5A4E42">{{ r.id }}</div>
+              <div style="font-size:13px;font-weight:600;color:#3D342C">{{ r.name }}</div>
+            </div>
+            <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:7px">{{ r.body }}</div>
+            <div style="font-size:12px;line-height:1.65;color:#B23030;margin-top:6px">{{ r.fail }}</div>
+          </div>
+        </sc-for>
+        <div style="padding:15px 22px;background:#FBF7F1;font-size:12.5px;line-height:1.75;color:#5A4E42">Nothing in this column says "สำเร็จ" until verification has re-read the domain and found the merchant actually paused. A command that returned <span style="font-family:'IBM Plex Mono',monospace">200</span> and a merchant that is actually paused are two different claims, and the audit record distinguishes them.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:18px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:24px;max-width:1360px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">INTERACTION RULES — S-04</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px 28px;margin-top:14px">
+      <sc-for list="{{ interactions }}" as="i" hint-placeholder-count="10">
+        <div style="display:flex;gap:11px;align-items:baseline">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600;flex:0 0 auto">{{ i.id }}</div>
+          <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ i.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 08 FAIL CLOSED -->
+  <div id="s08" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — FAIL-CLOSED STATES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Nine ways this ends without a pause, and what the supervisor is told in each.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Every row states the same three things: what the supervisor sees, what happened to the case, and what happened in the database. The third column is always "nothing" except on the success path — that is what fail-closed means here, and it is the property Claude Code must test rather than assume.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:154px 1fr 1fr 210px 150px;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>STATE</div><div>TRIGGER</div><div>WHAT THE SUPERVISOR SEES</div><div>CASE OUTCOME</div><div>DB EFFECT</div>
+    </div>
+    <sc-for list="{{ failStates }}" as="f" hint-placeholder-count="9">
+      <div style="display:grid;grid-template-columns:154px 1fr 1fr 210px 150px;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:14px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ f.style }}">{{ f.id }}</div></div>
+        <div style="padding-right:16px">{{ f.trigger }}</div>
+        <div style="padding-right:16px;color:#3D342C">{{ f.sees }}</div>
+        <div style="padding-right:14px">{{ f.outcome }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:{{ f.dbColor }}">{{ f.db }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:1560px">
+    <div style="border-radius:20px;border:1.5px solid #F0C9C9;background:#fff;overflow:hidden">
+      <div style="padding:14px 20px;background:#FBEAEA;border-bottom:1px solid #F0C9C9;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;font-weight:700;color:#B23030">สถานะเปลี่ยนไปแล้ว</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#B23030">S-04.E · CONFLICT</div>
+      </div>
+      <div style="padding:20px">
+        <div style="font-size:14px;font-weight:600;line-height:1.6">ร้านนี้เปลี่ยนสถานะหลังจากคุณเปิดเคส</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:8px">ตอนเปิดเคส: <span style="font-family:'IBM Plex Mono',monospace">ACTIVE</span> · ตอนนี้: <span style="font-family:'IBM Plex Mono',monospace">—</span></div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:8px">ไม่มีการแก้ไขข้อมูลใด คำสั่งไม่ได้ทำงาน</div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:13px;font-weight:600;padding:11px 16px;border-radius:11px;background:#C2431F;color:#fff;text-align:center">โหลดเคสใหม่</div>
+          <div style="font-size:13px;font-weight:600;padding:11px 16px;border-radius:11px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42;text-align:center">กลับไปกล่องงาน</div>
+        </div>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1.5px solid #F0C9C9;background:#fff;overflow:hidden">
+      <div style="padding:14px 20px;background:#FBEAEA;border-bottom:1px solid #F0C9C9;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;font-weight:700;color:#B23030">คำสั่งถูกปฏิเสธ</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#B23030">S-04.F · REJECTED</div>
+      </div>
+      <div style="padding:20px">
+        <div style="font-size:14px;font-weight:600;line-height:1.6">ระบบปฏิเสธคำสั่งนี้</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#B23030;margin-top:8px;line-height:1.7">code: — · reason: —</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:8px">เหตุผลมาจากระบบโดยตรง ไม่ใช่ข้อความที่หน้าจอแปลเอง ร้านยังอยู่ในสถานะเดิมทุกอย่าง</div>
+        <div style="font-size:12px;line-height:1.7;color:#7A6E64;margin-top:10px">เคสยังเปิดอยู่ และยังอยู่ในกล่องงาน — การถูกปฏิเสธไม่ใช่การปิดเคส</div>
+        <div style="margin-top:14px;font-size:13px;font-weight:600;padding:11px 16px;border-radius:11px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42;text-align:center">ดูรายละเอียดเคส</div>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1.5px solid #F0DFC4;background:#fff;overflow:hidden">
+      <div style="padding:14px 20px;background:#FDF3E6;border-bottom:1px solid #F0DFC4;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;font-weight:700;color:#8A6A3A">ยืนยันผลไม่ได้</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8A6A3A">S-04.G · UNVERIFIED</div>
+      </div>
+      <div style="padding:20px">
+        <div style="font-size:14px;font-weight:600;line-height:1.6">คำสั่งส่งไปแล้ว แต่ยังยืนยันผลไม่ได้</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:8px">อย่าถือว่าสำเร็จ และอย่าสั่งซ้ำ คำสั่งนี้มี idempotency key เดิมอยู่แล้ว การกดซ้ำจะได้ผลเดิม ไม่ใช่การหยุดร้านสองครั้ง</div>
+        <div style="font-size:12px;line-height:1.7;color:#7A6E64;margin-top:10px">เคสยังเปิดอยู่ในสถานะ <span style="font-family:'IBM Plex Mono',monospace">รอยืนยันผล</span> จนกว่าการอ่านสถานะจะยืนยันได้</div>
+        <div style="margin-top:14px;font-size:13px;font-weight:600;padding:11px 16px;border-radius:11px;background:#fff;border:1px solid #C2431F;color:#C2431F;text-align:center">ตรวจผลอีกครั้ง</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 09 CONCURRENCY -->
+  <div id="s09" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — CONCURRENCY: TWO SUPERVISORS, ONE CASE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Both may open it. Only one may resolve it. The second must not be told they succeeded.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">No locking, no soft claim that expires wrongly, no "B is editing" banner that lies when B closes their laptop. The case carries a version; resolution is a guarded conditional update whose <span style="font-family:'IBM Plex Mono',monospace">WHERE</span> clause carries the version B read. B loses the race and is told exactly that — ADR-003's rule applied to a UI, not just a table.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:64px 1fr 1fr 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>T</div><div>SUPERVISOR A</div><div>SUPERVISOR B</div><div>SYSTEM</div>
+    </div>
+    <sc-for list="{{ raceRows }}" as="r" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:64px 1fr 1fr 1fr;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;color:#A2968A">{{ r.t }}</div>
+        <div style="padding-right:18px;color:{{ r.aColor }}">{{ r.a }}</div>
+        <div style="padding-right:18px;color:{{ r.bColor }}">{{ r.b }}</div>
+        <div style="color:#7A6E64;font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ r.sys }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 10 ABSENT -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — ABSENT, NOT DISABLED</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">The controls this screen does not have, and why each absence is the design.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">A greyed-out refund button is a promise. It tells the supervisor the capability exists and they lack permission, which is false — the capability does not exist, and building the button before the policy invites someone to wire it up. Only <strong>one</strong> control on this whole flow renders disabled: the approve button, because its blocker is a named decision with a stated resolution path.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:1.1fr 1fr;gap:20px;max-width:1500px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+      <div style="padding:15px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:13.5px;font-weight:700">NOT RENDERED AT ALL</div>
+      <sc-for list="{{ absent }}" as="a" hint-placeholder-count="9">
+        <div style="padding:13px 22px;border-bottom:1px solid #F0EAE1;display:grid;grid-template-columns:190px 1fr;gap:16px;align-items:start">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8F3A3A">{{ a.cmd }}</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ a.why }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:24px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">THE ONE DISABLED CONTROL</div>
+        <div style="font-size:15px;font-weight:700;margin-top:10px;line-height:1.5">อนุมัติและสั่งหยุดร้าน</div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:9px">It renders, disabled, with the blocker named in the sentence beneath it. The distinction from the list on the left: a supervisor <em>will</em> be able to press this, and the reason they cannot yet is a decision someone can go and make. Nothing on the left has that property.</div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:10px">It carries no tooltip. A disabled control whose explanation is hidden behind a hover is a disabled control with no explanation on touch, and the tablet layout is a real target.</div>
+      </div>
+      <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:24px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">WHAT S-04 <em>CAN</em> DO — COMPLETE LIST</div>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:12px">
+          <sc-for list="{{ canDo }}" as="c" hint-placeholder-count="5">
+            <div style="display:flex;gap:10px;align-items:baseline">
+              <div style="width:6px;height:6px;border-radius:50%;background:#0A6B49;flex:0 0 auto;margin-top:6px"></div>
+              <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ c }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:12.5px;line-height:1.75;color:#7A6E64;margin-top:14px">Five capabilities, one of them a mutation. That ratio is the whole point of an exception-first console.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11 AUDIT -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — AUDIT REPRESENTATION</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Four kinds of row, and a human decision is never one of the other three.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">The human resolution writes <span style="font-family:'IBM Plex Mono',monospace">actor_type = OPERATOR</span> with the acting profile id, and DEC-032's mandatory-reason CHECK fires on exactly that value — so the reason field on S-04 is not a UI courtesy, it is the database's own requirement. The AI rows are where <span style="font-family:'IBM Plex Mono',monospace">AI-01</span> still bites.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:132px 132px 1fr 1fr 190px;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>KIND</div><div>actor_type</div><div>WHAT IT RECORDS</div><div>REASON FIELD</div><div>SHOWN AS</div>
+    </div>
+    <sc-for list="{{ auditKinds }}" as="a" hint-placeholder-count="4">
+      <div style="display:grid;grid-template-columns:132px 132px 1fr 1fr 190px;padding:15px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div><div style="font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ a.style }}">{{ a.kind }}</div></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:{{ a.actorColor }}">{{ a.actor }}</div>
+        <div style="padding-right:16px">{{ a.records }}</div>
+        <div style="padding-right:16px">{{ a.reason }}</div>
+        <div style="font-size:12px;color:#7A6E64">{{ a.shown }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;padding:18px 20px;border-radius:16px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:13.5px;line-height:1.75;color:#8F3A3A;max-width:1560px">
+    <strong style="color:#B23030">AI-01, unchanged and still open.</strong> <span style="font-family:'IBM Plex Mono',monospace">audit_logs.actor_type</span> is CHECK-constrained to <span style="font-family:'IBM Plex Mono',monospace">CUSTOMER · MERCHANT · RIDER · OPERATOR · SYSTEM · WEBHOOK</span>. There is no AI value, so an agent-authored escalation is indistinguishable from a scheduled tick in the audit table, and this flow's timeline can only label it "AI" by reading the case projection alongside the log. <strong>The human side is unaffected</strong> — <span style="font-family:'IBM Plex Mono',monospace">OPERATOR</span> exists, carries the mandatory reason, and is what a resolution writes. So the audit requirement in this brief is satisfiable today; only the AI attribution half is not. Widening the CHECK additively is one option and the convention "AI writes SYSTEM plus a discriminator in the payload" is the other. <strong>This package does not choose, and does not propose a migration.</strong>
+  </div>
+
+  <!-- 12 STATE MATRIX -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — STATE MATRIX &amp; RESPONSIVE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Desktop is the design target. Tablet is a supported degradation. Phone is out of scope, deliberately.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Approving a merchant pause on a phone, one-handed, between other tasks, is exactly the interaction this design is trying to slow down. The console is desktop-first at 1360; the tablet layout at 1024 stacks the two columns and keeps every gate visible; below 900 the console shows the queue and case detail but the approve panel is not rendered.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:190px 1fr 1fr 200px;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>STATE</div><div>DESKTOP 1360</div><div>TABLET 1024</div><div>APPROVE CONTROL</div>
+    </div>
+    <sc-for list="{{ stateMatrix }}" as="s" hint-placeholder-count="12">
+      <div style="display:grid;grid-template-columns:190px 1fr 1fr 200px;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="font-weight:600;color:#3D342C;padding-right:14px">{{ s.state }}</div>
+        <div style="padding-right:16px">{{ s.desktop }}</div>
+        <div style="padding-right:16px">{{ s.tablet }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ s.color }}">{{ s.approve }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 13 THAI COPY -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — THAI COPY INVENTORY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Every string a supervisor reads, in one keyed table.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Keys live in one module per app so a second language is a new file, not a refactor. Line height 1.55–1.75 throughout — Thai upper and lower vowels collide below that, and this console is dense.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:250px 1fr 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>KEY</div><div>THAI</div><div>NOTE</div>
+    </div>
+    <sc-for list="{{ copyRows }}" as="c" hint-placeholder-count="18">
+      <div style="display:grid;grid-template-columns:250px 1fr 1fr;padding:12px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;padding-right:14px">{{ c.k }}</div>
+        <div style="color:#3D342C;padding-right:16px">{{ c.th }}</div>
+        <div style="color:#7A6E64">{{ c.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 14 DEPENDENCIES -->
+  <div id="s14" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">14 — DATA &amp; COMMAND DEPENDENCY MAP</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">What this flow needs, and what exists at <span style="font-family:'IBM Plex Mono',monospace;font-size:22px">main</span> today.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Read the STATUS column as the honest answer to "can Claude Code build this on Monday". Two rows are shipped, one is a locked-schema read, and the rest is new API work in Phase I's territory — which is not started at <span style="font-family:'IBM Plex Mono',monospace">main</span>.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:1fr 1.15fr 148px 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>NEEDS</div><div>SOURCE</div><div>STATUS</div><div>NOTE</div>
+    </div>
+    <sc-for list="{{ deps }}" as="d" hint-placeholder-count="10">
+      <div style="display:grid;grid-template-columns:1fr 1.15fr 148px 1fr;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:16px;color:#3D342C;font-weight:600">{{ d.needs }}</div>
+        <div style="padding-right:16px;font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ d.source }}</div>
+        <div style="padding-right:12px"><div style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ d.style }}">{{ d.status }}</div></div>
+        <div>{{ d.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 15 ACCEPTANCE -->
+  <div id="s15" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">15 — ACCEPTANCE CRITERIA</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Fourteen statements, each one testable by execution rather than inspection.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px 28px;max-width:1560px">
+    <sc-for list="{{ acceptance }}" as="a" hint-placeholder-count="14">
+      <div style="display:flex;gap:12px;align-items:baseline;padding:14px 16px;border-radius:14px;background:#fff;border:1px solid #E0D6C8">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600;flex:0 0 auto">{{ a.id }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ a.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 16 HANDOFF -->
+  <div id="s16" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">16 — CLAUDE CODE HANDOFF</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Three things must be settled before a line of this gets built.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Not "should be" — must. Each has a named owner and a consequence if it is skipped, and the third one determines whether the first two are even the right questions.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1560px">
+    <sc-for list="{{ gatesBeforeBuild }}" as="g" hint-placeholder-count="3">
+      <div style="border-radius:20px;border:1.5px solid #F0C9C9;background:#fff;padding:22px;display:flex;flex-direction:column">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#B23030">{{ g.id }}</div>
+        <div style="font-size:16px;font-weight:700;margin-top:8px;line-height:1.45">{{ g.name }}</div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:10px">{{ g.body }}</div>
+        <div style="margin-top:auto;padding-top:14px;font-size:12.5px;line-height:1.65;color:#B23030">{{ g.cost }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="padding:16px 24px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:14px;font-weight:700">BUILD ORDER — after the three gates clear</div>
+    <sc-for list="{{ buildOrder }}" as="b" hint-placeholder-count="6">
+      <div style="padding:16px 24px;border-bottom:1px solid #F0EAE1;display:grid;grid-template-columns:52px 1fr 1fr;gap:18px;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#C2431F">{{ b.n }}</div>
+        <div>
+          <div style="font-size:13.5px;font-weight:600;color:#3D342C">{{ b.name }}</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:5px">{{ b.body }}</div>
+        </div>
+        <div style="font-size:12.5px;line-height:1.7;color:#7A6E64">{{ b.done }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1560px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">UNRESOLVED, CARRIED FORWARD</div>
+      <div style="display:flex;flex-direction:column;gap:11px;margin-top:14px">
+        <sc-for list="{{ unresolved }}" as="u" hint-placeholder-count="8">
+          <div style="display:flex;gap:11px;align-items:baseline">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#B23030;font-weight:600;flex:0 0 auto;min-width:74px">{{ u.id }}</div>
+            <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ u.body }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">NOT CHANGED BY THIS PACKAGE — CONFIRMED</div>
+      <div style="display:flex;flex-direction:column;gap:11px;margin-top:14px">
+        <sc-for list="{{ notChanged }}" as="n" hint-placeholder-count="8">
+          <div style="display:flex;gap:11px;align-items:baseline">
+            <div style="width:6px;height:6px;border-radius:50%;background:#0A6B49;flex:0 0 auto;margin-top:6px"></div>
+            <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ n }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:16px;padding:14px 16px;border-radius:13px;background:#FBF7F1;border:1px solid #F0EAE1;font-size:12.5px;line-height:1.75;color:#5A4E42">This package is a design artifact. It contains no production code, no migration, no endpoint implementation and no authorization change, and it does not implement <span style="font-family:'IBM Plex Mono',monospace">pause_merchant</span>.</div>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1700,&quot;height&quot;:1100}}">
+class Component extends DCLogic {
+  renderVals() {
+    const chip = {
+      det:'background:#E6F2EC;color:#0A6B49',
+      ai:'background:#EDE6F5;color:#5B4A87',
+      human:'background:#FDF3E6;color:#8A6A3A',
+      blocked:'background:#FBEAEA;color:#B23030',
+      shipped:'background:#E6F2EC;color:#0A6B49',
+      design:'background:#F3EDE4;color:#5A4E42',
+      sys:'background:#F3EDE4;color:#5A4E42'
+    };
+    return {
+      chip,
+      nav: [
+        {href:'#s00', label:'00 Recon conflict'},
+        {href:'#s01', label:'01 Rationale'},
+        {href:'#s02', label:'02 Flow map'},
+        {href:'#s03', label:'03 Authorization'},
+        {href:'#s04', label:'04 S-02 queue'},
+        {href:'#s05', label:'05 S-03 detail'},
+        {href:'#s06', label:'06 Policy & evidence'},
+        {href:'#s07', label:'07 S-04 approval'},
+        {href:'#s08', label:'08 Fail-closed'},
+        {href:'#s09', label:'09 Concurrency'},
+        {href:'#s10', label:'10 Absent controls'},
+        {href:'#s11', label:'11 Audit'},
+        {href:'#s12', label:'12 States'},
+        {href:'#s13', label:'13 Thai copy'},
+        {href:'#s14', label:'14 Dependencies'},
+        {href:'#s15', label:'15 Acceptance'},
+        {href:'#s16', label:'16 Handoff'}
+      ],
+      conflicts: [
+        {claim:'docs/HUMAN_SUPERVISOR_CONTRACT.md settles the A-series / S-series overlap',
+         found:'File not found at main. A repository-wide search for the string "supervisor" returns one hit, in ai/RESEARCH/BACKEND_COMPARISON.md, about Laravel Horizon.',
+         effect:'The overlap is settled here by the same reasoning the AI Operations package used, not by citing a document that could not be read. If the contract exists on another branch it outranks this file and must be re-read before implementation.'},
+        {claim:'Supervisor case projection API is complete',
+         found:'No supervisor module under apps/api/src. CURRENT_STATUS.md lists Phases E, F, F\u2032, G, H, I as not started.',
+         effect:'\u00a7 14 marks every case-projection dependency NEW API WORK rather than assuming a shipped reader.'},
+        {claim:'Human Supervisor Console is complete',
+         found:'apps/admin contains 3 config files plus 2 files under src/. No console, no routes.',
+         effect:'The screens here are drawn as new work against the shipped Admin visual language, not as annotations of an existing UI.'},
+        {claim:'GET /admin/supervisor/me is complete',
+         found:'Not present. The nearest shipped equivalent is the Phase B capability resolution behind /api/v1/me.',
+         effect:'\u00a7 03 designs the identity strip on the shipped capability chain, so the endpoint name is an implementation detail rather than a dependency.'},
+        {claim:'API 1437 tests, Admin 18 tests',
+         found:'CURRENT_STATUS.md (2026-08-19) records API 480/480 across 29 suites, Customer 260/260, packages/validation 29/29. No admin suite.',
+         effect:'No effect on the design. Recorded because the gap suggests this brief describes a branch this read cannot see.'},
+        {claim:'24 migrations',
+         found:'19 files at main. CLAUDE.md says 16 locked at e471ec1d; CURRENT_STATUS.md \u00a7 12 said 17 on 2026-08-19.',
+         effect:'See the panel below. No migration is proposed either way, so the count does not gate this design \u2014 but it does tell us the brief and the tree disagree about what is deployed.'},
+        {claim:'No new DB table was introduced',
+         found:'Consistent with the tree. The three post-lock migrations are a policy replacement, an order-creation function and a reconciliation invariant \u2014 no ai_* or case table.',
+         effect:'Confirms AI-02 is still open, so the case machine is designed as a projection.'}
+      ],
+      rules: [
+        {id:'HS-R1', name:'Evidence before proposal', body:'The timeline and live domain state occupy the left column and are read first. The AI panel sits below the escalation reasons on the right, styled as a quotation from another system.', cost:'A supervisor cannot see the recommendation without scrolling past what actually happened.'},
+        {id:'HS-R2', name:'The command is shown verbatim', body:'S-04 prints pause_merchant with its real argument list, including the argument that has no value. Not a sentence describing it \u2014 the call.', cost:'The supervisor has to read a line of code. That is cheaper than approving something they cannot name.'},
+        {id:'HS-R3', name:'Approval is bound to a fresh read', body:'The approve control carries the version and status from the revalidation read, not from the case. A stale read fails the command rather than widening the window.', cost:'One extra click, and an approval that expires.'},
+        {id:'HS-R4', name:'The reason is typed, not inherited', body:'The reason field starts empty and no control copies the AI\u2019s text into it. DEC-032 requires a reason on OPERATOR rows; the design requires it to be the human\u2019s.', cost:'Typing, every single time, with no shortcut.'},
+        {id:'HS-R5', name:'Success is verified, not returned', body:'A 200 from the command sets the case to \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25. Only a re-read of the domain that finds the merchant paused sets it to \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08.', cost:'A visible intermediate state the supervisor has to wait through.'}
+      ],
+      flow: [
+        {n:'1', actor:'AI', chip:chip.ai, name:'Escalation', body:'The agent detects the pattern, classifies it ESC-REPEAT, records the reliability events it already has permission to record, and stops. It writes nothing to restaurants.', fail:'Classification fails \u2192 case opens unclassified at highest visible severity. Never silently dropped.', bg:'#F8F5FD', border:'#C9B8E8'},
+        {n:'2', actor:'HUMAN', chip:chip.human, name:'Queue triage', body:'S-02 lists the case with origin AI OPERATIONS, severity, age, last event and blockedBy. A decision-blocked case is visibly not actionable before it is opened.', fail:'Projection unreadable \u2192 the row still renders, marked unreadable, and stays in the queue.', bg:'#fff', border:'#E0D6C8'},
+        {n:'3', actor:'HUMAN', chip:chip.human, name:'Case review', body:'S-03: what happened, why it escalated, what the AI proposes \u2014 in that order. Timeline plus current domain state, no money.', fail:'Case already resolved \u2192 read-only detail with the resolver named. No approve panel.', bg:'#fff', border:'#E0D6C8'},
+        {n:'4', actor:'POLICY', chip:chip.det, name:'Policy visibility', body:'Six governing values render as [BQ-013 DECISION REQUIRED]. The panel names which of them the approve control is waiting on.', fail:'Any required value undefined \u2192 approve disabled, blocker named in prose. This is today\u2019s state.', bg:'#FBEAEA', border:'#F0C9C9'},
+        {n:'5', actor:'SYSTEM', chip:chip.sys, name:'Live revalidation', body:'Re-read restaurants.status, the case version and open-order count immediately before the write. The approve control binds to this read.', fail:'State moved \u2192 CONFLICT, diff shown, zero rows written, case reloaded.', bg:'#fff', border:'#E0D6C8'},
+        {n:'6', actor:'HUMAN', chip:chip.human, name:'Approval \u2192 command', body:'Typed reason, explicit approve, one guarded domain command with an idempotency key derived from the case and version.', fail:'Authorization fails \u2192 403, no mutation, case untouched. Duplicate \u2192 same result returned, not a second pause.', bg:'#FDF3E6', border:'#F0DFC4'},
+        {n:'7', actor:'SYSTEM', chip:chip.sys, name:'Verification', body:'Re-read the domain and confirm the merchant is actually paused. Only this sets the case to \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08.', fail:'Cannot verify \u2192 \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25, never \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08. Case stays open.', bg:'#fff', border:'#E0D6C8'},
+        {n:'8', actor:'AUDIT', chip:chip.det, name:'Audit result', body:'actor_type = OPERATOR, acting profile id, mandatory reason, correlation id, command and its verified outcome \u2014 four distinguishable row kinds.', fail:'Audit write fails \u2192 treated as command failure, surfaced, and the case does not close.', bg:'#fff', border:'#E0D6C8'}
+      ],
+      authChain: [
+        {step:'platform_staff', body:'Membership row. Being staff is a row in a table, not a column on a profile \u2014 DEC-033, implemented with zero profiles.role references in any policy.'},
+        {step:'CapabilitiesService', body:'Resolves what this staff member may do. The shipped Phase B pattern behind RolesGuard / RestaurantScopeGuard.'},
+        {step:"@Roles('OPERATOR','ADMIN')", body:'Route guard on the approval command. Both roles may approve a pause; nothing here distinguishes them.'},
+        {step:'guarded domain command', body:'The command re-validates independently of the guard. Authorization is not the only check, and the state check lives in the WHERE clause per ADR-003.'},
+        {step:'audit_logs', body:'actor_type = OPERATOR plus the acting profile id. DEC-032\u2019s mandatory-reason CHECK fires on exactly this value.'}
+      ],
+      noRoles: ['SUPERVISOR','AI_ADMIN','AI_OPERATOR','TEMP_APPROVER','case_owner scope','pause_merchant capability flag'],
+      queueFilters: [
+        {label:'\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14', weight:'400', color:'#7A6E64', mark:'transparent'},
+        {label:'\u0e15\u0e49\u0e2d\u0e07\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34', weight:'700', color:'#C2431F', mark:'#C2431F'},
+        {label:'\u0e15\u0e34\u0e14\u0e01\u0e32\u0e23\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e43\u0e08', weight:'400', color:'#7A6E64', mark:'transparent'},
+        {label:'AI \u0e17\u0e33\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08', weight:'400', color:'#7A6E64', mark:'transparent'},
+        {label:'\u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49', weight:'400', color:'#7A6E64', mark:'transparent'}
+      ],
+      queueRows: [
+        {sev:'\u0e15\u0e49\u0e2d\u0e07\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34', sevStyle:chip.human, title:'\u0e23\u0e49\u0e32\u0e19\u0e44\u0e21\u0e48\u0e15\u0e2d\u0e1a\u0e23\u0e31\u0e1a\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c\u0e0b\u0e49\u0e33\u0e2b\u0e25\u0e32\u0e22\u0e04\u0e23\u0e31\u0e49\u0e07 \u2014 \u0e40\u0e2a\u0e19\u0e2d\u0e2b\u0e22\u0e38\u0e14\u0e23\u0e31\u0e1a\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c\u0e0a\u0e31\u0e48\u0e27\u0e04\u0e23\u0e32\u0e27', ref:'ESC-REPEAT \u00b7 case \u2014', scope:'\u0e23\u0e49\u0e32\u0e19 \u2014', blockedBy:'BQ-013', blockColor:'#B23030', last:'\u2014 (\u0e2b\u0e21\u0e14\u0e40\u0e27\u0e25\u0e32\u0e23\u0e31\u0e1a\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c)', bg:'#FFFDF9'},
+        {sev:'\u0e15\u0e49\u0e2d\u0e07\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34', sevStyle:chip.human, title:'\u0e23\u0e49\u0e32\u0e19\u0e44\u0e21\u0e48\u0e15\u0e2d\u0e1a\u0e23\u0e31\u0e1a \u2014 \u0e04\u0e19\u0e25\u0e30\u0e23\u0e49\u0e32\u0e19 \u0e41\u0e15\u0e48\u0e2a\u0e31\u0e07\u0e01\u0e32\u0e23\u0e13\u0e4c\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e19', ref:'ESC-REPEAT \u00b7 case \u2014', scope:'\u0e23\u0e49\u0e32\u0e19 \u2014', blockedBy:'BQ-013', blockColor:'#B23030', last:'\u2014', bg:'#fff'},
+        {sev:'\u0e14\u0e48\u0e27\u0e19', sevStyle:chip.blocked, title:'\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e1b\u0e25\u0e48\u0e2d\u0e22\u0e07\u0e32\u0e19\u0e16\u0e39\u0e01\u0e23\u0e30\u0e1a\u0e1a\u0e1b\u0e0f\u0e34\u0e40\u0e2a\u0e18 \u2014 \u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c\u0e04\u0e49\u0e32\u0e07', ref:'ESC-COMMAND \u00b7 case \u2014', scope:'\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c \u2014', blockedBy:'\u2014 (\u0e14\u0e39\u0e40\u0e04\u0e2a\u0e44\u0e14\u0e49)', blockColor:'#7A6E64', last:'\u2014', bg:'#fff'},
+        {sev:'AI \u0e17\u0e33\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08', sevStyle:chip.design, title:'\u0e41\u0e08\u0e49\u0e07\u0e40\u0e15\u0e37\u0e2d\u0e19\u0e23\u0e49\u0e32\u0e19\u0e2a\u0e48\u0e07\u0e44\u0e21\u0e48\u0e1c\u0e48\u0e32\u0e19\u0e17\u0e38\u0e01\u0e0a\u0e48\u0e2d\u0e07\u0e17\u0e32\u0e07', ref:'ESC-RETRY-EX \u00b7 case \u2014', scope:'\u0e23\u0e49\u0e32\u0e19 \u2014', blockedBy:'\u2014', blockColor:'#7A6E64', last:'\u2014', bg:'#fff'},
+        {sev:'\u0e15\u0e34\u0e14\u0e01\u0e32\u0e23\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e43\u0e08', sevStyle:chip.blocked, title:'\u0e2a\u0e48\u0e07\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 \u2014 \u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e08\u0e19\u0e2b\u0e21\u0e14\u0e40\u0e27\u0e25\u0e32', ref:'ESC-NOANSWER \u00b7 case \u2014', scope:'\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c \u2014', blockedBy:'OD-04 \u00b7 UX-Q-006', blockColor:'#B23030', last:'\u2014', bg:'#fff'}
+      ],
+      queueNotes: [
+        {id:'S02-N1', body:'Origin is a chip on every row, not a filter you have to apply. A supervisor should never wonder whether a human or the agent opened a case \u2014 it is stated in place.'},
+        {id:'S02-N2', body:'blockedBy is a column, not a detail-page field. Its whole value is letting a supervisor skip a case they cannot act on, and that only works from the list.'},
+        {id:'S02-N3', body:'No financial column exists \u2014 no amount, no payment reference, no order total. The queue is sorted by operational urgency, and money is not one of its inputs.'}
+      ],
+      timeline: [
+        {time:'\u2014', title:'\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c\u0e0a\u0e33\u0e23\u0e30\u0e40\u0e07\u0e34\u0e19\u0e41\u0e25\u0e49\u0e27 \u0e2a\u0e48\u0e07\u0e43\u0e2b\u0e49\u0e23\u0e49\u0e32\u0e19', actor:'SYSTEM', chip:chip.sys, body:'\u0e40\u0e23\u0e34\u0e48\u0e21\u0e19\u0e31\u0e1a\u0e40\u0e27\u0e25\u0e32\u0e23\u0e31\u0e1a\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c \u2014 \u0e01\u0e33\u0e2b\u0e19\u0e14\u0e15\u0e32\u0e21 BQ-013 \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e01\u0e33\u0e2b\u0e19\u0e14', dot:'#A2968A'},
+        {time:'\u2014', title:'\u0e40\u0e15\u0e37\u0e2d\u0e19\u0e23\u0e49\u0e32\u0e19\u0e01\u0e48\u0e2d\u0e19\u0e2b\u0e21\u0e14\u0e40\u0e27\u0e25\u0e32', actor:'SYSTEM', chip:chip.sys, body:'\u0e2a\u0e48\u0e07\u0e41\u0e25\u0e49\u0e27 \u0e44\u0e21\u0e48\u0e21\u0e35\u0e01\u0e32\u0e23\u0e15\u0e2d\u0e1a\u0e01\u0e25\u0e31\u0e1a', dot:'#A2968A'},
+        {time:'\u2014', title:'\u0e2b\u0e21\u0e14\u0e40\u0e27\u0e25\u0e32\u0e23\u0e31\u0e1a\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c', actor:'SYSTEM', chip:chip.sys, body:'\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c\u0e2b\u0e21\u0e14\u0e40\u0e27\u0e25\u0e32\u0e23\u0e31\u0e1a\u0e15\u0e32\u0e21\u0e19\u0e42\u0e22\u0e1a\u0e32\u0e22\u0e1d\u0e31\u0e48\u0e07\u0e40\u0e0b\u0e34\u0e23\u0e4c\u0e1f\u0e40\u0e27\u0e2d\u0e23\u0e4c', dot:'#B23030'},
+        {time:'\u2014', title:'\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e2b\u0e15\u0e38\u0e01\u0e32\u0e23\u0e13\u0e4c\u0e04\u0e27\u0e32\u0e21\u0e19\u0e48\u0e32\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e16\u0e37\u0e2d\u0e02\u0e2d\u0e07\u0e23\u0e49\u0e32\u0e19', actor:'AI', chip:chip.ai, body:'record_reliability_event \u2014 L2 \u00b7 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e40\u0e17\u0e48\u0e32\u0e19\u0e31\u0e49\u0e19 \u0e44\u0e21\u0e48\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e23\u0e49\u0e32\u0e19', dot:'#5B4A87'},
+        {time:'\u2014', title:'AI \u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e21\u0e40\u0e2b\u0e15\u0e38\u0e01\u0e32\u0e23\u0e13\u0e4c\u0e17\u0e35\u0e48\u0e40\u0e01\u0e34\u0e14\u0e0b\u0e49\u0e33\u0e40\u0e02\u0e49\u0e32\u0e14\u0e49\u0e27\u0e22\u0e01\u0e31\u0e19', actor:'AI', chip:chip.ai, body:'link_related_cases \u2014 L1 \u00b7 \u0e2d\u0e48\u0e32\u0e19\u0e41\u0e25\u0e49\u0e27\u0e40\u0e02\u0e35\u0e22\u0e19\u0e2a\u0e23\u0e38\u0e1b \u0e44\u0e21\u0e48\u0e21\u0e35\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e42\u0e14\u0e40\u0e21\u0e19\u0e43\u0e14\u0e17\u0e33\u0e07\u0e32\u0e19', dot:'#5B4A87'},
+        {time:'\u2014', title:'\u0e2a\u0e48\u0e07\u0e15\u0e48\u0e2d\u0e43\u0e2b\u0e49\u0e40\u0e08\u0e49\u0e32\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e43\u0e08', actor:'AI', chip:chip.ai, body:'ESC-REPEAT \u00b7 AI \u0e2b\u0e22\u0e38\u0e14\u0e17\u0e35\u0e48\u0e19\u0e35\u0e48 \u0e41\u0e25\u0e30\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e17\u0e33\u0e2d\u0e30\u0e44\u0e23\u0e01\u0e31\u0e1a\u0e23\u0e49\u0e32\u0e19\u0e19\u0e35\u0e49', dot:'#5B4A87'}
+      ],
+      domainState: [
+        {k:'restaurants.status', v:'ACTIVE'},
+        {k:'\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c\u0e17\u0e35\u0e48\u0e04\u0e49\u0e32\u0e07\u0e2d\u0e22\u0e39\u0e48\u0e15\u0e2d\u0e19\u0e19\u0e35\u0e49', v:'\u2014'},
+        {k:'\u0e40\u0e04\u0e2a\u0e17\u0e35\u0e48\u0e40\u0e01\u0e35\u0e48\u0e22\u0e27\u0e02\u0e49\u0e2d\u0e07\u0e01\u0e31\u0e19', v:'\u2014'},
+        {k:'\u0e2d\u0e48\u0e32\u0e19\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e40\u0e21\u0e37\u0e48\u0e2d', v:'\u2014'}
+      ],
+      whyRows: [
+        {k:'\u0e40\u0e2b\u0e15\u0e38\u0e17\u0e35\u0e48 AI \u0e2a\u0e48\u0e07\u0e15\u0e48\u0e2d', v:'ESC-REPEAT', color:'#5B4A87', body:'\u0e23\u0e49\u0e32\u0e19\u0e19\u0e35\u0e49\u0e02\u0e49\u0e32\u0e21\u0e40\u0e01\u0e13\u0e11\u0e4c\u0e04\u0e27\u0e32\u0e21\u0e19\u0e48\u0e32\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e16\u0e37\u0e2d\u0e17\u0e35\u0e48\u0e15\u0e31\u0e49\u0e07\u0e44\u0e27\u0e49 \u2014 \u0e41\u0e15\u0e48\u0e40\u0e01\u0e13\u0e11\u0e4c\u0e19\u0e31\u0e49\u0e19\u0e40\u0e2d\u0e07\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e04\u0e48\u0e32'},
+        {k:'\u0e1c\u0e25\u0e01\u0e32\u0e23\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e40\u0e0a\u0e34\u0e07\u0e01\u0e2f', v:'HUMAN', color:'#8A6A3A', body:'\u0e15\u0e31\u0e27\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e2a\u0e48\u0e07\u0e04\u0e33\u0e16\u0e32\u0e21\u0e19\u0e35\u0e49\u0e43\u0e2b\u0e49\u0e04\u0e19 \u0e44\u0e21\u0e48\u0e43\u0e2b\u0e49 AI \u0e40\u0e1e\u0e23\u0e32\u0e30\u0e44\u0e21\u0e48\u0e21\u0e35\u0e19\u0e42\u0e22\u0e1a\u0e32\u0e22\u0e17\u0e35\u0e48\u0e08\u0e30\u0e40\u0e17\u0e35\u0e22\u0e1a\u0e01\u0e31\u0e1a'},
+        {k:'\u0e19\u0e42\u0e22\u0e1a\u0e32\u0e22\u0e17\u0e35\u0e48\u0e2d\u0e49\u0e32\u0e07\u0e2d\u0e34\u0e07', v:'BQ-013 \u00b7 OPEN', color:'#B23030', body:'BQ-013 \u0e1a\u0e2d\u0e01\u0e27\u0e48\u0e32\u0e01\u0e32\u0e23\u0e2b\u0e22\u0e38\u0e14\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34 \u0e17\u0e33\u0e44\u0e14\u0e49\u0e41\u0e25\u0e30\u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e44\u0e14\u0e49 \u0e41\u0e15\u0e48\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e01\u0e33\u0e2b\u0e19\u0e14\u0e04\u0e48\u0e32\u0e43\u0e14\u0e44\u0e27\u0e49'},
+        {k:'\u0e15\u0e34\u0e14\u0e2d\u0e22\u0e39\u0e48\u0e17\u0e35\u0e48', v:'BQ-013', color:'#B23030', body:'\u0e15\u0e49\u0e2d\u0e07\u0e21\u0e35\u0e40\u0e01\u0e13\u0e11\u0e4c\u0e41\u0e25\u0e30\u0e23\u0e30\u0e22\u0e30\u0e40\u0e27\u0e25\u0e32\u0e2b\u0e22\u0e38\u0e14\u0e01\u0e48\u0e2d\u0e19 \u0e08\u0e36\u0e07\u0e08\u0e30\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e44\u0e14\u0e49'}
+      ],
+      policyRows: [
+        {k:'\u0e01\u0e33\u0e2b\u0e19\u0e14\u0e40\u0e27\u0e25\u0e32\u0e23\u0e31\u0e1a\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c \u2014 acceptance deadline', note:'How long a merchant has to accept before timeout. Governs the timeline every case in this class is built from.'},
+        {k:'\u0e08\u0e33\u0e19\u0e27\u0e19\u0e04\u0e23\u0e31\u0e49\u0e07\u0e01\u0e48\u0e2d\u0e19\u0e40\u0e2a\u0e19\u0e2d\u0e2b\u0e22\u0e38\u0e14 \u2014 auto-pause threshold', note:'How many non-responses inside the window constitute a pattern. Without it, "\u0e0b\u0e49\u0e33\u0e2b\u0e25\u0e32\u0e22\u0e04\u0e23\u0e31\u0e49\u0e07" has no defined meaning.'},
+        {k:'\u0e0a\u0e48\u0e27\u0e07\u0e40\u0e27\u0e25\u0e32\u0e19\u0e31\u0e1a\u0e04\u0e27\u0e32\u0e21\u0e19\u0e48\u0e32\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e16\u0e37\u0e2d \u2014 reliability window', note:'Rolling period the count is measured over. A count with no window is not a threshold.'},
+        {k:'\u0e23\u0e30\u0e22\u0e30\u0e40\u0e27\u0e25\u0e32\u0e2b\u0e22\u0e38\u0e14\u0e23\u0e49\u0e32\u0e19 \u2014 pause duration', note:'The until argument of the command. This is the value whose absence makes approval structurally impossible, not merely unwise.'},
+        {k:'\u0e0a\u0e48\u0e27\u0e07\u0e1e\u0e31\u0e01\u0e01\u0e48\u0e2d\u0e19\u0e40\u0e2a\u0e19\u0e2d\u0e2b\u0e22\u0e38\u0e14\u0e2d\u0e35\u0e01 \u2014 cooldown', note:'Whether the same merchant can be re-proposed immediately after a rejection or a completed pause.'},
+        {k:'\u0e01\u0e32\u0e23\u0e40\u0e1b\u0e34\u0e14\u0e23\u0e49\u0e32\u0e19\u0e01\u0e25\u0e31\u0e1a \u2014 resume path', note:'Whether resume is automatic at expiry, requires a second human action, or both. Determines if this flow needs a resume command at all.'}
+      ],
+      evidence: [
+        {field:'Merchant display name, restaurant id, current status', verdict:'SHOWN', style:chip.shipped},
+        {field:'Non-response event count and the events themselves', verdict:'SHOWN', style:chip.shipped},
+        {field:'Affected order references (id and state only)', verdict:'SHOWN', style:chip.shipped},
+        {field:'Timeline of deadline / reminder / timeout events', verdict:'SHOWN', style:chip.shipped},
+        {field:'Open-order count at the moment of revalidation', verdict:'SHOWN', style:chip.shipped},
+        {field:'Order totals, item prices, fees, any amount at all', verdict:'WITHHELD', style:chip.blocked},
+        {field:'Payment references, provider ids, ledger or settlement rows', verdict:'WITHHELD', style:chip.blocked},
+        {field:'Customer name, phone, address, delivery instructions', verdict:'WITHHELD', style:chip.blocked},
+        {field:'Rider identity \u2014 shown only where an assignment is material to the case', verdict:'CONDITIONAL', style:chip.human}
+      ],
+      gates: [
+        {name:'\u0e04\u0e38\u0e13\u0e21\u0e35\u0e2a\u0e34\u0e17\u0e18\u0e34\u0e4c\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34', body:'OPERATOR \u00b7 \u0e42\u0e1b\u0e23\u0e44\u0e1f\u0e25\u0e4c \u2014 \u0e1c\u0e48\u0e32\u0e19\u0e01\u0e32\u0e23\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e34\u0e17\u0e18\u0e34\u0e4c\u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22\u0e41\u0e25\u0e49\u0e27', icon:'\u2713', iconBg:'#0A6B49', bg:'#F3FAF6', border:'#CDE7DB'},
+        {name:'\u0e40\u0e04\u0e2a\u0e19\u0e35\u0e49\u0e22\u0e31\u0e07\u0e40\u0e1b\u0e34\u0e14\u0e2d\u0e22\u0e39\u0e48', body:'\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e04\u0e23\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e40\u0e04\u0e2a\u0e19\u0e35\u0e49 \u0e41\u0e25\u0e30\u0e40\u0e27\u0e2d\u0e23\u0e4c\u0e0a\u0e31\u0e19\u0e17\u0e35\u0e48\u0e04\u0e38\u0e13\u0e2d\u0e48\u0e32\u0e19\u0e04\u0e37\u0e2d \u2014', icon:'\u2713', iconBg:'#0A6B49', bg:'#F3FAF6', border:'#CDE7DB'},
+        {name:'\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e23\u0e49\u0e32\u0e19\u0e15\u0e23\u0e07\u0e01\u0e31\u0e19\u0e01\u0e31\u0e1a\u0e15\u0e2d\u0e19\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e04\u0e2a', body:'\u0e15\u0e49\u0e2d\u0e07\u0e2d\u0e48\u0e32\u0e19\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e2a\u0e14\u0e01\u0e48\u0e2d\u0e19\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34 \u2014 \u0e01\u0e32\u0e23\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e1c\u0e39\u0e01\u0e01\u0e31\u0e1a\u0e01\u0e32\u0e23\u0e2d\u0e48\u0e32\u0e19\u0e04\u0e23\u0e31\u0e49\u0e07\u0e19\u0e31\u0e49\u0e19', icon:'!', iconBg:'#8A6A3A', bg:'#FDFAF4', border:'#F0DFC4'},
+        {name:'\u0e19\u0e42\u0e22\u0e1a\u0e32\u0e22\u0e04\u0e23\u0e1a\u0e16\u0e49\u0e27\u0e19', body:'\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a \u2014 \u0e40\u0e01\u0e13\u0e11\u0e4c \u0e0a\u0e48\u0e27\u0e07\u0e40\u0e27\u0e25\u0e32 \u0e23\u0e30\u0e22\u0e30\u0e40\u0e27\u0e25\u0e32\u0e2b\u0e22\u0e38\u0e14 \u0e41\u0e25\u0e30\u0e01\u0e32\u0e23\u0e40\u0e1b\u0e34\u0e14\u0e01\u0e25\u0e31\u0e1a \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e16\u0e39\u0e01\u0e01\u0e33\u0e2b\u0e19\u0e14 (BQ-013)', icon:'\u00d7', iconBg:'#B23030', bg:'#FDF6F6', border:'#F0C9C9'}
+      ],
+      revalidate: [
+        {k:'restaurants.status', v:'\u0e15\u0e2d\u0e19\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e04\u0e2a ACTIVE \u00b7 \u0e15\u0e2d\u0e19\u0e19\u0e35\u0e49 \u2014'},
+        {k:'case version', v:'\u0e2d\u0e48\u0e32\u0e19\u0e44\u0e27\u0e49 \u2014 \u00b7 \u0e15\u0e2d\u0e19\u0e19\u0e35\u0e49 \u2014'},
+        {k:'\u0e2d\u0e2d\u0e40\u0e14\u0e2d\u0e23\u0e4c\u0e17\u0e35\u0e48\u0e01\u0e33\u0e25\u0e31\u0e07\u0e17\u0e33\u0e2d\u0e22\u0e39\u0e48', v:'\u2014'},
+        {k:'\u0e21\u0e35\u0e43\u0e04\u0e23\u0e2d\u0e37\u0e48\u0e19\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e04\u0e2a\u0e19\u0e35\u0e49\u0e2d\u0e22\u0e39\u0e48', v:'\u2014'}
+      ],
+      resultStages: [
+        {id:'S-04.B', name:'\u0e01\u0e33\u0e25\u0e31\u0e07\u0e2a\u0e48\u0e07\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07', body:'\u0e1b\u0e38\u0e48\u0e21\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e01\u0e33\u0e25\u0e31\u0e07\u0e17\u0e33\u0e07\u0e32\u0e19 \u0e01\u0e14\u0e0b\u0e49\u0e33\u0e44\u0e21\u0e48\u0e2a\u0e48\u0e07\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e49\u0e33 \u2014 idempotency key \u0e21\u0e32\u0e08\u0e32\u0e01\u0e40\u0e04\u0e2a\u0e41\u0e25\u0e30\u0e40\u0e27\u0e2d\u0e23\u0e4c\u0e0a\u0e31\u0e19', fail:'Request fails or times out \u2192 S-04.G, never a success message.'},
+        {id:'S-04.D', name:'\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 \u2014 \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25', body:'\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e15\u0e2d\u0e1a 200 \u0e41\u0e25\u0e49\u0e27 \u0e41\u0e15\u0e48\u0e2b\u0e19\u0e49\u0e32\u0e08\u0e2d\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1a\u0e2d\u0e01\u0e27\u0e48\u0e32\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 \u2014 \u0e23\u0e2d\u0e01\u0e32\u0e23\u0e2d\u0e48\u0e32\u0e19\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19', fail:'This is a state, not a transition. It can persist.'},
+        {id:'S-04.\u2713', name:'\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e41\u0e25\u0e49\u0e27 \u2014 \u0e2b\u0e22\u0e38\u0e14\u0e23\u0e49\u0e32\u0e19\u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22', body:'\u0e2d\u0e48\u0e32\u0e19\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e23\u0e49\u0e32\u0e19\u0e08\u0e32\u0e01\u0e42\u0e14\u0e40\u0e21\u0e19\u0e2d\u0e35\u0e01\u0e04\u0e23\u0e31\u0e49\u0e07 \u0e41\u0e25\u0e30\u0e1e\u0e1a\u0e27\u0e48\u0e32\u0e2b\u0e22\u0e38\u0e14\u0e08\u0e23\u0e34\u0e07 \u0e08\u0e36\u0e07\u0e41\u0e2a\u0e14\u0e07\u0e04\u0e33\u0e27\u0e48\u0e32\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08', fail:'Verification read disagrees with the command result \u2192 escalate, do not overwrite.'},
+        {id:'S-04.\u2691', name:'\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a', body:'actor_type = OPERATOR \u00b7 \u0e42\u0e1b\u0e23\u0e44\u0e1f\u0e25\u0e4c\u0e1c\u0e39\u0e49\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34 \u00b7 \u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25\u0e17\u0e35\u0e48\u0e01\u0e23\u0e2d\u0e01 \u00b7 correlationId \u00b7 \u0e1c\u0e25\u0e01\u0e32\u0e23\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19', fail:'Audit write fails \u2192 the whole approval is reported as failed and the case stays open.'}
+      ],
+      interactions: [
+        {id:'HS-I01', body:'The approve control reads four gates. Any gate not passing renders it disabled with the failing gate named in prose beneath it \u2014 never a bare greyed button.'},
+        {id:'HS-I02', body:'The reason field is required and starts empty. No control anywhere copies the AI\u2019s text into it, and there is no "use AI reason" affordance.'},
+        {id:'HS-I03', body:'Pressing approve immediately disables the control and shows S-04.B. A second press cannot fire, and the same idempotency key would return the same result if it did.'},
+        {id:'HS-I04', body:'The revalidation read expires. Once expired, approve disables and the supervisor must re-read \u2014 the read, not the case, is what the approval is bound to.'},
+        {id:'HS-I05', body:'\u0e1b\u0e0f\u0e34\u0e40\u0e2a\u0e18\u0e04\u0e33\u0e40\u0e2a\u0e19\u0e2d is always available, including while approve is blocked. Rejecting is a valid resolution and requires its own reason.'},
+        {id:'HS-I06', body:'No control on this screen changes restaurants.status except approve. Nothing is editable inline; there is no field on the case a supervisor can type into except the reason.'},
+        {id:'HS-I07', body:'A resolved case opens read-only, with the resolver, timestamp, outcome and reason shown. The approve panel is absent, not disabled.'},
+        {id:'HS-I08', body:'Every rejection reason displayed comes from the command response. The screen never composes a friendlier explanation of a failure it did not diagnose.'},
+        {id:'HS-I09', body:'The AI panel never renders a control. It is read-only evidence \u2014 no accept, no thumbs, no "apply recommendation".'},
+        {id:'HS-I10', body:'An unreadable or unknown case state keeps the case visible and open, marked unreadable. Nothing is auto-closed to tidy the queue.'}
+      ],
+      failStates: [
+        {id:'POLICY_OPEN', style:chip.blocked, trigger:'Any BQ-013 value required by the command is undefined.', sees:'Approve disabled; the policy panel names each missing value as [BQ-013 DECISION REQUIRED]; reject stays available.', outcome:'Stays OPEN, blockedBy BQ-013.', db:'none', dbColor:'#0A6B49'},
+        {id:'ALREADY_RESOLVED', style:chip.blocked, trigger:'The case was resolved before this supervisor opened it.', sees:'Read-only detail: who resolved it, when, outcome, reason. No approve panel rendered.', outcome:'Unchanged.', db:'none', dbColor:'#0A6B49'},
+        {id:'STATE_CHANGED', style:chip.blocked, trigger:'Live state differs from the state the case was opened against.', sees:'S-04.E \u2014 before/after diff, no partial success wording, reload as the primary action.', outcome:'Stays OPEN, version bumped.', db:'none', dbColor:'#0A6B49'},
+        {id:'COMMAND_REJECTED', style:chip.blocked, trigger:'The guarded domain command refused the request.', sees:'S-04.F \u2014 the command\u2019s own code and reason, verbatim.', outcome:'Stays OPEN. Rejection is not resolution.', db:'0 rows', dbColor:'#0A6B49'},
+        {id:'FORBIDDEN', style:chip.blocked, trigger:'Guard denies \u2014 not OPERATOR or ADMIN, or capability resolution returns nothing.', sees:'Permission-denied state for the whole console. The case surface does not render at all.', outcome:'Not visible to this user.', db:'none', dbColor:'#0A6B49'},
+        {id:'DUPLICATE', style:chip.blocked, trigger:'A second approval attempt on the same case and version.', sees:'CONFLICT with the first resolution named. Never a second success message.', outcome:'Already resolved by the first approver.', db:'0 additional rows', dbColor:'#0A6B49'},
+        {id:'NETWORK', style:chip.human, trigger:'Request fails, times out, or the response never arrives.', sees:'S-04.G \u2014 cannot confirm. Explicit instruction not to retry blindly; the retry is a verification read.', outcome:'Stays OPEN, \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25.', db:'unknown \u2014 must be read', dbColor:'#8A6A3A'},
+        {id:'UNVERIFIED', style:chip.human, trigger:'Command returned success but the verification read cannot confirm the pause.', sees:'\u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25 \u2014 never \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08. Verify-again is the only action.', outcome:'Stays OPEN until verified.', db:'possibly written', dbColor:'#8A6A3A'},
+        {id:'UNKNOWN_STATE', style:chip.design, trigger:'The projection returns a state this UI does not recognise.', sees:'The case renders with its raw state string and a note that it cannot be acted on here.', outcome:'Stays OPEN and visible.', db:'none', dbColor:'#0A6B49'}
+      ],
+      raceRows: [
+        {t:'t1', a:'Opens the case. Reads version v1, status ACTIVE.', aColor:'#3D342C', b:'\u2014', bColor:'#C4B8AC', sys:'case v1 \u00b7 no lock taken'},
+        {t:'t2', a:'\u2014', aColor:'#C4B8AC', b:'Opens the same case. Reads version v1, status ACTIVE.', bColor:'#3D342C', sys:'case v1 \u00b7 both reads valid'},
+        {t:'t3', a:'Runs revalidation, types a reason, approves.', aColor:'#3D342C', b:'Still reading the evidence panel.', bColor:'#7A6E64', sys:'UPDATE \u2026 WHERE version = v1 \u2192 1 row'},
+        {t:'t4', a:'Sees \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25, then \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 after verification.', aColor:'#0A6B49', b:'Screen still shows the approve panel \u2014 B has not been told anything yet.', bColor:'#7A6E64', sys:'case v2 \u00b7 RESOLVED \u00b7 audit: OPERATOR = A'},
+        {t:'t5', a:'\u2014', aColor:'#C4B8AC', b:'Presses approve.', bColor:'#3D342C', sys:'UPDATE \u2026 WHERE version = v1 \u2192 0 rows'},
+        {t:'t6', a:'\u2014', aColor:'#C4B8AC', b:'CONFLICT: \u0e40\u0e04\u0e2a\u0e19\u0e35\u0e49\u0e16\u0e39\u0e01\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e44\u0e1b\u0e41\u0e25\u0e49\u0e27\u0e42\u0e14\u0e22 A \u2014 with the outcome and reason shown. No success wording, no second pause, no second audit row.', bColor:'#B23030', sys:'0 rows written \u00b7 no audit row for B\u2019s attempt beyond the rejected attempt itself'},
+        {t:'t7', a:'\u2014', aColor:'#C4B8AC', b:'Reloads. The case is read-only with A named as resolver.', bColor:'#7A6E64', sys:'case v2 \u00b7 terminal'}
+      ],
+      absent: [
+        {cmd:'cancel_order', why:'DEC-021 forbids rider cancellation cancelling an order, and the customer-facing cancellation policy (BQ-016/017) is open. No cancel control exists on this surface at any authorization level.'},
+        {cmd:'fail_delivery', why:'OD-04 has no policy input and UX-Q-006 has no terminal outcome. The agent runs the timer and escalates; nobody here has a button.'},
+        {cmd:'reassign_rider / redispatch', why:'release_rider_assignment() is the sole release path and it is service_role EXECUTE only. Dispatch is the tick\u2019s job, not a supervisor\u2019s.'},
+        {cmd:'refund / partial refund', why:'L5. Q-020 has no refund mechanism, Q-001 has no provider. A refund control on a pause screen would be the beginning of a financial console.'},
+        {cmd:'ledger adjustment', why:'L5, and DEC-034 deliberately has no zero-sum trigger \u2014 reconciliation is the compensating control. Manual ledger entry from an operations surface would defeat it.'},
+        {cmd:'settlement / payout action', why:'L5. Settlement needs six deferred tables and a Product Owner decision; it is not buildable in V1.'},
+        {cmd:'edit merchant profile / hours / menu', why:'Out of scope for an exception console. Merchant self-service surfaces exist (M-10, M-11, M-12) and are the correct path.'},
+        {cmd:'change order state directly', why:'V1.1 \u00a7 19 specifies commands, never PATCH state. A supervisor gets commands or nothing.'},
+        {cmd:'raw SQL / table editor', why:'Never. The agent has no Supabase client and the console has no query surface \u2014 AI-05\u2019s least-privilege argument depends on both staying true.'}
+      ],
+      canDo: [
+        'Read the case queue and one case at a time.',
+        'Read the evidence the contract permits \u2014 no money, no unrelated PII.',
+        'Re-read live domain state on demand.',
+        'Approve pause_merchant, with a typed reason, when all four gates pass.',
+        'Reject the proposal, or take manual control and close the case with a recorded outcome.'
+      ],
+      auditKinds: [
+        {kind:'AI EVENT', style:chip.ai, actor:'SYSTEM (see AI-01)', actorColor:'#B23030', records:'Escalation, classification, reliability event, link \u2014 everything the agent did before a human saw it.', reason:'Not enforced by CHECK. DEC-032\u2019s mandatory reason fires only on OPERATOR, so an agent row can carry no database-required reason.', shown:'Purple AI OPERATIONS chip, sourced from the case projection rather than actor_type alone.'},
+        {kind:'HUMAN DECISION', style:chip.human, actor:'OPERATOR', actorColor:'#0A6B49', records:'The approval or rejection, the acting profile id, and the typed reason.', reason:'Mandatory and database-enforced. This is why the reason field cannot be optional in the UI.', shown:'Named person plus role chip. Never SYSTEM, never AI.'},
+        {kind:'DOMAIN EXECUTION', style:chip.det, actor:'OPERATOR', actorColor:'#0A6B49', records:'The command that ran, its arguments, its result code, and the correlation id linking it to the decision.', reason:'Inherited from the decision row via correlationId.', shown:'Command name in mono, result code verbatim.'},
+        {kind:'VERIFICATION', style:chip.det, actor:'SYSTEM', actorColor:'#5A4E42', records:'The post-command read and whether it agreed with the command result.', reason:'n/a \u2014 not a decision.', shown:'\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 only when this row agrees. Otherwise \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25.'}
+      ],
+      stateMatrix: [
+        {state:'Loading', desktop:'Skeleton rows in the queue; case panels skeleton per region, not one full-screen spinner.', tablet:'Same, stacked.', approve:'not rendered', color:'#7A6E64'},
+        {state:'Empty queue', desktop:'\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e04\u0e2a\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e43\u0e08 \u2014 stated as a fact, no illustration, no call to action.', tablet:'Same.', approve:'n/a', color:'#7A6E64'},
+        {state:'Error \u2014 projection', desktop:'Queue shows an error region with retry. Cases already loaded stay readable.', tablet:'Same.', approve:'not rendered', color:'#7A6E64'},
+        {state:'Permission denied', desktop:'Whole console replaced by a denied state. No case titles, no counts, no merchant names leak through.', tablet:'Same.', approve:'not rendered', color:'#B23030'},
+        {state:'Policy unresolved', desktop:'Full case detail, policy panel red, approve disabled with the blocker named.', tablet:'Policy panel moves above the approve panel so the blocker is read first.', approve:'disabled \u00b7 named', color:'#B23030'},
+        {state:'Eligible', desktop:'All four gates green; approve enabled only after a reason is typed and the read is fresh.', tablet:'Same; gates stay above the button, never collapsed.', approve:'enabled', color:'#0A6B49'},
+        {state:'Submitting', desktop:'S-04.B \u2014 control disabled, in-flight, no optimistic success text anywhere.', tablet:'Same.', approve:'disabled \u00b7 in flight', color:'#8A6A3A'},
+        {state:'Awaiting verification', desktop:'S-04.D \u2014 \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25 with a verify action.', tablet:'Same.', approve:'replaced by verify', color:'#8A6A3A'},
+        {state:'Resolved \u2014 verified', desktop:'Read-only case, resolver named, audit rows visible, outcome \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08.', tablet:'Same.', approve:'absent', color:'#0A6B49'},
+        {state:'Conflict', desktop:'S-04.E \u2014 diff plus reload. Approve gone, not greyed.', tablet:'Same.', approve:'absent', color:'#B23030'},
+        {state:'Command rejected', desktop:'S-04.F \u2014 code and reason verbatim, case still open.', tablet:'Same.', approve:'re-enabled after a fresh read', color:'#8A6A3A'},
+        {state:'Verification failed', desktop:'S-04.G \u2014 explicitly not successful; do-not-retry guidance; verify again.', tablet:'Same.', approve:'absent', color:'#B23030'}
+      ],
+      copyRows: [
+        {k:'supervisor.inbox.title', th:'\u0e01\u0e25\u0e48\u0e2d\u0e07\u0e07\u0e32\u0e19 — Operations', note:'Existing S-02 key, unchanged.'},
+        {k:'supervisor.inbox.empty', th:'\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e04\u0e2a\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e43\u0e08', note:'A fact, not encouragement.'},
+        {k:'supervisor.case.origin', th:'\u0e21\u0e32\u0e08\u0e32\u0e01 AI Operations', note:'Rendered as a Latin-caps chip in the UI; this is the accessible label.'},
+        {k:'supervisor.case.what', th:'\u0e40\u0e01\u0e34\u0e14\u0e2d\u0e30\u0e44\u0e23\u0e02\u0e36\u0e49\u0e19', note:'Section 1 of S-03.'},
+        {k:'supervisor.case.why', th:'\u0e17\u0e33\u0e44\u0e21\u0e16\u0e36\u0e07\u0e2a\u0e48\u0e07\u0e15\u0e48\u0e2d\u0e43\u0e2b\u0e49\u0e04\u0e19', note:'Section 2. Deliberately not \u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25 \u2014 the supervisor asks why it reached them.'},
+        {k:'supervisor.case.blockedBy', th:'\u0e15\u0e34\u0e14\u0e2d\u0e22\u0e39\u0e48\u0e17\u0e35\u0e48', note:'Queue column and detail field share one key.'},
+        {k:'supervisor.ai.label', th:'AI \u0e40\u0e2a\u0e19\u0e2d — \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1c\u0e25', note:'Must contain the negation. A label reading only "AI \u0e40\u0e2a\u0e19\u0e2d" is not sufficient.'},
+        {k:'supervisor.ai.noEffect', th:'AI \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e17\u0e33\u0e2d\u0e30\u0e44\u0e23\u0e01\u0e31\u0e1a\u0e23\u0e49\u0e32\u0e19\u0e19\u0e35\u0e49', note:'The single most important sentence on S-03.'},
+        {k:'supervisor.policy.required', th:'\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e01\u0e33\u0e2b\u0e19\u0e14 — \u0e23\u0e2d\u0e01\u0e32\u0e23\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19 BQ-013', note:'Thai-facing form of the token. Annotations keep [BQ-013 DECISION REQUIRED].'},
+        {k:'supervisor.approve.cta', th:'\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e41\u0e25\u0e30\u0e2a\u0e31\u0e48\u0e07\u0e2b\u0e22\u0e38\u0e14\u0e23\u0e49\u0e32\u0e19', note:'Names the consequence, not the gesture. Never \u0e22\u0e37\u0e19\u0e22\u0e31\u0e19.'},
+        {k:'supervisor.approve.blocked', th:'\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49: \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e01\u0e13\u0e11\u0e4c\u0e41\u0e25\u0e30\u0e23\u0e30\u0e22\u0e30\u0e40\u0e27\u0e25\u0e32\u0e2b\u0e22\u0e38\u0e14\u0e23\u0e49\u0e32\u0e19\u0e15\u0e32\u0e21 BQ-013', note:'Prose, beneath the button. No tooltip.'},
+        {k:'supervisor.approve.reason', th:'\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25 — \u0e1a\u0e31\u0e07\u0e04\u0e31\u0e1a\u0e01\u0e23\u0e2d\u0e01', note:'Placeholder: \u0e40\u0e02\u0e35\u0e22\u0e19\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25\u0e02\u0e2d\u0e07\u0e04\u0e38\u0e13 \u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e04\u0e31\u0e14\u0e25\u0e2d\u0e01\u0e08\u0e32\u0e01 AI.'},
+        {k:'supervisor.reject.cta', th:'\u0e1b\u0e0f\u0e34\u0e40\u0e2a\u0e18\u0e04\u0e33\u0e40\u0e2a\u0e19\u0e2d', note:'Rejects the AI proposal, not the merchant.'},
+        {k:'supervisor.revalidate.cta', th:'\u0e2d\u0e48\u0e32\u0e19\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e43\u0e2b\u0e21\u0e48', note:'Neutral verb. Not \u0e23\u0e35\u0e40\u0e1f\u0e23\u0e0a.'},
+        {k:'supervisor.result.pending', th:'\u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25', note:'The state between 200 and verified. Must exist as its own string.'},
+        {k:'supervisor.result.verified', th:'\u0e2b\u0e22\u0e38\u0e14\u0e23\u0e49\u0e32\u0e19\u0e40\u0e23\u0e35\u0e22\u0e1a\u0e23\u0e49\u0e2d\u0e22 — \u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e41\u0e25\u0e49\u0e27', note:'Only after the verification read agrees.'},
+        {k:'supervisor.conflict.title', th:'\u0e40\u0e04\u0e2a\u0e19\u0e35\u0e49\u0e16\u0e39\u0e01\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e44\u0e1b\u0e41\u0e25\u0e49\u0e27', note:'Followed by the resolver name. Never ambiguous about who won.'},
+        {k:'supervisor.unverified.noRetry', th:'\u0e2d\u0e22\u0e48\u0e32\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e49\u0e33 — \u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e19\u0e35\u0e49\u0e2d\u0e32\u0e08\u0e17\u0e33\u0e07\u0e32\u0e19\u0e44\u0e1b\u0e41\u0e25\u0e49\u0e27', note:'The line that prevents a double pause attempt.'}
+      ],
+      deps: [
+        {needs:'Staff identity + role for the audit actor', source:'platform_staff \u2192 CapabilitiesService', status:'SHIPPED', style:chip.shipped, note:'Phase B. No new endpoint strictly required.'},
+        {needs:'Route authorization on the approval command', source:"@Roles('OPERATOR','ADMIN')", status:'SHIPPED', style:chip.shipped, note:'Guard pattern exists; the route it guards does not.'},
+        {needs:'Merchant current status', source:'restaurants.status', status:'LOCKED SCHEMA', style:chip.design, note:'Read-only select. Merchant SELECT policies already exist; staff read path is new.'},
+        {needs:'Case queue + case detail projection', source:'jobs + audit_logs + reconciliation_cases', status:'NEW API WORK', style:chip.blocked, note:'AI-02: no ai_* table. Projection, or one additive table \u2014 not decided.'},
+        {needs:'Case version for optimistic concurrency', source:'nothing today', status:'NEW API WORK', style:chip.blocked, note:'A projection has no version column. This is the strongest argument for AI-02\u2019s one additive table.'},
+        {needs:'pause_merchant command', source:'nothing today', status:'NEW API WORK', style:chip.blocked, note:'No pause path exists anywhere. restaurants has SELECT-only grants to authenticated \u2014 same finding as M-10.'},
+        {needs:'Pause representation on the merchant', source:'restaurants.status? temporarily_closed_until?', status:'UNDECIDED', style:chip.blocked, note:'Two candidate columns exist and BQ-007 is open on temporary closure. Which one a pause writes is not decided \u2014 and it changes the command signature.'},
+        {needs:'Verification read', source:'restaurants.status re-read', status:'NEW API WORK', style:chip.blocked, note:'Cheap, but must be a distinct step with its own audit row.'},
+        {needs:'Audit rows with mandatory reason', source:'audit_logs \u00b7 DEC-032', status:'LOCKED SCHEMA', style:chip.design, note:'OPERATOR + reason works today. AI attribution does not \u2014 AI-01.'},
+        {needs:'Admin app shell to host the console', source:'apps/admin', status:'NOT STARTED', style:chip.blocked, note:'3 config files and 2 src files at main. Phase I is not started.'}
+      ],
+      acceptance: [
+        {id:'AC-01', body:'With any BQ-013 value undefined, the approve control is disabled and the specific missing values are named on screen. No default is substituted anywhere in the request path.'},
+        {id:'AC-02', body:'The AI recommendation panel renders no interactive control of any kind. Asserted by test, not by review.'},
+        {id:'AC-03', body:'Approving without a typed reason is impossible in the UI and rejected by the API. Both halves tested.'},
+        {id:'AC-04', body:'The reason field is never pre-filled from the AI recommendation, and no control copies it.'},
+        {id:'AC-05', body:'An approval carrying a stale case version writes zero rows and returns a conflict. Proven with two concurrent requests, not one simulated.'},
+        {id:'AC-06', body:'The second supervisor to approve sees a conflict naming the first resolver, and no second audit row claims a successful pause.'},
+        {id:'AC-07', body:'A command rejection displays the command\u2019s own code and reason and leaves the case open.'},
+        {id:'AC-08', body:'A network failure or timeout never renders success wording, and the retry affordance is a verification read rather than a re-send.'},
+        {id:'AC-09', body:'A successful command whose verification read disagrees renders \u0e23\u0e2d\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e1c\u0e25 and never \u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08.'},
+        {id:'AC-10', body:'A resolved case opens read-only with no approve panel rendered \u2014 absent, not disabled.'},
+        {id:'AC-11', body:'The human resolution writes actor_type = OPERATOR with the acting profile id and a non-null reason. Never SYSTEM, never an AI value.'},
+        {id:'AC-12', body:'No amount, fee, total, payment reference, ledger row or settlement figure appears anywhere in the case surface. Asserted against the API response shape, not just the rendered DOM.'},
+        {id:'AC-13', body:'No control for cancel, fail, reassign, refund, ledger, settlement or arbitrary merchant mutation exists in the DOM in any state \u2014 not hidden, not disabled.'},
+        {id:'AC-14', body:'A permission-denied response renders no case titles, merchant names or counts. Nothing leaks through the denied state.'}
+      ],
+      gatesBeforeBuild: [
+        {id:'HANDOFF-01', name:'Which branch is authoritative', body:'This brief describes a Human Supervisor contract, projection API, console and 24 migrations that do not exist at main. Either they live on an unmerged branch \u2014 in which case that branch outranks this package and \u00a7 14 must be re-read against it \u2014 or the brief is describing intent as if it were state.', cost:'Owner: Product Owner. If skipped, Claude Code builds a second console beside an existing one, or builds against a tree that already moved.'},
+        {id:'HANDOFF-02', name:'BQ-013, all six values', body:'Acceptance deadline, auto-pause threshold, reliability window, pause duration, cooldown, resume path. Four of the six are needed just to make the command signature complete \u2014 pause duration is the until argument.', cost:'Owner: Product Owner. If skipped, the only buildable thing is the blocked state, which is genuinely worth building first \u2014 but it cannot be approved.'},
+        {id:'HANDOFF-03', name:'What a pause writes', body:'restaurants.status has no PAUSED value in the design vocabulary this project uses, and temporarily_closed_until / temporary_close_reason exist but sit behind BQ-007. Pause via status, via temporary closure, or via a new mechanism are three different commands with three different merchant-facing consequences.', cost:'Owner: Product Owner with Claude Code input. If skipped, the command gets designed twice. The database is locked, so a new column is not an option.'}
+      ],
+      buildOrder: [
+        {n:'1', name:'Case projection, read-only', body:'The queue and case detail against jobs + audit_logs + reconciliation_cases, behind the existing guard. No mutation anywhere in this step.', done:'A supervisor can see a real ESC-REPEAT case with its blockedBy, and nothing on the screen can change state.'},
+        {n:'2', name:'The blocked approval surface', body:'S-04.A exactly as drawn: four gates, three green, one red, approve disabled with the blocker named, reject working.', done:'Rejection resolves a case with a typed reason and an OPERATOR audit row. Approve cannot fire.'},
+        {n:'3', name:'Case version + concurrency', body:'Whatever AI-02 resolves to must carry a version. The conflict path is built and tested before the success path exists.', done:'Two concurrent rejections produce one resolution and one conflict, proven with real concurrent requests.'},
+        {n:'4', name:'Revalidation read', body:'The live-state read, its expiry, and the binding of the approve control to the read rather than the case.', done:'An expired read disables approve; a changed status produces S-04.E with a visible diff.'},
+        {n:'5', name:'pause_merchant \u2014 after HANDOFF-02 and 03', body:'The guarded command, its idempotency key, and the verification read as a distinct step with its own audit row.', done:'AC-01 through AC-14 pass, including the concurrent-approval test.'},
+        {n:'6', name:'Resume \u2014 only if HANDOFF-02 says a human resumes', body:'Not designed in this package. If the resume path turns out to be human-initiated, it is a second L4 command and needs its own approval surface.', done:'Out of scope here. Recorded so it is not smuggled into step 5.'}
+      ],
+      unresolved: [
+        {id:'BQ-013', body:'All six values: acceptance deadline, auto-pause threshold, reliability window, pause duration, cooldown, resume path. Rendered as [BQ-013 DECISION REQUIRED] throughout; no default anywhere.'},
+        {id:'BQ-007', body:'Temporary closure semantics \u2014 bears directly on HANDOFF-03, since temporarily_closed_until is one of the two candidate mechanisms for a pause.'},
+        {id:'AI-01', body:'No AI value on audit_logs.actor_type, and DEC-032\u2019s mandatory-reason CHECK fires only on OPERATOR. The human half of this flow is unaffected; AI attribution is.'},
+        {id:'AI-02', body:'No ai_* table. Case projection versus one additive table \u2014 and a projection has nowhere to put the version this flow\u2019s concurrency needs.'},
+        {id:'AI-05', body:'Least privilege lives in the command allowlist, not in RLS, because every shipped write path uses the service_role client. The absent-control inventory in \u00a7 10 is therefore a security boundary, not a UX preference.'},
+        {id:'A-ADMIN-01', body:'Dual control with one staff member blocks the action. Pause is designed single-control; if that is wrong, the approve panel changes.'},
+        {id:'UX-Q-006', body:'No terminal outcome for a no-rider delivery. Appears in the queue as a blocked case class this package does not design.'},
+        {id:'OD-04', body:'Failed delivery has no policy input, so fail_delivery stays absent from this console.'}
+      ],
+      notChanged: [
+        'No production code written, in any app.',
+        'No API endpoint, controller, service or guard implemented.',
+        'No migration created, edited or proposed. The count discrepancy is recorded, not arbitrated.',
+        'No schema object, RLS policy or RPC touched.',
+        'No authorization model change \u2014 no new role, scope, capability or temporary grant.',
+        'pause_merchant not implemented; its signature is drawn with an unresolved argument.',
+        'No BQ-013 value chosen, defaulted, or implied by an example.',
+        'No repository file created, modified, committed or pushed.'
+      ]
+    };
+  }
+}
+
+</script>
+</body>
+</html>
