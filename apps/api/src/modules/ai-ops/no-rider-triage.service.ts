@@ -8,6 +8,7 @@ import { EventNormalizer, type OutboxRowForNormalization } from './event-normali
 import { NoRiderTriagePolicySource } from './no-rider-triage-policy';
 import { PlaybookRouter } from './playbook-router';
 import type {
+  AgentDecision,
   AiOpsRunResult,
   NoRiderTriageProjection,
   OperationalEvent,
@@ -174,7 +175,17 @@ export class NoRiderTriageService {
       return 'NO_ACTION';
     }
 
-    const decision = await this.agent.decide(projection);
+    // An agent that throws is contained here, not propagated: design package
+    // § 11 — no action, no retry of the same prompt, escalate as UNKNOWN with
+    // the failure attached. A stuck delivery must not become invisible because
+    // the model was unavailable.
+    let decision: AgentDecision;
+    try {
+      decision = await this.agent.decide(projection);
+    } catch (cause) {
+      await this.escalate(event, 'ESC-UNKNOWN', `Agent failed: ${message(cause)}`);
+      return 'ESCALATED';
+    }
 
     if (decision.kind === 'NO_ACTION') {
       return 'NO_ACTION';

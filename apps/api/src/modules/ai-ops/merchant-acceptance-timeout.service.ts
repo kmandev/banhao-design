@@ -7,6 +7,7 @@ import { EventNormalizer, type OutboxRowForNormalization } from './event-normali
 import { MerchantAcceptancePolicySource } from './merchant-acceptance-policy';
 import { PlaybookRouter } from './playbook-router';
 import type {
+  AgentDecision,
   AiOpsRunResult,
   MerchantAcceptanceProjection,
   OperationalEvent,
@@ -191,7 +192,27 @@ export class MerchantAcceptanceTimeoutService {
 
     // Stage 4 — the agent boundary, reached only now: a playbook is chosen,
     // its policy resolved, and the deterministic branches exhausted.
-    const decision = await this.agent.decide(projection);
+    //
+    // An agent that throws — unavailable, timed out, or returning something
+    // its adapter could not parse — is contained here rather than allowed to
+    // become the pipeline's failure. The design package § 11 fixes this
+    // behaviour: no action, no retry of the same prompt, and the case
+    // escalates as UNKNOWN with the failure attached. There is deliberately no
+    // cheaper-model retry, because no model vendor is selected (DEC-040) and
+    // inventing a fallback tier would be choosing one.
+    let decision: AgentDecision;
+    try {
+      decision = await this.agent.decide(projection);
+    } catch (cause) {
+      await this.audit.recordEscalation({
+        action: EventNormalizer.MERCHANT_ACCEPTANCE_ACTION,
+        entityId: event.aggregateId,
+        escalation: 'ESC-UNKNOWN',
+        reason: `Agent failed: ${message(cause)}`,
+        context: { playbook, policyVersion: resolved.policyVersion, stage: 'AGENT' },
+      });
+      return 'ESCALATED';
+    }
 
     if (decision.kind === 'NO_ACTION') {
       return 'NO_ACTION';

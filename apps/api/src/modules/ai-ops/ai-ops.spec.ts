@@ -504,14 +504,14 @@ describe('Phase J — failure safety (DEC-040: AI failure is not an operational 
     });
   });
 
-  it('never throws when the agent itself fails', async () => {
+  it('contains an agent failure as an ESC-UNKNOWN escalation rather than losing the event', async () => {
     class ExplodingAgent extends AgentPort {
       async decide(): Promise<AgentDecision> {
         throw new Error('model unavailable');
       }
     }
 
-    const { pipeline } = buildService({
+    const { pipeline, calls } = buildService({
       results: [
         { data: [outboxRow()], error: null },
         { data: [], error: null },
@@ -524,8 +524,20 @@ describe('Phase J — failure safety (DEC-040: AI failure is not an operational 
 
     const result = await pipeline.run();
 
-    expect(result.failed).toBe(1);
+    // Design package § 11: no action, no retry of the same prompt, escalate as
+    // UNKNOWN with the failure attached — never a silent loss and never a
+    // thrown pipeline.
+    expect(result.failed).toBe(0);
+    expect(result.escalated).toBe(1);
     expect(result.acted).toBe(0);
+
+    const payload = firstAuditPayload(calls);
+    expect(payload.actor_type).toBe('AI');
+    expect(String(payload.reason)).toContain('ESC-UNKNOWN');
+    expect(String(payload.reason)).toContain('model unavailable');
+    expect(payload.after).toMatchObject({ escalation: 'ESC-UNKNOWN', stage: 'AGENT' });
+    // Nothing reached the domain.
+    expect(calls.some((c) => c.table === 'outbox' && c.op === 'insert')).toBe(false);
   });
 });
 

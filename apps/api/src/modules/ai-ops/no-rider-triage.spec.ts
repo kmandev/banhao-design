@@ -436,21 +436,27 @@ describe('Phase J — no-rider triage: idempotency, candidate selection and fail
     });
   });
 
-  it('never throws when the agent itself fails', async () => {
+  it('contains an agent failure as an ESC-UNKNOWN escalation, so a stuck delivery stays visible', async () => {
     class ExplodingAgent extends AgentPort {
       async decide(): Promise<AgentDecision> {
         throw new Error('model unavailable');
       }
     }
 
-    const { pipeline } = buildService({
+    const { pipeline, calls } = buildService({
       results: happyPathReads(),
       agent: new ExplodingAgent(),
     });
 
     const result = await pipeline.run();
 
-    expect(result.failed).toBe(1);
-    expect(result.escalated).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(result.escalated).toBe(1);
+
+    const payload = auditInserts(calls)[0]?.payload ?? {};
+    expect(payload.entity_type).toBe('delivery');
+    expect(String(payload.reason)).toContain('ESC-UNKNOWN');
+    expect(String(payload.reason)).toContain('model unavailable');
+    expect(calls.some((c) => c.op === 'insert' && c.table !== 'audit_logs')).toBe(false);
   });
 });
