@@ -13,7 +13,6 @@ import { HttpExceptionFilter } from '../../common/filters/http-exception.filter'
 import { ResponseInterceptor } from '../../common/interceptors/response.interceptor';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { RestaurantScopeGuard } from '../../common/guards/restaurant-scope.guard';
-import { DomainError } from '../../common/errors/domain-error';
 import { NO_CAPABILITIES, type AuthenticatedUser } from '../../common/types';
 import { RestaurantProfileController } from './restaurant-profile.controller';
 import { RestaurantProfileService } from './restaurant-profile.service';
