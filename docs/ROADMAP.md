@@ -90,11 +90,6 @@ noted.
   question remains. **Do not invent a default for any of them** anywhere in
   the application; the schema stores amounts, never rates, so these can be
   set later without a migration.
-- **Two merged migrations are not applied to `banhao-dev`** —
-  `20260904000001` (M-AV availability, DEC-041) and `20260904000002` (AC-04
-  customer-quoted prep estimate, DEC-042). Both pass the Docker domain suite;
-  applying either to the dev project is a separate explicit operational
-  instruction and blocks live verification of both features until given.
 - **R2/M-11/M-12 architecture-decision gap** (see `CURRENT_STATUS.md` §9) —
   not a blocker to further work, but an unrecorded deviation from V1.1's
   stated storage-provider timeline that the Product Owner should either

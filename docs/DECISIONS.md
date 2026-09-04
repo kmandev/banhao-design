@@ -3365,9 +3365,12 @@ it aliases two different actors' answers, exactly the mistake
   sections A–H) prove derivation, nullability, immutability, independence
   from `prep_minutes` and separation from `quoted_eta_minutes` against real
   PostgreSQL.
-- **Not applied to `banhao-dev`.** Applying it is a separate, explicit
-  operational instruction (`CLAUDE.md` §10), and until it is applied the
-  column exists only in the repository.
+- **Applied and verified on `banhao-dev` 2026-09-04**, under a separate,
+  explicit operational instruction (`CLAUDE.md` §10) — `supabase migration
+  list --linked` shows the migration with a matching Remote entry, and a
+  direct schema read confirms `orders.customer_quoted_prep_minutes` exists
+  with its designed CHECK, that `orders_enforce_immutable_columns()` protects
+  it, and that every pre-existing order row reads NULL with no backfill.
 
 ### Evidence
 

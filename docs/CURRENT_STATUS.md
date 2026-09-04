@@ -29,7 +29,7 @@ Built by a solo founder using AI as the development team.
 |---|---|
 | Branch | `feature/g7-driver-availability`, pushed to `origin` |
 | Current commit | `feat(orders): snapshot customer prep estimate` — AC-04 / DEC-042, on top of `7ea20a65` (M-AV availability) |
-| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **10 additive migrations merged since, 2 of them not yet applied live** (§10) |
+| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **10 additive migrations merged since, all 10 applied live** (§10) |
 | Application architecture | [`BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md) — V1.1, **APPROVED / READY FOR IMPLEMENTATION** |
 | API contract | [`06-api/openapi.json`](06-api/openapi.json), generated from the code and guarded against drift by a test |
 
@@ -156,10 +156,11 @@ SQL suites, both Docker-based and both now run by CI:
 
 **Live and LOCKED.** 26 migration files. 16 are the `e471ec1d` checkpoint V1.1
 was reviewed against; ten have been merged since, each additive and each under
-an explicit instruction. **24 are applied to `banhao-dev`; two are not** — see
-the last two rows. Every one of the ten is exercised by the Docker domain
-suite (`supabase/tests/run-domain-tests.sh`), which is what "verified" means
-below; it is not a statement about the live project.
+an explicit instruction. **All 26 are applied to `banhao-dev`** — the last
+two (M-AV, AC-04) were applied and verified 2026-09-04, see the last two rows.
+Every one of the ten is exercised by the Docker domain suite
+(`supabase/tests/run-domain-tests.sh`) as well as being confirmed live; "verified"
+below distinguishes the two where it matters.
 
 | Migration | Why |
 |---|---|
@@ -171,8 +172,8 @@ below; it is not a statement about the live project.
 | `20260901000002_merchant_catalog_write_functions.sql` | Four transactional catalog-write functions for M-11/M-12. Applied and verified live 2026-09-03 |
 | `20260902000001_order_item_options_drop_menu_option_fk.sql` | Drops the `order_item_options` menu-option FK so M-11 option edits work |
 | `20260903000001_audit_logs_ai_actor_type.sql` | AI-01 — widens `audit_logs.actor_type` to accept `'AI'` |
-| `20260904000001_restaurant_availability_mode.sql` | **M-AV** (DEC-041) — `restaurants.availability_mode` / `busy_prep_minutes`, and `create_order()`'s PAUSED refusal. **Merged, 22 assertions pass against real PostgreSQL, NOT applied to `banhao-dev`** |
-| `20260904000002_orders_customer_quoted_prep_minutes.sql` | **AC-04** (DEC-042) — `orders.customer_quoted_prep_minutes`, captured by `create_order()` and added to the immutability denylist. **Merged, 16 assertions pass against real PostgreSQL, NOT applied to `banhao-dev`** |
+| `20260904000001_restaurant_availability_mode.sql` | **M-AV** (DEC-041) — `restaurants.availability_mode` / `busy_prep_minutes`, and `create_order()`'s PAUSED refusal. 22 assertions pass against real PostgreSQL. **Applied and verified on `banhao-dev` 2026-09-04** |
+| `20260904000002_orders_customer_quoted_prep_minutes.sql` | **AC-04** (DEC-042) — `orders.customer_quoted_prep_minutes`, captured by `create_order()` and added to the immutability denylist. 16 assertions pass against real PostgreSQL. **Applied and verified on `banhao-dev` 2026-09-04** |
 
 Six tables remain deferred (`settlements`, `settlement_items`,
 `delivery_fee_bands`, `zones`, `service_areas`, `delivery_attempts`), each
@@ -251,7 +252,7 @@ effort alone.
 | 9 | Dropping `profiles.role` | **Approved migration** | A migration explicitly approved for it. The application half is already done |
 | 10 | Push notifications (Phase H's missing channel) | Technical decision | TQ-002 |
 | 11 | Android, physical iOS, real SMS, the search results list | Device / environment | Hardware and an Android SDK on the build machine |
-| 12 | Applying `20260904000001` (M-AV) and `20260904000002` (AC-04) to `banhao-dev`, and live-verifying M-AV and the quoted-estimate caption | **Explicit instruction** | Both are merged and proven against real PostgreSQL by 38 assertions between them, but applying either to the dev project is a deliberate act, not a side effect of building the screens. Neither can be walked live until it is. (`20260901000002` was applied and verified live 2026-09-03; that older blocker is closed) |
+| 12 | ~~Applying `20260904000001` (M-AV) and `20260904000002` (AC-04) to `banhao-dev`~~ | **Resolved** | Both applied and verified on `banhao-dev` 2026-09-04, under an explicit operational instruction — `supabase migration list --linked` shows 26/26, and direct schema reads confirm the columns, constraints, and the deployed `create_order()` body match the migration text with no pre-existing row rewritten. (`20260901000002` was applied and verified live 2026-09-03; that older entry was already closed.) **A UI walkthrough of the M-AV board control and the C-14 quoted-estimate caption, in the style of the M-05 live verification, is still outstanding** — the database side is done, the browser side is not |
 | 13 | `apps/merchant` lint/typecheck/build and `apps/api` lint are red on this branch | Engineering | Two stray unused imports introduced by `20044391` (M-10): `waitFor` in `apps/merchant/src/components/RestaurantProfileForm.test.tsx` and `DomainError` in `apps/api/src/modules/merchant/restaurant-profile.controller.spec.ts`. Merchant's own test suite passes (613 tests); it is the lint rule that fails the build. Two deletions, but they belong to M-10's own follow-up, not to unrelated work |
 
 **7 P0 business decisions remain**, all of them a number, a provider or a

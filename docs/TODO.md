@@ -113,10 +113,10 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## Follow-through, no new decision needed
 
-- [ ] Apply `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate) to `banhao-dev`, then live-verify M-AV and the C-14 quoted-estimate caption
+- [ ] Live-verify M-AV and the C-14 quoted-estimate caption through the browser UI
   - Priority: P1
   - Source: DEC-041, DEC-042, `CLAUDE.md` §10
-  - Notes: Both migrations are merged and proven against real PostgreSQL by the Docker domain suite — 22 assertions for M-AV, 16 for AC-04. **Neither has been applied to the dev project, and applying either is a deliberate act under explicit instruction, never a side effect of other work.** Until then the availability modes and the quoted-estimate caption exist only in the repository. `20260901000002` was applied and verified live 2026-09-03; that older entry is closed.
+  - Notes: `20260904000001` (M-AV, 22 assertions) and `20260904000002` (AC-04, 16 assertions) — both merged, both proven against real PostgreSQL by the Docker domain suite, and **both applied and verified on `banhao-dev` 2026-09-04**: `supabase migration list --linked` shows 26/26 applied, direct schema reads confirm the columns/constraints/deployed `create_order()` body match the migration text, and no pre-existing row was rewritten. **What is still outstanding is a UI walkthrough** — the merchant board's mode control and the customer C-14 quoted-estimate caption have not yet been exercised through the real browser UI, in the style of the M-05 live verification (`CLAUDE.md` §11).
 
 - [ ] Remove the two stray unused imports left by M-10 (`20044391`)
   - Priority: P1
