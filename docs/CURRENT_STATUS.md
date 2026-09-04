@@ -253,7 +253,7 @@ effort alone.
 | 10 | Push notifications (Phase H's missing channel) | Technical decision | TQ-002 |
 | 11 | Android, physical iOS, real SMS, the search results list | Device / environment | Hardware and an Android SDK on the build machine |
 | 12 | ~~Applying `20260904000001` (M-AV) and `20260904000002` (AC-04) to `banhao-dev`~~ | **Resolved** | Both applied and verified on `banhao-dev` 2026-09-04, under an explicit operational instruction — `supabase migration list --linked` shows 26/26, and direct schema reads confirm the columns, constraints, and the deployed `create_order()` body match the migration text with no pre-existing row rewritten. (`20260901000002` was applied and verified live 2026-09-03; that older entry was already closed.) **A UI walkthrough of the M-AV board control and the C-14 quoted-estimate caption, in the style of the M-05 live verification, is still outstanding** — the database side is done, the browser side is not |
-| 13 | `apps/merchant` lint/typecheck/build and `apps/api` lint are red on this branch | Engineering | Two stray unused imports introduced by `20044391` (M-10): `waitFor` in `apps/merchant/src/components/RestaurantProfileForm.test.tsx` and `DomainError` in `apps/api/src/modules/merchant/restaurant-profile.controller.spec.ts`. Merchant's own test suite passes (613 tests); it is the lint rule that fails the build. Two deletions, but they belong to M-10's own follow-up, not to unrelated work |
+| 13 | ~~`apps/merchant` lint/typecheck/build and `apps/api` lint were red on this branch~~ | **Resolved** | Two stray unused imports introduced by `20044391` (M-10) — `waitFor` in `apps/merchant/src/components/RestaurantProfileForm.test.tsx` and `DomainError` in `apps/api/src/modules/merchant/restaurant-profile.controller.spec.ts` — were removed in the separate hygiene commit `1654e4ef` (`chore: remove pre-existing unused imports`). `apps/merchant` lint/typecheck/build and `apps/api` lint are now green; merchant's own test suite had passed throughout (613 tests) — it was only the lint rule that failed the build. Not part of the M-AV or AC-04 implementation itself |
 
 **7 P0 business decisions remain**, all of them a number, a provider or a
 legal question: Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-027
@@ -270,8 +270,6 @@ Everything in §13 is blocked on something outside engineering. What is not:
 - Further test and contract hardening, on the pattern of the rider
   controller's HTTP-boundary suite.
 - Documentation reconciliation, of which this file is one instance.
-- **Clearing the two stray unused imports from M-10** (§13 row 13), which is
-  what currently makes `pnpm turbo run lint typecheck test build` red.
 - **M-11/M-12 follow-through that needs no new design**: the edit-mode image
   upload in the item drawer, which currently shows the stored key rather than
   driving the existing two-step upload.
