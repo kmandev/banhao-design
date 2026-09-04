@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#FBF7F1;font-family:'IBM Plex Sans Thai',system-ui,sans-serif;color:#1F1A16;-webkit-font-smoothing:antialiased}
+  a{color:#C2431F;text-decoration:none}
+  a:hover{color:#8F3116}
+</style>
+</helmet>
+
+<div style="max-width:1620px;margin:0 auto;padding:48px 40px 160px">
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="width:48px;height:48px;border-radius:15px;background:#1F1A16;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:0 0 auto;font-family:'IBM Plex Mono',monospace">M13</div>
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:.14em">MERCHANT — NORMAL · BUSY · PAUSE — AVAILABILITY FLOW</div>
+      <div style="font-size:14px;color:#7A6E64;margin-top:-2px">BANHAO | บ้านเฮา · operational availability mode, not an order state · merchant control + customer effect + order safety · design only</div>
+    </div>
+  </div>
+
+  <div style="margin-top:22px;padding:16px 18px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1240px">
+    Read-only recon at two refs. <strong>Schema and locked state</strong> from <span style="font-family:'IBM Plex Mono',monospace">main</span> (tree <span style="font-family:'IBM Plex Mono',monospace">bc6e468e</span>): <span style="font-family:'IBM Plex Mono',monospace">supabase/migrations/20260811000002_merchant_domain.sql</span> in full, <span style="font-family:'IBM Plex Mono',monospace">CLAUDE.md</span>, <span style="font-family:'IBM Plex Mono',monospace">docs/CURRENT_STATUS.md</span>, the migration listing, and a docs-wide search for <span style="font-family:'IBM Plex Mono',monospace">BQ-007 · BQ-013 · busy · avg_prep_minutes · temporarily_closed</span>. <strong>Current implementation state</strong> from <span style="font-family:'IBM Plex Mono',monospace">feature/g7-driver-availability</span>: <span style="font-family:'IBM Plex Mono',monospace">docs/BQ-013-HANDOFF-03-DECISION-PACK.md</span> read in full at <span style="font-family:'IBM Plex Mono',monospace">67458253</span>, which supplied the branch's own evidence table. Builds on the existing merchant packages <a href="#s12">M-2.6 · M-04 · M-05 · M-10 · M-12</a> and stays clear of <a href="#s10">the L4 supervisor flow</a>. No repository file, migration, endpoint or UI implementation was created or modified in either ref.
+  </div>
+
+  <div style="margin-top:14px;padding:18px 20px;border-radius:16px;background:#FBEAEA;border:1px solid #F0C9C9;max-width:1240px">
+    <div style="font-size:13px;font-weight:700;letter-spacing:.1em;color:#B23030">THREE FINDINGS THAT DECIDE WHAT CAN BE BUILT</div>
+    <div style="font-size:13.5px;line-height:1.75;color:#8F3A3A;margin-top:10px"><strong>1. HANDOFF-01 is answered: the supervisor work is on <span style="font-family:'IBM Plex Mono',monospace">feature/g7-driver-availability</span>, not <span style="font-family:'IBM Plex Mono',monospace">main</span>.</strong> The L4 package raised this as its first gate; the decision pack answers it and adds that the L4 design's own § 14 dependency map was measured against the wrong tree. It also reconciles the migration count the earlier package could not — <strong>16 is the locked checkpoint, 19 files sit at <span style="font-family:'IBM Plex Mono',monospace">main</span>, and the pack names a hypothetical status widening "Migration #25", putting 24 on the branch</strong>: the exact figure that brief carried. All three numbers were true of different trees, and this package still proposes no migration.</div>
+    <div style="font-size:13.5px;line-height:1.75;color:#8F3A3A;margin-top:10px"><strong>2. Busy has nowhere to live, and Pause has no status value.</strong> <span style="font-family:'IBM Plex Mono',monospace">restaurants.status</span> is CHECK-constrained to <span style="font-family:'IBM Plex Mono',monospace">DRAFT · PENDING_APPROVAL · ACTIVE · SUSPENDED · CLOSED</span> — no <span style="font-family:'IBM Plex Mono',monospace">PAUSED</span>, no <span style="font-family:'IBM Plex Mono',monospace">BUSY</span> — and no column on any table expresses a busy mode or a busy preparation time. The pack does not mention Busy at all. The database is LOCKED, so <strong>the approved Normal/Busy/Pause model is not storable today</strong>; § 03 states exactly what each mode would need.</div>
+    <div style="font-size:13.5px;line-height:1.75;color:#8F3A3A;margin-top:10px"><strong>3. A recommendation is not a decision, and every BQ-013 value is still OPEN.</strong> The pack is explicit that its own status is decision <em>preparation</em>, that it selects nothing, and that BQ-013's recorded "A as the system rule, with B as an ops overlay" carries no <span style="font-family:'IBM Plex Mono',monospace">DEC-</span> number and is not tagged <span style="font-family:'IBM Plex Mono',monospace">ACCEPTED</span>. The earlier "three misses → thirty minutes, twenty-four hour cooldown" figures appear nowhere in this package.</div>
+  </div>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="17">
+      <a href="{{ n.href }}" style="font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42">{{ n.label }}</a>
+    </sc-for>
+  </div>
+
+  <!-- 00 CONSTRAINTS -->
+  <div id="s00" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">00 — EXISTING-SYSTEM CONSTRAINTS</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">What the deployed schema already decides for us, whether we like it or not.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Every row is quoted from the migration or the document named, not inferred. Read the last column as the design consequence — several of these close off options that would otherwise look obvious.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:1fr 1.35fr 1.2fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>FACT AT main</div><div>SOURCE</div><div>DESIGN CONSEQUENCE</div>
+    </div>
+    <sc-for list="{{ constraints }}" as="c" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:1fr 1.35fr 1.2fr;padding:15px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:16px;color:#3D342C;font-weight:600">{{ c.fact }}</div>
+        <div style="padding-right:16px;font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ c.src }}</div>
+        <div>{{ c.effect }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 01 INTENT -->
+  <div id="s01" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">01 — PRODUCT INTENT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">A busy kitchen has one honest option today: stop taking orders. Busy exists so it has a second one.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Without a middle setting, a merchant with a full pass either accepts orders they cannot cook on time or closes the shop and loses the evening. Both outcomes are bad, and the second one is worse for the platform than for the merchant. Busy keeps the shop open and moves the cost onto the estimate the customer agrees to before ordering — which is the only place that cost can honestly sit.</div>
+
+  <div style="margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1560px">
+    <sc-for list="{{ intent }}" as="i" hint-placeholder-count="3">
+      <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">{{ i.who }}</div>
+        <div style="font-size:16px;font-weight:700;margin-top:9px;line-height:1.45">{{ i.head }}</div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:9px">{{ i.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 02 MODEL -->
+  <div id="s02" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">02 — THE MODEL, AND WHAT IT IS NOT</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Three modes on the restaurant. Zero new states on the order.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">DEC-018 keeps Order, Payment, Delivery and Settlement as four separate state machines and forbids a mega-enum. Availability is not a fifth machine bolted to the order — it is an attribute of the storefront, read at the moment an order is created and never read again. The <strong>IS NOT</strong> row on each card is the part that has to survive implementation review.</div>
+
+  <div style="margin-top:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1560px">
+    <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+      <div style="border-radius:20px;border:1.5px solid {{ m.border }};background:#fff;overflow:hidden;display:flex;flex-direction:column">
+        <div style="padding:16px 20px;background:{{ m.bg }};border-bottom:1px solid {{ m.border }};display:flex;align-items:center;gap:10px">
+          <div style="width:11px;height:11px;border-radius:3px;background:{{ m.dot }};flex:0 0 auto"></div>
+          <div style="font-size:16px;font-weight:700;color:{{ m.fg }}">{{ m.th }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ m.fg }};margin-left:auto">{{ m.en }}</div>
+        </div>
+        <div style="padding:20px">
+          <div style="font-size:13.5px;line-height:1.75;color:#5A4E42">{{ m.body }}</div>
+          <div style="margin-top:14px;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">รับออเดอร์ใหม่</div>
+          <div style="font-size:13.5px;font-weight:600;color:{{ m.fg }};margin-top:3px">{{ m.accepts }}</div>
+          <div style="margin-top:12px;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">เวลาทำอาหารที่แสดง</div>
+          <div style="font-size:13.5px;color:#3D342C;margin-top:3px">{{ m.prep }}</div>
+          <div style="margin-top:14px;padding-top:14px;border-top:1px dashed #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#B23030">IS NOT</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#8F3A3A;margin-top:5px">{{ m.isnot }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 03 STORAGE -->
+  <div id="s03" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">03 — WHERE EACH MODE WOULD LIVE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">One mode is free, one is expressible with an existing column, and one has no home at all.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">This is the section to read before estimating the work. The design below is drawn as if all three modes exist, because that is what was approved — but two of the three need a decision the database lock makes unavoidable, and neither decision belongs to design.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1560px">
+    <sc-for list="{{ storage }}" as="s" hint-placeholder-count="3">
+      <div style="border-radius:20px;border:1.5px solid {{ s.border }};background:{{ s.bg }};padding:22px;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:16px;font-weight:700">{{ s.mode }}</div>
+          <div style="font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:8px;{{ s.chip }}">{{ s.verdict }}</div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#3D342C;margin-top:12px;line-height:1.7">{{ s.column }}</div>
+        <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:12px">{{ s.body }}</div>
+        <div style="margin-top:auto;padding-top:14px;font-size:12.5px;line-height:1.7;color:{{ s.askColor }};font-weight:600">{{ s.ask }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;border-radius:20px;border:1px solid #F0C9C9;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="padding:15px 22px;background:#FBEAEA;border-bottom:1px solid #F0C9C9;font-size:13.5px;font-weight:700;color:#B23030">WHY PAUSE IS NOT DRAWN AS A STATUS VALUE — six load-bearing readers of <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">status = 'ACTIVE'</span></div>
+    <sc-for list="{{ statusReaders }}" as="r" hint-placeholder-count="5">
+      <div style="padding:12px 22px;border-bottom:1px solid #F0EAE1;display:grid;grid-template-columns:1.15fr 1fr;gap:16px;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.6;color:#5A4E42">{{ r.where }}</div>
+        <div style="font-size:12.5px;line-height:1.7;color:#8F3A3A">{{ r.effect }}</div>
+      </div>
+    </sc-for>
+    <div style="padding:16px 22px;background:#FBF7F1;font-size:12.5px;line-height:1.75;color:#5A4E42">Enumerated in the decision pack as Candidate A's impact, and every consequence but the first contradicts a requirement in this brief: customers must keep seeing the shop, must keep browsing the menu, and existing orders must be unaffected. A <span style="font-family:'IBM Plex Mono',monospace">PAUSED</span> status produces a shop whose menu nobody can load. <strong>Candidate B's consequence matches what a pause means far better</strong> — the storefront closes while menu and hours stay readable — but selecting it belongs to the Product Owner and to BQ-007, so this design describes the shape without choosing it.</div>
+  </div>
+
+  <div style="margin-top:18px;padding:18px 20px;border-radius:16px;background:#fff;border:1px solid #E0D6C8;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1560px">
+    <strong>The option this design rejects, and why.</strong> Busy could be implemented with no migration by overwriting <span style="font-family:'IBM Plex Mono',monospace">restaurants.avg_prep_minutes</span> with a higher number and restoring it on return to Normal. Do not. That column is catalogue data, it is what a restaurant's normal prep time <em>is</em>, and a crash between "set busy" and "restore normal" leaves the restaurant permanently claiming a busy estimate with nothing recording that it was temporary. A mode needs a field that says which mode it is; borrowing a value field to imply a mode is how a system loses the ability to answer "was this restaurant busy last Tuesday". Recorded as <span style="font-family:'IBM Plex Mono',monospace">AV-D01</span>.
+  </div>
+
+  <!-- 04 TRANSITIONS -->
+  <div id="s04" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">04 — STATE &amp; TRANSITION MODEL</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Five merchant transitions. One system transition that is not designed here.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:1.1fr 1fr;gap:20px;max-width:1500px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:28px">
+      <div style="display:flex;flex-direction:column;gap:0;align-items:center">
+        <div style="display:flex;gap:16px;align-items:center;width:100%;justify-content:center">
+          <div style="padding:14px 24px;border-radius:14px;background:#F3FAF6;border:1.5px solid #CDE7DB;font-size:15px;font-weight:700;color:#0A6B49;min-width:132px;text-align:center">เปิดปกติ<div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;margin-top:2px">NORMAL</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+            <div style="font-size:11px;color:#7A6E64;font-family:'IBM Plex Mono',monospace">AV-T1 →</div>
+            <div style="width:56px;height:1px;background:#C4B8AC"></div>
+            <div style="font-size:11px;color:#7A6E64;font-family:'IBM Plex Mono',monospace">← AV-T2</div>
+          </div>
+          <div style="padding:14px 24px;border-radius:14px;background:#FDF3E6;border:1.5px solid #F0DFC4;font-size:15px;font-weight:700;color:#8A6A3A;min-width:132px;text-align:center">กำลังยุ่ง<div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;margin-top:2px">BUSY</div></div>
+        </div>
+        <div style="display:flex;gap:120px;margin-top:6px">
+          <div style="display:flex;flex-direction:column;align-items:center"><div style="width:1px;height:34px;background:#C4B8AC"></div><div style="font-size:11px;color:#7A6E64;font-family:'IBM Plex Mono',monospace;margin-top:2px">AV-T3</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center"><div style="width:1px;height:34px;background:#C4B8AC"></div><div style="font-size:11px;color:#7A6E64;font-family:'IBM Plex Mono',monospace;margin-top:2px">AV-T4</div></div>
+        </div>
+        <div style="padding:14px 28px;border-radius:14px;background:#FBEAEA;border:1.5px solid #F0C9C9;font-size:15px;font-weight:700;color:#B23030;margin-top:8px;text-align:center">หยุดรับออเดอร์ชั่วคราว<div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;margin-top:2px">PAUSE</div></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+          <div style="font-size:11px;color:#7A6E64;font-family:'IBM Plex Mono',monospace">AV-T5 ↑ กลับไป NORMAL เท่านั้น</div>
+        </div>
+      </div>
+      <div style="margin-top:20px;padding:14px 16px;border-radius:13px;background:#FBF7F1;border:1px solid #F0EAE1;font-size:12.5px;line-height:1.75;color:#5A4E42">
+        <strong>Resume returns to Normal, never to Busy.</strong> A merchant who paused had a reason, and resuming into a mode that quietly promises longer cooking times is a decision they did not make in that moment. If they are still busy they set Busy again in one tap from Normal — an explicit act, visible in the audit trail. Recorded as <span style="font-family:'IBM Plex Mono',monospace">AV-D02</span>.
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+      <div style="padding:14px 20px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;display:grid;grid-template-columns:64px 1fr 118px;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+        <div>ID</div><div>TRANSITION</div><div>OWNER</div>
+      </div>
+      <sc-for list="{{ transitions }}" as="t" hint-placeholder-count="6">
+        <div style="padding:14px 20px;border-bottom:1px solid #F0EAE1;display:grid;grid-template-columns:64px 1fr 118px;gap:10px;align-items:start">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600">{{ t.id }}</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#3D342C">{{ t.name }}</div>
+            <div style="font-size:12px;line-height:1.65;color:#7A6E64;margin-top:4px">{{ t.body }}</div>
+          </div>
+          <div><div style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ t.style }}">{{ t.owner }}</div></div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 05 MERCHANT SCREENS -->
+  <div id="s05" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">05 — M-13 · MERCHANT CONTROL (BOARD HEADER, 1280 WEB)</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">The control lives in the board header, because that is the screen a merchant already has open.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Merchant is Next.js web (DEC-APP-003) and M-2.6's order board is where a kitchen actually works. A separate settings page for availability would be a page nobody visits at the moment they need it. The header shows current mode as a pill; changing mode opens one dialog reusing M-05's scrim and focus trap.</div>
+
+  <div style="margin-top:22px;display:flex;flex-direction:column;gap:22px">
+    <sc-for list="{{ headerStates }}" as="h" hint-placeholder-count="3">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#5A4E42;margin-bottom:10px"><span style="font-family:'IBM Plex Mono',monospace;color:#C2431F">{{ h.id }}</span> &nbsp;{{ h.label }}</div>
+        <div style="border-radius:18px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;width:1280px;box-shadow:0 1px 3px rgba(31,26,22,.04)">
+          <div style="padding:16px 24px;border-bottom:1px solid #F0EAE1;display:flex;align-items:center;gap:18px">
+            <div style="font-size:17px;font-weight:700">ออเดอร์วันนี้</div>
+            <div style="display:flex;align-items:center;gap:9px;padding:7px 14px;border-radius:11px;background:{{ h.pillBg }};border:1.5px solid {{ h.pillBorder }}">
+              <div style="width:10px;height:10px;border-radius:3px;background:{{ h.dot }};flex:0 0 auto"></div>
+              <div style="font-size:13.5px;font-weight:700;color:{{ h.fg }}">{{ h.pill }}</div>
+              <div style="font-size:12px;color:{{ h.fg }};opacity:.85">{{ h.pillSub }}</div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+              <sc-for list="{{ h.actions }}" as="a" hint-placeholder-count="2">
+                <div style="font-size:13px;font-weight:600;padding:10px 16px;border-radius:11px;background:{{ a.bg }};border:1px solid {{ a.border }};color:{{ a.fg }}">{{ a.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="padding:18px 24px;background:{{ h.bannerBg }};border-bottom:1px solid #F0EAE1;display:flex;gap:14px;align-items:flex-start">
+            <div style="width:22px;height:22px;border-radius:7px;background:{{ h.dot }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto;font-family:'IBM Plex Mono',monospace">{{ h.icon }}</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:#3D342C">{{ h.bannerTitle }}</div>
+              <div style="font-size:13px;line-height:1.7;color:#5A4E42;margin-top:4px;max-width:900px">{{ h.bannerBody }}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr)">
+            <sc-for list="{{ h.columns }}" as="c" hint-placeholder-count="4">
+              <div style="border-right:1px solid #F0EAE1;padding:16px 18px;min-height:132px;background:{{ c.bg }}">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div style="font-size:12.5px;font-weight:700;color:#5A4E42">{{ c.name }}</div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#A2968A">{{ c.count }}</div>
+                </div>
+                <div style="font-size:12px;line-height:1.65;color:#7A6E64;margin-top:8px">{{ c.note }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:26px;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;max-width:1560px">
+    <sc-for list="{{ dialogs }}" as="d" hint-placeholder-count="3">
+      <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+        <div style="padding:14px 20px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:13px;font-weight:700">{{ d.title }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#A2968A">{{ d.id }}</div>
+        </div>
+        <div style="padding:20px">
+          <div style="font-size:15px;font-weight:700;line-height:1.5">{{ d.head }}</div>
+          <div style="font-size:13px;line-height:1.7;color:#5A4E42;margin-top:8px">{{ d.body }}</div>
+          <sc-if value="{{ d.hasPrep }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:16px;padding:14px 15px;border-radius:13px;background:#FBF7F1;border:1px solid #F0EAE1">
+              <div style="font-size:12px;font-weight:600;color:#3D342C">เวลาทำอาหารระหว่างที่ร้านยุ่ง <span style="color:#B23030">*</span></div>
+              <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                <sc-for list="{{ prepOptions }}" as="p" hint-placeholder-count="5">
+                  <div style="font-size:13px;font-weight:600;padding:9px 14px;border-radius:10px;background:#fff;border:1.5px solid #E0D6C8;color:#5A4E42;min-height:44px;display:flex;align-items:center">{{ p }}</div>
+                </sc-for>
+              </div>
+              <div style="font-size:11.5px;line-height:1.7;color:#7A6E64;margin-top:10px">Same option set M-05 already uses for per-order prep time — reused, not re-invented. Nothing is preselected, and there is no recommended value: which option a busy kitchen should pick is <span style="font-family:'IBM Plex Mono',monospace;color:#B23030">OPEN</span>.</div>
+            </div>
+          </sc-if>
+          <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+            <div style="font-size:13.5px;font-weight:600;padding:11px 18px;border-radius:11px;background:{{ d.ctaBg }};color:{{ d.ctaFg }};min-height:44px;display:flex;align-items:center">{{ d.cta }}</div>
+            <div style="font-size:13.5px;font-weight:600;padding:11px 18px;border-radius:11px;background:#fff;border:1px solid #E0D6C8;color:#5A4E42;min-height:44px;display:flex;align-items:center">ยกเลิก</div>
+          </div>
+          <div style="font-size:12px;line-height:1.7;color:#7A6E64;margin-top:12px">{{ d.foot }}</div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 06 PREP TIME -->
+  <div id="s06" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">06 — PREPARATION TIME BEHAVIOUR</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">An order's estimate is decided once, when the order is created, and never revised by a mode change.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">This is not a rule the UI enforces — it falls out of the architecture. V1.1 § 19 specifies <span style="font-family:'IBM Plex Mono',monospace">POST /orders</span> with <em>full snapshotting</em>, and <span style="font-family:'IBM Plex Mono',monospace">create_order()</span> already snapshots prices and options at creation. An estimate captured the same way cannot be retroactively changed by a later mode switch, because nothing reads the restaurant's current mode after creation.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:1fr 1.25fr 1.25fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>QUESTION</div><div>ANSWER</div><div>WHY / DEPENDENCY</div>
+    </div>
+    <sc-for list="{{ prepQs }}" as="p" hint-placeholder-count="5">
+      <div style="display:grid;grid-template-columns:1fr 1.25fr 1.25fr;padding:15px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:16px;color:#3D342C;font-weight:600">{{ p.q }}</div>
+        <div style="padding-right:16px">{{ p.a }}</div>
+        <div style="color:{{ p.color }}">{{ p.why }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;padding:18px 20px;border-radius:16px;background:#FDF3E6;border:1px solid #F0DFC4;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1560px">
+    <strong>One unavoidable collision with M-05.</strong> M-05 already gives the merchant a required prep-time choice at the moment they accept each order — and M-05's own finding was that no column on <span style="font-family:'IBM Plex Mono',monospace">orders</span> carries per-order prep time and <span style="font-family:'IBM Plex Mono',monospace">POST /orders/:id/accept</span> has no DTO. Busy's prep time and M-05's per-order prep time are the same quantity chosen at two different moments. Two coherent readings exist and design cannot pick: Busy sets the <em>default</em> the accept dialog opens with (merchant can still override per order), or Busy replaces the per-order choice while active. Recorded as <span style="font-family:'IBM Plex Mono',monospace">AV-Q01</span> — it changes both the accept dialog and the command signature.
+  </div>
+
+  <!-- 07 PAUSE SAFETY -->
+  <div id="s07" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">07 — PAUSE SAFETY BOUNDARY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Pause blocks the door. It does not touch anyone already inside.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1500px">
+    <div style="border-radius:20px;border:1.5px solid #CDE7DB;background:#F3FAF6;padding:24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#0A6B49">WHAT PAUSE DOES</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+        <sc-for list="{{ pauseDoes }}" as="p" hint-placeholder-count="4">
+          <div style="display:flex;gap:11px;align-items:baseline">
+            <div style="width:6px;height:6px;border-radius:50%;background:#0A6B49;flex:0 0 auto;margin-top:6px"></div>
+            <div style="font-size:13px;line-height:1.7;color:#1F4F3C">{{ p }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1.5px solid #F0C9C9;background:#FBEAEA;padding:24px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#B23030">WHAT PAUSE MUST NEVER DO</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;margin-top:14px">
+        <sc-for list="{{ pauseNever }}" as="p" hint-placeholder-count="8">
+          <div style="display:flex;gap:9px;align-items:baseline">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#B23030;flex:0 0 auto">×</div>
+            <div style="font-size:12.5px;line-height:1.65;color:#8F3A3A">{{ p }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="font-size:12.5px;line-height:1.75;color:#8F3A3A;margin-top:16px;padding-top:14px;border-top:1px solid #F0C9C9">No financial or destructive operation appears anywhere in this flow. A merchant pausing their own shop is an availability change, and the moment it can cancel, fail or refund an order it has become an operator action wearing merchant clothes.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:18px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:24px;max-width:1500px">
+    <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">THE BOUNDARY, DRAWN</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px">
+      <div style="padding:18px;border-radius:15px;background:#F3FAF6;border:1px solid #CDE7DB">
+        <div style="font-size:12px;font-weight:600;color:#0A6B49">CORRECT</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#1F4F3C;margin-top:8px">restaurant → PAUSE<br>existing order PREPARING → PREPARING<br>existing order PAID → PAID<br>new order creation → blocked at source</div>
+      </div>
+      <div style="padding:18px;border-radius:15px;background:#FBEAEA;border:1px solid #F0C9C9">
+        <div style="font-size:12px;font-weight:600;color:#B23030">FORBIDDEN</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:#8F3A3A;margin-top:8px;text-decoration:line-through">restaurant → PAUSE<br>existing order PREPARING → PAUSED<br>existing order PAID → CANCELLED<br>order state derived from restaurant mode</div>
+      </div>
+    </div>
+    <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:16px">The board keeps showing every in-flight order while paused, with the same columns and the same actions. A merchant who pauses still has four orders to cook, and hiding them to signal "closed" would be the single most dangerous thing this design could do.</div>
+  </div>
+
+  <!-- 08 CUSTOMER -->
+  <div id="s08" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">08 — CUSTOMER-FACING BEHAVIOUR</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Busy is a longer wait, stated up front. Pause is a temporary closure, and the copy has to say temporary.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">No new customer screen is proposed. Every touchpoint below is a state on a screen the customer app already has, which is the correct scope for an availability mode — and it keeps the UX specification's existing closed-shop vocabulary intact rather than adding a competing one.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:180px 128px 1fr 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>TOUCHPOINT</div><div>MODE</div><div>WHAT THE CUSTOMER SEES</div><div>DESIGN NOTE</div>
+    </div>
+    <sc-for list="{{ customerRows }}" as="c" hint-placeholder-count="9">
+      <div style="display:grid;grid-template-columns:180px 128px 1fr 1fr;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:14px;color:#3D342C;font-weight:600">{{ c.where }}</div>
+        <div style="padding-right:12px"><div style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ c.style }}">{{ c.mode }}</div></div>
+        <div style="padding-right:16px;color:#3D342C">{{ c.sees }}</div>
+        <div>{{ c.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;padding:18px 20px;border-radius:16px;background:#FBEAEA;border:1px solid #F0C9C9;font-size:13.5px;line-height:1.75;color:#8F3A3A;max-width:1560px">
+    <strong style="color:#B23030">The checkout race is the one that costs money.</strong> A customer can be on the payment screen when the merchant pauses. Phase D already built the answer and it is the only correct one: <span style="font-family:'IBM Plex Mono',monospace">POST /api/v1/cart/validate</span> runs on the place-order press, not on mount, and <strong>fails closed</strong> — navigation only follows a successful validation. Availability must be one more named 409 alongside <span style="font-family:'IBM Plex Mono',monospace">PRICE_CHANGED</span> / <span style="font-family:'IBM Plex Mono',monospace">ITEM_UNAVAILABLE</span> / <span style="font-family:'IBM Plex Mono',monospace">MIXED_RESTAURANT</span>, rendered in the same conflict pattern the checkout screen already has. Do not build a second mechanism, and never block only in the client — a client that decides a restaurant is open is the same class of mistake CON-002 forbids for payments.
+  </div>
+
+  <!-- 09 FAILURE -->
+  <div id="s09" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">09 — FAILURE, CONCURRENCY &amp; STALE STATE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">The pill shows what the server confirmed. Never what the merchant just tapped.</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px">Optimistic mode switching is tempting and wrong here: a merchant who believes they are paused while the server has them open will get orders they refuse to cook. The pill is server truth, the dialog holds the in-flight state, and a failed request leaves the previous mode visibly intact.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:168px 1fr 1fr 200px;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>CASE</div><div>SITUATION</div><div>BEHAVIOUR</div><div>WHAT THE PILL SHOWS</div>
+    </div>
+    <sc-for list="{{ failures }}" as="f" hint-placeholder-count="8">
+      <div style="display:grid;grid-template-columns:168px 1fr 1fr 200px;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:14px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ f.style }}">{{ f.id }}</div></div>
+        <div style="padding-right:16px">{{ f.sit }}</div>
+        <div style="padding-right:16px;color:#3D342C">{{ f.beh }}</div>
+        <div style="font-size:12px;color:{{ f.color }}">{{ f.pill }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 10 SUPERVISOR BOUNDARY -->
+  <div id="s10" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">10 — MERCHANT PAUSE vs SUPERVISOR L4 PAUSE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Same word, two different powers. They must not share a code path or a control.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:190px 1fr 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div></div><div>MERCHANT SELF-SERVICE PAUSE</div><div>SUPERVISOR L4 pause_merchant</div>
+    </div>
+    <sc-for list="{{ boundary }}" as="b" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:190px 1fr 1fr;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;align-items:start">
+        <div style="font-size:11.5px;font-weight:600;letter-spacing:.06em;color:#A2968A;padding-right:14px">{{ b.k }}</div>
+        <div style="padding-right:18px;color:#3D342C">{{ b.merchant }}</div>
+        <div style="color:#5B4A87">{{ b.supervisor }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1560px">
+    <div style="border-radius:20px;border:1px solid #F0C9C9;background:#FBEAEA;padding:22px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#B23030">NEVER IN THE MERCHANT UI</div>
+      <div style="font-size:13px;line-height:1.75;color:#8F3A3A;margin-top:10px">No merchant-facing control may perform, request, approve or acknowledge an L4 operator action. No "ขออนุมัติ" button, no supervisor case reference, no visibility into who proposed a pause. A merchant sees their own availability and nothing about the operations queue that may be discussing them.</div>
+      <div style="font-size:13px;line-height:1.75;color:#8F3A3A;margin-top:10px">And a supervisor-initiated pause is <strong>not</strong> presented to the merchant as their own Pause mode. If the two mechanisms end up writing the same field, the merchant-facing copy must still distinguish "you paused this" from "the platform paused this" — otherwise Resume looks available when it is not. Recorded as <span style="font-family:'IBM Plex Mono',monospace">AV-Q02</span>.</div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">AUTO-PAUSE — RESERVED SPACE ONLY</div>
+      <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:10px">The mode card reserves one line for a future automatic pause, worded as a possibility with its dependency named: <span style="font-family:'IBM Plex Mono',monospace">ระบบอาจหยุดรับออเดอร์อัตโนมัติตามนโยบายที่กำหนด · BQ-013 OPEN</span>. That is the entire treatment.</div>
+      <div style="font-size:13px;line-height:1.75;color:#5A4E42;margin-top:10px">No threshold, no count, no window, no duration, no cooldown, and no example. The earlier "three misses → thirty minutes, twenty-four hour cooldown" figures are <strong>not approved policy</strong> and appear nowhere in this package. Auto-pause also does not get a merchant-facing control — it is a system transition (<span style="font-family:'IBM Plex Mono',monospace">AV-T6</span>) whose consequence design belongs to BQ-013, not here.</div>
+    </div>
+  </div>
+
+  <!-- 11 STATE MATRIX -->
+  <div id="s11" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">11 — STATE MATRIX &amp; EDGE CASES</div>
+
+  <div style="margin-top:20px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:212px 1fr 1fr 176px;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>STATE</div><div>MERCHANT WEB 1280</div><div>TABLET 1024 / CUSTOMER</div><div>CONTROL</div>
+    </div>
+    <sc-for list="{{ stateMatrix }}" as="s" hint-placeholder-count="14">
+      <div style="display:grid;grid-template-columns:212px 1fr 1fr 176px;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="font-weight:600;color:#3D342C;padding-right:14px">{{ s.state }}</div>
+        <div style="padding-right:16px">{{ s.web }}</div>
+        <div style="padding-right:16px">{{ s.other }}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ s.color }}">{{ s.ctrl }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px 24px;max-width:1560px">
+    <sc-for list="{{ edges }}" as="e" hint-placeholder-count="8">
+      <div style="display:flex;gap:12px;align-items:baseline;padding:14px 16px;border-radius:14px;background:#fff;border:1px solid #E0D6C8">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600;flex:0 0 auto">{{ e.id }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ e.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 12 COMPONENTS + A11Y -->
+  <div id="s12" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">12 — COMPONENT INVENTORY &amp; ACCESSIBILITY</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Nothing new in the design language. One new composition of parts that already ship.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:1.15fr 1fr;gap:20px;max-width:1560px">
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+      <div style="padding:15px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:13.5px;font-weight:700">REUSED — no new component</div>
+      <sc-for list="{{ components }}" as="c" hint-placeholder-count="8">
+        <div style="padding:13px 22px;border-bottom:1px solid #F0EAE1;display:grid;grid-template-columns:196px 1fr;gap:16px;align-items:start">
+          <div style="font-size:12.5px;font-weight:600;color:#3D342C">{{ c.name }}</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ c.from }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden">
+      <div style="padding:15px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:13.5px;font-weight:700">ACCESSIBILITY</div>
+      <sc-for list="{{ a11y }}" as="a" hint-placeholder-count="7">
+        <div style="padding:13px 22px;border-bottom:1px solid #F0EAE1">
+          <div style="font-size:12.5px;font-weight:600;color:#3D342C">{{ a.k }}</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42;margin-top:4px">{{ a.body }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- 13 THAI COPY -->
+  <div id="s13" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">13 — THAI COPY INVENTORY</div>
+  <div style="font-size:15px;line-height:1.75;color:#5A4E42;max-width:1040px;margin-top:8px">Merchant and customer strings in one keyed table. The customer keys deliberately avoid ปิดร้าน for Pause — the UX specification already owns that word for a closed shop, and Busy must never read as closed at all.</div>
+
+  <div style="margin-top:20px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:104px 246px 1fr 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>SURFACE</div><div>KEY</div><div>THAI</div><div>NOTE</div>
+    </div>
+    <sc-for list="{{ copyRows }}" as="c" hint-placeholder-count="20">
+      <div style="display:grid;grid-template-columns:104px 246px 1fr 1fr;padding:12px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;align-items:start">
+        <div style="padding-right:10px"><div style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;display:inline-block;{{ c.style }}">{{ c.surf }}</div></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#C2431F;padding-right:14px">{{ c.k }}</div>
+        <div style="color:#3D342C;padding-right:16px">{{ c.th }}</div>
+        <div style="color:#7A6E64">{{ c.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 14 ACCEPTANCE -->
+  <div id="s14" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">14 — ACCEPTANCE CRITERIA</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Sixteen statements, each testable by execution.</div>
+
+  <div style="margin-top:22px;display:grid;grid-template-columns:repeat(2,1fr);gap:14px 26px;max-width:1560px">
+    <sc-for list="{{ acceptance }}" as="a" hint-placeholder-count="16">
+      <div style="display:flex;gap:12px;align-items:baseline;padding:14px 16px;border-radius:14px;background:#fff;border:1px solid #E0D6C8">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#C2431F;font-weight:600;flex:0 0 auto">{{ a.id }}</div>
+        <div style="font-size:13px;line-height:1.7;color:#5A4E42">{{ a.body }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 15 HANDOFF -->
+  <div id="s15" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">15 — HANDOFF TO CLAUDE CODE</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Reuse these seams. Do not build a second one of anything.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:220px 1fr 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>SEAM</div><div>EXISTING PATH TO REUSE</div><div>RULE</div>
+    </div>
+    <sc-for list="{{ seams }}" as="s" hint-placeholder-count="10">
+      <div style="display:grid;grid-template-columns:220px 1fr 1fr;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="padding-right:14px;color:#3D342C;font-weight:600">{{ s.seam }}</div>
+        <div style="padding-right:16px;font-family:'IBM Plex Mono',monospace;font-size:11.5px">{{ s.path }}</div>
+        <div>{{ s.rule }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1560px">
+    <div style="border-radius:20px;border:1.5px solid #F0C9C9;background:#fff;padding:22px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#B23030">DO NOT IMPLEMENT — STILL OPEN</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+        <sc-for list="{{ dontBuild }}" as="d" hint-placeholder-count="7">
+          <div style="display:flex;gap:10px;align-items:baseline">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#B23030;flex:0 0 auto">×</div>
+            <div style="font-size:12.5px;line-height:1.7;color:#8F3A3A">{{ d }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">DB · RLS · SECURITY IMPACT</div>
+      <div style="display:flex;flex-direction:column;gap:11px;margin-top:12px">
+        <sc-for list="{{ dbImpact }}" as="d" hint-placeholder-count="5">
+          <div style="font-size:12.5px;line-height:1.7;color:#5A4E42"><strong style="color:#3D342C">{{ d.k }}</strong> — {{ d.body }}</div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="border-radius:20px;border:1px solid #E0D6C8;background:#fff;padding:22px">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.12em;color:#A2968A">TESTS TO ADD</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+        <sc-for list="{{ tests }}" as="t" hint-placeholder-count="7">
+          <div style="display:flex;gap:10px;align-items:baseline">
+            <div style="width:6px;height:6px;border-radius:50%;background:#0A6B49;flex:0 0 auto;margin-top:6px"></div>
+            <div style="font-size:12.5px;line-height:1.7;color:#5A4E42">{{ t }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- 16 OPEN -->
+  <div id="s16" style="height:1px;background:#EAE1D6;margin:52px 0 32px"></div>
+  <div style="font-size:12px;font-weight:600;letter-spacing:.18em;color:#A2968A">16 — UNRESOLVED DEPENDENCIES</div>
+  <div style="font-size:26px;font-weight:700;margin:8px 0 6px;max-width:1140px">Nothing below has a value in this package. Five of them block the build.</div>
+
+  <div style="margin-top:22px;border-radius:20px;border:1px solid #E0D6C8;background:#fff;overflow:hidden;max-width:1560px">
+    <div style="display:grid;grid-template-columns:120px 1fr 128px 1fr;padding:13px 22px;background:#F7F2EA;border-bottom:1px solid #E0D6C8;font-size:11px;font-weight:600;letter-spacing:.1em;color:#A2968A">
+      <div>ID</div><div>QUESTION</div><div>BLOCKS</div><div>OWNER / NOTE</div>
+    </div>
+    <sc-for list="{{ open }}" as="o" hint-placeholder-count="11">
+      <div style="display:grid;grid-template-columns:120px 1fr 128px 1fr;padding:14px 22px;border-bottom:1px solid #F0EAE1;font-size:12.5px;line-height:1.7;color:#5A4E42;align-items:start">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;color:#B23030;padding-right:12px">{{ o.id }}</div>
+        <div style="padding-right:16px;color:#3D342C">{{ o.q }}</div>
+        <div style="padding-right:12px"><div style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;display:inline-block;{{ o.style }}">{{ o.blocks }}</div></div>
+        <div>{{ o.owner }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="margin-top:20px;padding:18px 20px;border-radius:16px;background:#fff;border:1px solid #E0D6C8;font-size:13.5px;line-height:1.75;color:#5A4E42;max-width:1560px">
+    <strong>Design-only confirmation.</strong> No production code, API, database, migration, RLS policy, RPC or UI implementation was created or modified. No repository file was written, committed or pushed — this package is a design artifact in the design project, and the requested repository path <span style="font-family:'IBM Plex Mono',monospace">docs/design/BANHAO MERCHANT - NORMAL BUSY PAUSE - AVAILABILITY FLOW.dc.html</span> is recorded in the screen map for whoever commits it. <strong>No commit SHA exists for this work</strong>, and no BQ-013 or BQ-007 value was chosen, defaulted or implied by an example anywhere above. Protected order <span style="font-family:'IBM Plex Mono',monospace">BH-20260824-0001</span> was never read or referenced.
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  chips() {
+    return {
+      ok:'background:#E6F2EC;color:#0A6B49',
+      warn:'background:#FDF3E6;color:#8A6A3A',
+      bad:'background:#FBEAEA;color:#B23030',
+      neutral:'background:#F3EDE4;color:#5A4E42',
+      cust:'background:#EDE6F5;color:#5B4A87'
+    };
+  }
+  partA() {
+    const chip = this.chips();
+    return {
+      chip,
+      prepOptions: ['10 นาที','20 นาที','30 นาที','45 นาที','60 นาที'],
+      nav: [
+        {href:'#s00', label:'00 Constraints'},
+        {href:'#s01', label:'01 Intent'},
+        {href:'#s02', label:'02 The model'},
+        {href:'#s03', label:'03 Storage reality'},
+        {href:'#s04', label:'04 Transitions'},
+        {href:'#s05', label:'05 M-13 merchant'},
+        {href:'#s06', label:'06 Prep time'},
+        {href:'#s07', label:'07 Pause safety'},
+        {href:'#s08', label:'08 Customer'},
+        {href:'#s09', label:'09 Failure'},
+        {href:'#s10', label:'10 Supervisor boundary'},
+        {href:'#s11', label:'11 States & edges'},
+        {href:'#s12', label:'12 Components & a11y'},
+        {href:'#s13', label:'13 Thai copy'},
+        {href:'#s14', label:'14 Acceptance'},
+        {href:'#s15', label:'15 Handoff'},
+        {href:'#s16', label:'16 Open'}
+      ],
+      constraints: [
+        {fact:'restaurants.status has five values and none is PAUSED or BUSY',
+         src:"20260811000002_merchant_domain.sql · check (status in ('DRAFT','PENDING_APPROVAL','ACTIVE','SUSPENDED','CLOSED'))",
+         effect:'Neither mode can be a status value without widening a CHECK in a new migration. SUSPENDED exists but is administrative — using it for a twenty-minute pause would conflate a kitchen being busy with a platform sanction.'},
+        {fact:'temporarily_closed_until and temporary_close_reason exist, nullable, unconstrained',
+         src:'20260811000002_merchant_domain.sql:117-120',
+         effect:'The only shipped columns that express "temporarily not accepting", and the only candidate needing no migration. Their semantics belong to BQ-007, which is OPEN — so this design describes the shape without selecting it.'},
+        {fact:'status = ACTIVE has six load-bearing readers',
+         src:'decision pack § 6 · order_creation_function:203 · catalog_availability_visibility:67 · rls_policies:205,224,245 · cart.service:147 · restaurantMembershipQueries:51',
+         effect:'A PAUSED status closes the menu, the categories and the hours under RLS as a side effect. See the table in § 03 — this is the strongest evidence against Candidate A.'},
+        {fact:'temporarily_closed_until already has a live customer-facing reader',
+         src:'apps/customer/src/repositories/supabaseCatalog.ts:58 → deriveAvailability · openingHours.ts:181',
+         effect:'A value written there changes what customers see immediately — but openingHours deliberately excludes the field from nextOpening because no "reopens at" copy is defined, so a pause would read as closed with no reopening time. § 13 supplies the key that gap needs.'},
+        {fact:'pause_merchant does not exist in any production surface',
+         src:'decision pack § 6 — command catalog, domain types, service, controller, openapi.json and DB function all verified empty on the branch',
+         effect:'There is no supervisor pause to align to yet, only a design. § 10 draws the boundary so this work does not accidentally create one.'},
+        {fact:'No column anywhere expresses a busy mode or a busy preparation time',
+         src:'full read of 20260811000002 · docs-wide search for "busy" returns only a loading-skeleton mention',
+         effect:'Busy is genuinely new. Two values are needed — the mode and its minutes — and there is nowhere to put either. AV-Q04.'},
+        {fact:'avg_prep_minutes is restaurant-level catalogue data, nullable',
+         src:'20260811000002_merchant_domain.sql',
+         effect:'Usable as the Normal estimate source. Must never be overwritten to signal Busy — AV-D01. A null value means Normal has no estimate to show, which the UI must render as absent rather than invent.'},
+        {fact:'"Is this restaurant open right now" is deliberately not stored',
+         src:'table comment · DATABASE_DESIGN § 5.2',
+         effect:'Availability is derived from status + hours + temporary closure. A mode joins that derivation; it never becomes a cached boolean the client can disagree with.'},
+        {fact:'No endpoint writes status or either temporary-closure column',
+         src:'M-10 finding · RestaurantProfileService "what this never writes" list',
+         effect:'Every transition in § 04 is a new named API command. There is no existing write path to extend, in either direction.'},
+        {fact:'restaurants grants SELECT only to authenticated',
+         src:'M-10 finding · locked grants',
+         effect:'All availability writes go through the service-role API. A client-side mode change is not merely discouraged, it is refused by the database.'},
+        {fact:'No per-order prep time column exists on orders',
+         src:'M-05 finding · POST /orders/:id/accept has no DTO',
+         effect:'M-05\u2019s prep-time selection and Busy\u2019s prep time have no storage in common today. AV-Q01 must be answered before either ships.'},
+        {fact:'create_order() snapshots prices and options at creation',
+         src:'V1.1 § 19 POST /orders · full snapshotting',
+         effect:'An estimate captured the same way cannot be retroactively changed. Order safety in § 06 is structural, not a UI convention.'},
+        {fact:'Cart validation already fails closed on the place-order press',
+         src:'Phase D · POST /api/v1/cart/validate · PRICE_CHANGED · ITEM_UNAVAILABLE · MIXED_RESTAURANT',
+         effect:'The checkout race has a shipped answer. Availability becomes one more named 409 in that pattern — never a second mechanism.'}
+      ],
+      intent: [
+        {who:'MERCHANT', head:'A setting between "fine" and "closed"',
+         body:'Today a full kitchen has one lever and it is the wrong size. Busy lets a merchant keep earning while telling the truth about the wait; Pause lets them stop the inflow for twenty minutes without looking shut for the night.'},
+        {who:'CUSTOMER', head:'The wait is disclosed before payment, not after',
+         body:'A longer estimate on the shop page is an informed choice. The same delay discovered after paying is a support ticket. Busy moves the information to the only point where the customer can still act on it.'},
+        {who:'PLATFORM', head:'Fewer merchant non-responses to escalate',
+         body:'Every order a swamped kitchen ignores becomes an acceptance timeout, and BQ-013 has no approved consequence for one. A merchant who can say "busy" or "paused" generates fewer of the exceptions nobody has an answer for yet.'}
+      ],
+      modes: [
+        {th:'เปิดปกติ', en:'NORMAL', border:'#CDE7DB', bg:'#F3FAF6', dot:'#0A6B49', fg:'#0A6B49',
+         body:'The default. The shop is open per its hours, orders arrive as usual, and the estimate customers see is the restaurant\u2019s ordinary preparation time.',
+         accepts:'รับ — ตามเวลาทำการปกติ', prep:'avg_prep_minutes (ค่าเดิมของร้าน)',
+         isnot:'Not an order state. Not the same as "open now" — a Normal restaurant outside its opening hours is still closed, and that derivation is unchanged.'},
+        {th:'กำลังยุ่ง', en:'BUSY', border:'#F0DFC4', bg:'#FDF3E6', dot:'#8A6A3A', fg:'#8A6A3A',
+         body:'Open, accepting, and slower. The kitchen is dense with work, so the estimate customers agree to before ordering rises to a value the merchant picks from the supported set.',
+         accepts:'รับ — แต่เวลารอนานกว่าเดิม', prep:'ค่าที่ร้านเลือก — จากชุดที่ระบบรองรับ',
+         isnot:'Not a soft close, not a queue limit, not a cap on order count, and not an order state. A Busy restaurant is fully open — the only thing that changes is the estimate.'},
+        {th:'หยุดรับออเดอร์ชั่วคราว', en:'PAUSE', border:'#F0C9C9', bg:'#FBEAEA', dot:'#B23030', fg:'#B23030',
+         body:'No new orders. Everything already accepted continues to completion, unchanged, and the board keeps showing all of it.',
+         accepts:'ไม่รับออเดอร์ใหม่', prep:'— (ไม่มีออเดอร์ใหม่ให้ประมาณ)',
+         isnot:'Not closed for the day, not SUSPENDED, not a cancellation of anything, and not the supervisor\u2019s L4 pause (§ 10). Nothing about an existing order changes.'}
+      ],
+      storage: [
+        {mode:'NORMAL', verdict:'FREE', chip:chip.ok, border:'#CDE7DB', bg:'#F3FAF6',
+         column:'status = ACTIVE\ntemporarily_closed_until is null',
+         body:'Already representable, and already what the shipped availability derivation returns. Normal is the absence of the other two, so it needs no column, no migration and no decision.',
+         ask:'No decision needed.', askColor:'#0A6B49'},
+        {mode:'PAUSE', verdict:'EXPRESSIBLE', chip:chip.warn, border:'#F0DFC4', bg:'#FDFAF4',
+         column:'temporarily_closed_until = <ts>\ntemporary_close_reason = <text>',
+         body:'The columns exist and need no migration. But their intended semantic is a merchant-initiated temporary closure, BQ-007 owns that semantic and is OPEN, and the field is a timestamp — so an indefinite pause has no representation without a sentinel value nobody has agreed to.',
+         ask:'AV-Q03: may a pause use these columns, must it carry an end time, and how does it stay distinguishable from a platform pause? BQ-007 dependency.', askColor:'#8A6A3A'},
+        {mode:'BUSY', verdict:'NO HOME', chip:chip.bad, border:'#F0C9C9', bg:'#FBEAEA',
+         column:'— no column exists',
+         body:'Nothing in the locked schema records that a restaurant is busy, or what estimate it quotes while busy. Two values are needed and there is nowhere to put either. This is the one part of the approved model that cannot be built at all today.',
+         ask:'AV-Q04: one additive migration (mode + minutes), or is Busy deferred? Database LOCKED — CLAUDE.md § 10 requires explicit instruction.', askColor:'#B23030'}
+      ],
+      transitions: [
+        {id:'AV-T1', name:'Normal → Busy', body:'Merchant opens the mode dialog and picks a busy prep time. The choice is required; nothing is preselected.', owner:'MERCHANT', style:chip.ok},
+        {id:'AV-T2', name:'Busy → Normal', body:'One tap. New orders revert to avg_prep_minutes; orders already created are untouched.', owner:'MERCHANT', style:chip.ok},
+        {id:'AV-T3', name:'Normal → Pause', body:'Confirmation dialog, because it stops revenue. States plainly that in-flight orders continue.', owner:'MERCHANT', style:chip.ok},
+        {id:'AV-T4', name:'Busy → Pause', body:'Same dialog as AV-T3. The busy prep time is remembered but not re-applied on resume — AV-D02.', owner:'MERCHANT', style:chip.ok},
+        {id:'AV-T5', name:'Pause → Normal', body:'Merchant resume. Returns to Normal only. Setting Busy again is a separate, explicit act.', owner:'MERCHANT', style:chip.ok},
+        {id:'AV-T6', name:'* → Pause (automatic)', body:'Reserved, not designed. Threshold, window, duration, cooldown and consequence are all BQ-013 and all OPEN. DEC-040 § 5 forbids supplying any of them as a default.', owner:'BQ-013', style:chip.bad}
+      ],
+      headerStates: [
+        {id:'M-13.A', label:'เปิดปกติ — NORMAL', pill:'เปิดปกติ', pillSub:'เวลาทำอาหาร — นาที',
+         pillBg:'#F3FAF6', pillBorder:'#CDE7DB', dot:'#0A6B49', fg:'#0A6B49', icon:'\u2713',
+         bannerBg:'#FCFAF7', bannerTitle:'ร้านเปิดรับออเดอร์ตามปกติ',
+         bannerBody:'ลูกค้าเห็นเวลาทำอาหารตามค่าเดิมของร้าน · ระบบอาจหยุดรับออเดอร์อัตโนมัติตามนโยบายที่กำหนด — BQ-013 ยังไม่กำหนด',
+         actions:[{label:'เปลี่ยนเป็น กำลังยุ่ง', bg:'#fff', border:'#E0D6C8', fg:'#5A4E42'},{label:'หยุดรับออเดอร์', bg:'#fff', border:'#C2431F', fg:'#C2431F'}],
+         columns:[{name:'รอตอบรับ', count:'—', note:'นับเวลา 3 นาที (ค่าที่อนุมัติแล้ว) · ผลเมื่อหมดเวลา BQ-013', bg:'#fff'},{name:'กำลังทำ', count:'—', note:'', bg:'#fff'},{name:'รอไรเดอร์', count:'—', note:'', bg:'#fff'},{name:'กำลังส่ง', count:'—', note:'', bg:'#fff'}]},
+        {id:'M-13.B', label:'กำลังยุ่ง — BUSY', pill:'กำลังยุ่ง', pillSub:'เวลาทำอาหาร — นาที',
+         pillBg:'#FDF3E6', pillBorder:'#F0DFC4', dot:'#8A6A3A', fg:'#8A6A3A', icon:'!',
+         bannerBg:'#FDFAF4', bannerTitle:'ร้านกำลังยุ่ง — ยังรับออเดอร์อยู่',
+         bannerBody:'ลูกค้าเห็นเวลาทำอาหารที่นานขึ้นก่อนสั่ง · ออเดอร์ที่สั่งก่อนเปลี่ยนโหมดยังใช้เวลาเดิม',
+         actions:[{label:'กลับเป็นเปิดปกติ', bg:'#C2431F', border:'#C2431F', fg:'#fff'},{label:'หยุดรับออเดอร์', bg:'#fff', border:'#E0D6C8', fg:'#5A4E42'}],
+         columns:[{name:'รอตอบรับ', count:'—', note:'เวลาทำที่เสนอคือค่าช่วงยุ่ง (AV-Q01)', bg:'#FFFDF9'},{name:'กำลังทำ', count:'—', note:'', bg:'#fff'},{name:'รอไรเดอร์', count:'—', note:'', bg:'#fff'},{name:'กำลังส่ง', count:'—', note:'', bg:'#fff'}]},
+        {id:'M-13.C', label:'หยุดรับออเดอร์ชั่วคราว — PAUSE', pill:'หยุดรับออเดอร์ชั่วคราว', pillSub:'จะกลับมาเปิดเมื่อ —',
+         pillBg:'#FBEAEA', pillBorder:'#F0C9C9', dot:'#B23030', fg:'#B23030', icon:'\u2016',
+         bannerBg:'#FDF6F6', bannerTitle:'ไม่รับออเดอร์ใหม่ — ออเดอร์ที่รับไว้แล้วดำเนินต่อปกติ',
+         bannerBody:'คุณยังต้องทำอาหารและส่งออเดอร์ที่รับไว้ก่อนหน้านี้ให้ครบทุกรายการ · ร้านของคุณไม่ได้ปิดถาวร',
+         actions:[{label:'กลับมาเปิดรับออเดอร์', bg:'#C2431F', border:'#C2431F', fg:'#fff'}],
+         columns:[{name:'รอตอบรับ', count:'0', note:'ไม่มีออเดอร์ใหม่เข้า', bg:'#FDF6F6'},{name:'กำลังทำ', count:'—', note:'ดำเนินต่อตามปกติ', bg:'#fff'},{name:'รอไรเดอร์', count:'—', note:'ดำเนินต่อตามปกติ', bg:'#fff'},{name:'กำลังส่ง', count:'—', note:'ดำเนินต่อตามปกติ', bg:'#fff'}]}
+      ],
+      dialogs: [
+        {id:'M-13.D1', title:'AV-T1 · Normal → Busy', head:'เปลี่ยนเป็น กำลังยุ่ง', hasPrep:true,
+         body:'ร้านยังรับออเดอร์ต่อ แต่ลูกค้าจะเห็นเวลาทำอาหารที่นานขึ้นก่อนสั่ง',
+         cta:'เปลี่ยนเป็น กำลังยุ่ง', ctaBg:'#C2431F', ctaFg:'#fff',
+         foot:'Applies to orders created after this change only. Nothing already placed is affected.'},
+        {id:'M-13.D2', title:'AV-T3 / AV-T4 · → Pause', head:'หยุดรับออเดอร์ชั่วคราว', hasPrep:false,
+         body:'ลูกค้าจะสั่งออเดอร์ใหม่จากร้านนี้ไม่ได้ · ออเดอร์ที่รับไว้แล้วจะดำเนินต่อตามปกติทั้งหมด และร้านของคุณไม่ได้ปิดถาวร',
+         cta:'ยืนยัน หยุดรับออเดอร์', ctaBg:'#C2431F', ctaFg:'#fff',
+         foot:'Confirmation required because it stops incoming revenue. ระยะเวลาหยุด — ยังไม่กำหนด (BQ-007 · AV-Q03).'},
+        {id:'M-13.D3', title:'AV-T5 · Pause → Normal', head:'กลับมาเปิดรับออเดอร์', hasPrep:false,
+         body:'ร้านจะกลับเป็น เปิดปกติ ด้วยเวลาทำอาหารค่าเดิม หากยังยุ่งอยู่ เลือก กำลังยุ่ง อีกครั้งได้',
+         cta:'กลับมาเปิดรับออเดอร์', ctaBg:'#C2431F', ctaFg:'#fff',
+         foot:'Never resumes into Busy — AV-D02. If the platform paused this restaurant, this control is absent, not disabled (AV-Q02).'}
+      ]
+    };
+  }
+  partB() {
+    const chip = this.chips();
+    return {
+      statusReaders: [
+        {where:'20260819000001_order_creation_function.sql:203', effect:'Order creation is refused outright — the one consequence a pause actually wants, and the only one of the six that is.'},
+        {where:'20260817000001_catalog_availability_visibility.sql:67', effect:'menu_items become unreadable. The customer can no longer browse the menu, which § 08 requires them to be able to do.'},
+        {where:'20260811000011_rls_policies.sql:205, 224, 245', effect:'restaurant_hours, menu_categories and menu_items close under RLS. The shop page has nothing left to render.'},
+        {where:'apps/api/src/modules/cart/cart.service.ts:147', effect:'Cart validation fails — the correct outcome, but reached by a mechanism that also destroyed the menu.'},
+        {where:'apps/merchant/.../restaurantMembershipQueries.ts:51', effect:'The merchant console reads status for its own display, so a paused shop would misreport itself in the merchant app too.'}
+      ],
+      prepQs: [
+        {q:'What does the merchant see?', a:'The mode pill carries the estimate currently being quoted, and the board\u2019s รอตอบรับ column notes which value new orders are using.', why:'Reuses M-2.6\u2019s existing column pattern — no new panel.', color:'#5A4E42'},
+        {q:'What does the customer see?', a:'One estimate — the one in force when they open the shop, in the slot the normal estimate already uses. Not a base value plus a penalty.', why:'A customer needs the wait, not the kitchen\u2019s mode. Showing "30 → 45" invites an argument about which one applies.', color:'#5A4E42'},
+        {q:'Normal vs Busy value — shown together?', a:'Not to the customer. The merchant sees both, because they are the one choosing.', why:'AV-D03.', color:'#5A4E42'},
+        {q:'Which value do new orders use after a switch?', a:'The value in force at the moment POST /orders runs, captured into the order at creation, server-side.', why:'V1.1 § 19 full snapshotting · create_order(). Never client-supplied.', color:'#5A4E42'},
+        {q:'Are earlier orders affected?', a:'No. Never. Not the estimate, not the state, not the timeline.', why:'Structural, not a UI rule — nothing reads restaurant mode after creation. AC-05 tests it.', color:'#0A6B49'}
+      ],
+      pauseDoes: [
+        'Blocks creation of new orders for this restaurant, server-side, at the seam cart validation already fails closed on.',
+        'Keeps every accepted order exactly where it is, with the same actions available on the board.',
+        'Tells the customer, on the shop surface, that this is temporary.',
+        'Leaves opening hours, menu, item availability and merchant status untouched.'
+      ],
+      pauseNever: [
+        'Cancel an order','Fail an order or a delivery','Refund anything','Change a payment state',
+        'Change a delivery state','Release or reassign a rider','Add an order state','Hide in-flight work from the board'
+      ],
+      customerRows: [
+        {where:'Shop card in list', mode:'BUSY', style:chip.warn, sees:'Shop appears normally, orderable, with the busy estimate in the slot the normal estimate uses.', note:'No badge that reads like a warning. Busy is not a defect.'},
+        {where:'Shop page', mode:'BUSY', style:chip.warn, sees:'ร้านกำลังยุ่ง — เวลาทำอาหารนานกว่าปกติ as an informational line above the menu.', note:'Placed before the menu so it is read before choosing, not at checkout.'},
+        {where:'Checkout', mode:'BUSY', style:chip.warn, sees:'The same busy estimate, unchanged from the shop page. No new consent step.', note:'Consistency is the point — the number must not move between screens.'},
+        {where:'Shop card in list', mode:'PAUSE', style:chip.bad, sees:'Visible but not orderable, marked หยุดรับออเดอร์ชั่วคราว.', note:'Reuses the existing unavailable-card treatment — the วันนี้หมด pattern, not a new one.'},
+        {where:'Shop page', mode:'PAUSE', style:chip.bad, sees:'Menu still browsable; add-to-cart unavailable, with the temporary wording stated once.', note:'Browsable because PC-Q-001 Option A already decided unavailable things stay visible so the app can explain them.'},
+        {where:'Cart holding that shop', mode:'PAUSE', style:chip.bad, sees:'Cart preserved; the place-order press returns the availability conflict and does not navigate.', note:'Never silently emptied. Phase D\u2019s fail-closed revalidation is the mechanism.'},
+        {where:'Checkout / payment', mode:'PAUSE', style:chip.bad, sees:'The existing conflict pattern with an availability reason. No payment initiated.', note:'One more named 409 beside PRICE_CHANGED · ITEM_UNAVAILABLE · MIXED_RESTAURANT.'},
+        {where:'Existing order tracking', mode:'PAUSE', style:chip.ok, sees:'Completely unchanged — same timeline, same states, same ETA, no notice that the shop paused.', note:'Their order is unaffected, so telling them would create alarm about nothing.'},
+        {where:'Order history', mode:'PAUSE', style:chip.ok, sees:'Unchanged.', note:'Availability is not order data.'}
+      ],
+      failures: [
+        {id:'AV-F1', style:chip.bad, sit:'Merchant presses Busy, the request fails.', beh:'Dialog stays open with an inline error and a retry. No mode change is shown anywhere.', pill:'เปิดปกติ (unchanged)', color:'#0A6B49'},
+        {id:'AV-F2', style:chip.bad, sit:'Merchant presses Pause, the request fails.', beh:'Same — and the copy states explicitly that the shop is still accepting orders, because that is the dangerous misunderstanding.', pill:'previous mode (unchanged)', color:'#0A6B49'},
+        {id:'AV-F3', style:chip.bad, sit:'Request times out; outcome unknown.', beh:'No success wording. The pill refetches; until the server answers it shows a loading treatment rather than a guess.', pill:'— loading', color:'#8A6A3A'},
+        {id:'AV-F4', style:chip.warn, sit:'Two merchant sessions change mode at once.', beh:'Last confirmed write wins and both sessions converge on the server value. Both are told the current mode; neither is told it won.', pill:'server truth', color:'#8A6A3A'},
+        {id:'AV-F5', style:chip.warn, sit:'Server mode changed before the UI refreshed.', beh:'The pill is re-read on window focus and after any mode action, and resolves silently to the server value.', pill:'server truth', color:'#8A6A3A'},
+        {id:'AV-F6', style:chip.warn, sit:'Merchant acts on a stale pill — pauses while already paused.', beh:'Idempotent: same mode, reported as already in effect. Not an error, and not a second pause.', pill:'หยุดรับออเดอร์', color:'#0A6B49'},
+        {id:'AV-F7', style:chip.bad, sit:'Customer has the shop page open when it pauses.', beh:'No forced navigation, no modal interrupt. The page updates on its next read; the definitive block happens at place-order.', pill:'n/a — customer', color:'#7A6E64'},
+        {id:'AV-F8', style:chip.bad, sit:'Customer is mid-checkout when it pauses.', beh:'The place-order press fails closed with the availability conflict. Cart intact, no payment started, no order row created.', pill:'n/a — customer', color:'#7A6E64'}
+      ],
+      boundary: [
+        {k:'WHO ACTS', merchant:'The restaurant\u2019s own member — restaurant_members, DEC-033.', supervisor:"Platform staff — platform_staff → @Roles('OPERATOR','ADMIN')."},
+        {k:'AUTHORIZATION', merchant:'Membership in that one restaurant. Nothing else.', supervisor:'Staff capability plus an L4 approval gate with a mandatory typed reason.'},
+        {k:'WHAT IT MEANS', merchant:'"I am not able to take orders right now."', supervisor:'"The platform is stopping this restaurant from taking orders."'},
+        {k:'REVERSIBLE BY', merchant:'The merchant, at will, at any time.', supervisor:'Not the merchant — that is the entire point, and why AV-Q02 matters.'},
+        {k:'POLICY DEPENDENCY', merchant:'None for the act itself; duration semantics inherit BQ-007.', supervisor:'BQ-013 in full — threshold, window, duration, cooldown, resume path. All OPEN.'},
+        {k:'AUDIT ACTOR', merchant:'MERCHANT.', supervisor:'OPERATOR, with the acting profile and a reason — DEC-032.'},
+        {k:'UI SURFACE', merchant:'M-13, in the merchant board header.', supervisor:'S-04, in the supervisor console. No shared control, no shared screen, no shared command.'}
+      ],
+      stateMatrix: [
+        {state:'Normal', web:'Green pill, two actions in the header.', other:'Customer sees the normal estimate everywhere.', ctrl:'both actions active', color:'#0A6B49'},
+        {state:'Busy', web:'Amber pill carrying the busy estimate; primary action returns to Normal.', other:'Customer sees the busy estimate, shop fully orderable.', ctrl:'both actions active', color:'#0A6B49'},
+        {state:'Pause', web:'Red pill; single Resume action; all in-flight columns still populated.', other:'Shop visible, not orderable, marked temporary.', ctrl:'resume only', color:'#0A6B49'},
+        {state:'Switching — in flight', web:'Dialog CTA disabled and in-flight; pill unchanged.', other:'No customer-visible change until confirmed.', ctrl:'disabled', color:'#8A6A3A'},
+        {state:'Switch failed', web:'Inline error in the dialog naming what is still true.', other:'No change.', ctrl:'retry', color:'#B23030'},
+        {state:'Loading — pill', web:'Skeleton pill. No mode word is shown while the mode is unknown.', other:'—', ctrl:'not rendered', color:'#7A6E64'},
+        {state:'Stale — refetched', web:'Pill resolves to the server value with no interruption.', other:'—', ctrl:'active', color:'#0A6B49'},
+        {state:'Busy prep time unpicked', web:'CTA disabled; nothing preselected; no recommended value.', other:'—', ctrl:'disabled', color:'#8A6A3A'},
+        {state:'Platform-paused (L4)', web:'Pill states the platform paused this restaurant. Resume absent, not disabled.', other:'Customer sees the same temporary treatment.', ctrl:'absent · AV-Q02', color:'#B23030'},
+        {state:'Outside opening hours', web:'Mode pill still shown; a closed-by-hours note sits beside it.', other:'Customer sees the existing closed-by-hours copy — not the pause copy.', ctrl:'active', color:'#0A6B49'},
+        {state:'status \u2260 ACTIVE', web:'Mode control not rendered at all.', other:'Shop not listed — existing behaviour.', ctrl:'not rendered', color:'#7A6E64'},
+        {state:'Permission — non-member', web:'Header renders no mode control; no mode word leaks.', other:'—', ctrl:'not rendered', color:'#B23030'},
+        {state:'Tablet 1024', web:'Header wraps to two rows — pill first, actions below, 44px targets preserved.', other:'Same content, no feature removed.', ctrl:'active', color:'#0A6B49'},
+        {state:'Customer — existing order', web:'—', other:'Tracking screen entirely unchanged in every mode.', ctrl:'n/a', color:'#0A6B49'}
+      ],
+      edges: [
+        {id:'AV-E1', body:'Pause while an order sits in รอตอบรับ: the 3-minute accept window keeps running. Pause blocks creation, not acceptance — and what happens at expiry is BQ-013, unchanged by this design.'},
+        {id:'AV-E2', body:'Busy set while orders are already awaiting acceptance: those keep the estimate they were created with. AV-Q01 decides what the accept dialog then defaults to.'},
+        {id:'AV-E3', body:'Pause spanning closing time: pause and the opening-hours derivation are independent inputs. Resume does not reopen a shop that is closed by its hours.'},
+        {id:'AV-E4', body:'Merchant pauses, then the platform pauses too. Two mechanisms, possibly one field — AV-Q02. Merchant resume must not lift a platform pause.'},
+        {id:'AV-E5', body:'A restaurant with avg_prep_minutes null has no normal estimate. The column is nullable, so Normal must render an absent estimate rather than fabricate one.'},
+        {id:'AV-E6', body:'Busy prep time lower than the normal value: allowed by the control, meaningless in practice. Not blocked — blocking it would be inventing a rule nobody decided.'},
+        {id:'AV-E7', body:'Cart held across a Pause and a Resume: still valid, still revalidated at place-order. Nothing expires a cart on availability alone.'},
+        {id:'AV-E8', body:'Membership revoked mid-session: the command fails on authorization and the header stops rendering the control on the next read.'}
+      ],
+      components: [
+        {name:'Status pill', from:'M-2.6 order board status badges · packages/ui tokens. Same radius, weight and chip scale.'},
+        {name:'Confirmation dialog', from:'M-05 accept confirmation — scrim, focus trap, required-choice pattern, 44px targets. Reused wholesale.'},
+        {name:'Prep-time option row', from:'M-05\u2019s 10/20/30/45/60 นาที radiogroup. Same set, same nothing-preselected rule.'},
+        {name:'Board header', from:'M-2.6 / M-03 header. The mode control is added into it, not placed on a new page.'},
+        {name:'Inline error region', from:'apps/merchant ErrorState — the M-11 / M-12 save-failure pattern.'},
+        {name:'Skeleton', from:'apps/merchant Spinner and the existing board skeletons. Per-region, never full-screen.'},
+        {name:'Unavailable card treatment', from:'Customer app วันนี้หมด item pattern (PC-Q-001 Option A), reused for a paused shop card.'},
+        {name:'Checkout conflict pattern', from:'Phase D checkout revalidation conflict UI. One more reason code, no new UI.'}
+      ],
+      a11y: [
+        {k:'Never colour alone', body:'Every mode carries a shape (square dot), a Thai word and an icon glyph. The pill reads in greyscale, which also matters on a kitchen screen in daylight.'},
+        {k:'Contrast', body:'Mode foregrounds use the existing token set — #0A6B49, #8A6A3A, #B23030 on tinted backgrounds. Not #E4572E on white: UX-FINDING-02 measured 3.68:1, which fails AA at label sizes.'},
+        {k:'Touch targets', body:'Every action and prep-time option is at least 44px tall. The merchant surface is web but used on tablets in kitchens.'},
+        {k:'Screen reader', body:'The pill announces mode plus estimate as one label, and a change announces the confirmed server state — never the optimistic one.'},
+        {k:'Confirmation', body:'Pause requires explicit confirmation because it stops revenue; Busy and Resume do not. The dialog states the consequence for in-flight orders rather than asking "are you sure".'},
+        {k:'Keyboard', body:'The dialog is fully keyboard operable with a visible focus ring, Escape cancels, and focus returns to the invoking control — M-05\u2019s trap, unmodified.'},
+        {k:'Copy', body:'Thai line-height 1.55–1.75 throughout. No mode word is abbreviated, and Pause copy always contains ชั่วคราว.'}
+      ],
+      copyRows: [
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.mode.normal', th:'เปิดปกติ', note:'Pill label.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.mode.busy', th:'กำลังยุ่ง', note:'Never เกือบเต็ม or any capacity word.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.mode.pause', th:'หยุดรับออเดอร์ชั่วคราว', note:'ชั่วคราว is mandatory in the string.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.action.setBusy', th:'เปลี่ยนเป็น กำลังยุ่ง', note:'—'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.action.setNormal', th:'กลับเป็นเปิดปกติ', note:'—'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.action.pause', th:'หยุดรับออเดอร์', note:'—'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.action.resume', th:'กลับมาเปิดรับออเดอร์', note:'Resume, not เปิดร้าน — the shop was never closed.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.pause.consequence', th:'ออเดอร์ที่รับไว้แล้วจะดำเนินต่อตามปกติ', note:'The sentence that prevents the worst misunderstanding.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.busy.prepLabel', th:'เวลาทำอาหารระหว่างที่ร้านยุ่ง', note:'Required field, nothing preselected.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.error.stillAccepting', th:'เปลี่ยนสถานะไม่สำเร็จ — ร้านของคุณยังรับออเดอร์อยู่', note:'Failure copy must state what is still true, not only that it failed.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.autoPause.note', th:'ระบบอาจหยุดรับออเดอร์อัตโนมัติตามนโยบายที่กำหนด', note:'อาจ is deliberate. BQ-013 OPEN — no number may ever join this string.'},
+        {surf:'MERCHANT', style:chip.neutral, k:'availability.platformPaused', th:'ร้านนี้ถูกหยุดรับออเดอร์โดยผู้ดูแลระบบ', note:'Only if AV-Q02 resolves to a shared field. Resume is absent in this state.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'shop.busy.notice', th:'ร้านกำลังยุ่ง — เวลาทำอาหารนานกว่าปกติ', note:'Informational, above the menu. Must not read as closed.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'shop.pause.notice', th:'ร้านหยุดรับออเดอร์ชั่วคราว', note:'Never ร้านปิด — the UX spec owns that word for a closed shop.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'shop.pause.reopens', th:'กลับมาเปิดรับออเดอร์ —', note:'Renders nothing when no end time exists. AV-Q03 governs whether an end time is mandatory.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'shop.pause.browsable', th:'ดูเมนูได้ แต่ยังสั่งไม่ได้ตอนนี้', note:'Follows PC-Q-001 Option A\u2019s precedent for unavailable things.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'checkout.conflict.paused', th:'ร้านหยุดรับออเดอร์ชั่วคราว — สั่งออเดอร์นี้ไม่สำเร็จ', note:'Rendered in the existing conflict pattern. The cart is not emptied.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'checkout.conflict.cartKept', th:'รายการในตะกร้ายังอยู่ครบ', note:'Reassurance is load-bearing here.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'shop.card.paused', th:'หยุดรับออเดอร์ชั่วคราว', note:'List card badge.'},
+        {surf:'CUSTOMER', style:chip.cust, k:'shop.prep.estimate', th:'เวลาทำอาหารประมาณ — นาที', note:'One slot, one number, whichever mode is in force. Reuse the existing key if one exists.'}
+      ],
+      acceptance: [
+        {id:'AC-01', body:'A mode change is written only by the API. No client write path to restaurants exists or is added, and an attempted client write is rejected by RLS.'},
+        {id:'AC-02', body:'The merchant pill reflects server state only. No optimistic mode is ever rendered — proven by failing the request and asserting the pill is unchanged.'},
+        {id:'AC-03', body:'Setting Busy requires an explicit prep-time choice; nothing is preselected and no value is defaulted server-side.'},
+        {id:'AC-04', body:'Orders created while Busy carry the busy estimate; orders created while Normal carry the normal one. Both captured server-side at creation.'},
+        {id:'AC-05', body:'Switching mode alters no existing order row — estimate, state or history. Asserted by comparing rows before and after a switch.'},
+        {id:'AC-06', body:'Pause blocks order creation server-side. A client that skips the check still cannot create an order for a paused restaurant.'},
+        {id:'AC-07', body:'Pause changes no order state, no payment state, no delivery state, and creates no reconciliation or ledger row.'},
+        {id:'AC-08', body:'The merchant board shows the same in-flight orders and the same actions while paused as while normal.'},
+        {id:'AC-09', body:'A checkout attempt against a paused restaurant returns the availability conflict, keeps the cart, initiates no payment and creates no order row.'},
+        {id:'AC-10', body:'An existing order\u2019s customer-facing tracking is identical before and after the restaurant pauses.'},
+        {id:'AC-11', body:'Merchant resume returns the restaurant to Normal, never to Busy, even if it was Busy before the pause.'},
+        {id:'AC-12', body:'A repeated identical mode change is idempotent — same mode, no error, no duplicate audit row claiming a second change.'},
+        {id:'AC-13', body:'Concurrent mode changes from two sessions converge on one server value, and neither session displays a stale mode after its next read.'},
+        {id:'AC-14', body:'A non-member sees no mode control and cannot change the mode. No mode value leaks in the denied response.'},
+        {id:'AC-15', body:'No merchant-facing control performs, requests or acknowledges an L4 operator action, and no supervisor case data appears in the merchant app.'},
+        {id:'AC-16', body:'No threshold, count, window, duration or cooldown value appears in any string, constant, config default or test fixture for auto-pause.'}
+      ],
+      seams: [
+        {seam:'Authorization', path:'restaurant_members · RolesGuard / RestaurantScopeGuard', rule:'Reuse the Phase B membership guards. Do not add a role, capability string or scope.'},
+        {seam:'Write path', path:'apps/api NestJS command · service_role client', rule:'Availability writes are API-only. restaurants grants SELECT only to authenticated — do not grant more.'},
+        {seam:'What must not write it', path:'RestaurantProfileService', rule:'Its documented "never writes" list covers status and both temporary-closure columns. Do not quietly widen it — a mode change is a named command, not a profile field.'},
+        {seam:'Order-creation block', path:'create_order() · order creation function', rule:'The refusal already exists for non-ACTIVE status. Extend that single authority; never add a second gate in a controller.'},
+        {seam:'Checkout revalidation', path:'POST /api/v1/cart/validate', rule:'Add one named 409 reason. Do not build a second availability check, and do not move the check to mount time.'},
+        {seam:'Customer availability derivation', path:'deriveAvailability · openingHours', rule:'One shipped derivation. A mode becomes an input to it — never a parallel client-side rule.'},
+        {seam:'Prep-time estimate', path:'restaurants.avg_prep_minutes · create_order() snapshot', rule:'Read for Normal, snapshot at creation. Never overwritten to signal a mode (AV-D01).'},
+        {seam:'Accept dialog', path:'M-05 · POST /orders/:id/accept', rule:'Blocked on AV-Q01. Do not ship Busy prep time and M-05 prep time as two independent concepts.'},
+        {seam:'Audit', path:'audit_logs · actor_type = MERCHANT', rule:'A merchant mode change is a MERCHANT row. Never SYSTEM, never OPERATOR — that distinction is what § 10 protects.'},
+        {seam:'Supervisor path', path:'AI-ops command catalog · supervisor console', rule:'Do not add pause_merchant as a side effect of this work. It stays absent until BQ-013 and the pause-mechanism decision land.'}
+      ],
+      dontBuild: [
+        'Any auto-pause threshold, window, duration, cooldown or resume timer — every one is OPEN under BQ-013.',
+        'A PAUSED value on restaurants.status — it needs a CHECK widening in a new migration, which CLAUDE.md § 10 forbids without explicit instruction.',
+        'A write to temporarily_closed_until — the semantic belongs to BQ-007 and is not settled.',
+        'A Busy column, mode enum or busy-prep-time field — AV-Q04 is undecided and the database is LOCKED.',
+        'The merchant-facing per-order prep-time change AV-Q01 implies, in either direction.',
+        'Any auto-reject, auto-cancel or refund at acceptance expiry — BQ-013, with Q-020 and Q-001 behind it.',
+        'Anything that lets a merchant see, request or acknowledge a supervisor action.'
+      ],
+      dbImpact: [
+        {k:'Migration', body:'None proposed. A CHECK widening or a Busy column would each need one, and both require explicit Product Owner instruction under the schema lock.'},
+        {k:'RLS', body:'No policy change proposed. Note the trap: a status-based pause changes RLS-visible catalogue data as a side effect, which is a security-relevant behaviour change disguised as a status update.'},
+        {k:'Grants', body:'Unchanged. restaurants keeps SELECT-only for authenticated; every write stays behind the service-role API.'},
+        {k:'Security', body:'Availability must never be enforced client-side only. A client deciding a shop is open is the CON-002 failure mode transplanted from payments.'},
+        {k:'Audit', body:'Reuses audit_logs with actor_type = MERCHANT. No new table and no new actor value — unlike the AI path, where AI-01 is still open.'}
+      ],
+      tests: [
+        'Mode change rejected for a non-member, and for a member of a different restaurant.',
+        'Failed mode change leaves both the server value and the rendered pill unchanged.',
+        'Order created during Busy carries the busy estimate; during Normal, the normal one.',
+        'Mode switch mutates no existing order row — diff before and after.',
+        'Order creation refused for a paused restaurant, asserted at the database function rather than the controller.',
+        'Cart validate returns the availability conflict; cart rows survive; no payment intent is created.',
+        'Two concurrent mode changes converge on one value with no lost update and no duplicate audit row.'
+      ],
+      open: [
+        {id:'AV-Q04', q:'Where does Busy live — one additive migration, or is Busy deferred until one is authorized?', blocks:'BUSY ENTIRELY', style:chip.bad, owner:'Product Owner + architecture. No column exists; the schema is LOCKED.'},
+        {id:'AV-Q03', q:'What does a merchant Pause write, may it use the temporary-closure columns, and can a pause be indefinite?', blocks:'PAUSE', style:chip.bad, owner:'Product Owner, with BQ-007. The column is a timestamp, so "no end time" needs an agreed representation.'},
+        {id:'AV-Q01', q:'Does Busy set the default the M-05 accept dialog opens with, or replace the per-order choice while active?', blocks:'BUSY + M-05', style:chip.bad, owner:'Product Owner. Changes both the accept dialog and the command signature.'},
+        {id:'AV-Q02', q:'If a merchant pause and a platform pause share a field, how does merchant-facing copy keep them apart so Resume never lies?', blocks:'PAUSE UI', style:chip.warn, owner:'Design can answer once the field question is settled — Resume absent, not disabled.'},
+        {id:'BQ-013', q:'Acceptance-timeout consequence, auto-pause threshold, reliability window, pause duration, cooldown, resume policy, expiry consequence.', blocks:'AUTO-PAUSE', style:chip.bad, owner:'Product Owner, P1. Every value OPEN. The 3-minute accept window is separately ACCEPTED; its consequence is not.'},
+        {id:'BQ-007', q:'What temporary closure means, and whether a punitive pause may share the columns designed for an operational one.', blocks:'AV-Q03', style:chip.bad, owner:'Product Owner, P1.'},
+        {id:'HANDOFF-01', q:'Which branch is authoritative for implementation planning?', blocks:'PLANNING', style:chip.warn, owner:'Located, not resolved. The decision pack, the supervisor console, supervisor.controller.ts and the MISSING-returning policy source are all on feature/g7-driver-availability; main has none of them. A Product Owner statement is still owed, and the L4 design\u2019s § 14 was measured against main.'},
+        {id:'AV-D01', q:'Recorded, not open: Busy must not be implemented by overwriting avg_prep_minutes.', blocks:'—', style:chip.neutral, owner:'Design decision, reversible only by a stated architecture decision.'},
+        {id:'AV-D02', q:'Recorded, not open: merchant Resume returns to Normal, never to Busy.', blocks:'—', style:chip.neutral, owner:'Design decision. BQ-013 owns the resume path for a platform pause.'},
+        {id:'AV-D03', q:'Recorded, not open: the customer sees one estimate, never a before/after pair.', blocks:'—', style:chip.neutral, owner:'Design decision.'},
+        {id:'AV-D04', q:'Recorded, not open: the mode pill shows server-confirmed state only — no optimistic rendering.', blocks:'—', style:chip.neutral, owner:'Design decision. AC-02 tests it.'}
+      ]
+    };
+  }
+  renderVals() {
+    return Object.assign({}, this.partA(), this.partB());
+  }
+}
+
+</script>
+</body>
+</html>
