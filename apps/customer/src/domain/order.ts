@@ -129,6 +129,26 @@ export interface OrderDetail {
    * it is not `orders.quoted_eta_minutes` or `restaurants.avg_prep_minutes`.
    */
   prepMinutes: number | null;
+  /**
+   * `orders.customer_quoted_prep_minutes` (AC-04 / DEC-042) — the
+   * preparation estimate the platform showed this customer, in force when
+   * they placed the order: the restaurant's busy estimate if it was Busy,
+   * its normal estimate otherwise. Captured by `create_order()` and
+   * immutable afterwards, so a later mode change cannot rewrite what the
+   * customer was told.
+   *
+   * `null` when no estimate was recorded — every order placed before this
+   * column existed, permanently, and any order placed at a restaurant with
+   * no estimate to show (AV-E5). Never substitute the restaurant's current
+   * value for a null: that is the live number, not the historical one.
+   *
+   * **Not `prepMinutes`.** That is the merchant's own answer for this order,
+   * given later, at accept time (M-05). The two are different actors
+   * answering at different moments and may legitimately differ. **Not an
+   * ETA** either — the same prohibition `prepMinutes` carries applies here
+   * in full.
+   */
+  customerQuotedPrepMinutes: number | null;
   items: OrderLineItem[];
   /**
    * The append-only audit trail. Fetched and modelled here because it is part

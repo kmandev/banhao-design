@@ -112,20 +112,33 @@ export function OrderTrackingScreen() {
           </Text>
         ) : null}
         {/*
-          M-05 §08 — the merchant's own prep-time estimate for this order,
-          directly under the state headline because it qualifies the state.
-          Rendered only when the value exists: an order accepted before M-05
-          shipped has none, and inventing one would be fabricating a fact the
-          merchant never stated.
+          The preparation-time caption, in one slot with one number
+          (M-AV design, AV-D03: the customer sees one estimate, never a
+          before/after pair).
 
-          "ประมาณ" is load-bearing. This is NOT an ETA and must never become
-          one — no countdown, no arithmetic against the delivery time, no
-          clock time, and never `restaurants.avg_prep_minutes`, which the
-          catalog mappers already refuse to derive an ETA from.
+          The merchant's own answer for this order wins once it exists
+          (M-05 §08, `orders.prep_minutes`) — it is the more specific fact,
+          and it is what the kitchen actually committed to. Before the
+          merchant has accepted there is no such answer, so the caption
+          falls back to the estimate the customer was shown when they placed
+          the order (AC-04 / DEC-042, `orders.customer_quoted_prep_minutes`),
+          which is a snapshot on this order and never a live read of the
+          restaurant's current mode. Both are omitted when null: an order
+          accepted before M-05 shipped, or placed before AC-04 shipped, has
+          none, and inventing one would be fabricating a fact nobody stated.
+
+          "ประมาณ" is load-bearing on both. Neither is an ETA and neither may
+          become one — no countdown, no arithmetic against the delivery time,
+          no clock time, and never a live `restaurants.avg_prep_minutes`,
+          which the catalog mappers already refuse to derive an ETA from.
         */}
         {order.prepMinutes !== null ? (
           <Text style={styles.prepCaption} testID="tracking-prep-minutes">
             ร้านใช้เวลาทำอาหารประมาณ {order.prepMinutes} นาที
+          </Text>
+        ) : order.customerQuotedPrepMinutes !== null ? (
+          <Text style={styles.prepCaption} testID="tracking-quoted-prep-minutes">
+            เวลาทำอาหารประมาณ {order.customerQuotedPrepMinutes} นาที
           </Text>
         ) : null}
         <Text style={styles.orderId} testID="tracking-order-id">

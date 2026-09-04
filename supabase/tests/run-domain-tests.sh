@@ -255,4 +255,18 @@ if grep -q "FAIL" /tmp/banhao-availability-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-13 AVAILABILITY VERIFICATION PASSED"
+echo "==> Running AC-04 / DEC-042 customer-quoted prep estimate assertions (20260904000002)"
+docker cp "$REPO_ROOT/supabase/tests/order_customer_quoted_prep_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/order_customer_quoted_prep_test.sql 2>&1 | tee /tmp/banhao-quoted-prep-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> AC-04 customer-quoted prep estimate verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-quoted-prep-out.log; then
+  echo "==> AC-04 customer-quoted prep estimate verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE VERIFICATION PASSED"

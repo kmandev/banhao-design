@@ -45,6 +45,7 @@ const ORDER: OrderDetail = {
   state: 'PREPARING',
   paymentMethod: 'ONLINE',
   prepMinutes: null,
+  customerQuotedPrepMinutes: null,
   subtotalSatang: 12000,
   deliveryFeeSatang: 1500,
   serviceFeeSatang: 500,
@@ -301,4 +302,67 @@ it('presents the prep time as an estimate, never as an ETA or an arrival time', 
   for (const forbidden of ['ถึงประมาณ', 'จัดส่งประมาณ', 'ETA', 'ไรเดอร์ถึง']) {
     expect(screen.queryByText(new RegExp(forbidden))).toBeNull();
   }
+});
+
+// ---------------------------------------------------------------------------
+// AC-04 / DEC-042 — the estimate the customer was shown when they placed the
+// order. One caption slot, one number (AV-D03): the merchant's own answer
+// wins once it exists, and this is what fills the slot before then.
+// ---------------------------------------------------------------------------
+
+it('renders the quoted estimate before the merchant has answered', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'PAID', prepMinutes: null, customerQuotedPrepMinutes: 45 });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  expect(screen.getByTestId('tracking-quoted-prep-minutes').props.children.join('')).toBe(
+    'เวลาทำอาหารประมาณ 45 นาที',
+  );
+});
+
+it('shows one estimate, never both — the merchant’s answer replaces the quote', async () => {
+  mockGetOrder.mockResolvedValue({
+    ...ORDER,
+    state: 'MERCHANT_ACCEPTED',
+    prepMinutes: 20,
+    customerQuotedPrepMinutes: 45,
+  });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  // AV-D03: the customer sees one estimate, never a before/after pair — so
+  // the 45 they were quoted is not rendered alongside the 20 the kitchen
+  // committed to.
+  expect(screen.getByTestId('tracking-prep-minutes').props.children.join('')).toBe(
+    'ร้านใช้เวลาทำอาหารประมาณ 20 นาที',
+  );
+  expect(screen.queryByTestId('tracking-quoted-prep-minutes')).toBeNull();
+  expect(screen.queryByText(/45/)).toBeNull();
+});
+
+it('renders no caption when neither value exists', async () => {
+  mockGetOrder.mockResolvedValue({
+    ...ORDER,
+    state: 'PAID',
+    prepMinutes: null,
+    customerQuotedPrepMinutes: null,
+  });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  expect(screen.queryByTestId('tracking-prep-minutes')).toBeNull();
+  expect(screen.queryByTestId('tracking-quoted-prep-minutes')).toBeNull();
+  expect(screen.queryByText(/ประมาณ/)).toBeNull();
+});
+
+it('presents the quote as preparation time, never as an arrival estimate', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'PAID', prepMinutes: null, customerQuotedPrepMinutes: 45 });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+
+  expect(screen.queryByText(/ถึงเวลา|จะถึง|ส่งถึง|เวลาส่ง/)).toBeNull();
 });

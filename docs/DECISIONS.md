@@ -3139,3 +3139,252 @@ DEC-037, DEC-039 (approved-number-as-cited-constant precedent) · DEC-021,
 DEC-022 · ADR-005 (outbox), ADR-006 (jobs) · OD-04, OD-05, OD-06 (Driver +
 Delivery design package) · BQ-013, BQ-015, Q-001, Q-002, Q-020 (all still
 open)
+
+---
+
+## DEC-041 — Merchant operational availability is a separate additive field on `restaurants`, never `status` and never the temporary-closure columns
+
+**Status:** ACCEPTED — **STORAGE AND TRANSITION MODEL ONLY** · **NOT** an
+answer to BQ-013, BQ-007, AV-Q03 · **Date:** 2026-09-04 · **Owner:**
+PRODUCT_OWNER
+
+### Decision
+
+This entry records the decision lock that authorized the merchant
+availability work implemented at `7ea20a65`
+(`supabase/migrations/20260904000001_restaurant_availability_mode.sql`). The
+implementation cites that lock as its authority in three places — the
+migration header, `packages/validation/src/restaurant-availability.ts` and
+the commit message — but the lock itself was never written into this file.
+That governance gap is what this entry closes. It authorizes nothing new and
+changes no shipped behaviour.
+
+**Canonical identifier: `M-AV` (Merchant Availability — NORMAL / BUSY /
+PAUSED).** The design package labels the work `M13`, which collides with
+`docs/design/BANHAO-UX-SPEC-V1.md` §6, where M-13 is *Earnings* and M-14 is
+*Settings / staff / profile*. Those two roadmap slots keep their meanings
+unchanged and no availability item is added to the merchant roadmap. `M-AV`
+extends the `AV-` namespace the work already established (`AV-Q01…Q04`,
+`AV-D01…D04`, `AV-T1…T5`, `AV-E5`), so design states map `M-13.A/B/C →
+M-AV.A/B/C`. Git history is not rewritten: commit `7ea20a65` keeps its
+message, and this entry is the mapping.
+
+1. **`restaurants.availability_mode`** — `NORMAL` / `BUSY` / `PAUSED`, an
+   operational mode distinct from lifecycle. `restaurants.status` and its
+   five-value CHECK are untouched; a Busy or Paused restaurant keeps
+   `status = 'ACTIVE'`. Reusing `status` was rejected on a specific, verified
+   ground: `restaurants_select_active` filters on `status = 'ACTIVE'`, so a
+   status-based mode would drop the restaurant out of the public catalogue —
+   the exact inverse of what Busy means.
+2. **`restaurants.busy_prep_minutes`** — one of `10 / 20 / 30 / 45 / 60`,
+   enforced by a database CHECK, not by application validation alone. The
+   same five values M-05's accept dialog offers, reused deliberately. Never
+   `restaurants.avg_prep_minutes`, which is never overwritten to signal a
+   mode (**AV-D01**).
+3. **The pairing constraint** — `BUSY` always carries a value; `NORMAL` and
+   `PAUSED` always carry NULL. A table CHECK, so it binds every writer rather
+   than one endpoint.
+4. **PAUSED writes neither `temporarily_closed_until` nor
+   `temporary_close_reason`.** Those columns exist and have a live
+   customer-facing reader, but their semantics belong to **BQ-007**, which
+   stays OPEN.
+5. **PAUSED changes no existing order, no cart, no payment, no delivery, and
+   creates no reconciliation or ledger row.** It blocks the door; it does not
+   touch anyone already inside. The merchant board keeps showing every
+   in-flight order with the same actions.
+6. **`create_order()` remains the single order-creation-safety authority.**
+   The PAUSED refusal is a second condition inside the existing function,
+   never a second independent gate, and the pre-existing "is not ACTIVE"
+   raise is byte-for-byte unchanged.
+7. **Cart validation reuses the existing `RESTAURANT_CLOSED` code**
+   (`apps/api/src/modules/cart/cart.service.ts`), one more named 409
+   alongside `PRICE_CHANGED` / `ITEM_UNAVAILABLE` / `MIXED_RESTAURANT`. No
+   second mechanism, and never a client-side-only block.
+8. **No `availability_set_by`, no new actor, no new RLS policy, no new
+   grant.** `audit_logs.actor_id` already records who acted;
+   `grant select on public.restaurants to anon, authenticated` is
+   table-level, so both new columns are covered and are public by design.
+   `authenticated` still holds no UPDATE on `restaurants`.
+9. **Audit:** one `audit_logs` row per real change,
+   `action = 'MerchantAvailabilityChanged'`, `actor_type = 'MERCHANT'` —
+   never `SYSTEM`, never `OPERATOR` — carrying the before/after mode and busy
+   minutes. An identical repeat request is a no-op: no UPDATE, no audit row
+   (AC-12).
+10. **Transitions are guarded conditional UPDATEs** (ADR-003). Resume always
+    returns to NORMAL and never directly to BUSY; `PAUSED → BUSY` is two
+    calls (**AV-D02**).
+11. **BQ-013 auto-pause remains deferred in full** — threshold, window,
+    duration, cooldown and consequence are all OPEN, and DEC-040 §5 forbids
+    supplying any of them as a default. No merchant-facing control performs
+    or acknowledges an L4 operator action (AC-15), and no threshold, count,
+    window, duration or cooldown value appears in any string, constant,
+    config default or test fixture (AC-16).
+12. **M-05's `orders.prep_minutes` is unchanged** — same column, same `> 0`
+    CHECK, same accept-time write, same M05-Q-01 openness about the preset
+    list.
+13. **AV-Q01 is answered: Busy affects the customer-facing pre-order
+    estimate only.** It does not change M-05, `orders.prep_minutes`,
+    `POST /orders/:id/accept` or the accept dialog, which stays unaware of
+    the mode and continues to preselect nothing. The accept dialog having no
+    mode awareness is therefore correct by decision, not an omission.
+
+### What this decision does NOT answer
+
+- **AV-Q03 / BQ-007** — what a pause's duration means, and whether a pause
+  may be indefinite. **OPEN.** The pause dialog says so in its own copy:
+  `ระยะเวลาหยุด — ยังไม่กำหนด`.
+- **BQ-013** in any part. **DEFERRED**, per item 11.
+- **AC-04** — whether the estimate the customer was shown is persisted as
+  order history. Answered separately by **DEC-042**; nothing in this entry
+  decides it.
+
+### Review trigger
+
+Any of: BQ-013 receiving an approved threshold (which introduces a second
+setter and reopens item 8); BQ-007 settling temporary-closure semantics
+(which may make items 4 and 5 restate-able); a decision to let a pause carry
+a duration.
+
+### Alternatives considered
+
+Extending `restaurants.status` (rejected — the RLS trap above); reusing the
+temporary-closure columns (rejected — BQ-007 semantics); a separate
+availability table (rejected — `restaurants` already stores operational
+availability alongside lifecycle, and `rider_availability`'s separation
+exists for continuous GPS under DBQ-005, which does not apply here);
+overwriting `avg_prep_minutes` (rejected by AV-D01).
+
+### Evidence
+
+`supabase/migrations/20260904000001_restaurant_availability_mode.sql`,
+`supabase/tests/restaurant_availability_test.sql` (22 assertions, sections
+A–F), `apps/api/src/modules/merchant/restaurant-availability.{service,controller}.ts`,
+`apps/api/src/modules/cart/cart.service.ts`,
+`apps/api/src/modules/orders/orders.service.ts`
+(`raiseFromCreateOrderError`), `packages/validation/src/restaurant-availability.ts`,
+`apps/customer/src/lib/catalogDisplay.ts`,
+`apps/merchant/src/components/AvailabilityDialog.tsx`,
+`docs/design/BANHAO MERCHANT - NORMAL BUSY PAUSE - AVAILABILITY FLOW.dc.html`,
+commit `7ea20a65`.
+
+### Related
+
+DEC-042 (the customer-quoted estimate this mode decides) · DEC-040 §5 (a
+missing decision is never a licence to choose a default) · DEC-APP-008
+(writes stay in the API) · ADR-003 · DEC-E-02 (`create_order()` atomicity) ·
+DEC-D-01 / DEC-D-02 (cart validation) · DEC-032 · BQ-007, BQ-013 · AV-Q01
+(answered here), AV-Q03 (open), AV-Q04 (answered here) ·
+`docs/BQ-013-HANDOFF-03-DECISION-PACK.md`
+
+---
+
+## DEC-042 — The customer-quoted preparation estimate is persisted on the order
+
+**Status:** ACCEPTED — **AC-04** · **Date:** 2026-09-04 · **Owner:**
+PRODUCT_OWNER
+
+### Decision
+
+The preparation-time estimate the platform presents to a customer
+immediately before they place an order is **historical order state and is
+persisted server-side at creation**, in one additive nullable column on
+`public.orders` — shipped as `customer_quoted_prep_minutes`
+(`supabase/migrations/20260904000002_orders_customer_quoted_prep_minutes.sql`).
+
+M-AV (DEC-041) made that estimate depend on a merchant-controlled mode that
+can change at any moment, while the number itself was derived live from
+`restaurants` on every render. An order placed at a Busy restaurant showed
+one figure before payment and left no record of it afterwards; the merchant
+could return to Normal a second later and nothing would show what the
+customer had been told. This is the same class of fact the schema already
+snapshots eleven times over, for the reason
+`20260811000005_order_domain.sql` states about money: *"a rate changing later
+must not be able to rewrite what the customer was actually charged."*
+
+### The semantic contract
+
+| Property | Contract |
+|---|---|
+| **Meaning** | The preparation-time estimate the platform presented to the customer and that was in force when the order was created |
+| **Type** | Integer minutes |
+| **Nullability** | Nullable, no default, **no backfill**. NULL means *no estimate was recorded* — never zero, and never "substitute the restaurant's current value" |
+| **Capture point** | `create_order()`, server-side, in the same transaction and from the same `restaurants` row the availability guard already reads. **No parameter, no client input, no update-it-afterwards path** |
+| **Derivation** | BUSY → `restaurants.busy_prep_minutes`; NORMAL → `restaurants.avg_prep_minutes`; PAUSED is unreachable because `create_order()` refuses it. A NULL restaurant estimate yields a NULL quote (**AV-E5**) |
+| **Mutability** | **Immutable after creation**, in `orders_enforce_immutable_columns()` alongside the other snapshots — for every role, including `service_role` |
+| **Not `orders.prep_minutes`** | That is the *merchant's* per-order answer, given later at accept time (M-05). Different actor, different moment, different question. The two may legitimately differ, and **neither defaults from the other in either direction** |
+| **Not `orders.quoted_eta_minutes`** | That is a delivery-**arrival** estimate. This is kitchen work only, and **must not participate in any delivery-ETA calculation** unless a later decision says so explicitly. `quoted_eta_minutes` is not repurposed, written or read |
+| **Visibility** | Readable by the customer on the existing order-detail path under the existing `orders_select_customer` policy — no new endpoint, no new RLS policy, no new grant (the `orders` `select` grant is table-level) |
+| **Scope** | A historical quote and nothing else. Not an SLA, not a promise the platform enforces, and read by no dispatch, pricing or ledger logic |
+
+**Exactly one field.** No mode snapshot, no quote timestamp, no second quote
+column: `placed_at` already timestamps the quote and the mode is recoverable
+from `audit_logs`.
+
+**Customer surface.** C-14 order tracking renders one caption in one slot
+(**AV-D03** — one estimate, never a before/after pair): the merchant's
+`prep_minutes` once it exists, and the quote before that. Both are omitted
+when null. Neither may be presented as a delivery ETA, an arrival time or a
+guaranteed delivery time. C-19 order detail is unchanged — its design canvas
+has no prep caption, and adding one would be design work this decision does
+not authorize.
+
+### What this decision does NOT answer
+
+- **AV-Q03 / BQ-007 / BQ-013** — untouched, and not closed by any part of
+  this entry.
+- **Whether the quote should ever feed a delivery ETA.** It must not, until a
+  separate decision says otherwise.
+- **What to show a customer whose order carries no quote.** Nothing is shown,
+  which is the existing `prep_minutes` behaviour; whether that should change
+  is a design question nobody has asked yet.
+- **Anything about orders placed before this column existed.** They carry
+  NULL permanently. No reconstruction from `audit_logs` is authorized, and
+  none is performed.
+
+### Alternatives considered
+
+**Do not persist** (amend AC-04 to make the estimate informational only) —
+rejected: it leaves the dispute case unanswerable, leaves the pre-accept
+tracking caption empty, and pushes anyone who needs the answer into replaying
+`audit_logs` mode changes against `placed_at`, which is a column with extra
+steps, no coverage of pre-M-AV orders and no immutability guarantee.
+**Repurpose `orders.quoted_eta_minutes`** — rejected: it is unused but not
+unowned; it means arrival, and prep time plus travel time is not an arrival
+time. **Default the quote from, or into, `orders.prep_minutes`** — rejected:
+it aliases two different actors' answers, exactly the mistake
+`merchant-acceptance-policy.ts` refuses for policy values.
+
+### Consequences
+
+- One additive migration (`20260904000002`), bringing the repository total to
+  **26**. No existing migration was edited.
+- `create_order()` and `orders_enforce_immutable_columns()` are restated in
+  full, because PL/pgSQL has no add-a-clause equivalent. Every other line of
+  both is reproduced unchanged.
+- 16 SQL assertions (`supabase/tests/order_customer_quoted_prep_test.sql`,
+  sections A–H) prove derivation, nullability, immutability, independence
+  from `prep_minutes` and separation from `quoted_eta_minutes` against real
+  PostgreSQL.
+- **Not applied to `banhao-dev`.** Applying it is a separate, explicit
+  operational instruction (`CLAUDE.md` §10), and until it is applied the
+  column exists only in the repository.
+
+### Evidence
+
+`supabase/migrations/20260904000002_orders_customer_quoted_prep_minutes.sql`,
+`supabase/tests/order_customer_quoted_prep_test.sql`,
+`apps/customer/src/data/orderQueries.ts`,
+`apps/customer/src/data/orderMappers.ts`,
+`apps/customer/src/domain/order.ts`,
+`apps/customer/src/screens/OrderTrackingScreen.tsx` (+ `.test.tsx`),
+`apps/customer/src/repositories/supabaseOrderDetail.test.ts`.
+
+### Related
+
+DEC-041 (M-AV — the mode this quote is derived from) · DEC-E-02
+(`create_order()` is the sole atomic write boundary) · DEC-E-01 (server
+derives what the client must not supply) · DEC-APP-008 · ADR-003, ADR-007 ·
+CON-002 (the client never decides a fact of record) · M-05
+(`orders.prep_minutes`, `20260901000001`) · AV-D01, AV-D03, AV-E5 ·
+`docs/design/BANHAO MERCHANT - NORMAL BUSY PAUSE - AVAILABILITY FLOW.dc.html`
+AC-04

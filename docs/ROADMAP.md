@@ -18,9 +18,11 @@ noted.
 
 > **Phase-status staleness:** the ✅/⏳ sections below were last reconciled
 > 2026-08-19 and still show Phase E as next. They are not current — Phases E–H
-> have since been substantially built and Phase G is the work in flight. Use
-> `CLAUDE.md` §9 and `CURRENT_STATUS.md` for live phase status; this file's
-> Phase J row and the blocked list below are current.
+> have since been substantially built, Phase I's Human Supervisor half and two
+> Phase J playbooks are built, and merchant M-10 and M-AV (availability,
+> DEC-041) landed on 2026-09-04 along with AC-04's order snapshot (DEC-042).
+> Use `CLAUDE.md` §9 and `CURRENT_STATUS.md` for live phase status; this
+> file's Phase J row and the blocked list below are current.
 
 ### ✅ COMPLETED
 
@@ -88,6 +90,11 @@ noted.
   question remains. **Do not invent a default for any of them** anywhere in
   the application; the schema stores amounts, never rates, so these can be
   set later without a migration.
+- **Two merged migrations are not applied to `banhao-dev`** —
+  `20260904000001` (M-AV availability, DEC-041) and `20260904000002` (AC-04
+  customer-quoted prep estimate, DEC-042). Both pass the Docker domain suite;
+  applying either to the dev project is a separate explicit operational
+  instruction and blocks live verification of both features until given.
 - **R2/M-11/M-12 architecture-decision gap** (see `CURRENT_STATUS.md` §9) —
   not a blocker to further work, but an unrecorded deviation from V1.1's
   stated storage-provider timeline that the Product Owner should either

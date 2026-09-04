@@ -81,6 +81,7 @@ const ORDER_ROW = {
   delivery_landmark: 'ใกล้ตลาดสดบุณฑริก',
   placed_at: '2026-08-19T05:00:00Z',
   prep_minutes: 20,
+  customer_quoted_prep_minutes: 30,
 };
 
 const ITEM_ROW = {
@@ -135,6 +136,7 @@ describe('getOrder — owner reads own order', () => {
       recipientPhoneSnapshot: '0812345678',
       deliveryAddressSnapshot: '123 หมู่ 4 ต.บุณฑริก',
       prepMinutes: 20,
+      customerQuotedPrepMinutes: 30,
       deliveryLandmark: 'ใกล้ตลาดสดบุณฑริก',
       placedAt: '2026-08-19T05:00:00Z',
       items: [
@@ -244,6 +246,61 @@ describe('getOrder — prep time (M-05)', () => {
     await subject.getOrder('order-1');
 
     expect(calls.find((c) => c.table === 'restaurants')).toBeUndefined();
+  });
+});
+
+describe('getOrder — the customer-quoted prep estimate (AC-04 / DEC-042)', () => {
+  it('selects customer_quoted_prep_minutes as part of the order projection', async () => {
+    const { subject, calls } = repoWith({
+      orders: { data: ORDER_ROW, error: null },
+      order_items: { data: [], error: null },
+      order_item_options: { data: [], error: null },
+      order_status_history: { data: [], error: null },
+    });
+
+    await subject.getOrder('order-1');
+
+    expect(calls.find((c) => c.table === 'orders')?.columns).toContain('customer_quoted_prep_minutes');
+  });
+
+  it('carries a null quote through as null — an order placed before the column existed has none', async () => {
+    const { subject } = repoWith({
+      orders: { data: { ...ORDER_ROW, customer_quoted_prep_minutes: null }, error: null },
+      order_items: { data: [], error: null },
+      order_item_options: { data: [], error: null },
+      order_status_history: { data: [], error: null },
+    });
+
+    const order = await subject.getOrder('order-1');
+
+    expect(order?.customerQuotedPrepMinutes).toBeNull();
+  });
+
+  it('never falls back to the restaurant for a missing quote — the live value is not the historical one', async () => {
+    const { subject, calls } = repoWith({
+      orders: { data: { ...ORDER_ROW, customer_quoted_prep_minutes: null }, error: null },
+      order_items: { data: [], error: null },
+      order_item_options: { data: [], error: null },
+      order_status_history: { data: [], error: null },
+    });
+
+    await subject.getOrder('order-1');
+
+    expect(calls.find((c) => c.table === 'restaurants')).toBeUndefined();
+  });
+
+  it('keeps the quote and the merchant prep time as independent values', async () => {
+    const { subject } = repoWith({
+      orders: { data: { ...ORDER_ROW, prep_minutes: 20, customer_quoted_prep_minutes: 45 }, error: null },
+      order_items: { data: [], error: null },
+      order_item_options: { data: [], error: null },
+      order_status_history: { data: [], error: null },
+    });
+
+    const order = await subject.getOrder('order-1');
+
+    expect(order?.prepMinutes).toBe(20);
+    expect(order?.customerQuotedPrepMinutes).toBe(45);
   });
 });
 

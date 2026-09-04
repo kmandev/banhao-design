@@ -28,8 +28,8 @@ Built by a solo founder using AI as the development team.
 | | |
 |---|---|
 | Branch | `feature/g7-driver-availability`, pushed to `origin` |
-| Current commit | `8da83eaf` — `feat(merchant): implement M-11 menu management and M-12 opening hours` |
-| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **6 additive migrations merged since, 1 of them not yet applied live** (§10) |
+| Current commit | `feat(orders): snapshot customer prep estimate` — AC-04 / DEC-042, on top of `7ea20a65` (M-AV availability) |
+| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **10 additive migrations merged since, 2 of them not yet applied live** (§10) |
 | Application architecture | [`BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md) — V1.1, **APPROVED / READY FOR IMPLEMENTATION** |
 | API contract | [`06-api/openapi.json`](06-api/openapi.json), generated from the code and guarded against drift by a test |
 
@@ -76,7 +76,7 @@ not the same claim.
 | App | State |
 |---|---|
 | **Customer** (Expo) | 31/31 design states, screenshot-verified. Every one of the nine repository bindings is live — catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. `mockRepositories` survives only as test fixtures |
-| **Merchant** (Next.js, DEC-APP-003) | **MUST scope complete.** M-01 login, M-02 scope resolution, M-03 live board with Realtime and audible arrival alerting, M-04 detail panel, M-05 accept with prep time, M-07/M-08 board actions, **M-11 menu management, M-12 opening hours**, and the five-item nav the UX specification fixes. Unbuilt: M-06/M-09/M-10 (`SHOULD`) and M-13/M-14 (`LATER`), all still without a design artifact |
+| **Merchant** (Next.js, DEC-APP-003) | **MUST scope complete.** M-01 login, M-02 scope resolution, M-03 live board with Realtime and audible arrival alerting, M-04 detail panel, M-05 accept with prep time, M-07/M-08 board actions, **M-11 menu management, M-12 opening hours**, and the five-item nav the UX specification fixes. **M-10 restaurant profile**, and **M-AV availability (NORMAL / BUSY / PAUSED — DEC-041, formerly labelled M-13)**. Unbuilt: M-06/M-09 (`SHOULD`) and UX-SPEC M-13 earnings / M-14 settings (`LATER`), all still without a design artifact |
 | **Driver** (Expo) | Status/availability, offer inbox with the 15 s foreground poll, active delivery, proof camera/review/upload, navigation. The gap list in `BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` §4 is closed except the items that need a product decision (D-13 money, D-14 push, D-17 icons) |
 | **Admin** (Next.js) | **Human Supervisor console.** Phone-OTP login, `platform_staff` gate, operations inbox (S-02), case detail with live domain state and append-only timeline (S-03), close-case-with-reason (S-06). No Supabase data read at all — every screen goes through `/api/v1/admin/supervisor` (DEC-APP-008). The Admin package's financial screens (A-16…A-22) are **not built**: the money decisions gate them |
 | **tick-worker** (Cloudflare Worker) | Present, typechecks, bundles via dry-run, **never deployed** |
@@ -154,10 +154,12 @@ SQL suites, both Docker-based and both now run by CI:
 
 ## 10. Database
 
-**Live and LOCKED.** 22 migration files. 16 are the `e471ec1d` checkpoint V1.1
-was reviewed against; six have been merged since, each additive and each under
-an explicit instruction. **21 are applied to `banhao-dev`; one is not** — see
-the last row.
+**Live and LOCKED.** 26 migration files. 16 are the `e471ec1d` checkpoint V1.1
+was reviewed against; ten have been merged since, each additive and each under
+an explicit instruction. **24 are applied to `banhao-dev`; two are not** — see
+the last two rows. Every one of the ten is exercised by the Docker domain
+suite (`supabase/tests/run-domain-tests.sh`), which is what "verified" means
+below; it is not a statement about the live project.
 
 | Migration | Why |
 |---|---|
@@ -166,7 +168,11 @@ the last row.
 | `20260825000001_reconciliation_rider_release_invariant.sql` | The rider release / reconciliation invariant |
 | `20260831000001_orders_realtime_publication.sql` | `orders` in the Realtime publication, for the merchant board |
 | `20260901000001_orders_prep_minutes.sql` | `orders.prep_minutes`, for M-05 |
-| `20260901000002_merchant_catalog_write_functions.sql` | Four transactional catalog-write functions for M-11/M-12. **Merged, verified against a throwaway Postgres, NOT applied to `banhao-dev`** — applying it is a separate explicit instruction |
+| `20260901000002_merchant_catalog_write_functions.sql` | Four transactional catalog-write functions for M-11/M-12. Applied and verified live 2026-09-03 |
+| `20260902000001_order_item_options_drop_menu_option_fk.sql` | Drops the `order_item_options` menu-option FK so M-11 option edits work |
+| `20260903000001_audit_logs_ai_actor_type.sql` | AI-01 — widens `audit_logs.actor_type` to accept `'AI'` |
+| `20260904000001_restaurant_availability_mode.sql` | **M-AV** (DEC-041) — `restaurants.availability_mode` / `busy_prep_minutes`, and `create_order()`'s PAUSED refusal. **Merged, 22 assertions pass against real PostgreSQL, NOT applied to `banhao-dev`** |
+| `20260904000002_orders_customer_quoted_prep_minutes.sql` | **AC-04** (DEC-042) — `orders.customer_quoted_prep_minutes`, captured by `create_order()` and added to the immutability denylist. **Merged, 16 assertions pass against real PostgreSQL, NOT applied to `banhao-dev`** |
 
 Six tables remain deferred (`settlements`, `settlement_items`,
 `delivery_fee_bands`, `zones`, `service_areas`, `delivery_attempts`), each
@@ -235,7 +241,7 @@ effort alone.
 |---|---|---|---|
 | 1 | The Admin app's financial half — A-16 through A-22 (payments, refunds, reconciliation, ledger, settlement) | **Business decision** | Q-001, Q-002, Q-010/BQ-028, Q-020 and Q-032. The screens are fully designed in `BANHAO ADMIN - Operations - Phase I.dc.html`; what is missing is the numbers, the provider, the legal model and the refund mechanism. The design package's own § 19 says the same. **The exception half — the Human Supervisor console — is built**, since the AI Operations package § 09 designs it and it needs none of those decisions |
 | 1b | Phase I's operational commands from a case (cancel, release, redispatch, pause) | **Business decision** | BQ-013, UX-Q-006, OD-04, BQ-015, Q-032. Each case detail names the specific decision blocking it rather than rendering a control the platform cannot back |
-| 2 | Merchant M-06, M-09, M-10 (`SHOULD`), M-13, M-14 (`LATER`) | Missing design artifact | Same. None is launch-critical |
+| 2 | Merchant M-06, M-09 (`SHOULD`), UX-SPEC M-13 earnings, M-14 settings (`LATER`) | Missing design artifact | Same. None is launch-critical, and M-13 earnings is additionally money-blocked (BQ-029, Q-032). **M-10 and M-AV are no longer on this list — both are built**, each from its own committed artifact |
 | 3 | Customer C-14 prep-time caption | **Missing credential** | The fixture orders belong to `+66811110009`, for which no Test OTP pair is documented. A Supabase Dashboard action, or a fixture pointed at an onboarded identity. Do not guess an OTP |
 | 4 | Sentry (the last Phase A item) | **External account** | An account and a DSN. Free tier is single-user; $26/month on the second developer |
 | 5 | Any deployment | **External infrastructure** | The whole of `INFRASTRUCTURE-READINESS-V1.md`: GCP project, billing, WIF, Artifact Registry, Cloudflare token |
@@ -245,7 +251,8 @@ effort alone.
 | 9 | Dropping `profiles.role` | **Approved migration** | A migration explicitly approved for it. The application half is already done |
 | 10 | Push notifications (Phase H's missing channel) | Technical decision | TQ-002 |
 | 11 | Android, physical iOS, real SMS, the search results list | Device / environment | Hardware and an Android SDK on the build machine |
-| 12 | Applying `20260901000002` to `banhao-dev`, and live-verifying M-11/M-12 | **Explicit instruction** | The migration is merged and proven against a throwaway Postgres by 38 assertions, but applying it to the dev project is a deliberate act, not a side effect of building the screens. M-11/M-12 cannot be walked live until it is |
+| 12 | Applying `20260904000001` (M-AV) and `20260904000002` (AC-04) to `banhao-dev`, and live-verifying M-AV and the quoted-estimate caption | **Explicit instruction** | Both are merged and proven against real PostgreSQL by 38 assertions between them, but applying either to the dev project is a deliberate act, not a side effect of building the screens. Neither can be walked live until it is. (`20260901000002` was applied and verified live 2026-09-03; that older blocker is closed) |
+| 13 | `apps/merchant` lint/typecheck/build and `apps/api` lint are red on this branch | Engineering | Two stray unused imports introduced by `20044391` (M-10): `waitFor` in `apps/merchant/src/components/RestaurantProfileForm.test.tsx` and `DomainError` in `apps/api/src/modules/merchant/restaurant-profile.controller.spec.ts`. Merchant's own test suite passes (613 tests); it is the lint rule that fails the build. Two deletions, but they belong to M-10's own follow-up, not to unrelated work |
 
 **7 P0 business decisions remain**, all of them a number, a provider or a
 legal question: Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-027
@@ -262,7 +269,8 @@ Everything in §13 is blocked on something outside engineering. What is not:
 - Further test and contract hardening, on the pattern of the rider
   controller's HTTP-boundary suite.
 - Documentation reconciliation, of which this file is one instance.
-- **M-11/M-12 follow-through that needs no new design**: applying
-  `20260901000002` to `banhao-dev` and walking both screens live, and the
-  edit-mode image upload in the item drawer, which currently shows the stored
-  key rather than driving the existing two-step upload.
+- **Clearing the two stray unused imports from M-10** (§13 row 13), which is
+  what currently makes `pnpm turbo run lint typecheck test build` red.
+- **M-11/M-12 follow-through that needs no new design**: the edit-mode image
+  upload in the item drawer, which currently shows the stored key rather than
+  driving the existing two-step upload.

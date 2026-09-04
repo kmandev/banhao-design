@@ -57,6 +57,7 @@ const ORDER: OrderDetail = {
   state: 'PREPARING',
   paymentMethod: 'ONLINE',
   prepMinutes: null,
+  customerQuotedPrepMinutes: null,
   subtotalSatang: 12000,
   deliveryFeeSatang: 1500,
   serviceFeeSatang: 500,

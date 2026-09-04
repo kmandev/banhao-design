@@ -121,6 +121,8 @@ explicit instruction" rule.
 | EVENT-029 | **M-11 menu management and M-12 opening hours built**, from the two committed design artifacts. One additive migration (**22 total**) adding four transactional catalog-write functions; 11 new merchant API endpoints; the real five-item merchant nav; both screens with their dialogs, drawers and the option editor. `day_of_week` confirmed as **0 = Sunday**, matching every existing reader — no reinterpretation, no migration (this update) |
 | EVENT-032 | **Phase I started — the Human Supervisor console.** `docs/HUMAN_SUPERVISOR_CONTRACT.md` settles which of the two overlapping design packages governs what (`57e19412`); three guarded endpoints under `/api/v1/admin/supervisor` project AI Operations escalations out of `audit_logs` with no new table or migration (`4ca86967`); the admin app stops being a scaffold and becomes a working exception console — phone-OTP auth, staff gate, inbox, case detail, close-with-reason (`e0b763d0`); and the HTTP boundary and guard order are proven at 401/403/200 per route (`cbd6eec8`). No financial surface, no command that moves domain state — see §13 |
 | EVENT-031 | **Phase J started.** Three AI Operations units on `feature/g7-driver-availability`, no migration and no schema change in any of them: **J-01 merchant acceptance timeout** (`44abab39`, starvation fix `44eed3fc`), which fails closed on BQ-013 and escalates without ever reaching the agent; **J-02 no-rider triage** (`0726b269`), the design package's § 10 "No rider found" playbook, whose policy resolves from DEC-022 and which has **no command at all** so `ESC-NORIDER` is its only reachable outcome; and **agent-failure containment** (`dede3719`), escalating an unavailable or unparseable agent instead of losing the event. Both playbooks run as tick phases. Every remaining designed playbook is blocked on an open business decision — see §12 |
+| EVENT-033 | **M-10 restaurant profile and M-AV merchant availability built.** M-10 (`20044391`) from its own design artifact. **M-AV** — Normal / Busy / Paused (`7ea20a65`, historically labelled M-13 in its design package) — one additive migration (`20260904000001`), a single guarded mode-change endpoint, cart/order-creation integration reusing `RESTAURANT_CLOSED`, and the customer-facing estimate. Recorded as **DEC-041**, which also fixes the identifier: the availability work is **M-AV**, and UX-SPEC M-13 (earnings) / M-14 (settings) keep their meanings |
+| EVENT-034 | **AC-04 answered — the customer-quoted preparation estimate is persisted** (**DEC-042**). One additive migration (**26 total**), `orders.customer_quoted_prep_minutes`: captured by `create_order()` alone, never client-supplied, immutable afterwards, NULL for every pre-existing order. Distinct from `orders.prep_minutes` (M-05's merchant answer at accept time) and from `orders.quoted_eta_minutes` (a delivery-arrival estimate), and excluded from ETA arithmetic. 16 SQL assertions plus customer-app coverage; C-14 renders one caption in one slot. **Neither this migration nor M-AV's has been applied to `banhao-dev`** |
 | EVENT-030 | **AI-01 locked, then Phase J authorized.** One additive migration (**24 total**) widening `audit_logs.actor_type` to accept `'AI'` — every existing actor type, the append-only trigger, the DEC-032 operator-reason CHECK, RLS and grants all preserved, proven by 6 assertions in the domain suite (`95cc0dc4`). Then **DEC-040** added AI Operations + Human Supervisor to the roadmap as **Phase J, after Phase I — authorized, not started**: architecture direction only, no implementation code, no open business policy answered |
 
 ## 5. Current implementation status
@@ -134,10 +136,10 @@ explicit instruction" rule.
 | `profiles` + RLS | **DONE and live-verified** |
 | Mock repositories | **None left in the Customer app.** All nine bindings in `apps/customer/src/repositories/index.ts` are live: catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. The `mockRepositories` object survives only as test fixtures |
 | NestJS API | 49 operations across 46 paths — identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (`NullPaymentProvider`), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage, and the Phase I Human Supervisor console (§13). **The contract is `docs/06-api/openapi.json`**, generated from the real `AppModule` and guarded against drift by `apps/api/test/openapi.contract.spec.ts`; `docs/06-api/README.md` documents the envelope, the error catalogue and the guard order |
-| Merchant app | **MUST scope complete** (Next.js, DEC-APP-003) — phone-OTP login, restaurant scope, the live order board with Realtime + audible arrival alerting, order detail panel, accept-with-prep-time, **M-11 menu management and M-12 opening hours**, and the real five-item nav. The documented build order M-01 → M-03 → M-04/M-05 → M-07/M-08 → M-11/M-12 is **complete**. **Not built: M-06 reject dialog (SHOULD), M-09, M-10, M-13, M-14 — all still blocked on a design artifact, none exists** |
+| Merchant app | **MUST scope complete** (Next.js, DEC-APP-003) — phone-OTP login, restaurant scope, the live order board with Realtime + audible arrival alerting, order detail panel, accept-with-prep-time, **M-11 menu management**, **M-12 opening hours**, **M-10 restaurant profile** and **M-AV availability (NORMAL / BUSY / PAUSED)**, and the real five-item nav. The documented build order M-01 → M-03 → M-04/M-05 → M-07/M-08 → M-11/M-12 is **complete**, and M-10 and M-AV landed after it, each from its own committed design artifact. **Not built: M-06 reject dialog (SHOULD), M-09 (SHOULD), UX-SPEC M-13 earnings / M-14 settings (LATER) — all still blocked on a design artifact, none exists.** M-AV is the availability work formerly labelled M-13; see §11 |
 | Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
 | Admin app | **Human Supervisor console built** (Next.js) — phone-OTP login, `platform_staff` gate, operations inbox (S-02), case detail with live domain state and append-only timeline (S-03), close-case-with-reason (S-06). The Admin design package's financial screens (A-16…A-22) are **not built** and are blocked on the money decisions. See §13 |
-| Orders | Implemented in the API (creation, pricing, controller/service) and consumed by the Customer app — not the full nine-state lifecycle claimed complete, see Phase table in §9 |
+| Orders | Implemented in the API (creation, pricing, controller/service) and consumed by the Customer app. Since DEC-042 an order also snapshots `customer_quoted_prep_minutes` — what the customer was told before paying — captured by `create_order()` and immutable — not the full nine-state lifecycle claimed complete, see Phase table in §9 |
 | Payments | `NullPaymentProvider` implemented (service, controller, webhook simulator, attempt-expiry, event processing) — no real provider (still blocked, see §10) |
 | Dispatch / delivery | Implemented in the API's rider module (broadcast dispatch, pickup/en-route/arrival/completion transitions, release + reconciliation) and the Driver app's delivery flow |
 | Proof of delivery (G7) | Implemented end-to-end: driver camera capture → client-side compression + EXIF strip → presigned upload to a private R2 bucket → server-side 2 MB size enforcement → signed download URL → Customer app proof read API and viewer. Retention/purge mechanism exists, **default OFF**. See §9/§10 for phase status |
@@ -184,9 +186,11 @@ Three `T0` technical questions block backend work: TQ-008, TQ-011, TQ-012.
 EVENT-017 DEC-033/034 lock → EVENT-018 migration). **16 migration files, 40
 tables, merged to `main` at `e471ec1d` and applied to `banhao-dev`** — this was
 the schema V1.1 was reviewed against. **8 further migrations have since been
-merged** (EVENT-023/024/027/029/030) for Phase C/E/G, M-05, M-11/M-12 and AI-01
-needs, bringing the current total to **24 migration files**. Verified by two Docker-based test
-suites: **60/60 assertions pass**, including the rider race condition proven
+merged** (EVENT-023/024/027/029/030/033/034) for Phase C/E/G, M-05, M-10,
+M-11/M-12, AI-01, M-AV and AC-04 needs, bringing the current total to
+**26 migration files**. Verified by two Docker-based test
+suites: **60/60 assertions pass** at the checkpoint, and the domain suite has
+since grown to cover every migration merged after it, including the rider race condition proven
 with two genuinely concurrent `psql` processes (see
 `docs/DATABASE_MIGRATION_V1_REPORT.md`). The live `profiles` RLS pattern
 (**revoke-first**, column grants, policies `to authenticated`, trigger
@@ -228,7 +232,7 @@ apps/driver/                  Status/availability, offer inbox, active delivery,
 apps/merchant/                Next.js: order board, menu management (M-11),
                                opening hours (M-12); see §11
 apps/admin/                   Still a shell — see §5
-supabase/migrations/          24 migration files (16 at the `e471ec1d` checkpoint + 8 since)
+supabase/migrations/          26 migration files (16 at the `e471ec1d` checkpoint + 10 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -258,7 +262,7 @@ docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-0
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
 docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          24 migrations (16 at checkpoint + 8 since) — do not
+supabase/migrations/*.sql          26 migrations (16 at checkpoint + 10 since) — do not
                                     edit an existing file; do not add a new one without
                                     an explicit instruction (see §10)
 ```
@@ -274,7 +278,7 @@ supabase/migrations/*.sql          24 migrations (16 at checkpoint + 8 since) �
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
-| Migrations | **24 in the repository · 24 applied live · 0 pending** (16 at the `e471ec1d` V1.1 checkpoint + 8 merged since for Phase C/E/G, M-05, M-11/M-12 and AI-01). **Verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
+| Migrations | **26 in the repository · 24 applied live · 2 pending** (16 at the `e471ec1d` V1.1 checkpoint + 10 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV and AC-04). **The two pending are `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate)** — both merged, both proven against real PostgreSQL by the Docker domain suite, **neither applied to `banhao-dev`**. Applying them is a separate explicit operational instruction and has not been given. The 24 applied were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -424,6 +428,14 @@ migration explicitly instructed for the current phase — see §10.
   `SAMPLE_DELIVERY_FEE_SATANG = 1500`, which is **not** the approved amount and
   must never be copied into backend code.
 - Do not enable cash payment (DEC-016) — and do not delete the cash model either.
+- **Three preparation-time values exist and none substitutes for another.**
+  `restaurants.avg_prep_minutes` / `busy_prep_minutes` are live catalogue
+  data; `orders.customer_quoted_prep_minutes` is what the customer was
+  quoted at creation (DEC-042, immutable); `orders.prep_minutes` is the
+  merchant's own answer at accept time (M-05). **None of them is an ETA** —
+  `orders.quoted_eta_minutes` is the arrival estimate and is written by
+  nothing today. Never derive one from another, and never present any of
+  them as an arrival time.
 - Do not use the superseded order state names (`NEW`, `ACCEPTED`, `READY`,
   `DRIVER_ASSIGNED`, `COMPLETED`, `NO_DRIVER`) in new work.
 - **ADR-001…012 are `ACCEPTED`**, ratified unchanged by V1.1 §16, and the 12
@@ -435,8 +447,9 @@ migration explicitly instructed for the current phase — see §10.
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **24 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
-  plus 8 since for Phase C/E/G, M-05, M-11/M-12 and AI-01 — see §3/§7). Read
+- **26 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 10 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV and AC-04 —
+  see §3/§7; the last two are **not yet applied live**). Read
   `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
   edit an existing migration, and do not add a table, view, RLS policy, RPC, or
   new migration, and never run `supabase db push` or `supabase link`, without
@@ -492,6 +505,17 @@ Added 2026-09-01 (EVENT-026/027), extended by EVENT-029. The Merchant app is
 no longer a shell and its **MUST scope is complete**; §5's table is the
 summary, this section is the detail.
 
+### Identifier note — M-AV, not M-13
+
+The availability work (Normal / Busy / Paused) is labelled `M13` inside its
+own design package, which collides with `docs/design/BANHAO-UX-SPEC-V1.md` §6,
+where **M-13 is Earnings** and **M-14 is Settings / staff / profile**. Its
+canonical identifier is **`M-AV`** (DEC-041), extending the `AV-` namespace
+the work already uses (`AV-Q01…Q04`, `AV-D01…D04`, `AV-T1…T5`, `AV-E5`);
+design states map `M-13.A/B/C → M-AV.A/B/C`. The two UX-SPEC slots keep their
+meanings, no availability item is added to the merchant roadmap, and Git
+history is not rewritten — commit `7ea20a65` keeps its message.
+
 ### What is built
 
 `apps/merchant` is a **Next.js** app (DEC-APP-003 — never Expo), scoped to one
@@ -509,7 +533,9 @@ M-07/M-08 → M-11/M-12`, and everything up to and including M-07/M-08 exists:
 | M-07 preparing / M-08 ready | Built as the board's per-card actions (`เริ่มทำอาหาร`, `อาหารพร้อม`) |
 | M-11 menu management | **Built** (EVENT-029) — overview by category section, create/edit drawer, inline availability, archive-not-delete, category rename/reorder/archive, option-group editor |
 | M-12 opening hours | **Built** (EVENT-029) — seven days, split shifts, all seven validation rules, one atomic save of the whole week |
-| M-06 reject (SHOULD), M-09, M-10, M-13, M-14 | **Not built — no design artifact exists.** See the blocker below |
+| M-10 restaurant profile | **Built** (`20044391`) — from `docs/design/BANHAO M-10 Restaurant Profile.dc.html` |
+| **M-AV** availability (NORMAL / BUSY / PAUSED) | **Built** (`7ea20a65`, DEC-041) — board-header mode control, prep-time choice while Busy, pause confirmation, guarded transitions, merchant audit. Historically labelled **M-13** in its design package; the canonical identifier is now **M-AV**, because UX-SPEC M-13 is *Earnings*. See §11 |
+| M-06 reject (SHOULD), M-09 (SHOULD), UX-SPEC M-13 earnings / M-14 settings (LATER) | **Not built — no design artifact exists.** See the blocker below |
 
 ### M-05 live verification — PARTIAL PASS (2026-09-01)
 
@@ -528,11 +554,14 @@ below. Treat C-14 as `UNVERIFIED`, not as passing.
 
 ### Open blockers — read before planning merchant work
 
-1. **No design artifact for M-06, M-09, M-10, M-13 or M-14.** Every merchant
-   screen built so far had a committed `docs/design/BANHAO M-NN ….dc.html`
-   first. Do not design these yourself — that is a product decision, not an
-   implementation one. **None of them is `MUST` scope**: M-06/M-09/M-10 are
-   `SHOULD` and M-13/M-14 are `LATER`, so with M-11 and M-12 built this no
+1. **No design artifact for M-06, M-09, or UX-SPEC M-13 / M-14.** Every
+   merchant screen built so far had a committed
+   `docs/design/BANHAO M-NN ….dc.html` first — M-10 and M-AV included, which
+   is why both are now built. Do not design the rest yourself; that is a
+   product decision, not an implementation one. **None of them is `MUST`
+   scope**: M-06/M-09 are `SHOULD` and UX-SPEC M-13 (earnings) / M-14
+   (settings) are `LATER` — and M-13 earnings is additionally money-blocked
+   (BQ-029, Q-032). With M-11, M-12, M-10 and M-AV built this no
    longer blocks launch-critical merchant work. The next `MUST` gap in the
    product is the **Admin app (Phase I)**, which has no design artifact at all.
 2. **C-14 cannot be live-verified with the current test credentials.** The

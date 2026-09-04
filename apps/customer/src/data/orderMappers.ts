@@ -41,6 +41,8 @@ export interface OrderRow {
   placed_at: string;
   /** M-05. `null` for every order accepted before the merchant was asked. */
   prep_minutes: number | null;
+  /** AC-04 / DEC-042. `null` for every order placed before the column existed, and for any order placed at a restaurant that had no estimate to show. */
+  customer_quoted_prep_minutes: number | null;
 }
 
 export interface OrderItemRow {
@@ -150,6 +152,7 @@ export function toOrderDetail(
     deliveryLandmark: order.delivery_landmark,
     placedAt: order.placed_at,
     prepMinutes: order.prep_minutes,
+    customerQuotedPrepMinutes: order.customer_quoted_prep_minutes,
     items,
     statusHistory,
   };

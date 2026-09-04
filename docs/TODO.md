@@ -47,7 +47,7 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 - [ ] Design the remaining Merchant Web UI screens — **no longer blocks launch-critical work**
   - Priority: P2 (was P1)
   - Source: `docs/05-architecture/BANHAO Product Architecture.dc.html`, section "05 — WIREFRAMES"; screen inventory in `docs/design/BANHAO-UX-SPEC-V1.md` §6
-  - Notes: Updated 2026-09-01 (EVENT-029). **The merchant `MUST` scope is complete.** M-01, M-03, M-04, M-05, M-07, M-08, **M-11 and M-12** are all designed AND built (see `CLAUDE.md` §11), each with a committed `docs/design/BANHAO M-NN ….dc.html` artifact first — the established convention held throughout. Still undesigned and unbuilt: M-06 reject dialog, M-09 history and M-10 restaurant profile (`SHOULD`), and M-13/M-14 (`LATER`). Dropped from P1 because none of those is launch-critical. Do not design them inside an implementation task.
+  - Notes: Updated 2026-09-01 (EVENT-029). **The merchant `MUST` scope is complete.** M-01, M-03, M-04, M-05, M-07, M-08, **M-11 and M-12** are all designed AND built (see `CLAUDE.md` §11), each with a committed `docs/design/BANHAO M-NN ….dc.html` artifact first — the established convention held throughout. **Updated 2026-09-04: M-10 restaurant profile (`20044391`) and M-AV availability (`7ea20a65`, DEC-041 — the work formerly labelled M-13) are now designed and built too.** Still undesigned and unbuilt: M-06 reject dialog and M-09 history (`SHOULD`), and UX-SPEC M-13 earnings / M-14 settings (`LATER`) — M-13 earnings is additionally money-blocked (BQ-029, Q-032). Dropped from P1 because none of those is launch-critical. Do not design them inside an implementation task.
 
 - [ ] Design the full Admin Web UI (currently 3 wireframe-level screens only: A-02, A-03, A-12) — **now the top design blocker**
   - Priority: P1
@@ -113,10 +113,15 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## Follow-through, no new decision needed
 
-- [ ] Apply `20260901000002_merchant_catalog_write_functions.sql` to `banhao-dev`, then live-verify M-11 and M-12
+- [ ] Apply `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate) to `banhao-dev`, then live-verify M-AV and the C-14 quoted-estimate caption
   - Priority: P1
-  - Source: EVENT-029
-  - Notes: The migration is merged and proven against a throwaway Postgres by 38 assertions, but has **not** been applied to the dev project — applying it is a deliberate act under explicit instruction, never a side effect of building a screen (`CLAUDE.md` §10). Until it is applied, every M-11/M-12 write endpoint will fail against `banhao-dev`, and neither screen can be walked live the way M-05 was.
+  - Source: DEC-041, DEC-042, `CLAUDE.md` §10
+  - Notes: Both migrations are merged and proven against real PostgreSQL by the Docker domain suite — 22 assertions for M-AV, 16 for AC-04. **Neither has been applied to the dev project, and applying either is a deliberate act under explicit instruction, never a side effect of other work.** Until then the availability modes and the quoted-estimate caption exist only in the repository. `20260901000002` was applied and verified live 2026-09-03; that older entry is closed.
+
+- [ ] Remove the two stray unused imports left by M-10 (`20044391`)
+  - Priority: P1
+  - Source: `pnpm turbo run lint typecheck test build --force`
+  - Notes: `waitFor` in `apps/merchant/src/components/RestaurantProfileForm.test.tsx` and `DomainError` in `apps/api/src/modules/merchant/restaurant-profile.controller.spec.ts`. They fail `@banhao/merchant` lint/typecheck/build and `@banhao/api` lint, which makes the whole workspace gate red; the merchant test suite itself passes (613 tests). Two deletions, belonging to M-10's follow-up.
 
 - [ ] Wire the edit-mode image upload in the M-11 item drawer
   - Priority: P2
