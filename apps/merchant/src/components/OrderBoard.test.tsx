@@ -282,6 +282,14 @@ jest.mock('../repositories', () => ({
       listRestaurantOrders: jest.fn(),
       transitionOrder: jest.fn(),
     },
+    // M-13. Never resolves — irrelevant to M-2.7's own action tests, and a
+    // pending `useAvailability` renders no pill (AvailabilityPill returns
+    // null unless `status === 'ready'`), so the board otherwise behaves
+    // exactly as before this hook existed.
+    merchantAvailability: {
+      getAvailability: jest.fn(() => new Promise(() => {})),
+      setAvailability: jest.fn(() => new Promise(() => {})),
+    },
   },
 }));
 

@@ -20,6 +20,7 @@ import { useCart } from '../hooks/useCart';
 import { repositories } from '../repositories';
 import { formatBaht } from '../lib/money';
 import {
+  formatPrepEstimate,
   formatShopMeta,
   ITEM_PLACEHOLDER_GLYPH,
   SHOP_PLACEHOLDER_GLYPH,
@@ -129,7 +130,20 @@ export function ShopScreen() {
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <Text style={styles.name}>{shop.name}</Text>
-          <Badge label={shop.isOpen ? 'เปิดอยู่' : 'ปิดอยู่'} tone={shop.isOpen ? 'success' : 'neutral'} />
+          {/*
+            M-13. Paused gets its own badge — "หยุดรับออเดอร์ชั่วคราว", never
+            the ordinary "ปิดอยู่" — because a paused shop is explicitly "not
+            closed for the day" (M-13 design § 02). Busy carries no special
+            badge here: "No badge that reads like a warning. Busy is not a
+            defect" (customerRows, shop card row) — a Busy shop reads exactly
+            like an open one, and the estimate line below is where the
+            difference shows.
+          */}
+          {shop.availabilityMode === 'PAUSED' ? (
+            <Badge label="หยุดรับออเดอร์ชั่วคราว" tone="neutral" />
+          ) : (
+            <Badge label={shop.isOpen ? 'เปิดอยู่' : 'ปิดอยู่'} tone={shop.isOpen ? 'success' : 'neutral'} />
+          )}
         </View>
         <Text style={styles.meta}>{formatShopMeta(shop)}</Text>
         {/*
@@ -137,13 +151,46 @@ export function ShopScreen() {
           rendered. Distance needs the deferred geo domain; delivery fee is now
           a resolved flat amount (DEC-035) but is resolved server-side at order
           creation (Phase E), not per-shop here, and `delivery_fee_bands`
-          remains deferred; prep time is not a delivery ETA. Restore this row
-          once those sources exist; do not fill it with placeholders (V1.1
-          rule #10 — money is never invented by the client).
+          remains deferred. Restore this row once those sources exist; do not
+          fill it with placeholders (V1.1 rule #10 — money is never invented
+          by the client).
         */}
+        {/*
+          M-13. The one preparation-time slot the design calls for — "One
+          slot, one number, whichever mode is in force" — never a delivery
+          ETA (`prepEstimateMinutes`'s own doc comment). Null renders nothing,
+          matching AV-E5 rather than inventing a figure.
+        */}
+        {formatPrepEstimate(shop) ? (
+          <Text style={styles.hours} testID="shop-prep-estimate">
+            🍳 {formatPrepEstimate(shop)}
+          </Text>
+        ) : null}
         {shop.todayHours ? <Text style={styles.hours}>🕐 {shop.todayHours}</Text> : null}
         {shop.addressLine ? <Text style={styles.address}>📍 {shop.addressLine}</Text> : null}
       </View>
+
+      {shop.availabilityMode === 'BUSY' && shop.isOpen ? (
+        // customerRows, "Shop page" / BUSY: "an informational line above the
+        // menu... Placed before the menu so it is read before choosing, not
+        // at checkout." Reuses the closed banner's visual treatment — same
+        // component, different copy — rather than introducing a new style.
+        <View style={styles.closedBanner} testID="banner-shop-busy">
+          <Text style={styles.closedBannerTitle}>ร้านกำลังยุ่ง — เวลาทำอาหารนานกว่าปกติ</Text>
+        </View>
+      ) : null}
+
+      {shop.availabilityMode === 'PAUSED' && shop.isOpen ? (
+        // customerRows, "Shop page" / PAUSE: "Menu still browsable... with
+        // the temporary wording stated once." Shown only when the shop would
+        // otherwise read as open — a shop that is ALSO outside its hours
+        // renders the ordinary closed banner below instead, so the customer
+        // never sees two contradictory banners for one press of new orders.
+        <View style={styles.closedBanner} testID="banner-shop-paused">
+          <Text style={styles.closedBannerTitle}>ร้านหยุดรับออเดอร์ชั่วคราว</Text>
+          <Text style={styles.meta}>ออเดอร์ที่มีอยู่แล้วดำเนินการตามปกติ</Text>
+        </View>
+      ) : null}
 
       {!shop.isOpen ? (
         // UX-SPEC § 5.3 — a single non-dismissable banner, not a screen

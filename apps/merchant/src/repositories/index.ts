@@ -33,12 +33,17 @@ import { createMerchantOrdersRepository, type MerchantOrdersRepository } from '.
 import { createMerchantMenuRepository, type MerchantMenuRepository } from './merchantMenu';
 import { createMerchantHoursRepository, type MerchantHoursRepository } from './merchantHours';
 import { createMerchantProfileRepository, type MerchantProfileRepository } from './merchantProfile';
+import {
+  createMerchantAvailabilityRepository,
+  type MerchantAvailabilityRepository,
+} from './merchantAvailability';
 
 export * from './merchantRestaurant';
 export * from './merchantOrders';
 export * from './merchantMenu';
 export * from './merchantHours';
 export * from './merchantProfile';
+export * from './merchantAvailability';
 
 export interface Repositories {
   merchantRestaurant: MerchantRestaurantRepository;
@@ -46,6 +51,7 @@ export interface Repositories {
   merchantMenu: MerchantMenuRepository;
   merchantHours: MerchantHoursRepository;
   merchantProfile: MerchantProfileRepository;
+  merchantAvailability: MerchantAvailabilityRepository;
 }
 
 export const repositories: Repositories = {
@@ -54,4 +60,5 @@ export const repositories: Repositories = {
   merchantMenu: createMerchantMenuRepository(supabase),
   merchantHours: createMerchantHoursRepository(supabase),
   merchantProfile: createMerchantProfileRepository(supabase),
+  merchantAvailability: createMerchantAvailabilityRepository(supabase),
 };

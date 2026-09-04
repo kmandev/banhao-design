@@ -23,6 +23,7 @@ import type {
   MenuOption,
   MenuOptionGroup,
   OpeningWindow,
+  RestaurantAvailabilityMode,
   Shop,
 } from '../domain/catalog';
 
@@ -40,6 +41,8 @@ export interface RestaurantRow {
   lng: number | null;
   status: string;
   temporarily_closed_until: string | null;
+  availability_mode: RestaurantAvailabilityMode;
+  busy_prep_minutes: number | null;
   min_order_satang: number | null;
   avg_prep_minutes: number | null;
   rating_avg: number | null;
@@ -108,7 +111,7 @@ export function toOpeningWindow(row: RestaurantHoursRow): OpeningWindow {
 export function toShop(
   row: RestaurantRow,
   hours: OpeningWindow[],
-  derived: { isOpen: boolean; todayHours: string | null },
+  derived: { isOpen: boolean; todayHours: string | null; isOrderable: boolean },
 ): Shop {
   return {
     id: row.id,
@@ -125,9 +128,12 @@ export function toShop(
     ratingAvg: row.rating_avg,
     ratingCount: row.rating_count,
     temporarilyClosedUntil: row.temporarily_closed_until,
+    availabilityMode: row.availability_mode,
+    busyPrepMinutes: row.busy_prep_minutes,
     hours,
     isOpen: derived.isOpen,
     todayHours: derived.todayHours,
+    isOrderable: derived.isOrderable,
   };
 }
 

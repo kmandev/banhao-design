@@ -90,6 +90,8 @@ const RESTAURANT_ROW = {
   lng: null,
   status: 'ACTIVE',
   temporarily_closed_until: null,
+  availability_mode: 'NORMAL',
+  busy_prep_minutes: null,
   min_order_satang: null,
   avg_prep_minutes: null,
   rating_avg: 4.8,

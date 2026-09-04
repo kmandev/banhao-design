@@ -347,6 +347,35 @@ describe('ITEM_UNAVAILABLE', () => {
   });
 });
 
+describe('RESTAURANT_CLOSED (M-13 — the restaurant paused between the cart and this press)', () => {
+  const paused = () =>
+    jest.fn().mockRejectedValue(new CartConflictError({ kind: 'RESTAURANT_CLOSED' }));
+
+  it('does not proceed to payment', async () => {
+    stub({ validate: paused() });
+    await pressPlaceOrder();
+
+    await waitFor(() => expect(screen.getByTestId('checkout-restaurant-closed')).toBeTruthy());
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('renders the paused copy, no per-line diff', async () => {
+    stub({ validate: paused() });
+    await pressPlaceOrder();
+
+    await waitFor(() => expect(screen.getByText('ร้านหยุดรับออเดอร์ชั่วคราว')).toBeTruthy());
+  });
+
+  it('never initiates order creation — no payment, cart untouched', async () => {
+    const createOrder = jest.fn().mockResolvedValue(CREATED_ORDER);
+    stub({ validate: paused(), createOrder });
+    await pressPlaceOrder();
+
+    await waitFor(() => expect(screen.getByTestId('checkout-restaurant-closed')).toBeTruthy());
+    expect(createOrder).not.toHaveBeenCalled();
+  });
+});
+
 describe('transport / system failure — fails closed', () => {
   it.each([
     ['offline', 'Network request failed', 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต'],

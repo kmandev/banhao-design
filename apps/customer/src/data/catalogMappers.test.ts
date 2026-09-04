@@ -24,6 +24,8 @@ const RESTAURANT: RestaurantRow = {
   lng: 105.42,
   status: 'ACTIVE',
   temporarily_closed_until: null,
+  availability_mode: 'NORMAL',
+  busy_prep_minutes: null,
   min_order_satang: 5000,
   avg_prep_minutes: 20,
   rating_avg: 4.8,
@@ -42,7 +44,7 @@ const ITEM: MenuItemRow = {
   sort_order: 2,
 };
 
-const DERIVED = { isOpen: true, todayHours: '09:00 - 20:00' };
+const DERIVED = { isOpen: true, todayHours: '09:00 - 20:00', isOrderable: true };
 
 describe('toShop', () => {
   it('maps every column to its domain field', () => {
@@ -63,9 +65,12 @@ describe('toShop', () => {
       ratingAvg: 4.8,
       ratingCount: 326,
       temporarilyClosedUntil: null,
+      availabilityMode: 'NORMAL',
+      busyPrepMinutes: null,
       hours: [],
       isOpen: true,
       todayHours: '09:00 - 20:00',
+      isOrderable: true,
     });
   });
 
@@ -110,9 +115,21 @@ describe('toShop', () => {
   });
 
   it('carries the derived availability through untouched', () => {
-    const shop = toShop(RESTAURANT, [], { isOpen: false, todayHours: null });
+    const shop = toShop(RESTAURANT, [], { isOpen: false, todayHours: null, isOrderable: false });
     expect(shop.isOpen).toBe(false);
     expect(shop.todayHours).toBeNull();
+    expect(shop.isOrderable).toBe(false);
+  });
+
+  it('M-13: maps availability_mode and busy_prep_minutes through untouched', () => {
+    const busy = toShop({ ...RESTAURANT, availability_mode: 'BUSY', busy_prep_minutes: 30 }, [], DERIVED);
+    expect(busy.availabilityMode).toBe('BUSY');
+    expect(busy.busyPrepMinutes).toBe(30);
+  });
+
+  it('M-13: never writes avg_prep_minutes to signal Busy — the two fields stay independent (AV-D01)', () => {
+    const busy = toShop({ ...RESTAURANT, availability_mode: 'BUSY', busy_prep_minutes: 30 }, [], DERIVED);
+    expect(busy.avgPrepMinutes).toBe(RESTAURANT.avg_prep_minutes);
   });
 });
 

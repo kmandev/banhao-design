@@ -16,7 +16,13 @@ import {
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
-import { formatRating, formatShopMeta, SHOP_PLACEHOLDER_GLYPH } from '../lib/catalogDisplay';
+import {
+  formatPrepEstimate,
+  formatRating,
+  formatShopMeta,
+  shopCardBadge,
+  SHOP_PLACEHOLDER_GLYPH,
+} from '../lib/catalogDisplay';
 import { presentLoadError } from '../lib/loadError';
 import type { CustomerStackParamList } from '../navigation/types';
 
@@ -148,10 +154,17 @@ export function HomeScreen() {
             // PC-Q-002: distance and delivery fee have no authoritative
             // source, so the meta line carries only what the catalog knows;
             // today's hours are appended per UX-SPEC § 5.3 ("open/closed with
-            // today's hours").
-            meta={[formatShopMeta(shop), shop.todayHours].filter(Boolean).join(' · ')}
-            badge={{ label: shop.isOpen ? 'เปิดอยู่' : 'ปิดอยู่', tone: shop.isOpen ? 'success' : 'neutral' }}
-            closed={!shop.isOpen}
+            // today's hours"). M-13 adds the in-force preparation estimate —
+            // "the busy estimate in the slot the normal estimate uses"
+            // (customerRows) — null when there is none to show.
+            meta={[formatShopMeta(shop), formatPrepEstimate(shop), shop.todayHours]
+              .filter(Boolean)
+              .join(' · ')}
+            badge={shopCardBadge(shop)}
+            // M-13: not-orderable (Paused, or ordinarily closed) reads as
+            // "closed" on the card either way — the badge above is what
+            // tells the two apart.
+            closed={!shop.isOrderable}
             onPress={() => navigation.navigate('Shop', { shopId: shop.id })}
             testID={`shop-card-${shop.id}`}
           />

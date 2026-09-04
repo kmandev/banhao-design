@@ -48,9 +48,12 @@ const SHOP: Shop = {
   ratingAvg: 4.8,
   ratingCount: 326,
   temporarilyClosedUntil: null,
+  availabilityMode: 'NORMAL',
+  busyPrepMinutes: null,
   hours: [],
   isOpen: true,
   todayHours: '09:00 - 20:00',
+  isOrderable: true,
 };
 
 const AVAILABLE_ITEM: MenuItem = {

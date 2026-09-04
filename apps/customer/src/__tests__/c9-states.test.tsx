@@ -46,9 +46,12 @@ const OPEN_SHOP: Shop = {
   ratingAvg: 4.8,
   ratingCount: 326,
   temporarilyClosedUntil: null,
+  availabilityMode: 'NORMAL',
+  busyPrepMinutes: null,
   hours: [{ dayOfWeek: 0, opensAt: '09:00:00', closesAt: '20:00:00' }],
   isOpen: true,
   todayHours: '09:00 - 20:00',
+  isOrderable: true,
 };
 
 const CLOSED_SHOP: Shop = {
@@ -58,6 +61,7 @@ const CLOSED_SHOP: Shop = {
   hours: [{ dayOfWeek: 1, opensAt: '08:00:00', closesAt: '20:00:00' }],
   isOpen: false,
   todayHours: null,
+  isOrderable: false,
 };
 
 const ITEM: MenuItem = {

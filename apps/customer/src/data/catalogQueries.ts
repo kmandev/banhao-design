@@ -27,7 +27,7 @@ import type {
 } from './catalogMappers';
 
 const RESTAURANT_COLUMNS =
-  'id, name, description, cuisine, image_url, phone, address_line, lat, lng, status, temporarily_closed_until, min_order_satang, avg_prep_minutes, rating_avg, rating_count';
+  'id, name, description, cuisine, image_url, phone, address_line, lat, lng, status, temporarily_closed_until, availability_mode, busy_prep_minutes, min_order_satang, avg_prep_minutes, rating_avg, rating_count';
 
 const HOURS_COLUMNS = 'restaurant_id, day_of_week, opens_at, closes_at';
 const CATEGORY_COLUMNS = 'id, restaurant_id, name, sort_order';

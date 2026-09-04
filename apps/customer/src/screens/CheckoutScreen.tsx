@@ -249,6 +249,26 @@ export function CheckoutScreen() {
         other screen uses, so an unreachable API reads as "could not check",
         never as an accepted cart.
       */}
+      {/*
+        M-13. The restaurant paused between showing the cart and this press.
+        No per-line diff to show — unlike PRICE_CHANGED/ITEM_UNAVAILABLE, this
+        is one fact about the whole order, so there is one action: acknowledge
+        and go back. The cart itself is untouched, matching customerRows'
+        "Cart preserved" for this case.
+      */}
+      {conflict?.kind === 'RESTAURANT_CLOSED' ? (
+        <Card style={styles.conflict} testID="checkout-restaurant-closed">
+          <Text style={styles.conflictTitle}>ร้านหยุดรับออเดอร์ชั่วคราว</Text>
+          <Text style={styles.conflictItem}>ตะกร้าของคุณยังอยู่ครบ ลองอีกครั้งภายหลัง</Text>
+          <Button
+            label="กลับไปที่ร้าน"
+            variant="secondary"
+            onPress={() => navigation.goBack()}
+            testID="button-restaurant-closed-back"
+          />
+        </Card>
+      ) : null}
+
       {systemError ? (
         <Card style={styles.conflict} testID="checkout-validation-error">
           <Text style={styles.conflictTitle}>{presentLoadError(systemError).title}</Text>

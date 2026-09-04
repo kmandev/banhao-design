@@ -30,6 +30,15 @@
 
 import type { Satang } from '@banhao/types';
 
+/**
+ * M-13. `restaurants.availability_mode` — Normal/Busy/Paused, an operational
+ * mode entirely separate from order/payment/delivery state (DEC-018). Busy
+ * changes only the preparation estimate a customer is quoted before ordering;
+ * Paused blocks new orders while leaving the shop visible and every existing
+ * order untouched.
+ */
+export type RestaurantAvailabilityMode = 'NORMAL' | 'BUSY' | 'PAUSED';
+
 /** One opening window, from `restaurant_hours`. */
 export interface OpeningWindow {
   /** 0 = Sunday … 6 = Saturday, matching `restaurant_hours.day_of_week`. */
@@ -62,13 +71,19 @@ export interface Shop {
   ratingCount: number;
   /** ISO timestamp; a temporary closure that may be past, current or future. */
   temporarilyClosedUntil: string | null;
+  /** M-13. Never restaurants.status, never temporarily_closed_until — a separate, additive field. */
+  availabilityMode: RestaurantAvailabilityMode;
+  /** M-13. Set only while `availabilityMode === 'BUSY'`; one of 10/20/30/45/60. */
+  busyPrepMinutes: number | null;
   hours: OpeningWindow[];
 
   // --- derived, not stored -------------------------------------------------
-  /** Whether the shop is taking orders *right now* (Asia/Bangkok). */
+  /** Whether the shop is open per its hours *right now* (Asia/Bangkok) — unchanged by M-13; Busy/Paused never alter this. */
   isOpen: boolean;
   /** Today's window formatted for display, or null when closed all day. */
   todayHours: string | null;
+  /** M-13. `isOpen && availabilityMode !== 'PAUSED'` — whether a NEW order can be placed right now. */
+  isOrderable: boolean;
 }
 
 /** A menu section within one restaurant (`menu_categories`). */

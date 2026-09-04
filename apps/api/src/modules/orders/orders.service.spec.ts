@@ -310,6 +310,7 @@ describe('OrdersService.create — create_order failure mapping', () => {
     ['create_order: customer x has no open cart', 'CART_EMPTY'],
     ['create_order: unavailable items in cart: ของหมด', 'ITEM_UNAVAILABLE'],
     ['create_order: restaurant r1 is not ACTIVE', 'RESTAURANT_CLOSED'],
+    ['create_order: restaurant r1 is PAUSED and not accepting new orders', 'RESTAURANT_CLOSED'],
     ['create_order: address a1 is not a usable address for customer c1', 'NOT_FOUND'],
     ['connection reset', 'INTERNAL_ERROR'],
   ])('maps %j to %s', async (message, code) => {

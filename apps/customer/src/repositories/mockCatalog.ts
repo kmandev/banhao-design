@@ -54,9 +54,12 @@ function adaptShop(shop: MockShop): Shop {
     ratingAvg: Number.isNaN(rating) ? null : rating,
     ratingCount: shop.reviewCount,
     temporarilyClosedUntil: null,
+    availabilityMode: 'NORMAL',
+    busyPrepMinutes: null,
     hours: [],
     isOpen: shop.isOpen,
     todayHours: shop.openingHours,
+    isOrderable: shop.isOpen,
   };
 }
 

@@ -55,7 +55,7 @@ function groupHours(rows: RestaurantHoursRow[]): Map<string, RestaurantHoursRow[
 
 function buildShop(row: RestaurantRow, hoursRows: RestaurantHoursRow[], now: Date): Shop {
   const hours = hoursRows.map(toOpeningWindow);
-  return toShop(row, hours, deriveAvailability(hours, row.temporarily_closed_until, now));
+  return toShop(row, hours, deriveAvailability(hours, row.temporarily_closed_until, row.availability_mode, now));
 }
 
 /**

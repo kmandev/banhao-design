@@ -1,15 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useOrderBoard } from '../hooks/useOrderBoard';
 import { useOrderActions } from '../hooks/useOrderActions';
 import { useOrderAlerts } from '../hooks/useOrderAlerts';
+import { useAvailability } from '../hooks/useAvailability';
 import type { MerchantOrderRealtimeStatus } from '../hooks/useOrderRealtime';
 import type { MerchantOrderSummary } from '../domain/order';
 import { BOARD_COLUMNS, groupOrdersByColumn, type BoardColumnId, type OrderActionCommand } from '../lib/orderBoardDisplay';
 import { OrderCard } from './OrderCard';
 import { OrderDetailPanel } from './OrderDetailPanel';
 import { AcceptConfirmDialog } from './AcceptConfirmDialog';
+import { AvailabilityDialog, type AvailabilityDialogMode } from './AvailabilityDialog';
 
 /**
  * The Order Board (M-2.6) — design
@@ -299,18 +301,126 @@ function ConnectionBanner({ tone, text }: { tone: 'reconnecting' | 'error'; text
  * from `useOrderAlerts`'s return and `isDegraded(realtimeStatus)`, both
  * computed by the caller.
  */
+/**
+ * M-13. The board header's mode pill and its 1-2 actions — added into the
+ * existing M-2.6/M-03 header bar, not a new panel (seams table: "The mode
+ * control is added into it, not pla[ced elsewhere]"). Pure presentation, same
+ * as the rest of this bar: every value comes from `useAvailability`'s
+ * server-confirmed state (AV-D04 — never an optimistic mode), and every
+ * action is a callback the caller owns.
+ */
+function AvailabilityPill({
+  state,
+  onSetBusy,
+  onSetPaused,
+  onResume,
+}: {
+  state: import('../hooks/useAvailability').AvailabilityState;
+  onSetBusy: () => void;
+  onSetPaused: () => void;
+  onResume: () => void;
+}) {
+  if (state.status !== 'ready') return null;
+
+  const { mode } = state;
+  const palette =
+    mode === 'PAUSED'
+      ? { bg: '#FBEAEA', border: '#F0C9C9', dot: '#B23030', fg: '#B23030', label: 'หยุดรับออเดอร์ชั่วคราว' }
+      : mode === 'BUSY'
+        ? { bg: '#FDF3E6', border: '#F0DFC4', dot: '#8A6A3A', fg: '#8A6A3A', label: 'กำลังยุ่ง' }
+        : { bg: '#F3FAF6', border: '#CDE7DB', dot: '#0A6B49', fg: '#0A6B49', label: 'เปิดปกติ' };
+
+  return (
+    <>
+      <div
+        role="status"
+        data-testid="availability-pill"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          height: 44,
+          padding: '0 14px',
+          borderRadius: 12,
+          border: `1px solid ${palette.border}`,
+          background: palette.bg,
+          fontSize: 13.5,
+          fontWeight: 600,
+          color: palette.fg,
+        }}
+      >
+        <span style={{ width: 9, height: 9, borderRadius: '50%', background: palette.dot }} aria-hidden />
+        {palette.label}
+        {mode === 'BUSY' && state.busyPrepMinutes !== null ? ` · ${state.busyPrepMinutes} นาที` : null}
+      </div>
+
+      {mode === 'PAUSED' ? (
+        <button
+          type="button"
+          data-testid="availability-action-resume"
+          onClick={onResume}
+          style={availabilityActionButtonStyle}
+        >
+          เปิดรับออเดอร์
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            data-testid="availability-action-busy"
+            onClick={onSetBusy}
+            style={availabilityActionButtonStyle}
+          >
+            เปลี่ยนเป็น กำลังยุ่ง
+          </button>
+          <button
+            type="button"
+            data-testid="availability-action-pause"
+            onClick={onSetPaused}
+            style={{ ...availabilityActionButtonStyle, borderColor: '#E0AFAF', color: '#B23030' }}
+          >
+            หยุดรับออเดอร์
+          </button>
+        </>
+      )}
+    </>
+  );
+}
+
+const availabilityActionButtonStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  height: 44,
+  padding: '0 16px',
+  borderRadius: 12,
+  border: '1px solid #E9E0D5',
+  background: '#fff',
+  fontSize: 13.5,
+  fontWeight: 600,
+  color: '#5A4E42',
+  cursor: 'pointer',
+};
+
 function BoardHeaderBar({
   degraded,
   soundEnabled,
   audioBlocked,
   todayCount,
   onToggleSound,
+  availability,
+  onSetBusy,
+  onSetPaused,
+  onResume,
 }: {
   degraded: boolean;
   soundEnabled: boolean;
   audioBlocked: boolean;
   todayCount: number;
   onToggleSound: () => void;
+  availability: import('../hooks/useAvailability').AvailabilityState;
+  onSetBusy: () => void;
+  onSetPaused: () => void;
+  onResume: () => void;
 }) {
   const pillColor = degraded ? '#B98418' : '#0F8B5F';
   const pillLabel = degraded ? 'กำลังเชื่อมต่อใหม่' : 'เชื่อมต่ออยู่';
@@ -330,6 +440,10 @@ function BoardHeaderBar({
         border: '1px solid #EAE1D6',
       }}
     >
+      <AvailabilityPill state={availability} onSetBusy={onSetBusy} onSetPaused={onSetPaused} onResume={onResume} />
+
+      <div style={{ width: 1, alignSelf: 'stretch', background: '#EAE1D6' }} aria-hidden />
+
       <div
         role="status"
         style={{
@@ -405,6 +519,11 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
   // order at a time, so a command on one card leaves every other card fully
   // interactive and never draws a board-wide overlay.
   const actions = useOrderActions();
+  // M-13. Independent of `actions` — availability is a restaurant-level
+  // mode, not a per-order command, and reuses this hook's own server-read
+  // state exactly as `actions` reuses none of `useOrderBoard`'s.
+  const availability = useAvailability(restaurantId);
+  const [availabilityDialogMode, setAvailabilityDialogMode] = useState<AvailabilityDialogMode>(null);
   const [trayExpanded, setTrayExpanded] = useState(false);
   // Read once per render — not a ticking clock. See the module doc comment.
   const now = Date.now();
@@ -479,6 +598,59 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
     returnFocus();
   }, [returnFocus]);
 
+  /**
+   * M-13. Opening either availability dialog closes the M-04/M-05 overlays
+   * first — never two scrims, never two focus traps, the same discipline
+   * `handleOpenDetail`/`handleCardAction` already hold for each other.
+   */
+  const handleOpenBusyDialog = useCallback(() => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedOrderId(null);
+    setAcceptOrderId(null);
+    setAvailabilityDialogMode('BUSY');
+  }, []);
+
+  const handleOpenPauseDialog = useCallback(() => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSelectedOrderId(null);
+    setAcceptOrderId(null);
+    setAvailabilityDialogMode('PAUSE');
+  }, []);
+
+  const handleCloseAvailabilityDialog = useCallback(() => {
+    setAvailabilityDialogMode(null);
+    returnFocus();
+  }, [returnFocus]);
+
+  // Closes only on success — a failure leaves the dialog open with its own
+  // inline error (`availability.saveState`), the same posture
+  // `AcceptConfirmDialog` holds for a failed accept.
+  const handleConfirmBusy = useCallback(
+    (busyPrepMinutes: number) => {
+      void availability.setBusy(busyPrepMinutes).then((succeeded) => {
+        if (!succeeded) return;
+        setAvailabilityDialogMode(null);
+        returnFocus();
+      });
+    },
+    [availability, returnFocus],
+  );
+
+  const handleConfirmPause = useCallback(() => {
+    void availability.setPaused().then((succeeded) => {
+      if (!succeeded) return;
+      setAvailabilityDialogMode(null);
+      returnFocus();
+    });
+  }, [availability, returnFocus]);
+
+  // AV-T2/AV-T5 — Busy/Paused -> Normal is "One tap", no confirmation
+  // dialog: the design states this explicitly for both resume transitions,
+  // unlike Normal -> Paused, which requires one because it stops revenue.
+  const handleResumeNormal = useCallback(() => {
+    void availability.setNormal();
+  }, [availability]);
+
   const handleConfirmAccept = useCallback(
     (order: MerchantOrderSummary, prepMinutes: number) => {
       // Fire and forget. The dialog is NOT closed here: HTTP success is not
@@ -512,19 +684,20 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
   useEffect(() => {
     setSelectedOrderId(null);
     setAcceptOrderId(null);
+    setAvailabilityDialogMode(null);
     openerRef.current = null;
   }, [restaurantId]);
 
-  // Body scroll is locked while either overlay is open, released on close or
+  // Body scroll is locked while any overlay is open, released on close or
   // unmount (design §04 "SCROLL": "the board behind it does not [scroll]").
   useEffect(() => {
-    if (!selectedOrderId && !acceptOrderId) return;
+    if (!selectedOrderId && !acceptOrderId && !availabilityDialogMode) return;
     const original = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = original;
     };
-  }, [selectedOrderId, acceptOrderId]);
+  }, [selectedOrderId, acceptOrderId, availabilityDialogMode]);
 
   return (
     <div ref={boardContainerRef} tabIndex={-1} style={{ position: 'relative', outline: 'none' }}>
@@ -583,6 +756,10 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
         audioBlocked={alerts.audioBlocked}
         todayCount={alerts.todayCount}
         onToggleSound={alerts.toggleSound}
+        availability={availability.state}
+        onSetBusy={handleOpenBusyDialog}
+        onSetPaused={handleOpenPauseDialog}
+        onResume={handleResumeNormal}
       />
 
       {loading ? (
@@ -731,6 +908,14 @@ export function OrderBoard({ restaurantId }: OrderBoardProps) {
         failure={acceptOrder ? actions.failureFor(acceptOrder) : null}
         onConfirm={handleConfirmAccept}
         onClose={handleCloseAccept}
+      />
+
+      <AvailabilityDialog
+        mode={availabilityDialogMode}
+        saveState={availability.saveState}
+        onConfirmBusy={handleConfirmBusy}
+        onConfirmPause={handleConfirmPause}
+        onClose={handleCloseAvailabilityDialog}
       />
     </div>
   );

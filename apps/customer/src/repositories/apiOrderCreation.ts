@@ -81,13 +81,21 @@ export function createApiOrderCreationRepository(
               items: toUnavailableItems(cause.details),
             });
           }
+
+          // M-13: reachable the same way PRICE_CHANGED/ITEM_UNAVAILABLE are
+          // here — a genuine race between the last /cart/validate call and
+          // this one (the restaurant paused in between), not a bug. Same
+          // conflict, same UI, whichever of the two calls detects it.
+          if (cause.code === 'RESTAURANT_CLOSED') {
+            throw new CartConflictError({ kind: 'RESTAURANT_CLOSED' });
+          }
         }
 
-        // Everything else — CART_EMPTY, MIXED_RESTAURANT, RESTAURANT_CLOSED,
-        // NOT_FOUND (address), NOT_IMPLEMENTED (DEC-E-01's fee gate),
-        // VALIDATION_FAILED, INTERNAL_ERROR, a network throw — is not a
-        // conflict the customer can act on. It stays a failure, so the
-        // caller fails closed rather than treating it as a created order.
+        // Everything else — CART_EMPTY, MIXED_RESTAURANT, NOT_FOUND
+        // (address), NOT_IMPLEMENTED (DEC-E-01's fee gate), VALIDATION_FAILED,
+        // INTERNAL_ERROR, a network throw — is not a conflict the customer
+        // can act on. It stays a failure, so the caller fails closed rather
+        // than treating it as a created order.
         throw cause;
       }
     },

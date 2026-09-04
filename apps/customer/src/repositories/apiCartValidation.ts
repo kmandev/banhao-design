@@ -65,7 +65,7 @@ export function createApiCartValidationRepository(
         });
       } catch (cause) {
         if (cause instanceof ApiClientError) {
-          // Only these two are conflicts the customer can act on. Everything
+          // These are the conflicts the customer can act on. Everything
           // else — 401, 500, INVALID_RESPONSE, a network throw — falls through
           // and stays a failure, so the caller fails closed rather than
           // treating an unreachable server as an accepted cart.
@@ -81,6 +81,13 @@ export function createApiCartValidationRepository(
               kind: 'ITEM_UNAVAILABLE',
               items: toUnavailableItems(cause.details),
             });
+          }
+
+          // M-13: the restaurant is Paused. CartService raises this for the
+          // identical condition `POST /orders` already reports, so both
+          // revalidation calls agree.
+          if (cause.code === 'RESTAURANT_CLOSED') {
+            throw new CartConflictError({ kind: 'RESTAURANT_CLOSED' });
           }
         }
 

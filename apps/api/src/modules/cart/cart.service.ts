@@ -18,6 +18,10 @@ import { DomainError } from '../../common/errors/domain-error';
  * error is raised here — an empty cart or no cart at all is a valid, zero
  * result, because `CART_EMPTY` belongs to `POST /orders`'s failure list, not
  * this endpoint's.
+ *
+ * M-13 adds one more: `RESTAURANT_CLOSED` when the restaurant is Paused
+ * (`availability_mode = 'PAUSED'`) — the same code `POST /orders` already
+ * raises for the identical condition, so the two revalidation paths agree.
  */
 
 interface CartRow {
@@ -49,6 +53,7 @@ interface MenuItemRow {
 interface RestaurantRow {
   id: string;
   status: string;
+  availability_mode: string;
 }
 
 interface MenuOptionGroupRow {
@@ -145,6 +150,17 @@ export class CartService {
 
     const itemsById = new Map(menuItems.map((row) => [row.id, row]));
     const restaurantIsActive = restaurant?.status === 'ACTIVE';
+
+    // M-13. Checked ahead of the per-item loop below and reported as its own
+    // named conflict — RESTAURANT_CLOSED, the same code POST /orders already
+    // raises for the identical condition (OrdersService.raiseFromCreateOrderError),
+    // never ITEM_UNAVAILABLE, which would tell the customer a dish is gone
+    // when the kitchen has simply stopped taking new orders. Only reachable
+    // while status = ACTIVE (a Paused restaurant's status is untouched), so
+    // this never changes the pre-existing non-ACTIVE handling below.
+    if (restaurantIsActive && restaurant?.availability_mode === 'PAUSED') {
+      throw new DomainError('RESTAURANT_CLOSED', { details: { restaurantId: cart.restaurant_id } });
+    }
 
     const unavailable = items.filter((item) => {
       const menuItem = itemsById.get(item.menu_item_id);
@@ -321,7 +337,7 @@ export class CartService {
   private async fetchRestaurant(restaurantId: string): Promise<RestaurantRow | null> {
     const { data, error } = await this.supabase.admin
       .from('restaurants')
-      .select('id, status')
+      .select('id, status, availability_mode')
       .eq('id', restaurantId)
       .maybeSingle<RestaurantRow>();
 

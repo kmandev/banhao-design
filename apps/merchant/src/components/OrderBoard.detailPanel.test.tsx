@@ -40,6 +40,11 @@ jest.mock('../repositories', () => ({
       transitionOrder: jest.fn(() => new Promise(() => {})), // never resolves — the test asserts no panel opens, not the transition's outcome
       getOrderDetail: jest.fn(),
     },
+    // M-13. Never resolves — irrelevant to M-04's own panel tests.
+    merchantAvailability: {
+      getAvailability: jest.fn(() => new Promise(() => {})),
+      setAvailability: jest.fn(() => new Promise(() => {})),
+    },
   },
 }));
 

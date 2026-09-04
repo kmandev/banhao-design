@@ -168,18 +168,38 @@ describe('windowsForDay', () => {
 });
 
 describe('deriveAvailability', () => {
-  it('returns both derived values together', () => {
-    expect(deriveAvailability(NINE_TO_EIGHT, null, SUNDAY('07:00'))).toEqual({
+  it('returns every derived value together', () => {
+    expect(deriveAvailability(NINE_TO_EIGHT, null, 'NORMAL', SUNDAY('07:00'))).toEqual({
       isOpen: true,
       todayHours: '09:00 - 20:00',
+      isOrderable: true,
     });
   });
 
   it('reports closed-but-known-hours, which is what the closed screen shows', () => {
-    expect(deriveAvailability(NINE_TO_EIGHT, null, SUNDAY('14:00'))).toEqual({
+    expect(deriveAvailability(NINE_TO_EIGHT, null, 'NORMAL', SUNDAY('14:00'))).toEqual({
       isOpen: false,
       todayHours: '09:00 - 20:00',
+      isOrderable: false,
     });
+  });
+
+  it('M-13: Busy stays isOpen and isOrderable — only the estimate changes elsewhere', () => {
+    const result = deriveAvailability(NINE_TO_EIGHT, null, 'BUSY', SUNDAY('07:00'));
+    expect(result.isOpen).toBe(true);
+    expect(result.isOrderable).toBe(true);
+  });
+
+  it('M-13: Paused stays isOpen (not the ordinary closed badge) but is not orderable', () => {
+    const result = deriveAvailability(NINE_TO_EIGHT, null, 'PAUSED', SUNDAY('07:00'));
+    expect(result.isOpen).toBe(true);
+    expect(result.isOrderable).toBe(false);
+  });
+
+  it('M-13: Paused outside opening hours is neither open nor orderable — hours stay authoritative', () => {
+    const result = deriveAvailability(NINE_TO_EIGHT, null, 'PAUSED', SUNDAY('14:00'));
+    expect(result.isOpen).toBe(false);
+    expect(result.isOrderable).toBe(false);
   });
 });
 

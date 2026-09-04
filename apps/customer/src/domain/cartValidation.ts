@@ -64,7 +64,11 @@ export interface UnavailableItem {
  */
 export type CartConflict =
   | { kind: 'PRICE_CHANGED'; changes: PriceChange[] }
-  | { kind: 'ITEM_UNAVAILABLE'; items: UnavailableItem[] };
+  | { kind: 'ITEM_UNAVAILABLE'; items: UnavailableItem[] }
+  // M-13: the restaurant paused (or otherwise closed) between when the cart
+  // was shown and the place-order press. Carries nothing beyond its kind —
+  // there is no per-line diff to show, unlike PRICE_CHANGED/ITEM_UNAVAILABLE.
+  | { kind: 'RESTAURANT_CLOSED' };
 
 /**
  * A conflict the server named, raised so a caller cannot mistake it for a

@@ -139,10 +139,17 @@ describe('apiOrderCreation — conflict mapping', () => {
     });
   });
 
+  it('maps RESTAURANT_CLOSED to CartConflictError (M-13 — a Paused restaurant)', async () => {
+    const { client } = stubClient({ error: new ApiClientError(409, { code: 'RESTAURANT_CLOSED' }) });
+
+    const promise = createApiOrderCreationRepository(client).create(INPUT);
+    await expect(promise).rejects.toBeInstanceOf(CartConflictError);
+    await expect(promise).rejects.toMatchObject({ conflict: { kind: 'RESTAURANT_CLOSED' } });
+  });
+
   it.each<ErrorCode>([
     'CART_EMPTY',
     'MIXED_RESTAURANT',
-    'RESTAURANT_CLOSED',
     'NOT_FOUND',
     'NOT_IMPLEMENTED',
     'VALIDATION_FAILED',

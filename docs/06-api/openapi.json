@@ -127,7 +127,7 @@
             "description": "Missing or invalid access token"
           },
           "409": {
-            "description": "ITEM_UNAVAILABLE, PRICE_CHANGED, or MIXED_RESTAURANT"
+            "description": "ITEM_UNAVAILABLE, PRICE_CHANGED, MIXED_RESTAURANT, or RESTAURANT_CLOSED"
           }
         },
         "security": [
@@ -1020,6 +1020,43 @@
           },
           "403": {
             "description": "Not a member of this restaurant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "merchant"
+        ]
+      }
+    },
+    "/api/v1/merchant/restaurants/{restaurantId}/availability": {
+      "put": {
+        "operationId": "RestaurantAvailabilityController_setAvailability",
+        "parameters": [
+          {
+            "name": "restaurantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The saved availability, re-read from the database"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not a member of this restaurant"
+          },
+          "409": {
+            "description": "INVALID_TRANSITION — e.g. PAUSED to BUSY directly is not implemented"
           }
         },
         "security": [

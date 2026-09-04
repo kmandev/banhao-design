@@ -32,7 +32,7 @@ export class CartController {
   @HttpCode(200)
   @ApiOkResponse({ description: "The caller's cart, re-priced from the live catalog" })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
-  @ApiConflictResponse({ description: 'ITEM_UNAVAILABLE, PRICE_CHANGED, or MIXED_RESTAURANT' })
+  @ApiConflictResponse({ description: 'ITEM_UNAVAILABLE, PRICE_CHANGED, MIXED_RESTAURANT, or RESTAURANT_CLOSED' })
   async validate(
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Body() body: unknown,

@@ -43,6 +43,11 @@ jest.mock('../repositories', () => ({
       transitionOrder: jest.fn(),
       getOrderDetail: jest.fn(),
     },
+    // M-13. Never resolves — irrelevant to M-05's own accept-dialog tests.
+    merchantAvailability: {
+      getAvailability: jest.fn(() => new Promise(() => {})),
+      setAvailability: jest.fn(() => new Promise(() => {})),
+    },
   },
 }));
 

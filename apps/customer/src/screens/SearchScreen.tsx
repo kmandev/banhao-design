@@ -8,9 +8,11 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
 import { formatBaht } from '../lib/money';
 import {
+  formatPrepEstimate,
   formatRating,
   formatShopMeta,
   ITEM_PLACEHOLDER_GLYPH,
+  shopCardBadge,
   SHOP_PLACEHOLDER_GLYPH,
 } from '../lib/catalogDisplay';
 import { presentLoadError } from '../lib/loadError';
@@ -87,12 +89,12 @@ export function SearchScreen() {
                   rating={formatRating(shop.ratingAvg) ?? undefined}
                   // PC-Q-002: distance and delivery fee have no authoritative
                   // source; today's hours are appended per UX-SPEC § 5.3.
-                  meta={[formatShopMeta(shop), shop.todayHours].filter(Boolean).join(' · ')}
-                  badge={{
-                    label: shop.isOpen ? 'เปิดอยู่' : 'ปิดอยู่',
-                    tone: shop.isOpen ? 'success' : 'neutral',
-                  }}
-                  closed={!shop.isOpen}
+                  // M-13 adds the in-force preparation estimate.
+                  meta={[formatShopMeta(shop), formatPrepEstimate(shop), shop.todayHours]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  badge={shopCardBadge(shop)}
+                  closed={!shop.isOrderable}
                   onPress={() => navigation.navigate('Shop', { shopId: shop.id })}
                 />
               ))}

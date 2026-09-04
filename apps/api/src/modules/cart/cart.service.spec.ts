@@ -79,7 +79,7 @@ const MENU_ITEM = {
   is_available: true,
   archived_at: null,
 };
-const RESTAURANT = { id: 'shop-1', status: 'ACTIVE' };
+const RESTAURANT = { id: 'shop-1', status: 'ACTIVE', availability_mode: 'NORMAL' };
 
 describe('CartService.validate — ownership', () => {
   it('scopes the cart lookup to the caller, never a client-supplied id', async () => {
@@ -258,6 +258,56 @@ describe('CartService.validate — ITEM_UNAVAILABLE', () => {
     await expect(subject.validate(USER, {})).rejects.toMatchObject({
       details: { items: [{ cartItemId: 'ci-1', menuItemId: 'mi-1' }] },
     });
+  });
+});
+
+describe('CartService.validate — RESTAURANT_CLOSED (M-13, Paused)', () => {
+  it('raises RESTAURANT_CLOSED, not ITEM_UNAVAILABLE, when the restaurant is Paused', async () => {
+    const { subject } = serviceWith(
+      baseTables({
+        restaurants: { data: { id: 'shop-1', status: 'ACTIVE', availability_mode: 'PAUSED' }, error: null },
+      }),
+    );
+
+    await expect(subject.validate(USER, {})).rejects.toMatchObject({
+      code: 'RESTAURANT_CLOSED',
+      details: { restaurantId: 'shop-1' },
+    });
+  });
+
+  it('never reaches the ITEM_UNAVAILABLE check for a Paused restaurant, even with an unavailable item', async () => {
+    const { subject } = serviceWith(
+      baseTables({
+        restaurants: { data: { id: 'shop-1', status: 'ACTIVE', availability_mode: 'PAUSED' }, error: null },
+        menu_items: { data: [{ ...MENU_ITEM, is_available: false }], error: null },
+      }),
+    );
+
+    await expect(subject.validate(USER, {})).rejects.toMatchObject({ code: 'RESTAURANT_CLOSED' });
+  });
+
+  it('a Busy restaurant is unaffected — still validates normally, no conflict', async () => {
+    const { subject } = serviceWith(
+      baseTables({
+        restaurants: {
+          data: { id: 'shop-1', status: 'ACTIVE', availability_mode: 'BUSY' },
+          error: null,
+        },
+      }),
+    );
+
+    const result = await subject.validate(USER, {});
+    expect(result.lines).toHaveLength(1);
+  });
+
+  it('a non-ACTIVE restaurant keeps its pre-existing ITEM_UNAVAILABLE behaviour — unchanged by M-13', async () => {
+    const { subject } = serviceWith(
+      baseTables({
+        restaurants: { data: { id: 'shop-1', status: 'SUSPENDED', availability_mode: 'NORMAL' }, error: null },
+      }),
+    );
+
+    await expect(subject.validate(USER, {})).rejects.toMatchObject({ code: 'ITEM_UNAVAILABLE' });
   });
 });
 

@@ -905,7 +905,7 @@ export class OrdersService {
     if (message.includes('unavailable items')) {
       throw new DomainError('ITEM_UNAVAILABLE');
     }
-    if (message.includes('is not ACTIVE')) {
+    if (message.includes('is not ACTIVE') || message.includes('is PAUSED')) {
       throw new DomainError('RESTAURANT_CLOSED');
     }
     if (message.includes('not a usable address')) {

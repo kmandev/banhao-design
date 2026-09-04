@@ -157,15 +157,35 @@ export function formatTodayHours(hours: OpeningWindow[], now: Date): string | nu
     .join(', ');
 }
 
-/** Both derived values at once — what the shop mapper needs. */
+/**
+ * M-13. Whether a Paused restaurant should read as orderable.
+ *
+ * Deliberately not folded into `isOpenNow`: `isOpen` stays exactly what it
+ * always was — hours plus `temporarily_closed_until` — because a Paused shop
+ * is explicitly "not closed for the day" and must never share the ordinary
+ * closed badge/copy a customer would read as "back at 10:00 tomorrow". Busy
+ * changes nothing here; a Busy restaurant is fully orderable whenever it
+ * would otherwise be open.
+ */
+function isOrderableGivenOpen(isOpen: boolean, availabilityMode: RestaurantAvailabilityMode): boolean {
+  return isOpen && availabilityMode !== 'PAUSED';
+}
+
+/** M-13. `restaurants.availability_mode` — Normal/Busy/Paused, distinct from order state. */
+export type RestaurantAvailabilityMode = 'NORMAL' | 'BUSY' | 'PAUSED';
+
+/** Every derived value the shop mapper needs, in one call — the single availability derivation. */
 export function deriveAvailability(
   hours: OpeningWindow[],
   temporarilyClosedUntil: string | null,
+  availabilityMode: RestaurantAvailabilityMode,
   now: Date = new Date(),
-): { isOpen: boolean; todayHours: string | null } {
+): { isOpen: boolean; todayHours: string | null; isOrderable: boolean } {
+  const isOpen = isOpenNow(hours, temporarilyClosedUntil, now);
   return {
-    isOpen: isOpenNow(hours, temporarilyClosedUntil, now),
+    isOpen,
     todayHours: formatTodayHours(hours, now),
+    isOrderable: isOrderableGivenOpen(isOpen, availabilityMode),
   };
 }
 
