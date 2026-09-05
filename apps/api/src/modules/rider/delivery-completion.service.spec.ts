@@ -58,6 +58,7 @@ function supabaseStub(results: Result[]) {
           return builder;
         },
         maybeSingle: () => Promise.resolve(nextResult()),
+        returns: () => Promise.resolve(nextResult()),
         then: (resolve: (r: Result) => unknown) => Promise.resolve(nextResult()).then(resolve),
       };
 
@@ -94,6 +95,9 @@ function riderUser(riderId: string | null = RIDER_ID): AuthenticatedUser {
   };
 }
 
+/** DEC-044 — the Phase 1 flat rider earning, snapshotted by `claimCompletion`'s own guarded UPDATE. */
+const RIDER_EARNING_SATANG = 1200;
+
 /** The guarded UPDATE matched: this request is the one that moved the delivery. */
 const CLAIM_OK: Result = {
   data: {
@@ -102,6 +106,7 @@ const CLAIM_OK: Result = {
     rider_id: RIDER_ID,
     order_id: ORDER_ID,
     delivered_at: DELIVERED_AT,
+    rider_earning_satang: RIDER_EARNING_SATANG,
   },
   error: null,
 };
@@ -117,9 +122,28 @@ function deliveryRow(state: string, riderId: string | null = RIDER_ID): Result {
       rider_id: riderId,
       order_id: ORDER_ID,
       delivered_at: state === 'DELIVERED' ? DELIVERED_AT : null,
+      // A real DELIVERED row always carries its snapshot already — the same
+      // guarded UPDATE that set state also set this. Anything not yet
+      // DELIVERED has never reached that statement.
+      rider_earning_satang: state === 'DELIVERED' ? RIDER_EARNING_SATANG : null,
     },
     error: null,
   };
+}
+
+/** DEC-044 — the two stub results `postRiderEarningLedger` consumes on a fresh post: `ledger_entry_groups` insert (succeeds), `ledger_entries` insert. */
+const RIDER_EARNING_GROUP_INSERTED: Result = { data: { id: 'rider-earning-group-1' }, error: null };
+function freshRiderEarningLedgerStubs(): Result[] {
+  return [RIDER_EARNING_GROUP_INSERTED, OK];
+}
+
+/** DEC-044 — the three stub results consumed when the group was already posted by an earlier run: group insert (conflicts), the self-heal re-select of that group, and the entries-existence check (finds them already there). */
+function alreadyPostedRiderEarningLedgerStubs(): Result[] {
+  return [
+    { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
+    { data: { id: 'rider-earning-group-1' }, error: null },
+    { data: [{ id: 'rider-earning-entry-1' }], error: null },
+  ];
 }
 
 /** The `rider_assignments` row the close matched. */
@@ -181,8 +205,14 @@ async function expectDomainError(promise: Promise<unknown>, code: string): Promi
   await promise.catch((error: DomainError) => expect(error.code).toBe(code));
 }
 
-/** The happy path's four Supabase results, in the order the service issues them. */
-const HAPPY_PATH: Result[] = [CLAIM_OK, OK, ASSIGNMENT_CLOSED, SLOT_RELEASED];
+/** The happy path's Supabase results, in the order the service issues them. */
+const HAPPY_PATH: Result[] = [
+  CLAIM_OK,
+  OK,
+  ASSIGNMENT_CLOSED,
+  SLOT_RELEASED,
+  ...freshRiderEarningLedgerStubs(),
+];
 
 describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIVERED)', () => {
   it('transitions the delivery with a guarded UPDATE carrying ownership and pre-state', async () => {
@@ -276,12 +306,16 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
     // recipient lookup after the tail finishes (the actual order WRITE
     // still goes exclusively through the mocked `orders.completeDelivery`
     // above, never `supabase.admin` directly). Degrades to "not found" here
-    // since no queued result was supplied for it.
+    // since no queued result was supplied for it. The rider-earning ledger
+    // (DEC-044) posts between the slot release and the order advance —
+    // finishTail's step 5, before step 6.
     expect(calls.map((call) => call.table)).toEqual([
       'deliveries',
       'delivery_status_history',
       'rider_assignments',
       'rider_availability',
+      'ledger_entry_groups',
+      'ledger_entries',
       'orders',
     ]);
   });
@@ -382,14 +416,20 @@ describe('DeliveryCompletionService — refusals', () => {
   });
 
   it.each(['RIDER_ASSIGNED', 'AT_MERCHANT', 'PICKED_UP', 'FAILED', 'ABANDONED'])(
-    'refuses a delivery in %s with INVALID_TRANSITION',
+    'refuses a delivery in %s with INVALID_TRANSITION, and posts no rider earning (DEC-044)',
     async (state) => {
-      const { supabase } = supabaseStub([CLAIM_NO_MATCH, deliveryRow(state)]);
+      const { supabase, calls } = supabaseStub([CLAIM_NO_MATCH, deliveryRow(state)]);
       const completeDelivery = jest.fn();
       const service = buildService(supabase, ordersStub(completeDelivery));
 
       await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INVALID_TRANSITION');
       expect(completeDelivery).not.toHaveBeenCalled();
+      // DEC-044: earning is only ever payable at genuine DELIVERED. Neither
+      // pickup, arrival, acceptance, nor any pre-completion state may create
+      // a RIDER_PAYABLE entry — finishTail (and therefore the ledger step)
+      // never runs on this refusal path.
+      expect(calls.find((c) => c.table === 'ledger_entry_groups')).toBeUndefined();
+      expect(calls.find((c) => c.table === 'ledger_entries')).toBeUndefined();
     },
   );
 
@@ -409,6 +449,7 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       ASSIGNMENT_NO_MATCH,
       SLOT_NO_MATCH,
       availabilityRow(0),
+      ...freshRiderEarningLedgerStubs(),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
@@ -429,6 +470,7 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       ASSIGNMENT_NO_MATCH,
       SLOT_NO_MATCH,
       availabilityRow(0),
+      ...freshRiderEarningLedgerStubs(),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
@@ -446,6 +488,7 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       deliveryRow('DELIVERED'),
       ASSIGNMENT_CLOSED,
       SLOT_RELEASED,
+      ...freshRiderEarningLedgerStubs(),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
@@ -460,7 +503,13 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
   });
 
   it('treats an already-COMPLETED assignment as success rather than an error', async () => {
-    const { supabase } = supabaseStub([CLAIM_OK, OK, ASSIGNMENT_NO_MATCH, SLOT_RELEASED]);
+    const { supabase } = supabaseStub([
+      CLAIM_OK,
+      OK,
+      ASSIGNMENT_NO_MATCH,
+      SLOT_RELEASED,
+      ...freshRiderEarningLedgerStubs(),
+    ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
 
@@ -476,6 +525,7 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       ASSIGNMENT_CLOSED,
       SLOT_NO_MATCH,
       availabilityRow(0),
+      ...freshRiderEarningLedgerStubs(),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
@@ -521,6 +571,7 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       OK,
       ASSIGNMENT_CLOSED,
       SLOT_RELEASED,
+      ...freshRiderEarningLedgerStubs(),
       orderRow('DELIVERED'),
     ]);
     const completeDelivery = jest.fn().mockRejectedValue(new DomainError('INVALID_TRANSITION'));
@@ -537,6 +588,7 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       OK,
       ASSIGNMENT_CLOSED,
       SLOT_RELEASED,
+      ...freshRiderEarningLedgerStubs(),
       orderRow('CANCELLED'),
     ]);
     const completeDelivery = jest.fn().mockRejectedValue(new DomainError('INVALID_TRANSITION'));
@@ -552,6 +604,7 @@ describe('DeliveryCompletionService — idempotency and the repair path', () => 
       OK,
       ASSIGNMENT_CLOSED,
       SLOT_RELEASED,
+      ...freshRiderEarningLedgerStubs(),
       orderRow('DELIVERED'),
     ]);
     const completeDelivery = jest.fn().mockRejectedValue(new DomainError('INVALID_TRANSITION'));
@@ -574,6 +627,7 @@ describe('DeliveryCompletionService — concurrency', () => {
       ASSIGNMENT_NO_MATCH,
       SLOT_NO_MATCH,
       availabilityRow(0),
+      ...freshRiderEarningLedgerStubs(),
     ]);
 
     const winnerOrders = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
@@ -699,6 +753,7 @@ describe('DeliveryCompletionService — the proof photo (POD, mandatory)', () =>
       ASSIGNMENT_NO_MATCH,
       SLOT_NO_MATCH,
       availabilityRow(0),
+      ...freshRiderEarningLedgerStubs(),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
@@ -919,6 +974,7 @@ describe('DeliveryCompletionService — H-3 OrderDelivered outbox event', () => 
       deliveryRow('DELIVERED'), // readDelivery — already DELIVERED, still ours
       ASSIGNMENT_CLOSED,
       SLOT_RELEASED,
+      ...freshRiderEarningLedgerStubs(),
     ]);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
@@ -926,5 +982,121 @@ describe('DeliveryCompletionService — H-3 OrderDelivered outbox event', () => 
     await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     expect(calls.find((c) => c.table === 'outbox')).toBeUndefined();
+  });
+});
+
+describe('DeliveryCompletionService — rider earning ledger (DEC-044)', () => {
+  it('snapshots 1200 satang in the SAME guarded UPDATE as DELIVERED, and posts exactly one RIDER_PAYABLE entry', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const claim = calls.find((c) => c.table === 'deliveries' && c.op === 'update');
+    expect(claim?.payload).toMatchObject({ state: 'DELIVERED', rider_earning_satang: RIDER_EARNING_SATANG });
+
+    const groupInsert = calls.find((c) => c.table === 'ledger_entry_groups' && c.op === 'insert');
+    expect(groupInsert?.payload).toMatchObject({
+      group_key: `rider-earning:${DELIVERY_ID}`,
+      order_id: ORDER_ID,
+      kind: 'RIDER_EARNING',
+    });
+
+    const entryInsert = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert');
+    expect(entryInsert?.payload).toEqual({
+      group_id: 'rider-earning-group-1',
+      account: 'RIDER_PAYABLE',
+      party_type: 'RIDER',
+      party_id: RIDER_ID,
+      amount_satang: -RIDER_EARNING_SATANG,
+    });
+
+    expect(calls.filter((c) => c.table === 'ledger_entries' && c.op === 'insert')).toHaveLength(1);
+  });
+
+  it('idempotent: a retry of an already-fully-posted completion posts no second ledger_entries row', async () => {
+    // Same shape as the repair path's other self-heal tests, but this time
+    // the rider-earning ledger group AND its entry were already fully
+    // posted by an earlier run.
+    const { supabase, calls } = supabaseStub([
+      CLAIM_NO_MATCH,
+      deliveryRow('DELIVERED'),
+      ASSIGNMENT_NO_MATCH,
+      SLOT_NO_MATCH,
+      availabilityRow(0),
+      ...alreadyPostedRiderEarningLedgerStubs(),
+    ]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    const result = await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    expect(result.state).toBe('DELIVERED');
+    const groupInserts = calls.filter((c) => c.table === 'ledger_entry_groups' && c.op === 'insert');
+    expect(groupInserts).toHaveLength(1); // attempted once — conflicted, never retried as a second insert
+    expect(calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert')).toBeUndefined();
+  });
+
+  it('historical stability: an already-DELIVERED delivery snapshotted under a different amount posts THAT amount, never the current default', async () => {
+    // Simulates a future configuration change without building any
+    // configuration system: this delivery's OWN row already carries an
+    // amount that differs from the current 1200 constant (as it would if a
+    // future Admin change took effect after this delivery completed under
+    // an older rate). The repair path must never recompute or override it.
+    const HISTORICAL_AMOUNT = 1500;
+    const { supabase, calls } = supabaseStub([
+      CLAIM_NO_MATCH,
+      {
+        data: {
+          id: DELIVERY_ID,
+          state: 'DELIVERED',
+          rider_id: RIDER_ID,
+          order_id: ORDER_ID,
+          delivered_at: DELIVERED_AT,
+          rider_earning_satang: HISTORICAL_AMOUNT,
+        },
+        error: null,
+      },
+      ASSIGNMENT_NO_MATCH,
+      SLOT_NO_MATCH,
+      availabilityRow(0),
+      { data: { id: 'rider-earning-group-1' }, error: null },
+      OK,
+    ]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const entryInsert = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert');
+    expect(entryInsert?.payload).toMatchObject({ amount_satang: -HISTORICAL_AMOUNT });
+    // Never the current default — proves the amount came from the row's own
+    // snapshot, not from a fresh resolveRiderEarningSatang() call.
+    expect(entryInsert?.payload?.amount_satang).not.toBe(-RIDER_EARNING_SATANG);
+  });
+
+  it('fails closed rather than inventing an amount if a DELIVERED row somehow carries no snapshot', async () => {
+    const { supabase } = supabaseStub([
+      CLAIM_NO_MATCH,
+      {
+        data: {
+          id: DELIVERY_ID,
+          state: 'DELIVERED',
+          rider_id: RIDER_ID,
+          order_id: ORDER_ID,
+          delivered_at: DELIVERED_AT,
+          rider_earning_satang: null,
+        },
+        error: null,
+      },
+      ASSIGNMENT_NO_MATCH,
+      SLOT_NO_MATCH,
+      availabilityRow(0),
+    ]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INTERNAL_ERROR');
   });
 });

@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from '../../common/types';
 import { OrdersService } from '../orders/orders.service';
 import { StorageService } from '../storage/storage.service';
 import { parseDeliveryProofObjectKey } from '../storage/object-key';
+import { resolveRiderEarningSatang } from './rider-earning-pricing';
 
 /** `deliveries`, what the guarded UPDATE returns on a match, and the diagnostic read's own shape. */
 interface DeliveryRow {
@@ -16,6 +17,7 @@ interface DeliveryRow {
   order_id: string;
   delivered_at: string | null;
   proof_photo_path: string | null;
+  rider_earning_satang: number | null;
 }
 
 /** `orders`, the single column the order-side diagnostic read needs. */
@@ -157,10 +159,31 @@ const PROOF_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
  * never nulls `deliveries.rider_id` (that is reassignment, not completion) and
  * never touches `reassignment_count`.
  *
- * No payment, ledger, refund, reconciliation or settlement row is read or
- * written. No `rider_assignment_attempts` write — a completed delivery's
- * offers were already resolved at accept time. No notification, no earning, no
- * `rider_earning_satang` (BQ-029 is `OPEN`; a value here would be invented).
+ * No payment, refund, reconciliation or settlement row is read or written.
+ * No `rider_assignment_attempts` write — a completed delivery's offers were
+ * already resolved at accept time.
+ *
+ * ## Rider earning — DEC-044
+ *
+ * `claimCompletion`'s own guarded UPDATE now also snapshots
+ * `rider_earning_satang` (DEC-044 — flat ฿12, 1200 satang), in the **same**
+ * statement as the state transition — the identical atomicity reasoning this
+ * file already applies to `proof_photo_path`: no window in which a delivery
+ * is `DELIVERED` with a null earning, and no second write a retry could use
+ * to change it. `resolveRiderEarningSatang()` is called exactly once, by the
+ * guarded-UPDATE winner; the repair path never calls it again and never
+ * touches the column — it only reads back whatever the winner already wrote,
+ * which is what makes the snapshot stable against a future configurable rate
+ * (see that function's own doc comment).
+ *
+ * {@link postRiderEarningLedger}, run from {@link finishTail} on both the
+ * winner and repair paths, posts exactly one `RIDER_PAYABLE` ledger entry —
+ * `BANHAO owes rider ฿12` — anchored on `rider-earning:<deliveryId>` via
+ * `ledger_entry_groups.group_key`'s existing unique constraint, matching
+ * `PaymentEventProcessingService.postCommissionLedger`'s established
+ * insert-then-self-heal-on-conflict pattern (DEC-043). **This group does not
+ * sum to zero on its own** — see that method's own doc comment for why, and
+ * do not "fix" that by inventing a matching entry.
  *
  * ## The proof photo (POD, Phase 2)
  *
@@ -284,11 +307,11 @@ export class DeliveryCompletionService {
   }
 
   /**
-   * Steps 3–5, in order, run identically by the winner and by a repair.
+   * Steps 3–6, in order, run identically by the winner and by a repair.
    *
    * Every step is a guarded write that is a no-op once already applied, which
-   * is precisely what lets the repair path re-run all three rather than having
-   * to work out which of them an earlier request got to before it died.
+   * is precisely what lets the repair path re-run all of them rather than
+   * having to work out which of them an earlier request got to before it died.
    */
   private async finishTail(
     user: AuthenticatedUser,
@@ -297,6 +320,7 @@ export class DeliveryCompletionService {
   ): Promise<void> {
     await this.closeAssignment(delivery.id, riderId);
     await this.releaseRiderSlot(riderId, delivery.id);
+    await this.postRiderEarningLedger(delivery, riderId);
     await this.advanceOrder(user, delivery.order_id, delivery.id, riderId);
   }
 
@@ -420,11 +444,17 @@ export class DeliveryCompletionService {
         state: 'DELIVERED',
         delivered_at: new Date().toISOString(),
         proof_photo_path: objectKey,
+        // DEC-044 — snapshotted in this same statement, for the identical
+        // reason proof_photo_path is: no window where the delivery is
+        // DELIVERED with no earning recorded, and no second write a retry
+        // could use to change it. See this file's own "Rider earning" doc
+        // section above.
+        rider_earning_satang: resolveRiderEarningSatang(),
       })
       .eq('id', deliveryId)
       .eq('state', 'EN_ROUTE')
       .eq('rider_id', riderId)
-      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path')
+      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path, rider_earning_satang')
       .maybeSingle<DeliveryRow>();
 
     if (error) {
@@ -445,7 +475,7 @@ export class DeliveryCompletionService {
   private async readDelivery(deliveryId: string): Promise<DeliveryRow | null> {
     const { data, error } = await this.supabase.admin
       .from('deliveries')
-      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path')
+      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path, rider_earning_satang')
       .eq('id', deliveryId)
       .maybeSingle<DeliveryRow>();
 
@@ -596,7 +626,132 @@ export class DeliveryCompletionService {
   }
 
   /**
-   * Step 5 — the order-side half, made idempotent.
+   * Step 5 — DEC-044. Posts one `RIDER_PAYABLE` ledger entry —
+   * `BANHAO owes rider ฿12` — for this completed delivery.
+   *
+   * `delivery.rider_earning_satang` is read from the row {@link claimCompletion}
+   * or {@link readDelivery} already returned — **never recomputed** here — so
+   * the amount posted is always exactly what was snapshotted at completion,
+   * even if a future configuration changes the effective rate for deliveries
+   * that complete afterwards.
+   *
+   * Anchored on `rider-earning:<deliveryId>` via
+   * `ledger_entry_groups.group_key`'s existing unique constraint
+   * (`20260811000007_ledger_domain.sql`) — a delivery can complete at most
+   * once (the guarded `EN_ROUTE -> DELIVERED` transition is itself write-once),
+   * so the delivery id alone is a sufficient, permanent anchor; no second
+   * transaction identity is needed the way payment events needed one. The
+   * insert-then-self-heal-on-conflict shape matches
+   * `PaymentEventProcessingService.postCommissionLedger` exactly (DEC-043).
+   *
+   * **This group is a single entry and does not sum to zero on its own.**
+   * The natural offsetting entry would be the customer's delivery-fee
+   * payment (`CUSTOMER_PAYMENT`), but no such entry is posted anywhere in the
+   * current Phase F implementation — the commission ledger (DEC-043) does not
+   * post one either. Forcing a balanced group here would mean inventing a
+   * funding entry this repository's architecture does not yet have a home
+   * for, which DEC-044's own implementation instructions explicitly forbid.
+   * This is a real, surfaced accounting boundary, not an oversight: a
+   * `CUSTOMER_PAYMENT`-anchored, fully balanced rider/delivery ledger flow is
+   * a separate, larger Phase F question this method does not decide.
+   */
+  private async postRiderEarningLedger(delivery: DeliveryRow, riderId: string): Promise<void> {
+    if (delivery.rider_earning_satang === null) {
+      // Cannot happen on the paths that call this (claimCompletion always
+      // sets it in the same statement as DELIVERED; the repair path only
+      // reaches a delivery that is already DELIVERED, hence already
+      // snapshotted) — a defensive, "throw rather than guess" guard against
+      // silently inventing an amount here, matching this codebase's own
+      // convention for a state that should be structurally unreachable.
+      throw new DomainError('INTERNAL_ERROR', {
+        message: 'DELIVERED delivery has no rider_earning_satang snapshot',
+        details: { deliveryId: delivery.id },
+      });
+    }
+
+    const earningSatang = delivery.rider_earning_satang;
+    const groupKey = `rider-earning:${delivery.id}`;
+
+    const { data: group, error: groupError } = await this.supabase.admin
+      .from('ledger_entry_groups')
+      .insert({ group_key: groupKey, order_id: delivery.order_id, kind: 'RIDER_EARNING' })
+      .select('id')
+      .maybeSingle<{ id: string }>();
+
+    if (groupError) {
+      if (!isUniqueViolation(groupError)) {
+        throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger group insert failed' });
+      }
+
+      // Already posted by an earlier run of this same completion (self-heal),
+      // or the group committed but the entry insert below did not (the same
+      // class of narrow crash window this file's own history-write and
+      // slot-release steps already tolerate).
+      await this.ensureRiderEarningEntryRecorded(groupKey, riderId, earningSatang);
+      return;
+    }
+
+    if (!group) {
+      throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger group insert returned no row' });
+    }
+
+    await this.insertRiderEarningEntry(group.id, riderId, earningSatang);
+  }
+
+  private async ensureRiderEarningEntryRecorded(
+    groupKey: string,
+    riderId: string,
+    earningSatang: number,
+  ): Promise<void> {
+    const { data: existingGroup, error: groupReadError } = await this.supabase.admin
+      .from('ledger_entry_groups')
+      .select('id')
+      .eq('group_key', groupKey)
+      .maybeSingle<{ id: string }>();
+
+    if (groupReadError) {
+      throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger group read failed' });
+    }
+    if (!existingGroup) {
+      throw new DomainError('INTERNAL_ERROR', {
+        message: 'Rider earning ledger group read found no row',
+        details: { groupKey },
+      });
+    }
+
+    const { data: existingEntries, error: entriesReadError } = await this.supabase.admin
+      .from('ledger_entries')
+      .select('id')
+      .eq('group_id', existingGroup.id)
+      .returns<{ id: string }[]>();
+
+    if (entriesReadError) {
+      throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger entry check failed' });
+    }
+    if (existingEntries && existingEntries.length > 0) {
+      return;
+    }
+
+    await this.insertRiderEarningEntry(existingGroup.id, riderId, earningSatang);
+  }
+
+  /** `RIDER_PAYABLE`, negative — an outflow obligation, matching `SETTLEMENT_MODEL.md` § 4.1's own sign convention for this account. */
+  private async insertRiderEarningEntry(groupId: string, riderId: string, earningSatang: number): Promise<void> {
+    const { error } = await this.supabase.admin.from('ledger_entries').insert({
+      group_id: groupId,
+      account: 'RIDER_PAYABLE',
+      party_type: 'RIDER',
+      party_id: riderId,
+      amount_satang: -earningSatang,
+    });
+
+    if (error) {
+      throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger entry insert failed' });
+    }
+  }
+
+  /**
+   * Step 6 — the order-side half, made idempotent.
    *
    * `OrdersService.completeDelivery` is the authority and is called first,
    * unconditionally — its own guarded `WHERE state = 'DELIVERING'` is what
@@ -779,4 +934,9 @@ export class DeliveryCompletionService {
 
     return merchant.owner_user_id;
   }
+}
+
+/** Matches `PaymentEventProcessingService`'s own identically-named helper — Postgres unique-violation, code `23505`. */
+function isUniqueViolation(error: { code?: string; message: string }): boolean {
+  return error.code === '23505' || error.message.includes('duplicate key');
 }
