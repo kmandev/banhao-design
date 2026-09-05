@@ -104,7 +104,7 @@ the rider's side of the delivery fee remains open.
 
 | Account | Meaning | Phase 1 |
 |---|---|---|
-| `CUSTOMER_PAYMENT` | Money received from a customer online | Active |
+| `CUSTOMER_PAYMENT` | Money received from a customer online | Active — posting design **locked** (§ 3.1, 2026-09-05); posting itself **not implemented** |
 | `MERCHANT_PAYABLE` | What the platform owes a merchant | Active |
 | `RIDER_PAYABLE` | What the platform owes a rider for delivery work | Active |
 | `PLATFORM_REVENUE` | Commission + service fee + delivery margin | Active |
@@ -123,9 +123,206 @@ Rules, `ACCEPTED` via DEC-014 / CON-003 / DEC-028:
    webhook cannot write it twice.
 4. **Integer satang.** No floats anywhere in the path.
 
----
+### 3.1 CUSTOMER_PAYMENT posting design — locked 2026-09-05
 
-## 4. Worked examples
+**Architecture design, not a business decision.** Every fact this design relies
+on is already `ACCEPTED` (CON-003, DEC-014, DEC-023/024/025, DEC-028, DEC-034,
+DEC-035/036, DEC-043/044/045). No new DEC number was raised for it, matching
+this repository's own precedent: the `MERCHANT_COMMISSION` group's shape
+(`payment-event-processing.service.ts`, `postCommissionLedger`) and the
+`RIDER_EARNING` group's shape (`delivery-completion.service.ts`,
+`insertRiderEarningEntry`) were likewise never given their own `DEC-`, only
+implemented under the business decisions that authorized their accounts and
+amounts (DEC-043 and DEC-044/045 respectively). This design does the same for
+`CUSTOMER_PAYMENT`. **Not yet implemented** — see `docs/CURRENT_STATUS.md`.
+
+**Model: Hybrid payment-funding group (Model C).** `CUSTOMER_PAYMENT` posts
+into its own ledger group, independent of the existing `MERCHANT_COMMISSION`
+and `RIDER_EARNING` groups, linked to them only by the shared `order_id`
+column — exactly the relationship those two groups already have to each
+other. This is the only model that fits the current append-only,
+insert-once-per-event architecture: `ledger_entry_groups.group_key` anchors
+one deterministic economic event, and payment success, commission
+recognition, and delivery completion are three genuinely separate events,
+firing from two different services at two different times. A single
+full-order group (funding the customer payment and every downstream
+allocation in one group) would require inserting into that group again after
+delivery completes — but idempotency for a *later* insert on an *existing*
+group has no established pattern here (`group_key` uniqueness authorizes
+creating a group, not extending one), and would collapse two independent,
+already-idempotent event anchors into one, coupling the payment-processing
+tick to a delivery event it has no other reason to know about. Model A alone
+(posting `CUSTOMER_PAYMENT` with nothing else ever added) is a strict subset
+of Model C and is not distinguished from it here; Model C is simply Model A's
+entry considered alongside the sub-ledgers that already exist.
+
+**Anchor / economic finality:** `payments → SUCCESS` and the guarded
+`orders PENDING_PAYMENT → PAID` transition, together — the same instant
+`postCommissionLedger` already anchors to. `CUSTOMER_PAYMENT` posts from
+inside `completeSuccessSideEffects`, alongside `postCommissionLedger`, on
+both places it already runs today: the fresh-transition branch and the
+already-PAID self-heal branch. It must **not** post for `SURPLUS_PAYMENT` or
+`LATE_PAYMENT` — the same scope boundary `postCommissionLedger`'s own
+class-level doc comment already states for commission, for the same reason: a
+payment that never (or no longer) genuinely settles this order should not
+fund this order's ledger.
+
+**Entry:**
+```
+CUSTOMER_PAYMENT  +payment.amount_satang   party_type: CUSTOMER, party_id: orders.customer_id
+```
+One row, one group, one insert. `payment.amount_satang` is already established
+equal to `orders.grand_total_satang` at payment creation
+(`payments.service.ts`, `initializePayment`) and is immutable afterwards
+(`payments_enforce_immutable_columns`) — no new read or calculation is needed;
+the value the ledger posting code already holds in memory (`payment.amount_satang`,
+the same `PaymentRow` `postCommissionLedger` receives) is the correct amount.
+It represents the customer's total charge — subtotal + delivery fee + service
+fee − discount, per `orders_total_check` — not any single component; delivery
+fee and service fee are *funded* by this one entry without a separate
+`DELIVERY_FEE_REVENUE`/`SERVICE_FEE_REVENUE` account, exactly as the existing
+`RIDER_PAYABLE`/`PLATFORM_WRITE_OFF` group already funds delivery **without**
+one — component-level revenue recognition (e.g. `PLATFORM_REVENUE` for the
+service fee) remains a distinct, separately-unimplemented gap this design does
+not close (see Consequences below).
+
+**Sign:** positive, following the existing convention where a party-neutral
+"money enters the system" entry is positive (`PLATFORM_REVENUE +commission`,
+`PLATFORM_WRITE_OFF +200`) and an obligation the platform owes is negative
+(`MERCHANT_PAYABLE -commission`, `RIDER_PAYABLE -1200`). `CUSTOMER_PAYMENT` is
+money entering, not an obligation, so it is positive.
+
+**Party:** `party_type: 'CUSTOMER'`, `party_id: orders.customer_id` — already
+read on the winning-transition branch (`transitionedOrder.customer_id`,
+`completeSuccessSideEffects`) and cheaply re-readable on the self-heal branch
+exactly the way `postCommissionLedger` already does its own independent
+`orders` read rather than depend on the caller's partial `select`.
+
+**Group key:** `payment:<paymentId>:<providerTransactionId>` — the same
+`payment_transactions.provider_transaction_id` event identity `commission:…`
+already uses for DEC-030, and the literal shape the schema's own authoring
+comment anticipated (`ledger_entry_groups.group_key`,
+`20260811000007_ledger_domain.sql`: `"payment:PAY-BH000125:txn:<providerTxnId>"`).
+Reusing this identity, rather than inventing a new one, means a duplicate
+webhook or a retried partially-completed event can never post the group
+twice, for exactly the reason `commission:…` already can't.
+
+**Idempotency / crash / concurrency:** identical pattern to
+`postCommissionLedger`/`ensureCommissionEntriesRecorded` — attempt the
+`ledger_entry_groups` insert; on a unique-constraint conflict, re-read the
+existing group by `group_key`, check whether its `ledger_entries` row already
+exists, and insert the single `CUSTOMER_PAYMENT` row only if missing. First
+success: fresh insert, one entry written. Duplicate webhook / repeated event
+processing / already-PAID self-heal: group insert conflicts, entry already
+present, no-op. Crash after payment SUCCESS but before this entry posts: the
+next tick's retry re-enters `completeSuccessSideEffects`, the group insert
+conflicts (already created by the crashed run) or succeeds (if the crash was
+before the group insert), and the missing entry is filled in exactly the way
+`ensureCommissionEntriesRecorded` already fills in a missing commission entry
+today. Concurrent processing: `ledger_entry_groups_group_key_key` is the sole
+concurrency authority — exactly one caller's insert wins, per DEC-028.
+
+**Atomicity:** a single `ledger_entries` row is sufficient — there is nothing
+to keep in sync within the entry itself. No new database transaction or RPC is
+needed; the existing pattern (sequential guarded inserts, each independently
+safe to retry) already gives this the same correctness the commission and
+rider-earning postings already have, without wrapping multiple statements in
+an explicit transaction.
+
+**Zero-sum:** the `CUSTOMER_PAYMENT` group is **not** required to sum to zero
+on its own, and must not be forced to. It is a single-entry group by design —
+matching the rider-earning group's own precedent, which DEC-045 explicitly
+left with a `-1000` residual specifically *because* it does not contain
+`CUSTOMER_PAYMENT`. Symmetrically, the `CUSTOMER_PAYMENT` group does not
+contain the commission or rider-earning entries either. DEC-034's zero-sum
+invariant is a property of the **order as a whole** — commission group nets
+to zero internally by coincidence of its own two-party design, `CUSTOMER_PAYMENT`
+nets to +grand_total alone, and rider-earning nets to -1000 alone; a correct
+reconciliation sums all of an order's groups together, not any single group
+in isolation. Today, without this entry, an order's ledger groups net to
+`-1000` (rider-earning's own residual) with no `+grand_total` to offset it
+anywhere; posting `CUSTOMER_PAYMENT` is what eventually lets a full-order
+reconciliation balance, once `PLATFORM_REVENUE` also picks up the service fee
+(a distinct, separately-unimplemented gap — see Consequences).
+
+**Interaction with commission:** unchanged and untouched. `CUSTOMER_PAYMENT
++grand_total` and `MERCHANT_PAYABLE -commission / PLATFORM_REVENUE +commission`
+remain two independent groups, as they are today for `RIDER_PAYABLE`/
+`PLATFORM_WRITE_OFF`. `CUSTOMER_PAYMENT` does not fund commission specifically
+— it is the platform's total inbound funding for the order; commission is one
+of several claims against that funding, alongside the merchant's food payable,
+the rider's earning, and the platform's own fee revenue, none of which this
+design changes.
+
+**Interaction with rider earning / write-off:** same relationship as
+commission's — independent groups, joined only by shared `order_id`.
+`CUSTOMER_PAYMENT`'s +1000-satang delivery-fee component is part of what
+(eventually, once reconciled at the order level) offsets `RIDER_PAYABLE`'s
+-1200 and `PLATFORM_WRITE_OFF`'s +200; this design does not change DEC-044 or
+DEC-045, and does not modify `delivery-completion.service.ts`.
+
+**DEC-046 / discounts:** `discount_satang` is always `0` in every real order
+today (§6 of the prior BQ-030 prep recon), so `payment.amount_satang` already
+equals `orders.grand_total_satang` with a zero discount baked in — this design
+can be implemented today, independently of the promotion engine, with no
+special-casing. When a non-zero discount eventually exists, `CUSTOMER_PAYMENT`
+still posts the same way (`+payment.amount_satang`, which by
+`orders_total_check` already nets the discount out of `grand_total_satang`) —
+nothing about the `CUSTOMER_PAYMENT` entry itself changes. What a promotion
+engine will need to add later is a **separate** `PROMOTION_FUNDING` entry
+(`-discount`, party `PLATFORM` or `MERCHANT` per DEC-046's funder, no split)
+in its own group, so that `CUSTOMER_PAYMENT` (the full amount actually
+charged) and `PROMOTION_FUNDING` (who is out the discount) stay distinct
+facts. This design neither builds nor blocks that; DEC-046's funder model and
+BQ-030's open stacking question are both untouched.
+
+**Refunds:** not designed here. No contradiction: a future `REFUND_PAYABLE`
+entry is a **reversing** entry in a **new** group (per this document's own
+append-only rule), never a mutation of the `CUSTOMER_PAYMENT` row it offsets —
+consistent with how every other account here is already treated. BQ-027
+(service-fee refundability) and BQ-031 (partial refund composition) remain
+exactly as open as before this design.
+
+**Settlement:** this design is a **prerequisite** for future reconciliation
+— it gives "money actually received" a ledger row for the first time — but
+does not itself enable settlement/payout. A settlement engine still needs the
+deferred `settlements`/`settlement_items` tables (`docs/DATABASE_DESIGN.md`),
+a gross-merchant-payable computation (not just the commission deduction that
+exists today), and the still-open BQ-032/BQ-034. None of that is built or
+authorized by this design.
+
+**Reconciliation:** `payment_transactions.amount_satang` (DEC-030's
+money-movement record) and `CUSTOMER_PAYMENT.amount_satang` will always be
+equal by construction, since both are populated from the same in-memory
+`payment.amount_satang` value in the same request. They remain two distinct
+facts serving two distinct purposes: `payment_transactions` proves a specific
+provider transaction was durably received (the payment domain's own record,
+keyed by `provider_transaction_id`); `CUSTOMER_PAYMENT` is the accounting
+ledger's claim that this money is now available to fund the order's
+downstream obligations (the ledger domain's record, keyed by `group_key`).
+Future reconciliation should compare them as two independent sources that
+ought to agree — proving `CUSTOMER_PAYMENT` from `payment_transactions`,
+never treating `payment_transactions` as the ledger itself.
+
+**Historical immutability:** yes — `ledger_entries` already forbids UPDATE and
+DELETE for every role (`reject_mutation` trigger), unconditionally. A
+`CUSTOMER_PAYMENT` row is exactly as immutable as every other ledger entry;
+this design introduces no exception.
+
+**Existing schema:** **no migration required.** `CUSTOMER_PAYMENT` already
+exists in the `ledger_entries.account` CHECK
+(`20260811000007_ledger_domain.sql`), `party_type` already allows
+`'CUSTOMER'`, `amount_satang` is already a signed `bigint` with no sign CHECK,
+and `ledger_entry_groups.group_key` already provides the idempotency this
+design relies on. Every column and constraint this design needs is already
+live.
+
+**No new module:** this design does not introduce a finance/ledger module.
+The smallest change consistent with existing conventions is one new private
+method inside `PaymentEventProcessingService` (alongside
+`postCommissionLedger`), called from the same two call sites, following the
+same insert-then-self-heal shape already proven there — not a new service,
+controller, or module.
 
 ### 4.1 Online order — the Phase 1 path
 
