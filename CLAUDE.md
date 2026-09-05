@@ -157,9 +157,11 @@ was (§8). Treat "implemented" and "verified live" as separate claims.
 (EVENT-014, **DEC-016…DEC-032**). The seven business documents tag every rule
 `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with
 `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections.
-**Build only on `ACCEPTED`.** 7 P0 business questions remain, down from 15 —
+**Build only on `ACCEPTED`.** 6 P0 business questions remain, down from 15 —
 and every one of them is a number, a provider, or a legal question. The delivery
-and service fee amounts left that list on 2026-08-24 (DEC-035, DEC-036).
+and service fee amounts left that list on 2026-08-24 (DEC-035, DEC-036), and
+the merchant commission rate left it on 2026-09-05 (**DEC-043** — 8% of the
+food subtotal, round to whole baht).
 
 Decisions that change how anything gets built:
 
@@ -170,8 +172,9 @@ Decisions that change how anything gets built:
 | **DEC-018** | **Order, Payment, Delivery, Settlement are four separate state domains.** No mega-enum |
 | **DEC-019** | New Order lifecycle: `CREATED → PENDING_PAYMENT → PAID → MERCHANT_ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP → DELIVERING → DELIVERED`, with `PREPARING` ∥ `RIDER_SEARCHING`. **Supersedes the design canvas's 12 states** |
 | **DEC-020/021/022** | Broadcast → first accept from `MERCHANT_ACCEPTED`; rider cancellation reassigns and never cancels the order; no-rider escalates to an operator and never auto-cancels |
-| **DEC-023/024/025** | Delivery fee, service fee and commission — models accepted. **Delivery and service fee amounts are now approved (DEC-035, DEC-036); the commission rate is still OPEN** |
+| **DEC-023/024/025** | Delivery fee, service fee and commission — models accepted. **Delivery and service fee amounts (DEC-035, DEC-036) and the commission rate (DEC-043) are now all approved** |
 | **DEC-035/036** | **Phase 1 fees: delivery flat ฿10 (1000 satang), service fixed ฿5 (500 satang).** No distance, bands or zones in Phase 1 |
+| **DEC-043** | **Phase 1 merchant commission: 8% of the food subtotal, rounded to whole baht.** Delivery and service fees excluded from the base. Rider earnings (BQ-029) untouched, still `OPEN` |
 | **DEC-026…030** | Settlement is its own domain; refund lives in payment; idempotency, late payment and duplicate-payment protection required |
 | **DEC-031/032** | Manual operations and operator fallback are intentional Phase 1 capabilities. **No Admin App yet** |
 
@@ -354,7 +357,7 @@ this file summarises it.
 | **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | `NullPaymentProvider` module implemented (service, controller, webhook simulator, attempt-expiry, event processing) in the API; ledger-balances-to-zero property not independently re-verified in this update |
 | **G** | Rider & delivery — depends on E, **not** F | Substantial implementation: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, and the G7 proof-of-delivery flow (driver capture → compressed/EXIF-stripped upload → private R2 storage → signed download → customer read UI), all with test coverage (EVENT-023). Full-phase completion not independently re-verified in this update |
 | **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
-| **I** | Admin operations | **Started 2026-09-03 — the Human Supervisor half.** Exception inbox, case detail and case closure are built end to end (API + console + boundary tests). The financial half (payments, refunds, reconciliation, ledger, settlement) is designed and **not built**: Q-001, Q-002, Q-010, Q-020 and Q-032 gate it. Two design artifacts govern the phase and `docs/HUMAN_SUPERVISOR_CONTRACT.md` says which one governs what. See §13 |
+| **I** | Admin operations | **Started 2026-09-03 — the Human Supervisor half.** Exception inbox, case detail and case closure are built end to end (API + console + boundary tests). The financial half (payments, refunds, reconciliation, ledger, settlement) is designed and **not built**: Q-001, Q-002, Q-020 and Q-032 gate it (Q-010/BQ-028's commission rate is resolved — **DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht). Two design artifacts govern the phase and `docs/HUMAN_SUPERVISOR_CONTRACT.md` says which one governs what. See §13 |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
 | **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION STARTED 2026-09-03, two playbooks built (§12).** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4` and **applied and verified live 2026-09-03**, see §7). Read DEC-040 — including its *Implementation status* section — before any Phase J work |
 
@@ -370,9 +373,10 @@ API integration tests → **only then** Cloud Run.
 
 Running alongside, not blocking:
 
-1. **Answer the remaining 7 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
-   Q-001, Q-002, Q-010/BQ-028, Q-020, BQ-015, BQ-027 (**refundability only** —
-   the amount is decided), BQ-030. Every structural question is answered; what
+1. **Answer the remaining 6 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
+   Q-001, Q-002, Q-020, BQ-015, BQ-027 (**refundability only** —
+   the amount is decided), BQ-030. Q-010/BQ-028 (commission rate) left this
+   list 2026-09-05 (**DEC-043**). Every structural question is answered; what
    is left is numbers, the provider, and legal. **These block F′ only** —
    DEC-APP-007 keeps them off the critical path for the other eight phases.
 2. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
@@ -423,7 +427,10 @@ migration explicitly instructed for the current phase — see §10.
 - Sample figures are not rules: the 10% commission and the ฿10 `BANHAO7` coupon
   are illustrative. **DEC-025 says so explicitly of the 10%.** The **fee**
   figures are no longer samples — delivery is a flat **฿10 / 1000 satang**
-  (DEC-035) and service a fixed **฿5 / 500 satang** (DEC-036). Note the
+  (DEC-035) and service a fixed **฿5 / 500 satang** (DEC-036). **Commission is
+  no longer a sample either — it is 8% of the food subtotal, rounded to whole
+  baht (DEC-043, 2026-09-05). The old 10% figure is not retroactively treated
+  as an approximation of 8% — they are different numbers.** Note the
   divergence: `apps/customer/src/mocks/pricing.ts` still holds
   `SAMPLE_DELIVERY_FEE_SATANG = 1500`, which is **not** the approved amount and
   must never be copied into backend code.
@@ -463,10 +470,12 @@ migration explicitly instructed for the current phase — see §10.
   Supabase grants `ALL` on public tables by default.
 
 **Open questions blocking real money — and only real money:** Q-001 payment
-provider, Q-002 legal settlement model, Q-010 platform fee, Q-020 PromptPay
+provider, Q-002 legal settlement model, Q-020 PromptPay
 refund mechanism (no provider supports native PromptPay refunds — see
-`ai/RESEARCH/PAYMENT_RESEARCH.md`). Under **DEC-APP-007** these gate **Phase F′
-only**; build the whole order → delivery flow against `NullPaymentProvider`. The
+`ai/RESEARCH/PAYMENT_RESEARCH.md`). **Q-010 (platform fee) is resolved** —
+**DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht. Under
+**DEC-APP-007** the remaining three gate **Phase F′ only**; build the whole
+order → delivery flow against `NullPaymentProvider`. The
 schema stores **amounts, never rates**, so the open numbers can be set later
 without a migration — **do not invent a default anywhere in the application.**
 

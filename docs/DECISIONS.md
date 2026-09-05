@@ -1239,7 +1239,7 @@ None / The `OPEN — NUMERIC PRICING` half is resolved by **DEC-036** (fixed ฿
 
 ## DEC-025 — Merchant commission is BANHAO revenue (model only)
 
-**Status:** ACCEPTED — MODEL · OPEN — NUMERIC RATE
+**Status:** ACCEPTED — MODEL · **numeric rate resolved 2026-09-05 by DEC-043**
 **Date:** 2026-08-10
 **Owner:** PRODUCT_OWNER
 
@@ -1283,7 +1283,9 @@ CON-003
 
 ### Supersedes / Superseded By
 
-None / None.
+None / The `OPEN — NUMERIC RATE` half is resolved by **DEC-043** (8% of food
+subtotal, round to whole baht). The money-flow model recorded here is
+unchanged and still stands.
 
 ---
 
@@ -3391,3 +3393,108 @@ CON-002 (the client never decides a fact of record) · M-05
 (`orders.prep_minutes`, `20260901000001`) · AV-D01, AV-D03, AV-E5 ·
 `docs/design/BANHAO MERCHANT - NORMAL BUSY PAUSE - AVAILABILITY FLOW.dc.html`
 AC-04
+
+---
+
+## DEC-043 — Merchant commission rate: 8% of the food subtotal, rounded to whole baht
+
+**Status:** ACCEPTED · **Date:** 2026-09-05 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+The Phase 1 merchant commission is **Option A — percentage of the food
+subtotal**, at a rate of **8%**, applied to **food subtotal only** (delivery
+fee and service fee are excluded from the base), rounded to the nearest whole
+baht:
+
+```
+merchant_commission_satang = round_to_whole_baht(food_subtotal_satang × 8%)
+```
+
+This resolves the numeric half of **BQ-028 / Q-010**, which DEC-025 left
+`OPEN`. It does not authorize writing the ledger-posting code — see
+Consequences.
+
+### Why
+
+Product Owner decision, 2026-09-05. Option A is the model merchants already
+understand from national platforms and the only one whose arithmetic
+`docs/SETTLEMENT_MODEL.md` § 4.1 has already validated end to end for a
+percentage-of-food-subtotal shape. 8% is a deliberate, explicit departure from
+the design's illustrative 10% — a merchant-friendly rate is treated as a
+competitive instrument in a 20–30-shop district won on relationships, per
+`OPEN_BUSINESS_QUESTIONS.md` BQ-028's own recommendation.
+
+### Alternatives
+
+Fixed fee per order, hybrid (percentage + fixed), and monthly subscription are
+compared in `docs/SETTLEMENT_MODEL.md` § 5. Rejected for the same reasons that
+document records: a fixed fee is punishing on the district's characteristically
+cheap orders; a hybrid is harder to explain for no clear gain at this volume;
+a subscription adds billing, dunning and suspension machinery a solo founder
+does not need at launch.
+
+### The base and the rounding rule, both stated explicitly
+
+- **Base: food subtotal only.** Not the order total, not the total charged,
+  not the amount after discount, and not inclusive of the delivery fee
+  (DEC-023/DEC-035) or the service fee (DEC-024/DEC-036). `SETTLEMENT_MODEL.md`
+  § 5 flagged this as a question every option needed answered explicitly; this
+  decision answers it for Option A.
+- **Rounding: to the nearest whole baht**, matching the convention already
+  visible in the design's own samples (95→10, 75→8) and CON-003's ban on any
+  remainder. The satang value inside a whole-baht boundary is not itself
+  specified further by this decision — round-half-up is the ordinary reading
+  and is left to the implementing engineer's usual rounding convention unless
+  a future decision states otherwise.
+
+### The old 10% sample is not this rate
+
+The `10% ของยอดอาหาร` figure in the design canvas, and every sample derived
+from it (120→12, 180→18, 260→26, 95→10, 75→8 in `SETTLEMENT_MODEL.md` § 4.1),
+remains exactly what DEC-025 already said it was: **an illustrative design
+sample, historical evidence of what the design assumed, never an approved
+rate.** It is not retroactively relabeled as 8%, and it must not be read as
+either confirming or approximating this decision. **8% is the only approved
+commission rate as of this decision.**
+
+### Consequences
+
+- Q-010 and BQ-028's numeric half are resolved. Commission is confirmed as
+  BANHAO revenue, consistent with DEC-025's money-flow direction
+  (`Merchant → commission → BANHAO`), which this decision does not reopen.
+- **BQ-029 (rider earnings formula) is untouched and remains `OPEN`.** Nothing
+  in this decision supplies, implies, or constrains a rider rate, and the
+  delivery-side funding gap `SETTLEMENT_MODEL.md` § 4.1 describes is not
+  resolved by an 8% commission — that arithmetic is BQ-029's to settle.
+- **DEC-035 (flat ฿10 delivery fee) and DEC-036 (fixed ฿5 service fee) are
+  unaffected** — this decision touches only the commission line.
+- This decision is **documentation/business-decision locking only.** It does
+  not itself write the ledger-posting code, the commission-calculation
+  function, a database migration, or any schema change. `docs/DECISIONS.md`
+  and `docs/SETTLEMENT_MODEL.md`'s own consequences text for DEC-025 (§
+  "Consequences": "no settlement code may be written" until the rate resolves)
+  is satisfied by this decision with respect to the rate; the ledger-writing
+  implementation itself remains a separate, not-yet-authorized engineering
+  task.
+- No schema change is required to record this rate: `ledger_entries.amount_satang`
+  already stores a signed amount, not a formula (`supabase/migrations/20260811000007_ledger_domain.sql`).
+
+### Evidence
+
+Product Owner instruction, 2026-09-05 ("BANHAO — BQ-028 / Q-010 DECISION
+LOCK").
+
+### Related Requirements
+
+CON-003 (ledger balances to zero, integer satang)
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 5 · `docs/OPEN_BUSINESS_QUESTIONS.md` BQ-028 ·
+`ai/KNOWLEDGE/QUESTIONS.md` Q-010
+
+### Supersedes / Superseded By
+
+Resolves the `OPEN — NUMERIC RATE` half of DEC-025, which otherwise stands
+unchanged. / None.

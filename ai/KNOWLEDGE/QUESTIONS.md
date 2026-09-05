@@ -232,7 +232,7 @@ source: ai/RESEARCH/INFRASTRUCTURE.md; ai/RESEARCH/COST_MODEL.md
 ```yaml
 id: Q-010
 type: OPEN_QUESTION
-status: OPEN
+status: RESOLVED
 priority: P0
 date: 2026-08-09
 source: ai/RESEARCH/MARKETPLACE_PAYMENT_MODEL.md; docs/04-payment ledger examples
@@ -248,7 +248,14 @@ source: ai/RESEARCH/MARKETPLACE_PAYMENT_MODEL.md; docs/04-payment ledger example
 
 **Status note (2026-08-10):** **Partly addressed — the question stays `OPEN`.** DEC-025 accepts the *model* (`Merchant → commission → BANHAO`) and **explicitly refuses** to let the 10% example become the rate by default. The **rate and the model shape** (percentage / fixed / hybrid / subscription) are both still undecided. Extended by BQ-028.
 
-**Decision:** TBD
+**Status note (2026-09-05):** **RESOLVED by DEC-043.** Phase 1 commission is
+**Option A — 8% of the food subtotal, rounded to the nearest whole baht**
+(delivery fee and service fee excluded from the base). The 10% figure remains
+what it always was — a design illustration, not a rate — and is not
+retroactively treated as an approximation of 8%. Rider earnings (BQ-029) are
+untouched and remain `OPEN`.
+
+**Decision:** DEC-043 — 8% of food subtotal, round to whole baht
 
 ---
 

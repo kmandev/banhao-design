@@ -18,8 +18,12 @@ All amounts are integer **satang** (CON-003) — `฿130` is `13000`.
 
 > **IMPLEMENTATION: NOT STARTED, and blocked.** DEC-026 accepts settlement as a
 > domain; it explicitly does not authorise building it. Every number in the
-> model is still `OPEN` (DEC-023, DEC-024, DEC-025), so no ledger can be closed
-> to zero for a real order yet.
+> model was `OPEN` (DEC-023, DEC-024, DEC-025) — **as of 2026-09-05 all three
+> are numerically resolved** (delivery **DEC-035**, service fee **DEC-036**,
+> commission **DEC-043** — 8% of food subtotal, round to whole baht). **This
+> does not itself authorise building the ledger.** DEC-026's authorisation gap
+> is unchanged, no ledger-posting code has been written, and this is a
+> documentation lock only — see DEC-043's own Consequences clause.
 
 ---
 
@@ -73,19 +77,22 @@ legal structure, tax structure and regulatory classification all remain `OPEN`.
 
 ## 2. The three approved fee relationships
 
-`ACCEPTED — MODEL` / `OPEN — NUMBERS`. Direction of money is decided; **no
-amount, rate or band is approved.**
+`ACCEPTED — MODEL`. Direction of money is decided for all three; **the
+customer-facing amounts and the commission rate are now all approved** — only
+the rider's side of the delivery fee remains open.
 
 | Flow | Decision | Model | Numbers |
 |---|---|---|---|
 | `Customer → delivery fee → rider earning` | **DEC-023** | `ACCEPTED` | Customer side **`ACCEPTED`** — flat ฿10 / 1000 satang (**DEC-035**). Rider side **`OPEN`** — BQ-029 |
 | `Customer → service fee → BANHAO` | **DEC-024** | `ACCEPTED` | **`ACCEPTED`** — fixed ฿5 / 500 satang (**DEC-036**) |
-| `Merchant → commission → BANHAO` | **DEC-025** | `ACCEPTED` | **`OPEN`** — Q-010, BQ-028 |
+| `Merchant → commission → BANHAO` | **DEC-025** | `ACCEPTED` | **`ACCEPTED`** — 8% of the food subtotal, rounded to whole baht (**DEC-043**) |
 
 > **No agent may invent a price.** The design's `฿15` delivery, `฿5` service,
 > `฿10` coupon and `10%` commission are illustrative samples — the payment
 > canvas says so about itself. DEC-025 states explicitly that the 10% example
-> must not become a business rule by default. `apps/customer/src/mocks/pricing.ts`
+> must not become a business rule by default, and **DEC-043 confirms the
+> approved commission rate is 8%, not 10% — the two are not the same number
+> and the old sample is not retroactively relabelled.** `apps/customer/src/mocks/pricing.ts`
 > labels its constants `SAMPLE_*` for the same reason; do not copy them into
 > backend code.
 
@@ -170,6 +177,10 @@ decisions. **None is settled by this lock:**
 3. **10% is internally consistent** across every sample (120→12, 180→18,
    260→26, 95→10, 75→8) and stated outright as `10% ของยอดอาหาร`. **DEC-025
    explicitly refuses to let that become the rate by default** → Q-010, BQ-028.
+   **Resolved 2026-09-05 by DEC-043: the approved Phase 1 rate is 8% of the
+   food subtotal, round to whole baht — not 10%.** This worked example's own
+   arithmetic is left as originally published, at the design's illustrative
+   10%, and is not recomputed at 8% here.
 
 ### 4.2 Cash order — dormant, retained for the COD phase
 
@@ -194,27 +205,29 @@ COD is switched back on. **Decide it before then, not during.**
 ## 5. Commission models
 
 `ACCEPTED` — **DEC-025** fixes the direction (`Merchant → commission → BANHAO`).
-`OPEN` — the model shape *and* the rate. The comparison below is decision
-support, not a decision.
+**RESOLVED 2026-09-05 — DEC-043: the model shape and the rate are both now
+approved as Percentage of food subtotal, 8%, rounded to whole baht.** The
+comparison below is retained as the record of how that decision was reached —
+read it as history and rationale, not as an open question.
 
 | Model | Merchant friendliness | BANHAO revenue | Operational simplicity | Tax / accounting |
 |---|---|---|---|---|
-| **Percentage of food subtotal** (what the design samples) | Familiar; scales with the merchant's own take | Scales with GMV; low on small orders | **Simplest** — one number per merchant | Straightforward service revenue |
-| **Fixed fee per order** | Punishing on cheap orders — and ส้มตำ orders *are* cheap | Predictable; poor upside on large orders | Simple | Straightforward |
-| **Hybrid** (small % + small fixed) | Harder to explain | Covers per-order cost, keeps upside | Medium | Straightforward |
-| **Monthly subscription** | Good for high-volume shops, hostile to occasional ones | Predictable but capped | Adds billing, dunning, suspension | Recurring-revenue accounting |
+| **Percentage of food subtotal** — **approved, DEC-043, at 8%** | Familiar; scales with the merchant's own take | Scales with GMV; low on small orders | **Simplest** — one number per merchant | Straightforward service revenue |
+| **Fixed fee per order** — not chosen | Punishing on cheap orders — and ส้มตำ orders *are* cheap | Predictable; poor upside on large orders | Simple | Straightforward |
+| **Hybrid** (small % + small fixed) — not chosen | Harder to explain | Covers per-order cost, keeps upside | Medium | Straightforward |
+| **Monthly subscription** — not chosen | Good for high-volume shops, hostile to occasional ones | Predictable but capped | Adds billing, dunning, suspension | Recurring-revenue accounting |
 
-Two things to state explicitly whichever model wins, because leaving them
-implicit is how ledgers drift:
+The two things this table used to leave implicit are now stated, by DEC-043:
 
-- **The base** — food subtotal only (the design's answer, and the
-  merchant-friendly one) or the whole order including fees.
-- **The rounding rule** — the samples round to whole baht (95→10, 75→8). Pick
-  one rule, apply it in one place; CON-003 admits no remainder.
+- **The base — food subtotal only** (the design's answer, and the
+  merchant-friendly one). The whole-order-including-fees alternative was
+  considered and not chosen.
+- **The rounding rule — whole baht**, matching the samples (95→10, 75→8) and
+  CON-003's ban on any remainder.
 
 In a district won by relationships, the rate is a competitive instrument, not
-just a revenue dial. That is local judgement the Product Owner has and this
-analysis does not.
+just a revenue dial — the reasoning DEC-043 itself records for choosing 8%
+over the design's illustrative 10%.
 
 ---
 
@@ -414,11 +427,12 @@ duplicate payment (DEC-030).
 **Deferred by DEC-016:** BQ-023 (rider cash float) · BQ-033 (cash fee netting) ·
 Q-004 (cash limit) · the cash half of BQ-034.
 
-**Still `OPEN` — P0:** Q-002 (legal settlement model) · Q-010 / BQ-028
-(commission **rate**) · BQ-027 (service fee **refundability** only — the amount
-is set by DEC-036) · BQ-030 (promotion funding) · BQ-015 (who bears the cost of
-wasted food). **Resolved 2026-08-24:** BQ-026 (DEC-035, flat ฿10) and the
-amount half of BQ-027 (DEC-036, fixed ฿5).
+**Still `OPEN` — P0:** Q-002 (legal settlement model) · BQ-027 (service fee
+**refundability** only — the amount is set by DEC-036) · BQ-030 (promotion
+funding) · BQ-015 (who bears the cost of wasted food). **Resolved 2026-08-24:**
+BQ-026 (DEC-035, flat ฿10) and the amount half of BQ-027 (DEC-036, fixed ฿5).
+**Resolved 2026-09-05:** Q-010 / BQ-028 (**DEC-043** — commission is 8% of the
+food subtotal, rounded to whole baht).
 **Still `OPEN` — P1:** BQ-029 (rider earnings formula) · BQ-031 (partial refund
 composition) · BQ-032 (settlement cycle) · BQ-034 (negative balances) · Q-011
 (chargebacks).

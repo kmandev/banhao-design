@@ -52,7 +52,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
 | BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
 | BQ-027 — service fee | **RESOLVED (amount)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**. **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036 |
-| BQ-028 — merchant commission | **ACCEPTED (model)** — BANHAO revenue. **Rate `OPEN`** | DEC-025 |
+| BQ-028 — merchant commission | **RESOLVED** — BANHAO revenue; Phase 1 rate is **8% of the food subtotal, rounded to whole baht** | DEC-025, DEC-043 |
 
 Also decided, and not previously tracked as a `BQ`: online-payment-only with
 COD disabled but extensible (DEC-016), four separate state domains (DEC-018),
@@ -80,17 +80,18 @@ on. **Decide them before then, not during.**
 |---|---|---|
 | Q-001 | **Payment provider** — more urgent since DEC-016 made online the only method | Payment module, webhooks |
 | Q-002 | Legal / settlement model, merchant of record · `LEGAL_REVIEW_REQUIRED` | Payment, settlement, onboarding terms |
-| Q-010 / BQ-028 | Commission **rate** (model accepted, DEC-025) | Ledger, settlement |
 | Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
 | BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms. Sharpened by DEC-022: an operator cancelling a no-rider order needs this answer |
 | BQ-027 | Service fee **refundability** only — the amount is decided (DEC-036). Phase F scope; does **not** block order creation | Refund flow, ledger |
 | BQ-030 | Who funds promotions and discounts | Ledger, settlement |
 
-**Seven remain, down from fifteen.** The eight cleared are BQ-010, BQ-012,
+**Six remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
 BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
-and — as of 2026-08-24 — the **numeric** halves of BQ-026 (DEC-035) and BQ-027
-(DEC-036). Only BQ-027's refundability question is still carried above, and it
-is Phase F scope rather than an order-creation blocker.
+the **numeric** halves of BQ-026 (DEC-035) and BQ-027 (DEC-036) as of
+2026-08-24, and — as of 2026-09-05 — the **numeric** half of BQ-028 / Q-010
+(**DEC-043**, 8% of food subtotal, round to whole baht). Only BQ-027's
+refundability question is still carried above, and it is Phase F scope rather
+than an order-creation blocker.
 
 ### P1 — blocks a feature or launch readiness
 
@@ -1222,9 +1223,9 @@ a district where word of mouth is the entire marketing channel.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: ACCEPTED — MODEL · OPEN — NUMERIC RATE
-decision: DEC-025 (model only)
-blocks: Ledger, settlement, merchant terms
+status: RESOLVED — MODEL (DEC-025) · NUMERIC RATE (DEC-043)
+decision: DEC-025 (model) + DEC-043 (Phase 1 rate)
+blocks: nothing further — rider earnings remain BQ-029
 related: Q-010 (extends it)
 ```
 
@@ -1232,6 +1233,15 @@ related: Q-010 (extends it)
 > `Merchant → commission → BANHAO`. **The rate is not approved, and DEC-025
 > states explicitly that the 10% design example must not become a business rule
 > by default.**
+>
+> **RESOLVED 2026-09-05 — DEC-043.** Phase 1 uses **Option A — 8% of the food
+> subtotal, rounded to the nearest whole baht**. The base is explicitly food
+> subtotal only — delivery fee and service fee are excluded. The design's
+> illustrative 10% remains a historical sample only and is **not** the
+> approved rate; do not read it as an approximation of 8%. The discussion below
+> is retained as the record of how the decision was reached — read it as
+> history, not as an open question. **BQ-029 (rider earnings) is untouched and
+> remains `OPEN`.**
 
 **Question:** Percentage, fixed fee, hybrid, or subscription — and at what rate?
 

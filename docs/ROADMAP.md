@@ -68,23 +68,24 @@ noted.
 | **F — Payment (null provider)** | E | Payment + attempt creation, two-phase webhook ingest, QR expiry job, ledger groups with in-transaction zero-sum assertion |
 | **G — Rider & delivery** | E (not F) | Driver app screens, broadcast dispatch, guarded-claim, `release_rider_assignment` wiring, rider earnings from the ledger |
 | **H — Notification** | F, G | Outbox dispatch via the tick, channel adapters (Expo Push, SMS, LINE) |
-| **I — Admin operations** | — | Admin app, operator fallback tooling. **STARTED 2026-09-03 — the Human Supervisor half**: the exception inbox, case detail and case closure that Phase J's escalations land in, built from the AI Operations design package § 09 (S-01…S-06) with no new table, migration, role or permission model. The financial half (A-16…A-22 — payments, refunds, reconciliation, ledger, settlement) stays designed and unbuilt behind Q-001, Q-002, Q-010, Q-020 and Q-032. `docs/HUMAN_SUPERVISOR_CONTRACT.md` records which design package governs what |
+| **I — Admin operations** | — | Admin app, operator fallback tooling. **STARTED 2026-09-03 — the Human Supervisor half**: the exception inbox, case detail and case closure that Phase J's escalations land in, built from the AI Operations design package § 09 (S-01…S-06) with no new table, migration, role or permission model. The financial half (A-16…A-22 — payments, refunds, reconciliation, ledger, settlement) stays designed and unbuilt behind Q-001, Q-002, Q-020 and Q-032 (Q-010/BQ-028's commission rate is resolved — DEC-043, 2026-09-05). `docs/HUMAN_SUPERVISOR_CONTRACT.md` records which design package governs what |
 | **F′ — Real payment provider** | F | Externally blocked (§ Blocked below); may land any time after F |
 | **J — AI Operations + Human Supervisor** | After I (orchestrates E, G, H) | **AUTHORIZED 2026-09-03 by DEC-040 · IMPLEMENTATION STARTED 2026-09-03.** `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate`, plus a supervisor surface for escalations and L4 approvals. Authorization is of an architecture direction only: AI never holds domain, database or financial authority, adds no business state, invents no policy value (missing policy escalates), and audits as `actor_type = 'AI'`. Prerequisite AI-01 is merged (`95cc0dc4`) and **applied and verified live 2026-09-03**. Two playbooks are built (`apps/api/src/modules/ai-ops`): merchant acceptance timeout, which fails closed on BQ-013, and no-rider triage, which resolves DEC-022 and can only escalate. The supervisor console is **not built** and depends on Phase I. Read DEC-040 before any Phase J work |
 
 ### 🔴 BLOCKED / ⚠️ DECISION REQUIRED
 
-- **F′ specifically** — gated on 4 of the 8 open P0 business questions:
-  payment provider (Q-001), legal/settlement model (Q-002), PromptPay refund
-  mechanism (Q-020), and the commission rate feeding into settlement
-  (Q-010/BQ-028 numeric value). **Does not block E, F, G, H, or I** —
+- **F′ specifically** — gated on 3 of the 7 open P0 business questions:
+  payment provider (Q-001), legal/settlement model (Q-002), and PromptPay
+  refund mechanism (Q-020). **The commission rate (Q-010/BQ-028) that used to
+  be a fourth gating item is resolved** — DEC-043, 2026-09-05, 8% of the food
+  subtotal, round to whole baht. **Does not block E, F, G, H, or I** —
   DEC-APP-007 requires the whole order → delivery flow to be built against
   `NullPaymentProvider` first.
 - **Settlement** (its own future scope, not a lettered phase) — needs 6
   deferred database tables (`settlements`, `settlement_items`,
   `delivery_fee_bands`, `zones`, `service_areas`, `delivery_attempts`) and a
   Product Owner decision to un-defer them. Not started, not scheduled.
-- **8 P0 business questions remain overall** (down from the original 15) —
+- **7 P0 business questions remain overall** (down from the original 15) —
   see [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md). All are
   numbers, a provider choice, or a legal question — no open structural
   question remains. **Do not invent a default for any of them** anywhere in
