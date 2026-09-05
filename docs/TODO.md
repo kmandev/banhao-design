@@ -113,10 +113,14 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 ## Follow-through, no new decision needed
 
-- [ ] Live-verify M-AV and the C-14 quoted-estimate caption through the browser UI
+- [x] ~~Live-verify M-AV through the browser UI~~ — **Done.** The merchant board's mode control (Normal/Busy/Paused/Normal, pause-safety, resume) was observed live through the real browser UI.
   - Priority: P1
-  - Source: DEC-041, DEC-042, `CLAUDE.md` §10
-  - Notes: `20260904000001` (M-AV, 22 assertions) and `20260904000002` (AC-04, 16 assertions) — both merged, both proven against real PostgreSQL by the Docker domain suite, and **both applied and verified on `banhao-dev` 2026-09-04**: `supabase migration list --linked` shows 26/26 applied, direct schema reads confirm the columns/constraints/deployed `create_order()` body match the migration text, and no pre-existing row was rewritten. **What is still outstanding is a UI walkthrough** — the merchant board's mode control and the customer C-14 quoted-estimate caption have not yet been exercised through the real browser UI, in the style of the M-05 live verification (`CLAUDE.md` §11).
+  - Source: DEC-041, `CLAUDE.md` §10
+
+- [ ] Render C-14's quoted-estimate caption on an actual customer-app screen
+  - Priority: P1
+  - Source: DEC-042, `CLAUDE.md` §10
+  - Notes: `20260904000002` (AC-04) is applied and verified on `banhao-dev`, and its order-time behavior is now live-proven end to end, not just by the Docker SQL suite: a real order (`BH-20260905-0001`) was created through the customer API while the restaurant was genuinely `BUSY`, captured `customer_quoted_prep_minutes = busy_prep_minutes`, kept that value after the restaurant returned to `NORMAL`, and reads correctly through C-14's own query under the customer's real RLS session (not service-role). **What remains is rendering the React Native screen itself** — blocked by an Expo Go SDK mismatch on the available simulator (installed Expo Go is SDK 53; the customer app is pinned to SDK 52), not by a missing Test OTP. Needs either a matching Expo Go build or a decision to move the app off SDK 52 — do not bump the SDK as a side effect of a verification task.
 
 - [ ] Remove the two stray unused imports left by M-10 (`20044391`)
   - Priority: P1
