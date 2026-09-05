@@ -97,6 +97,8 @@ function riderUser(riderId: string | null = RIDER_ID): AuthenticatedUser {
 
 /** DEC-044 — the Phase 1 flat rider earning, snapshotted by `claimCompletion`'s own guarded UPDATE. */
 const RIDER_EARNING_SATANG = 1200;
+/** DEC-045 — the Phase 1 flat platform delivery write-off, posted alongside `RIDER_PAYABLE` in the same ledger group. */
+const PLATFORM_WRITE_OFF_SATANG = 200;
 
 /** The guarded UPDATE matched: this request is the one that moved the delivery. */
 const CLAIM_OK: Result = {
@@ -985,8 +987,8 @@ describe('DeliveryCompletionService — H-3 OrderDelivered outbox event', () => 
   });
 });
 
-describe('DeliveryCompletionService — rider earning ledger (DEC-044)', () => {
-  it('snapshots 1200 satang in the SAME guarded UPDATE as DELIVERED, and posts exactly one RIDER_PAYABLE entry', async () => {
+describe('DeliveryCompletionService — rider earning ledger (DEC-044 / DEC-045)', () => {
+  it('Test 1 — fresh completion: snapshots 1200 satang in the SAME guarded UPDATE, and posts RIDER_PAYABLE + PLATFORM_WRITE_OFF in one two-row insert', async () => {
     const { supabase, calls } = supabaseStub(HAPPY_PATH);
     const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
     const service = buildService(supabase, ordersStub(completeDelivery));
@@ -1003,19 +1005,36 @@ describe('DeliveryCompletionService — rider earning ledger (DEC-044)', () => {
       kind: 'RIDER_EARNING',
     });
 
-    const entryInsert = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert');
-    expect(entryInsert?.payload).toEqual({
-      group_id: 'rider-earning-group-1',
-      account: 'RIDER_PAYABLE',
-      party_type: 'RIDER',
-      party_id: RIDER_ID,
-      amount_satang: -RIDER_EARNING_SATANG,
-    });
+    // Exactly one INSERT statement carries both rows — Postgres treats a
+    // multi-row VALUES insert as atomic, which is the whole point.
+    const entryInserts = calls.filter((c) => c.table === 'ledger_entries' && c.op === 'insert');
+    expect(entryInserts).toHaveLength(1);
 
-    expect(calls.filter((c) => c.table === 'ledger_entries' && c.op === 'insert')).toHaveLength(1);
+    const entries = entryInserts[0]?.payload as unknown as Array<Record<string, unknown>>;
+    expect(entries).toEqual([
+      {
+        group_id: 'rider-earning-group-1',
+        account: 'RIDER_PAYABLE',
+        party_type: 'RIDER',
+        party_id: RIDER_ID,
+        amount_satang: -RIDER_EARNING_SATANG,
+      },
+      {
+        group_id: 'rider-earning-group-1',
+        account: 'PLATFORM_WRITE_OFF',
+        party_type: 'PLATFORM',
+        party_id: null,
+        amount_satang: PLATFORM_WRITE_OFF_SATANG,
+      },
+    ]);
+
+    // The DEC-045 residual: -1200 + 200 = -1000, intentional (no
+    // CUSTOMER_PAYMENT entry exists to fund the remainder).
+    const total = entries.reduce((sum, e) => sum + (e.amount_satang as number), 0);
+    expect(total).toBe(-1000);
   });
 
-  it('idempotent: a retry of an already-fully-posted completion posts no second ledger_entries row', async () => {
+  it('Test 2 — successful retry: does not create another ledger group and does not duplicate either entry', async () => {
     // Same shape as the repair path's other self-heal tests, but this time
     // the rider-earning ledger group AND its entry were already fully
     // posted by an earlier run.
@@ -1038,7 +1057,88 @@ describe('DeliveryCompletionService — rider earning ledger (DEC-044)', () => {
     expect(calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert')).toBeUndefined();
   });
 
-  it('historical stability: an already-DELIVERED delivery snapshotted under a different amount posts THAT amount, never the current default', async () => {
+  it('Test 3 — group exists but entries were never inserted (crash-window self-heal): restores BOTH rows in one insert', async () => {
+    // The group committed on an earlier, partially-completed run, but the
+    // entries insert never ran (the one crash window this architecture
+    // tolerates — see insertRiderEarningEntry's own doc comment). The
+    // self-heal path must find zero existing entries and post both rows
+    // fresh, in one statement, not one row at a time.
+    const { supabase, calls } = supabaseStub([
+      CLAIM_NO_MATCH,
+      deliveryRow('DELIVERED'),
+      ASSIGNMENT_NO_MATCH,
+      SLOT_NO_MATCH,
+      availabilityRow(0),
+      { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } }, // group insert conflicts
+      { data: { id: 'rider-earning-group-1' }, error: null }, // self-heal group re-select
+      { data: [], error: null }, // entries existence check — NONE found
+    ]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const entryInserts = calls.filter((c) => c.table === 'ledger_entries' && c.op === 'insert');
+    expect(entryInserts).toHaveLength(1);
+    const entries = entryInserts[0]?.payload as unknown as Array<Record<string, unknown>>;
+    expect(entries.map((e) => e.account)).toEqual(['RIDER_PAYABLE', 'PLATFORM_WRITE_OFF']);
+    expect(entries[1]?.amount_satang).toBe(PLATFORM_WRITE_OFF_SATANG);
+  });
+
+  it('Test 4 — duplicate/concurrent completion: only one economic rider-earning posting, one RIDER_PAYABLE, one PLATFORM_WRITE_OFF, no duplicate group', async () => {
+    // Winner: claim matches, finishes the tail, posts the ledger fresh.
+    const winner = supabaseStub(HAPPY_PATH);
+    // Loser: claim matches nothing, diagnoses DELIVERED-and-ours, repairs —
+    // and lands on the ledger step AFTER the winner has already posted it.
+    const loser = supabaseStub([
+      CLAIM_NO_MATCH,
+      deliveryRow('DELIVERED'),
+      ASSIGNMENT_NO_MATCH,
+      SLOT_NO_MATCH,
+      availabilityRow(0),
+      ...alreadyPostedRiderEarningLedgerStubs(),
+    ]);
+
+    const winnerOrders = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const loserOrders = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+
+    await Promise.all([
+      buildService(winner.supabase, ordersStub(winnerOrders)).complete(riderUser(), DELIVERY_ID, PROOF_KEY),
+      buildService(loser.supabase, ordersStub(loserOrders)).complete(riderUser(), DELIVERY_ID, PROOF_KEY),
+    ]);
+
+    const winnerGroupInserts = winner.calls.filter((c) => c.table === 'ledger_entry_groups' && c.op === 'insert');
+    const loserGroupInserts = loser.calls.filter((c) => c.table === 'ledger_entry_groups' && c.op === 'insert');
+    expect(winnerGroupInserts).toHaveLength(1);
+    expect(loserGroupInserts).toHaveLength(1); // attempted, conflicted — never a second group
+
+    const winnerEntryInserts = winner.calls.filter((c) => c.table === 'ledger_entries' && c.op === 'insert');
+    const loserEntryInserts = loser.calls.filter((c) => c.table === 'ledger_entries' && c.op === 'insert');
+    // Exactly one of the two calls actually inserts entries — the winner,
+    // in this stub arrangement. The loser's self-heal finds them already
+    // posted and inserts nothing.
+    expect(winnerEntryInserts).toHaveLength(1);
+    expect(loserEntryInserts).toHaveLength(0);
+
+    const entries = winnerEntryInserts[0]?.payload as unknown as Array<Record<string, unknown>>;
+    expect(entries.filter((e) => e.account === 'RIDER_PAYABLE')).toHaveLength(1);
+    expect(entries.filter((e) => e.account === 'PLATFORM_WRITE_OFF')).toHaveLength(1);
+  });
+
+  it('Test 6 — no CUSTOMER_PAYMENT leakage: DEC-045 never posts a CUSTOMER_PAYMENT entry anywhere', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const entryInsert = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert');
+    const entries = entryInsert?.payload as unknown as Array<Record<string, unknown>>;
+    expect(entries.some((e) => e.account === 'CUSTOMER_PAYMENT')).toBe(false);
+    expect(entries).toHaveLength(2); // exactly RIDER_PAYABLE and PLATFORM_WRITE_OFF, nothing more
+  });
+
+  it('Test 5 — historical earning: an already-DELIVERED delivery snapshotted under a different amount posts THAT amount for RIDER_PAYABLE, while PLATFORM_WRITE_OFF stays the independent Phase 1 constant', async () => {
     // Simulates a future configuration change without building any
     // configuration system: this delivery's OWN row already carries an
     // amount that differs from the current 1200 constant (as it would if a
@@ -1070,10 +1170,20 @@ describe('DeliveryCompletionService — rider earning ledger (DEC-044)', () => {
     await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
 
     const entryInsert = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert');
-    expect(entryInsert?.payload).toMatchObject({ amount_satang: -HISTORICAL_AMOUNT });
+    const entries = entryInsert?.payload as unknown as Array<Record<string, unknown>>;
+    const riderPayable = entries.find((e) => e.account === 'RIDER_PAYABLE');
+    const writeOff = entries.find((e) => e.account === 'PLATFORM_WRITE_OFF');
+
+    expect(riderPayable?.amount_satang).toBe(-HISTORICAL_AMOUNT);
     // Never the current default — proves the amount came from the row's own
     // snapshot, not from a fresh resolveRiderEarningSatang() call.
-    expect(entryInsert?.payload?.amount_satang).not.toBe(-RIDER_EARNING_SATANG);
+    expect(riderPayable?.amount_satang).not.toBe(-RIDER_EARNING_SATANG);
+
+    // The write-off is independently resolved — always 200, regardless of
+    // what the historical rider earning was. It is never derived as
+    // "earning minus something", so a historical earning of 1500 does not
+    // change it.
+    expect(writeOff?.amount_satang).toBe(PLATFORM_WRITE_OFF_SATANG);
   });
 
   it('fails closed rather than inventing an amount if a DELIVERED row somehow carries no snapshot', async () => {

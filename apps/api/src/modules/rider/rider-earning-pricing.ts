@@ -39,3 +39,33 @@ const RIDER_EARNING_SATANG = 1200;
 export function resolveRiderEarningSatang(): number {
   return RIDER_EARNING_SATANG;
 }
+
+/**
+ * DEC-045 — the Phase 1 platform delivery write-off: a flat **200 satang
+ * (฿2) per completed delivery**, the difference between the customer's
+ * ฿10 delivery fee (DEC-035) and the ฿12 rider earning (DEC-044) that
+ * BANHAO intentionally absorbs. Deliberately private, for the same reason
+ * `RIDER_EARNING_SATANG` is: the server is the only pricing authority
+ * (DEC-E-01).
+ *
+ * This is **not** derived by subtracting the rider earning from an order's
+ * `delivery_fee_satang` — DEC-045 defines a fixed Phase 1 gap, not a
+ * formula, and delivery fee is not snapshotted anywhere in the delivery
+ * ledger path. Computing it that way would also silently break the moment
+ * either locked amount changed for reasons unrelated to this gap.
+ */
+const PLATFORM_WRITE_OFF_SATANG = 200;
+
+/**
+ * Resolves the platform write-off amount for a delivery completing **right
+ * now** — the same future-configuration seam `resolveRiderEarningSatang`
+ * documents. Called once, at completion, and posted into the same
+ * `rider-earning:<deliveryId>` ledger group as the rider payable; nothing
+ * ever re-reads this function for an already-posted group, so a later
+ * change here affects only newly completing deliveries. No configuration
+ * table, API, or service exists yet — DEC-045 explicitly does not authorize
+ * building one, and none is invented here.
+ */
+export function resolvePlatformWriteOffSatang(): number {
+  return PLATFORM_WRITE_OFF_SATANG;
+}

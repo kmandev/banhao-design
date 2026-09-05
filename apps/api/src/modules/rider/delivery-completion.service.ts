@@ -7,7 +7,7 @@ import type { AuthenticatedUser } from '../../common/types';
 import { OrdersService } from '../orders/orders.service';
 import { StorageService } from '../storage/storage.service';
 import { parseDeliveryProofObjectKey } from '../storage/object-key';
-import { resolveRiderEarningSatang } from './rider-earning-pricing';
+import { resolveRiderEarningSatang, resolvePlatformWriteOffSatang } from './rider-earning-pricing';
 
 /** `deliveries`, what the guarded UPDATE returns on a match, and the diagnostic read's own shape. */
 interface DeliveryRow {
@@ -177,13 +177,16 @@ const PROOF_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
  * (see that function's own doc comment).
  *
  * {@link postRiderEarningLedger}, run from {@link finishTail} on both the
- * winner and repair paths, posts exactly one `RIDER_PAYABLE` ledger entry —
- * `BANHAO owes rider ฿12` — anchored on `rider-earning:<deliveryId>` via
+ * winner and repair paths, posts two ledger entries — `RIDER_PAYABLE -1200`
+ * (`BANHAO owes rider ฿12`) and, per **DEC-045**, `PLATFORM_WRITE_OFF +200`
+ * (BANHAO's own ฿2 subsidy of the gap between the ฿10 customer delivery fee
+ * and the ฿12 rider earning) — anchored on `rider-earning:<deliveryId>` via
  * `ledger_entry_groups.group_key`'s existing unique constraint, matching
  * `PaymentEventProcessingService.postCommissionLedger`'s established
- * insert-then-self-heal-on-conflict pattern (DEC-043). **This group does not
- * sum to zero on its own** — see that method's own doc comment for why, and
- * do not "fix" that by inventing a matching entry.
+ * insert-then-self-heal-on-conflict pattern (DEC-043). **This group's
+ * residual is `-1000`, not zero** — see {@link insertRiderEarningEntry}'s own
+ * doc comment for why, and do not "fix" that by inventing a
+ * `CUSTOMER_PAYMENT` entry here.
  *
  * ## The proof photo (POD, Phase 2)
  *
@@ -626,14 +629,19 @@ export class DeliveryCompletionService {
   }
 
   /**
-   * Step 5 — DEC-044. Posts one `RIDER_PAYABLE` ledger entry —
-   * `BANHAO owes rider ฿12` — for this completed delivery.
+   * Step 5 — DEC-044 / DEC-045. Posts the rider-earning ledger group for this
+   * completed delivery: `RIDER_PAYABLE -1200` (`BANHAO owes rider ฿12`,
+   * DEC-044) and `PLATFORM_WRITE_OFF +200` (BANHAO's own ฿2 subsidy of the
+   * gap between the ฿10 customer delivery fee and the ฿12 rider earning,
+   * DEC-045) — see {@link insertRiderEarningEntry}.
    *
    * `delivery.rider_earning_satang` is read from the row {@link claimCompletion}
    * or {@link readDelivery} already returned — **never recomputed** here — so
-   * the amount posted is always exactly what was snapshotted at completion,
-   * even if a future configuration changes the effective rate for deliveries
-   * that complete afterwards.
+   * the rider-payable amount posted is always exactly what was snapshotted at
+   * completion, even if a future configuration changes the effective rate for
+   * deliveries that complete afterwards. The write-off amount is independently
+   * resolved via `resolvePlatformWriteOffSatang()` — a flat Phase 1 constant,
+   * never derived from the rider earning or from any order's delivery fee.
    *
    * Anchored on `rider-earning:<deliveryId>` via
    * `ledger_entry_groups.group_key`'s existing unique constraint
@@ -644,16 +652,17 @@ export class DeliveryCompletionService {
    * insert-then-self-heal-on-conflict shape matches
    * `PaymentEventProcessingService.postCommissionLedger` exactly (DEC-043).
    *
-   * **This group is a single entry and does not sum to zero on its own.**
-   * The natural offsetting entry would be the customer's delivery-fee
-   * payment (`CUSTOMER_PAYMENT`), but no such entry is posted anywhere in the
-   * current Phase F implementation — the commission ledger (DEC-043) does not
-   * post one either. Forcing a balanced group here would mean inventing a
-   * funding entry this repository's architecture does not yet have a home
-   * for, which DEC-044's own implementation instructions explicitly forbid.
-   * This is a real, surfaced accounting boundary, not an oversight: a
-   * `CUSTOMER_PAYMENT`-anchored, fully balanced rider/delivery ledger flow is
-   * a separate, larger Phase F question this method does not decide.
+   * **This group's residual is `-1000` (`-1200 + 200`), not zero.** The
+   * remaining funding source would be the customer's delivery-fee payment
+   * (`CUSTOMER_PAYMENT`), but no such entry is posted anywhere in the current
+   * Phase F implementation — the commission ledger (DEC-043) does not post
+   * one either. Forcing full balance here would mean inventing a
+   * `CUSTOMER_PAYMENT` posting this repository's architecture does not yet
+   * have a home for, which DEC-045's own implementation instructions
+   * explicitly forbid. This is a real, surfaced, and now partially-narrowed
+   * accounting boundary, not an oversight: a `CUSTOMER_PAYMENT`-anchored,
+   * fully balanced rider/delivery ledger flow is a separate, larger Phase F
+   * question this method does not decide.
    */
   private async postRiderEarningLedger(delivery: DeliveryRow, riderId: string): Promise<void> {
     if (delivery.rider_earning_satang === null) {
@@ -735,15 +744,45 @@ export class DeliveryCompletionService {
     await this.insertRiderEarningEntry(existingGroup.id, riderId, earningSatang);
   }
 
-  /** `RIDER_PAYABLE`, negative — an outflow obligation, matching `SETTLEMENT_MODEL.md` § 4.1's own sign convention for this account. */
+  /**
+   * `RIDER_PAYABLE` (negative — the rider obligation, matching
+   * `SETTLEMENT_MODEL.md` § 4.1's own sign convention for this account) and
+   * `PLATFORM_WRITE_OFF` (positive — DEC-045's funding source for this
+   * group: BANHAO's own ฿2/200-satang subsidy of the gap between the ฿10
+   * customer delivery fee and the ฿12 rider earning). Both rows go through
+   * one `.insert([...])` call — a single multi-row `INSERT` statement is
+   * atomic in Postgres, so they are both written or neither is, matching
+   * `PaymentEventProcessingService.insertCommissionEntries`'s identical
+   * two-row shape.
+   *
+   * The group's residual is `-1000` (`-1200 + 200`), not zero — this is
+   * intentional and unchanged by DEC-045: the customer's ฿10 delivery fee is
+   * not posted anywhere in this ledger (no `CUSTOMER_PAYMENT` entry exists
+   * in the current implementation), so the remaining 1,000 satang stays the
+   * same pre-existing, already-documented accounting boundary. DEC-045
+   * narrows what was previously an unexplained `-1200` down to an explicit
+   * `+200` funding source plus that same unposted-customer-fee residual —
+   * it does not, and is not required to, make this group sum to zero.
+   * Building a full `CUSTOMER_PAYMENT` ledger flow is a separate, larger,
+   * not-yet-authorized engineering question.
+   */
   private async insertRiderEarningEntry(groupId: string, riderId: string, earningSatang: number): Promise<void> {
-    const { error } = await this.supabase.admin.from('ledger_entries').insert({
-      group_id: groupId,
-      account: 'RIDER_PAYABLE',
-      party_type: 'RIDER',
-      party_id: riderId,
-      amount_satang: -earningSatang,
-    });
+    const { error } = await this.supabase.admin.from('ledger_entries').insert([
+      {
+        group_id: groupId,
+        account: 'RIDER_PAYABLE',
+        party_type: 'RIDER',
+        party_id: riderId,
+        amount_satang: -earningSatang,
+      },
+      {
+        group_id: groupId,
+        account: 'PLATFORM_WRITE_OFF',
+        party_type: 'PLATFORM',
+        party_id: null,
+        amount_satang: resolvePlatformWriteOffSatang(),
+      },
+    ]);
 
     if (error) {
       throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger entry insert failed' });
