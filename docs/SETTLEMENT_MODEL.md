@@ -626,6 +626,273 @@ their own queue; and alert on any order whose ledger group does not sum to zero
 — that should be impossible, and if it happens it is the most important alert in
 the system.
 
+### 11.1 `payment_transactions` ↔ `CUSTOMER_PAYMENT` reconciliation — locked 2026-09-05
+
+**Architecture design, not a business decision** — same footing as § 3.1: every
+fact this relies on is already `ACCEPTED` (CON-003, DEC-028/029/030, DEC-034,
+and § 3.1 itself). No new `DEC-` was raised. **Not implemented** — read-only
+design only; see `docs/CURRENT_STATUS.md`.
+
+**Model: A — payment-transaction-centric.** For every eligible
+`payment_transactions` row, reconstruct its expected `CUSTOMER_PAYMENT`
+identity and look it up directly — never the reverse walk, and never a
+combined bidirectional scan as the primary path (Model C's second direction
+is retained only as a cheap orphan sweep, below). Model D (order-centric) was
+evaluated and rejected: `payments.order_id` is unique, so an order→payment
+join looks equally clean, but a genuine `SURPLUS_PAYMENT` inserts a **second**
+`payment_transactions` row against the same `payment_id` — walking from the
+order would see two transactions and one `CUSTOMER_PAYMENT`, misreading the
+surplus row as `MISSING_CUSTOMER_PAYMENT_LEDGER` unless it also re-derives
+which transaction was the *eligible* one. That re-derivation is exactly
+Model A, so Model D adds a join without adding a capability — rejected as
+unnecessary coupling, per the prompt's own suspicion.
+
+**Eligibility — which `payment_transactions` row, exactly.** Not "every row
+for a `SUCCESS` payment" — `payment_transactions` carries no flag
+distinguishing the settling transaction from a later surplus one. This design
+reuses, rather than invents, the exact rule `recordTransactionAndComplete`
+already applies to tell self-heal from surplus
+(`payment-event-processing.service.ts`): **the eligible transaction is the
+one with the earliest `occurred_at` for that `payment_id`**, restricted to
+payments where `payments.state = 'SUCCESS'`. Any other `payment_transactions`
+row sharing that `payment_id` is a surplus by construction and is correctly
+excluded — it was never given a `completeSuccessSideEffects` run, so it was
+never expected to have a `CUSTOMER_PAYMENT` entry, and reconciliation must
+not manufacture one.
+
+**Primary match key:** the reconstructed ledger group key,
+`payment:<payment_id>:<provider_transaction_id>` — taking `provider_transaction_id`
+from the eligible transaction identified above — looked up directly against
+`ledger_entry_groups.group_key` (its own unique constraint). This is the
+identical string the posting code itself builds
+(`postCustomerPaymentLedger`), not a new identifier; DEC-030's
+`provider_transaction_id`-as-event-identity is reused unchanged.
+
+**Secondary validation fields**, once the group is found:
+- `order_id` — `payments.order_id` (via the eligible transaction's
+  `payment_id`) must equal `ledger_entry_groups.order_id`.
+- `amount_satang` — `payments.amount_satang` must equal the
+  `CUSTOMER_PAYMENT` entry's `amount_satang` (see Amount invariant below;
+  note `payment_transactions.amount_satang` is itself always a copy of
+  `payments.amount_satang` at insert time — `recordTransactionAndComplete`
+  never writes anything else there — so this is really one invariant, not
+  two independent ones).
+- `party_id` — the `CUSTOMER_PAYMENT` entry's `party_id` must equal
+  `orders.customer_id` for that same order.
+
+**Amount invariant:** exact `bigint` equality, **no tolerance, ever** —
+satang is already the smallest unit BANHAO represents, so there is no
+sub-unit rounding question and no floating-point comparison of any kind.
+`payment_transactions.amount_satang` is DB-constrained `> 0`;
+`ledger_entries.amount_satang` carries no sign CHECK, so a `CUSTOMER_PAYMENT`
+row found with a non-positive amount is itself a hard invariant violation,
+not merely a mismatch. Currency: both tables default `'THB'`; Phase 1 has no
+multi-currency path, so this design does not compare `currency` beyond
+confirming it is present — a genuine currency mismatch would be a schema-level
+anomaly outside this design's scope.
+
+**Eligible payment statuses:** only `payments.state = 'SUCCESS'`, and within
+that, only the one eligible transaction defined above. `PENDING`,
+`PROCESSING`, `FAILED`, `EXPIRED`, `CANCELLED` payments are not eligible —
+they were never supposed to fund an order and `completeSuccessSideEffects`
+never ran for them. A payment event classified `SURPLUS_PAYMENT` or
+`LATE_PAYMENT` (`reconciliation_cases.kind`) is **excluded from the normal
+`CUSTOMER_PAYMENT` expectation by construction**, not by an extra filter this
+design adds — the eligibility rule above already excludes exactly these rows,
+because `completeSuccessSideEffects` (the only place `CUSTOMER_PAYMENT` is
+ever posted) never ran for them either.
+
+**Duplicate detection:**
+- `DUPLICATE_CUSTOMER_PAYMENT` — more than one `ledger_entries` row with
+  `account = 'CUSTOMER_PAYMENT'` under one `group_id`. **Not** prevented by a
+  database constraint — `ledger_entries` has no uniqueness on
+  `(group_id, account)` — so this is a genuine, checkable reconciliation
+  category, not a structurally-impossible one. Its existence would mean the
+  posting code's own "check entries exist before inserting" guard was
+  bypassed (a bug, or a manual/out-of-band insert), never an expected outcome.
+- `DUPLICATE_PAYMENT_TRANSACTION` — **omitted from the practical output
+  vocabulary.** `payment_transactions_provider_txn_key` (unique on
+  `provider_transaction_id`) already makes two transactions sharing one
+  provider identity structurally impossible at the database level; a second,
+  *distinct* transaction against the same `payment_id` is a genuine surplus
+  (already classified `SURPLUS_PAYMENT` at ingest), not a duplicate. Including
+  this category here would either be unreachable or would misname an existing,
+  already-classified case.
+
+**Missing ledger — `MISSING_CUSTOMER_PAYMENT_LEDGER`:** the eligible
+transaction exists and `payments.state = 'SUCCESS'`, but no
+`ledger_entry_groups` row exists for the reconstructed `group_key` (or it
+exists with zero `CUSTOMER_PAYMENT` entries). **Retryable, not fatal, within
+the grace period** (below) — this is exactly the crash window
+`ensureCustomerPaymentEntryRecorded`'s self-heal already exists to close, and
+the very next tick that reprocesses the same event closes it without any
+reconciliation-side repair. Only past the grace period does it become a
+genuine anomaly worth surfacing for manual review — the reconciliation scan
+itself never repairs it (read-only, per this task's own gate).
+
+**Orphan ledger — `ORPHAN_CUSTOMER_PAYMENT`:** a `CUSTOMER_PAYMENT` entry
+whose `group_key`'s embedded `payment_id` does not correspond to any
+`payments` row in `SUCCESS` state (including: the payment row does not exist
+at all, or exists but never reached `SUCCESS`). **Should be impossible under
+current invariants** — `postCustomerPaymentLedger` only ever runs after the
+guarded `PENDING_PAYMENT → PAID` transition already committed, which itself
+only follows `payments.state = 'SUCCESS'`. A row in this category is
+therefore a hard accounting-integrity violation, not an expected edge case —
+manual review, never auto-reversible (no reversal mechanism exists, and this
+design does not invent one).
+
+**Amount mismatch — `PAYMENT_LEDGER_AMOUNT_MISMATCH`:** exact `bigint`
+inequality between the eligible transaction's (i.e. `payments.amount_satang`,
+per the Amount invariant above) and the `CUSTOMER_PAYMENT` entry's
+`amount_satang`. **Severity: critical, not repairable by reconciliation.**
+Both values trace to the same immutable `payments.amount_satang` by
+construction, so a mismatch here means the ledger row was corrupted, hand-
+edited (impossible under `reject_mutation`, so this would mean inserted
+wrong at write time), or written by code other than
+`postCustomerPaymentLedger` — always a bug, always manual review, never a
+ledger mutation.
+
+**Identity mismatch — `PAYMENT_LEDGER_IDENTITY_MISMATCH`:** `order_id`
+disagreement (`ledger_entry_groups.order_id` ≠ the eligible transaction's own
+`payments.order_id`) or `party_id` disagreement (`CUSTOMER_PAYMENT.party_id`
+≠ `orders.customer_id`) are both **hard failures** — under current write
+paths both are read fresh from the same order row at posting time, so
+disagreement is unreachable except via a bug or manual tampering. A
+`provider_transaction_id` mismatch is not a separate category: it is what the
+primary-match-key lookup itself already tests (the key either resolves or it
+doesn't — see Missing/Orphan above), so there is no secondary
+`provider_transaction_id` check to define.
+
+**Legacy handling:** any `payments.state = 'SUCCESS'` row whose
+`succeeded_at` predates this feature's deployment has a `MERCHANT_COMMISSION`
+group but **no** `CUSTOMER_PAYMENT` group — expected, not a defect — and must
+be classified `LEGACY_NOT_APPLICABLE`, excluded from `MISSING_CUSTOMER_PAYMENT_LEDGER`,
+using a cutover timestamp (this feature's deploy time), never by attempting
+to backfill or rewrite historical ledger rows (forbidden — `reject_mutation`,
+and this task's own gate). The M05-VERIFY-\* and G71-\* fixtures
+(`docs/CURRENT_STATUS.md`) need no special case at all: they are UI-state
+fixtures with no `payments`/`payment_transactions` rows behind them, so they
+never appear in the eligible set to begin with.
+
+**Eventual consistency / grace period:** a genuine window exists between the
+guarded `orders → PAID` UPDATE committing and `postCustomerPaymentLedger`'s
+own insert committing — the same class of crash window `ensureOrderHistoryRecorded`
+and `ensureCommissionEntriesRecorded` already tolerate. Reconciliation must
+not treat an eligible payment inside this window as a hard mismatch: classify
+it `IN_FLIGHT` / `GRACE_PERIOD` while its `succeeded_at` (or `orders.paid_at`)
+age is below a threshold sized to **at least one full tick interval** — the
+exact interval is an operational/deployment config this design does not
+invent a number for. Past the threshold, self-heal should already have closed
+it on the next tick regardless, so a still-missing entry past the grace
+period is the genuine `MISSING_CUSTOMER_PAYMENT_LEDGER` anomaly, not a timing
+artifact.
+
+**Read-only / concurrency:** reconciliation only ever `SELECT`s — it competes
+with nothing, because the posting path's own idempotency
+(`ledger_entry_groups.group_key` uniqueness) is what keeps posting correct
+under concurrency, not reconciliation. Running reconciliation concurrently
+with a live tick is safe by ordinary MVCC: a row not yet committed is simply
+not yet visible, which the grace-period rule already absorbs. Repeated scans
+are deterministic because the reconstructed match key is a pure function of
+already-immutable data (`payment_id`, the eligible transaction's
+`provider_transaction_id`) — the same inputs always reconstruct the same key
+and therefore the same classification.
+
+**Zero-sum — explicitly not extended.** This design does not require the
+`CUSTOMER_PAYMENT` group to sum to zero (§ 3.1 already settled that), does
+not require the `RIDER_EARNING` group's `-1000` residual to change (DEC-045),
+and does not invent a full-order balancing check across all of an order's
+groups — that would be a distinct, larger, separately-unauthorized capability
+(§ 3.1's own "Zero-sum" note already flags it as future work). This design's
+scope is the narrower pairwise check named in its title: one payment
+transaction, one `CUSTOMER_PAYMENT` entry, matching amounts and identities.
+
+**What this proves:** that a specific, real, provider-confirmed money
+movement (`payment_transactions`) has exactly one corresponding accounting
+record (`CUSTOMER_PAYMENT`) with agreeing amount and identity — i.e., that
+received customer funds are properly reflected in the ledger.
+
+**What this does NOT prove:** that an order's full economics balance to zero
+(a separate, larger check spanning every group an order has); that
+`PLATFORM_REVENUE` correctly reflects the service fee (component-level
+revenue recognition remains unimplemented, § 3.1); that a merchant or rider
+will eventually be paid correctly (no settlement engine exists); refund
+correctness (no `REFUND_PAYABLE` posting exists); or promotion-funding
+correctness (`PROMOTION_FUNDING` remains unposted, DEC-046).
+
+**Future refunds:** a `REFUND_PAYABLE` entry, when it eventually exists, is a
+**new, separate** ledger entry in a **new** group — never a mutation of the
+`CUSTOMER_PAYMENT` row it offsets (consistent with this document's own
+append-only rule). This design's per-payment 1:1 `CUSTOMER_PAYMENT`
+invariant is therefore unaffected by a later refund: the original
+`CUSTOMER_PAYMENT` entry still reconciles exactly as it did the day it
+posted. Reconciling `REFUND_PAYABLE` against `refunds` is a distinct, future,
+unimplemented concern this design does not build, and BQ-027/BQ-031 remain
+exactly as open as before.
+
+**Future settlement:** this design is an **upstream control**, not a
+replacement — a settlement engine should never trust an order's
+`CUSTOMER_PAYMENT` funding without this reconciliation having already
+verified it. It does not compute a merchant or rider payable, does not
+create a settlement table, and does not decide settlement timing (BQ-032) or
+netting (BQ-034).
+
+**DEC-046 interaction:** unaffected. `CUSTOMER_PAYMENT`'s amount is always
+`payments.amount_satang`, which already nets out any future `discount_satang`
+via `orders_total_check` — this design's amount check works identically
+whether or not a discount exists on the order, with no special-casing added
+for DEC-046. Reconciling a future `PROMOTION_FUNDING` entry against a
+promotion's funder is a distinct, unimplemented concern; stacking (still
+`OPEN`, BQ-030) is untouched.
+
+**Business decisions required: none.** Every fact this design depends on
+(CON-003, DEC-028/029/030, DEC-034, § 3.1) is already `ACCEPTED`. Checked
+against BQ-024, BQ-027, BQ-030, BQ-031, BQ-032, BQ-034: none blocks this
+design and this design introduces no new dependency on any of them — it
+operates entirely within `payments`/`payment_transactions`/`ledger_entries`,
+never touching commission, rider earning, promotions, or settlement-cycle
+mechanics.
+
+**Architectural scope — smallest initial implementation.** A **read-only**
+SQL query or a single read-only NestJS service method, run on demand or from
+a report endpoint — not a scheduled job, not a database constraint, and
+**not yet a write into `reconciliation_cases`**: that table's own
+`kind` CHECK (`20260811000010_audit_notification_infra_domain.sql`) is
+closed to exactly `('LATE_PAYMENT', 'SURPLUS_PAYMENT', 'AMOUNT_MISMATCH',
+'UNMATCHED_EVENT')` and has no room for this design's categories without a
+migration this design does not authorize — the same shape of schema
+constraint Phase J's AI Operations recon already flagged for
+`reconciliation_cases`. The smallest correct implementation therefore reports
+its findings (log output, or an admin-only read endpoint) rather than
+persisting them, until persistence is separately authorized.
+
+**Output categories (smallest practical set):** `MATCH`,
+`MISSING_CUSTOMER_PAYMENT_LEDGER`, `ORPHAN_CUSTOMER_PAYMENT`,
+`PAYMENT_LEDGER_AMOUNT_MISMATCH`, `PAYMENT_LEDGER_IDENTITY_MISMATCH`,
+`DUPLICATE_CUSTOMER_PAYMENT`, `LEGACY_NOT_APPLICABLE`, `IN_FLIGHT` /
+`GRACE_PERIOD`. `DUPLICATE_PAYMENT_TRANSACTION` is omitted (see Duplicate
+detection above). `MISSING_CUSTOMER_PAYMENT_LEDGER` and `IN_FLIGHT` are
+warnings/retryable by nature; `ORPHAN_CUSTOMER_PAYMENT`,
+`PAYMENT_LEDGER_AMOUNT_MISMATCH`, `PAYMENT_LEDGER_IDENTITY_MISMATCH`, and
+`DUPLICATE_CUSTOMER_PAYMENT` are hard anomalies for manual review.
+
+**Invariants proposed for future automation** (validated against actual
+schema capabilities above, not asserted speculatively):
+1. Every eligible `SUCCESS` payment's earliest transaction maps to exactly
+   one `CUSTOMER_PAYMENT` entry — checkable today via the reconstructed
+   `group_key`.
+2. That entry's amount equals `payments.amount_satang` exactly — checkable,
+   no tolerance.
+3. That entry's `order_id`/`party_id` match `payments.order_id`/
+   `orders.customer_id` — checkable, both already stored.
+4. No eligible payment's `group_key` resolves to more than one
+   `CUSTOMER_PAYMENT` entry — checkable, not DB-enforced (see Duplicate
+   detection).
+5. No `CUSTOMER_PAYMENT` entry exists whose `payment_id` isn't a `SUCCESS`
+   payment — checkable by construction of the match key.
+6. `SURPLUS_PAYMENT`/`LATE_PAYMENT`-classified events are excluded from
+   invariant 1 by the eligibility rule itself, not by a separate filter.
+
 ---
 
 ## 12. Cost and complexity
