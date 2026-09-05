@@ -478,24 +478,68 @@ remaining readiness blockers are cleared — see §9.
 
 | | Gate | Current state |
 |---|---|---|
-| [ ] | Fixture specification approved | **Awaiting Product Owner** — §3 |
-| [ ] | Test B strategy approved | **Awaiting Product Owner** — §2 recommends Approach A |
-| [ ] | Provisioning mechanism approved | **Awaiting Product Owner** — §5 recommends a reviewed SQL file under `supabase/seed-dev/` |
-| [ ] | Live environment selected | Presumed `banhao-dev` (`yssnwnboiwldogmlvvlw`) per Infrastructure Readiness §2 Option A — **not confirmed for G-7.1** |
-| [ ] | Rider A Auth account available | **Not created.** Needs a Test OTP number + one sign-in |
-| [ ] | Rider B Auth account available | **Not created.** Must be a genuinely separate session/device |
-| [ ] | Non-approved rider Auth account available | **Not created** |
-| [ ] | Customer account available | **Not created** |
-| [ ] | Shared restaurant verified | `dede0000-…c001` exists in the seed file; **not verified as applied live** |
-| [ ] | Provisioning script reviewed | **Not written** — §5 is its specification |
-| [ ] | Read-only verification passed | **Not written** — §6 is its specification |
-| [ ] | Driver sessions available | Two physical/simulator devices or two Expo Go instances required for H and R. ⚠️ iOS Simulator HTTP/3 issue — `scripts/sim-supabase-proxy.mjs` |
-| [x] | G7 fixture identity recorded | **Done, 2026-08-26** — §7.0. Not the same gate as "integrity verified": that still requires `g71_verify.sql` to exist and run against the live target, which is still blocked below |
-| [ ] | Live acceptance may begin | — |
+| [x] | Fixture specification approved | ~~**Awaiting Product Owner** — §3~~ **Approved and executed.** `supabase/seed-dev/g71_offer_fixture.sql` implements §3 exactly and has been run live — see the 2026-09-05 update below |
+| [x] | Test B strategy approved | ~~**Awaiting Product Owner** — §2 recommends Approach A~~ **Approved — Approach A**, implemented exactly as recommended (`67100000-…-a3`, `PENDING_APPROVAL`, no `rider_availability` row) |
+| [x] | Provisioning mechanism approved | ~~**Awaiting Product Owner** — §5 recommends a reviewed SQL file under `supabase/seed-dev/`~~ **Approved and implemented** — `g71_offer_fixture.sql` + `g71_verify.sql`, committed `7bd8d619` |
+| [x] | Live environment selected | `banhao-dev` (`yssnwnboiwldogmlvvlw`) — confirmed by direct read against the project, 2026-09-05 |
+| [x] | Rider A Auth account available | ~~**Not created**~~ **Exists.** `user_id = 18c3a27c-d298-4a31-b512-4a01220786d4`, phone `+66811110001` — confirmed live (`riders.id = 67100000-…-a1`, `status = APPROVED`) |
+| [x] | Rider B Auth account available | ~~**Not created**~~ **Exists**, a genuinely separate account. `user_id = caf2cf17-01ea-4c21-a92c-cc07c6565459`, phone `+66811110002` — confirmed live (`riders.id = 67100000-…-a2`, `status = APPROVED`), and proven a *separate session* by the live evidence below (RIDER_B independently held and released deliveries) |
+| [x] | Non-approved rider Auth account available | ~~**Not created**~~ **Exists.** `user_id = 3f6f98a8-ac07-4949-b0d4-8defed3e23bd`, phone `+66811110003` — confirmed live, `status = PENDING_APPROVAL`, `approved_at`/`approved_by` both `NULL`, **no** `rider_availability` row (exactly §3.3) |
+| [x] | Customer account available | ~~**Not created**~~ **Exists.** `user_id = d25a51f9-93fb-48af-b208-512883ad4640`, phone `+66811110009` — anchors all seven live `G71-…` orders |
+| [x] | Shared restaurant verified | ~~`dede0000-…c001` exists in the seed file; **not verified as applied live**~~ **Verified live**, `status = ACTIVE` |
+| [x] | Provisioning script reviewed | ~~**Not written** — §5 is its specification~~ **Written and committed**, `7bd8d619` |
+| [x] | Read-only verification passed | ~~**Not written** — §6 is its specification~~ **Written, committed, and its checks re-run 2026-09-05** (via direct read against `banhao-dev`, equivalent to every `g71_verify.sql` query): V1–V5 rider states correct; V7/V9 every `67100000-…` offer belongs to Rider A or B, never NA, never the G-7 rider; V10/V12 delivery/order integrity, fees `1000`/`500`, `payment_method = ONLINE`, `rider_earning_satang` NULL throughout; V11 zero duplicate `ACCEPTED` rows per delivery; V13 zero G-7.1 rows reference the locked G-7 rider; V14 the online+`APPROVED` pool contains exactly Rider A, Rider B and the (unrelated) G-7 fixture — never NA |
+| [ ] | Driver sessions available | Two physical/simulator devices or two Expo Go instances required for H and R. ⚠️ iOS Simulator HTTP/3 issue — `scripts/sim-supabase-proxy.mjs`. **Two independent sessions were used at some point** (RIDER_A and RIDER_B each independently hold/held separate deliveries — see below), but no session is available in *this* pass, and the Test OTP codes for the rider numbers are not recorded anywhere in this repository, so a fresh interactive run cannot be started from here |
+| [x] | G7 fixture identity recorded | **Done, 2026-08-26** — §7.0. ~~Not the same gate as "integrity verified": that still requires `g71_verify.sql` to exist and run against the live target, which is still blocked below~~ **Integrity now verified too**, 2026-09-05: zero `67100000-…` rows reference `a0d763a3-…-587f`, and its `riders` row is `APPROVED`, unpromoted, and shows no evidence of disturbance |
+| [x] | Live acceptance may begin | ~~—~~ **It already did**, substantially, on 2026-08-26 — see the update below for exactly how much and what remains |
 
 ---
 
 ## 10. FINAL DECISION
+
+**Update — 2026-09-05.** The verdict below was correct when written (2026-08-26,
+before any of the five blockers had been cleared). All five have since been
+cleared and the fixture has been used for live acceptance — this update
+records that without deleting the original analysis, which stays accurate as
+a description of that day's starting state.
+
+Verified directly against `banhao-dev` (equivalent to every `g71_verify.sql`
+query, run as read-only checks against the live project): all three G-7.1
+riders exist with the exact status the design specifies (Rider A / B
+`APPROVED`, non-approved rider `PENDING_APPROVAL` with no `rider_availability`
+row); the customer identity anchors seven live `G71-…` orders, all
+`payment_method = ONLINE` with the DEC-035/036 fee amounts; the locked G-7
+fixture (`a0d763a3-…-587f`) is present, `APPROVED`, and referenced by **zero**
+`67100000-…` rows; the one-active-assignment invariant holds system-wide
+(zero deliveries with more than one `ACCEPTED` row); and the
+online-plus-`APPROVED` dispatch pool contains exactly Rider A, Rider B and the
+unrelated G-7 fixture — never the non-approved rider.
+
+The live `rider_assignment_attempts` rows go further than initial
+provisioning: real `ACCEPTED` / `DECLINED` / `SUPERSEDED` outcomes exist,
+reachable only through the guarded application flow this design's own rules
+forbid provisioning SQL from writing directly (§5.3 items 3/9, §8.4) —
+meaning Tests F (accept), G (decline) and H (`OFFER_TAKEN`, Rider A winning
+against Rider B on the same delivery, Rider B's slot correctly released back
+to `0`) have already been exercised live, by two genuinely independent rider
+sessions, with `active_delivery_count` bookkeeping on both riders
+self-consistent with exactly the deliveries they currently hold.
+
+**What is still open, honestly:** the Test OTP *codes* for the four
+`+6681111000x` numbers are not recorded anywhere in this repository (only the
+two customer-app pairs in `CLAUDE.md` §7 are), so a *new* interactive session
+cannot be started from a fresh environment without a Supabase Dashboard
+lookup — this document explicitly forbids guessing or fabricating one. Every
+fixture offer's fixture-only 60-minute `expires_at` window (§3.8) was set
+relative to 2026-08-26 and has since elapsed, so a fresh manual walkthrough
+today needs one new disposable triple (§8.5's own recommended path) — no
+existing `PENDING` row is still live. Tests P/Q (foreground/blur polling) and
+R (foreign-rider RLS isolation) need a real two-device session to observe and
+were not independently re-confirmed by this update. None of this is a defect
+in the fixture or the mechanism; both are proven correct by the evidence
+above.
+
+### Original verdict (2026-08-26) — preserved as written
 
 **BLOCKED**
 

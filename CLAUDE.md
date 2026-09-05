@@ -567,10 +567,14 @@ below. Treat C-14 as `UNVERIFIED`, not as passing.
    product is the **Admin app (Phase I)**, which has no design artifact at all.
 2. **C-14 cannot be live-verified with the current test credentials.** The
    fixture orders belong to customer `d25a51f9-…` (phone `+66811110009`), and
-   **no Test OTP code for that number is documented anywhere in this repo** —
-   `docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md` §9 explicitly records that Auth
-   accounts for the G-7.1 identities were never provisioned. The two documented
-   pairs (§7) belong to other identities. Do not guess an OTP and do not
+   **no Test OTP *code* for that number is documented anywhere in this repo.**
+   The two documented pairs (§7) belong to other identities. **Correction,
+   2026-09-05: the Auth *account* itself is not missing** — it exists and
+   already anchors seven live `G71-…` orders (confirmed live against
+   `banhao-dev`); what is missing is only the Test-OTP code needed to sign
+   into it interactively, which `docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md`'s
+   own fixture file already recorded as of 2026-08-26 and which that
+   document's §10 now states in full. Do not guess an OTP and do not
    fabricate a session. Unblocking this is a Supabase Dashboard action:
    configure a Test OTP pair for `+66811110009`, or point future fixtures at an
    already-onboarded customer identity.
