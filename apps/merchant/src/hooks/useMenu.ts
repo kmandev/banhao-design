@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiClientError } from '../lib/apiClient';
 import { repositories, type MerchantMenuRepository } from '../repositories';
 import type { MenuSection } from '../domain/menu';
+import { ALLOWED_COVER_MIME_TYPES } from '../lib/imageUrl';
 
 /**
  * The M-11 overview's data: load, refetch, and the optimistic availability
@@ -34,6 +35,17 @@ export type MenuState =
   | { status: 'error'; forbidden: boolean }
   | { status: 'ready'; sections: MenuSection[] };
 
+/**
+ * M-MENU-IMG — the menu-item image upload's state, scoped to whichever item
+ * is mid-upload. `idle` unless a `menuItemId` is present, so a caller can
+ * tell whether a given open drawer should render it (see `MenuOverview`).
+ */
+export type MenuItemImageState =
+  | { status: 'idle' }
+  | { status: 'uploading'; menuItemId: string }
+  | { status: 'failed'; menuItemId: string }
+  | { status: 'success'; menuItemId: string };
+
 export interface UseMenu {
   state: MenuState;
   /** Refetches from the server. Used after every write except the switch. */
@@ -45,6 +57,24 @@ export interface UseMenu {
   /** Set when an availability write failed; cleared by the next attempt. */
   availabilityError: boolean;
   dismissAvailabilityError: () => void;
+  /** The menu-item image upload's current state (M11-D09, edit-only). */
+  itemImageState: MenuItemImageState;
+  /**
+   * The resolved public URL from the most recent successful upload, paired
+   * with the item it belongs to. `null` until a success — the drawer falls
+   * back to `item.imageUrl` (the stored object key) until then, exactly the
+   * way `useRestaurantProfile.imageObjectKey` is read before its first upload.
+   */
+  itemImageUrl: { menuItemId: string; imageUrl: string } | null;
+  /**
+   * Two-step upload against the existing `menu-items/:menuItemId/image`
+   * routes — no new mechanism. Deliberately does **not** mutate the `item`
+   * object a drawer holds: doing so would give `MenuItemDrawer`'s `baseline`
+   * a new reference and reset any unsaved name/price/description edit the
+   * merchant has mid-typed. The caller reads the result from `itemImageState`
+   * / `itemImageUrl` instead.
+   */
+  uploadItemImage: (menuItemId: string, file: File) => Promise<void>;
 }
 
 export function useMenu(
@@ -55,6 +85,10 @@ export function useMenu(
   const [nonce, setNonce] = useState(0);
   const [pendingAvailabilityId, setPendingAvailabilityId] = useState<string | null>(null);
   const [availabilityError, setAvailabilityError] = useState(false);
+  const [itemImageState, setItemImageState] = useState<MenuItemImageState>({ status: 'idle' });
+  const [itemImageUrl, setItemImageUrl] = useState<{ menuItemId: string; imageUrl: string } | null>(
+    null,
+  );
 
   // Read inside the focus listener so it always sees the current value without
   // the listener needing to be torn down and rebuilt on every state change.
@@ -139,6 +173,54 @@ export function useMenu(
 
   const dismissAvailabilityError = useCallback(() => setAvailabilityError(false), []);
 
+  const uploadItemImage = useCallback(
+    async (menuItemId: string, file: File) => {
+      if (!ALLOWED_COVER_MIME_TYPES.includes(file.type as (typeof ALLOWED_COVER_MIME_TYPES)[number])) {
+        setItemImageState({ status: 'failed', menuItemId });
+        return;
+      }
+
+      setItemImageState({ status: 'uploading', menuItemId });
+      try {
+        const { uploadUrl, objectKey } = await repository.requestItemImageUpload(
+          menuItemId,
+          file.type,
+        );
+
+        // The presigned R2 URL, not the API — bytes never transit Cloud Run
+        // (MenuItemImageController's own doc comment).
+        const putResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!putResponse.ok) {
+          // Preserve whatever image state existed before this attempt —
+          // nothing here has touched it.
+          setItemImageState({ status: 'failed', menuItemId });
+          return;
+        }
+
+        const { imageUrl } = await repository.completeItemImageUpload(menuItemId, objectKey);
+        setItemImageUrl({ menuItemId, imageUrl });
+        setItemImageState({ status: 'success', menuItemId });
+        // Deliberately no reload() here. `MenuOverview.categories` is a
+        // `useMemo` over `state.sections`, and `MenuItemDrawer.baseline` is a
+        // `useMemo` over `categories` — so a reload gives `baseline` a new
+        // object reference purely from the array being recreated, which
+        // reruns the drawer's "reset the form" effect and would silently
+        // discard an unsaved name/price/description edit even though `item`
+        // itself never changed. The drawer already shows the new photo from
+        // `itemImageUrl` above; the background list catches up next time
+        // `reload()` runs for an unrelated reason (another write, or the
+        // existing refetch-on-window-focus).
+      } catch {
+        setItemImageState({ status: 'failed', menuItemId });
+      }
+    },
+    [repository],
+  );
+
   return {
     state,
     reload,
@@ -146,6 +228,9 @@ export function useMenu(
     pendingAvailabilityId,
     availabilityError,
     dismissAvailabilityError,
+    itemImageState,
+    itemImageUrl,
+    uploadItemImage,
   };
 }
 

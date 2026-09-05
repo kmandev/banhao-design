@@ -58,6 +58,20 @@ export interface MerchantMenuRepository {
     menuItemId: string,
     groups: MenuOptionGroupInput[],
   ): Promise<MenuOptionGroupsResponse>;
+
+  /**
+   * The M-MENU-IMG two-step upload's first call — existing
+   * `MenuItemImageController` route, keyed by `menuItemId` alone (no
+   * `restaurantId`, edit-mode only per M11-D09). Reused exactly as it exists,
+   * matching `merchantProfile.ts`'s cover-photo pair.
+   */
+  requestItemImageUpload(
+    menuItemId: string,
+    contentType: string,
+  ): Promise<{ uploadUrl: string; objectKey: string }>;
+
+  /** The second call — `imageUrl` in the response is already the resolved public URL. */
+  completeItemImageUpload(menuItemId: string, objectKey: string): Promise<{ imageUrl: string }>;
 }
 
 export function createMerchantMenuRepository(
@@ -130,6 +144,20 @@ export function createMerchantMenuRepository(
         `/api/v1/merchant/menu-items/${menuItemId}/option-groups`,
         'PUT',
         { groups },
+      ),
+
+    requestItemImageUpload: (menuItemId, contentType) =>
+      send<{ uploadUrl: string; objectKey: string }>(
+        `/api/v1/merchant/menu-items/${menuItemId}/image/upload-url`,
+        'POST',
+        { contentType },
+      ),
+
+    completeItemImageUpload: (menuItemId, objectKey) =>
+      send<{ imageUrl: string }>(
+        `/api/v1/merchant/menu-items/${menuItemId}/image/complete`,
+        'POST',
+        { objectKey },
       ),
   };
 }

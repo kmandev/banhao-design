@@ -65,6 +65,11 @@ export const menuCopy = {
   required: 'จำเป็น',
   optional: 'ไม่จำเป็น',
   imageEditOnly: 'บันทึกรายการก่อน แล้วจึงเพิ่มรูปภาพ',
+  // M-MENU-IMG — mirrors profileCopy's cover-photo strings verbatim.
+  imageReplace: 'เปลี่ยนรูปภาพ',
+  imageUploadFailed: 'อัปโหลดรูปไม่สำเร็จ · ลองอีกครั้ง',
+  imageUploadSuccess: 'อัปเดตรูปภาพแล้ว',
+  imageAlt: (name: string) => `รูปภาพของ ${name}`,
   cancel: 'ยกเลิก',
   save: 'บันทึก',
   saving: 'กำลังบันทึก…',

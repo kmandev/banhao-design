@@ -351,6 +351,21 @@ export function MenuOverview({
           setFailure(null);
         }}
         onEditOptions={(item) => void openOptionEditor(item)}
+        // M-MENU-IMG — scoped to the open item so a stale upload for a
+        // previously-open dish never renders against this one.
+        imagePhotoState={
+          drawerItem && menu.itemImageState.status !== 'idle' && menu.itemImageState.menuItemId === drawerItem.id
+            ? menu.itemImageState
+            : { status: 'idle' }
+        }
+        imageOverrideUrl={
+          drawerItem && menu.itemImageUrl?.menuItemId === drawerItem.id
+            ? menu.itemImageUrl.imageUrl
+            : null
+        }
+        onUploadImage={(file) => {
+          if (drawerItem) void menu.uploadItemImage(drawerItem.id, file);
+        }}
       />
 
       <CategoryManagerDialog

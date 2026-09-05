@@ -135,3 +135,89 @@ describe('merchantMenu — write commands', () => {
     ).rejects.toBe(failure);
   });
 });
+
+describe('merchantMenu — item image (M-MENU-IMG, existing endpoints reused)', () => {
+  it('requestItemImageUpload POSTs to the existing upload-url route', async () => {
+    const { api, calls } = fakeApi();
+
+    await createMerchantMenuRepository(supabase, api).requestItemImageUpload(
+      'item-1',
+      'image/webp',
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.path).toBe('/api/v1/merchant/menu-items/item-1/image/upload-url');
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ contentType: 'image/webp' });
+  });
+
+  it('the upload-url response is returned unchanged', async () => {
+    const api = {
+      request: () =>
+        Promise.resolve({ uploadUrl: 'https://r2.example/put', objectKey: 'menu-items/item-1/x.webp' }),
+    } as unknown as ApiClient;
+
+    const result = await createMerchantMenuRepository(supabase, api).requestItemImageUpload(
+      'item-1',
+      'image/webp',
+    );
+
+    expect(result).toEqual({ uploadUrl: 'https://r2.example/put', objectKey: 'menu-items/item-1/x.webp' });
+  });
+
+  it('completeItemImageUpload POSTs to the existing complete route', async () => {
+    const { api, calls } = fakeApi();
+
+    await createMerchantMenuRepository(supabase, api).completeItemImageUpload(
+      'item-1',
+      'menu-items/item-1/x.webp',
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.path).toBe('/api/v1/merchant/menu-items/item-1/image/complete');
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      objectKey: 'menu-items/item-1/x.webp',
+    });
+  });
+
+  it('the complete response is returned unchanged', async () => {
+    const api = {
+      request: () => Promise.resolve({ imageUrl: 'https://cdn.example/menu-items/item-1/x.webp' }),
+    } as unknown as ApiClient;
+
+    const result = await createMerchantMenuRepository(supabase, api).completeItemImageUpload(
+      'item-1',
+      'menu-items/item-1/x.webp',
+    );
+
+    expect(result).toEqual({ imageUrl: 'https://cdn.example/menu-items/item-1/x.webp' });
+  });
+
+  it('introduces no second upload mechanism — no other route is ever called', async () => {
+    const paths: string[] = [];
+    const api = {
+      request: (path: string) => {
+        paths.push(path);
+        return Promise.resolve({ uploadUrl: 'x', objectKey: 'x', imageUrl: 'x' });
+      },
+    } as unknown as ApiClient;
+
+    const repo = createMerchantMenuRepository(supabase, api);
+    await repo.requestItemImageUpload('item-1', 'image/jpeg');
+    await repo.completeItemImageUpload('item-1', 'menu-items/item-1/x.jpg');
+
+    for (const path of paths) {
+      expect(path).toMatch(/\/menu-items\/item-1\/image\/(upload-url|complete)$/);
+    }
+  });
+
+  it('lets an image-upload error through rather than collapsing it', async () => {
+    const failure = Object.assign(new Error('nope'), { code: 'VALIDATION_FAILED' });
+    const api = { request: () => Promise.reject(failure) } as unknown as ApiClient;
+
+    await expect(
+      createMerchantMenuRepository(supabase, api).requestItemImageUpload('item-1', 'image/gif'),
+    ).rejects.toBe(failure);
+  });
+});

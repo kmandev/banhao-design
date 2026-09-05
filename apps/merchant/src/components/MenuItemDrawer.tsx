@@ -4,10 +4,12 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { colors, spacing } from '@banhao/ui/theme';
 import type { CreateMenuItemInput, UpdateMenuItemInput } from '@banhao/validation';
 import type { MenuCategory, MenuItem } from '../domain/menu';
+import type { MenuItemImageState } from '../hooks/useMenu';
 import { useModalFocus } from '../hooks/useModalFocus';
 import { menuCopy } from '../lib/menuCopy';
 import { formatClockTime } from '../lib/orderBoardDisplay';
 import { parseBahtToSatang, satangToBahtInput } from '../lib/menuDisplay';
+import { resolveImageUrl } from '../lib/imageUrl';
 import { ConfirmDialog } from './ConfirmDialog';
 import * as m from '../lib/menuStyles';
 
@@ -31,13 +33,23 @@ import * as m from '../lib/menuStyles';
  * behaviour. The discard dialog is a second dialog above this one and takes
  * focus on cancel.
  *
- * ## The image field
+ * ## The image field (M-MENU-IMG)
  *
  * Disabled in create mode, with the reason stated. Both upload endpoints are
  * keyed by `menuItemId`, so no key exists before the dish is saved (M11-D09).
  * Rather than invent a pre-create upload, create says
  * `บันทึกรายการก่อน แล้วจึงเพิ่มรูปภาพ`. The edit-mode field reuses the
- * existing two-step upload — this drawer adds no second image system.
+ * existing two-step upload — this drawer adds no second image system, and the
+ * preview/uploading/failure treatment is the same one `RestaurantProfileForm`
+ * already uses for the restaurant cover photo.
+ *
+ * Upload state (`photoState`, `imageOverrideUrl`) is owned by `useMenu`, not
+ * this component and not the `item` prop — deliberately. Updating `item`
+ * itself after a successful upload would give `baseline` (below) a new
+ * object reference and re-run the "reset the form" effect, silently
+ * discarding any name/price/description edit the merchant has mid-typed. The
+ * preview instead prefers `imageOverrideUrl` over `item.imageUrl` and never
+ * touches the form.
  */
 
 export interface MenuItemDrawerProps {
@@ -55,6 +67,16 @@ export interface MenuItemDrawerProps {
   onClose: () => void;
   /** Opens the option editor for the dish being edited. Absent in create mode. */
   onEditOptions?: (item: MenuItem) => void;
+  /**
+   * M-MENU-IMG. Scoped to `item.id` by the caller — `{ status: 'idle' }` when
+   * this is not the item currently uploading. Absent in create mode, where
+   * the field stays disabled (M11-D09).
+   */
+  imagePhotoState?: MenuItemImageState;
+  /** The resolved public URL from the most recent successful upload of `item`, if any. */
+  imageOverrideUrl?: string | null;
+  /** Opens the file picker's result; absent in create mode. */
+  onUploadImage?: (file: File) => void;
 }
 
 interface FormState {
@@ -97,8 +119,12 @@ export function MenuItemDrawer({
   onUpdate,
   onClose,
   onEditOptions,
+  imagePhotoState = { status: 'idle' },
+  imageOverrideUrl = null,
+  onUploadImage,
 }: MenuItemDrawerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const nameId = useId();
   const descriptionId = useId();
@@ -189,6 +215,19 @@ export function MenuItemDrawer({
 
   const showError = (field: keyof typeof errors) => submitted && errors[field];
   const lastEdited = item ? formatClockTime(item.updatedAt) : null;
+
+  // M-MENU-IMG. `imageOverrideUrl` (the just-uploaded public URL) wins over
+  // `item.imageUrl` (the stored object key, resolved to a URL) — never the
+  // other way around, so a completed upload shows immediately without
+  // waiting on the item prop to catch up.
+  const imageSrc = imageOverrideUrl ?? resolveImageUrl(item?.imageUrl ?? null);
+  const uploadingImage = imagePhotoState.status === 'uploading';
+
+  function onImageSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) onUploadImage?.(file);
+  }
 
   return (
     <>
@@ -333,7 +372,82 @@ export function MenuItemDrawer({
           <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.xs }}>
             <span style={m.fieldLabel}>{menuCopy.fieldImage}</span>
             {item ? (
-              <p style={m.fieldHint}>{item.imageUrl ?? 'JPEG, PNG, WebP'}</p>
+              <>
+                <div
+                  style={{
+                    position: 'relative',
+                    width: 120,
+                    aspectRatio: '1 / 1',
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                    backgroundColor: colors.surfaceAccent,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  data-testid="item-image-preview"
+                >
+                  {imageSrc ? (
+                    <img
+                      src={imageSrc}
+                      alt={menuCopy.imageAlt(item.name)}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: 12, color: colors.textMuted, textAlign: 'center', padding: spacing.xs }} aria-hidden="true">
+                      JPEG, PNG, WebP
+                    </span>
+                  )}
+
+                  {uploadingImage ? (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        backgroundColor: 'rgba(31, 26, 22, 0.45)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      role="status"
+                      aria-live="polite"
+                      data-testid="item-image-uploading"
+                    >
+                      <span style={{ color: colors.textInverse, fontSize: 12 }}>{menuCopy.saving}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={onImageSelected}
+                  style={m.visuallyHidden}
+                  data-testid="item-image-input"
+                />
+
+                <button
+                  type="button"
+                  style={{ ...m.secondaryButton, alignSelf: 'flex-start' }}
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploadingImage}
+                  data-testid="item-image-replace"
+                >
+                  {menuCopy.imageReplace}
+                </button>
+
+                {imagePhotoState.status === 'failed' ? (
+                  <p style={m.fieldError} role="alert" data-testid="item-image-error">
+                    {menuCopy.imageUploadFailed}
+                  </p>
+                ) : null}
+                {imagePhotoState.status === 'success' ? (
+                  <p style={{ fontSize: 13, color: colors.success, margin: 0 }} role="status" data-testid="item-image-success">
+                    {menuCopy.imageUploadSuccess}
+                  </p>
+                ) : null}
+              </>
             ) : (
               <p style={m.fieldHint} data-testid="image-create-hint">
                 {menuCopy.imageEditOnly}

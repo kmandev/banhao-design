@@ -57,6 +57,12 @@ function makeRepository(overrides: Partial<MerchantMenuRepository> = {}): Mercha
     archiveItem: jest.fn().mockResolvedValue({}),
     reorderItems: jest.fn().mockResolvedValue({ reordered: 2 }),
     replaceOptionGroups: jest.fn().mockResolvedValue({ menuItemId: 'item-1', groupCount: 0 }),
+    requestItemImageUpload: jest
+      .fn()
+      .mockResolvedValue({ uploadUrl: 'https://r2.example/put', objectKey: 'menu-items/item-1/x.webp' }),
+    completeItemImageUpload: jest
+      .fn()
+      .mockResolvedValue({ imageUrl: 'https://cdn.example/menu-items/item-1/x.webp' }),
     ...overrides,
   };
 }
@@ -321,6 +327,287 @@ describe('MenuOverview — the item drawer (M-11 §04)', () => {
     fireEvent.click(screen.getByTestId('item-drawer-save'));
 
     expect(await screen.findByTestId('item-drawer-error')).toBeInTheDocument();
+  });
+});
+
+describe('MenuOverview — menu-item image upload (M-MENU-IMG)', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function sectionsWithImage(imageUrl: string | null): MenuSection[] {
+    return [
+      {
+        category: { id: 'cat-1', name: 'แนะนำ', sortOrder: 0, archivedAt: null },
+        items: [item({ imageUrl })],
+      },
+    ];
+  }
+
+  it('offers the upload control in edit mode when the dish has no image yet', async () => {
+    await renderOverview();
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+
+    expect(within(drawer).getByTestId('item-image-input')).toBeInTheDocument();
+    expect(within(drawer).getByTestId('item-image-replace')).toBeInTheDocument();
+  });
+
+  it('shows a photo preview for an existing image', async () => {
+    const repository = makeRepository({
+      listMenu: jest
+        .fn()
+        .mockResolvedValue(sectionsWithImage('https://cdn.example/menu-items/item-1/old.jpg')),
+    });
+    await renderOverview(repository);
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+
+    expect(within(drawer).getByRole('img')).toHaveAttribute(
+      'src',
+      'https://cdn.example/menu-items/item-1/old.jpg',
+    );
+  });
+
+  it('never renders a bare object key directly as an image source or as visible text', async () => {
+    const repository = makeRepository({
+      listMenu: jest.fn().mockResolvedValue(sectionsWithImage('menu-items/item-1/old.jpg')),
+    });
+    await renderOverview(repository);
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+
+    const img = within(drawer).queryByRole('img');
+    if (img) expect(img).not.toHaveAttribute('src', 'menu-items/item-1/old.jpg');
+    expect(within(drawer).queryByText('menu-items/item-1/old.jpg')).toBeNull();
+  });
+
+  it('create mode still shows the edit-only hint and offers no upload control', async () => {
+    await renderOverview();
+
+    fireEvent.click(screen.getByTestId('add-item'));
+    const drawer = await screen.findByTestId('item-drawer');
+
+    expect(within(drawer).getByTestId('image-create-hint')).toBeInTheDocument();
+    expect(within(drawer).queryByTestId('item-image-input')).toBeNull();
+    expect(within(drawer).queryByTestId('item-image-replace')).toBeNull();
+  });
+
+  it.each(['image/jpeg', 'image/png', 'image/webp'])(
+    'accepts %s and drives the existing two-step flow',
+    async (mimeType) => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+      const repository = await renderOverview();
+
+      fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+      await screen.findByTestId('item-drawer');
+      const file = new File(['x'], 'photo', { type: mimeType });
+      fireEvent.change(screen.getByTestId('item-image-input'), { target: { files: [file] } });
+
+      await screen.findByTestId('item-image-success');
+      expect(repository.requestItemImageUpload).toHaveBeenCalledWith('item-1', mimeType);
+    },
+  );
+
+  it('rejects an unsupported MIME type without calling upload-url', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+    const repository = await renderOverview();
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    await screen.findByTestId('item-drawer');
+    const file = new File(['x'], 'photo.gif', { type: 'image/gif' });
+    fireEvent.change(screen.getByTestId('item-image-input'), { target: { files: [file] } });
+
+    await screen.findByTestId('item-image-error');
+    expect(repository.requestItemImageUpload).not.toHaveBeenCalled();
+  });
+
+  it('runs request-url, then PUT, then complete, in that order', async () => {
+    const calls: string[] = [];
+    const repository = makeRepository({
+      requestItemImageUpload: jest.fn().mockImplementation(async () => {
+        calls.push('request');
+        return { uploadUrl: 'https://r2.example/put', objectKey: 'menu-items/item-1/x.webp' };
+      }),
+      completeItemImageUpload: jest.fn().mockImplementation(async () => {
+        calls.push('complete');
+        return { imageUrl: 'https://cdn.example/menu-items/item-1/x.webp' };
+      }),
+    });
+    global.fetch = jest.fn().mockImplementation(async () => {
+      calls.push('put');
+      return { ok: true };
+    }) as unknown as typeof global.fetch;
+    await renderOverview(repository);
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    await screen.findByTestId('item-drawer');
+    fireEvent.change(screen.getByTestId('item-image-input'), {
+      target: { files: [new File(['x'], 'photo.webp', { type: 'image/webp' })] },
+    });
+
+    await screen.findByTestId('item-image-success');
+    expect(calls).toEqual(['request', 'put', 'complete']);
+  });
+
+  it('shows failure and never calls complete when the R2 PUT fails', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false }) as unknown as typeof global.fetch;
+    const repository = await renderOverview();
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    await screen.findByTestId('item-drawer');
+    fireEvent.change(screen.getByTestId('item-image-input'), {
+      target: { files: [new File(['x'], 'photo.webp', { type: 'image/webp' })] },
+    });
+
+    await screen.findByTestId('item-image-error');
+    expect(repository.completeItemImageUpload).not.toHaveBeenCalled();
+  });
+
+  it('shows failure and preserves the existing image when complete fails', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+    const repository = makeRepository({
+      listMenu: jest
+        .fn()
+        .mockResolvedValue(sectionsWithImage('https://cdn.example/menu-items/item-1/old.jpg')),
+      completeItemImageUpload: jest.fn().mockRejectedValue(new Error('nope')),
+    });
+    await renderOverview(repository);
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+    fireEvent.change(screen.getByTestId('item-image-input'), {
+      target: { files: [new File(['x'], 'photo.webp', { type: 'image/webp' })] },
+    });
+
+    await screen.findByTestId('item-image-error');
+    expect(within(drawer).getByRole('img')).toHaveAttribute(
+      'src',
+      'https://cdn.example/menu-items/item-1/old.jpg',
+    );
+  });
+
+  it('disables the replace control and shows the uploading state while in flight, preventing a duplicate request', async () => {
+    let release: (value: { uploadUrl: string; objectKey: string }) => void = () => {};
+    const requestItemImageUpload = jest.fn(
+      () =>
+        new Promise<{ uploadUrl: string; objectKey: string }>((resolve) => {
+          release = resolve;
+        }),
+    );
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+    await renderOverview(makeRepository({ requestItemImageUpload }));
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+    fireEvent.change(screen.getByTestId('item-image-input'), {
+      target: { files: [new File(['x'], 'photo.webp', { type: 'image/webp' })] },
+    });
+
+    await within(drawer).findByTestId('item-image-uploading');
+    expect(within(drawer).getByTestId('item-image-replace')).toBeDisabled();
+    expect(requestItemImageUpload).toHaveBeenCalledTimes(1);
+
+    release({ uploadUrl: 'https://r2.example/put', objectKey: 'menu-items/item-1/x.webp' });
+    await screen.findByTestId('item-image-success');
+  });
+
+  it('lets a retry start a new upload after a failure', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+    const requestItemImageUpload = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('nope'))
+      .mockResolvedValue({ uploadUrl: 'https://r2.example/put', objectKey: 'menu-items/item-1/x.webp' });
+    await renderOverview(makeRepository({ requestItemImageUpload }));
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    await screen.findByTestId('item-drawer');
+    const file = new File(['x'], 'photo.webp', { type: 'image/webp' });
+
+    fireEvent.change(screen.getByTestId('item-image-input'), { target: { files: [file] } });
+    await screen.findByTestId('item-image-error');
+
+    fireEvent.change(screen.getByTestId('item-image-input'), { target: { files: [file] } });
+    await screen.findByTestId('item-image-success');
+
+    expect(requestItemImageUpload).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the new server-returned image on success and does not save the item form as a side effect', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+    const repository = await renderOverview();
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+    fireEvent.change(screen.getByTestId('item-image-input'), {
+      target: { files: [new File(['x'], 'photo.webp', { type: 'image/webp' })] },
+    });
+
+    await screen.findByTestId('item-image-success');
+    expect(within(drawer).getByRole('img')).toHaveAttribute(
+      'src',
+      'https://cdn.example/menu-items/item-1/x.webp',
+    );
+    expect(repository.updateItem).not.toHaveBeenCalled();
+  });
+
+  it('preserves an unsaved name edit through a successful image upload', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+    await renderOverview();
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+    fireEvent.change(within(drawer).getByLabelText(/ชื่อรายการ/), {
+      target: { value: 'ชื่อใหม่ยังไม่บันทึก' },
+    });
+
+    fireEvent.change(screen.getByTestId('item-image-input'), {
+      target: { files: [new File(['x'], 'photo.webp', { type: 'image/webp' })] },
+    });
+    await screen.findByTestId('item-image-success');
+
+    expect(within(drawer).getByLabelText(/ชื่อรายการ/)).toHaveValue('ชื่อใหม่ยังไม่บันทึก');
+  });
+
+  it('offers no remove/clear control and no replacement confirmation dialog', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof global.fetch;
+    const repository = makeRepository({
+      listMenu: jest
+        .fn()
+        .mockResolvedValue(sectionsWithImage('https://cdn.example/menu-items/item-1/old.jpg')),
+    });
+    await renderOverview(repository);
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+
+    expect(within(drawer).queryByText('นำออก')).toBeNull();
+    expect(screen.queryByTestId('image-replace-confirm-dialog')).toBeNull();
+
+    fireEvent.change(screen.getByTestId('item-image-input'), {
+      target: { files: [new File(['x'], 'photo.webp', { type: 'image/webp' })] },
+    });
+    // No confirmation gate stands between the file picker and the upload.
+    await screen.findByTestId('item-image-uploading');
+  });
+
+  it('does not disturb the option editor button or the existing drawer save flow', async () => {
+    const repository = await renderOverview();
+
+    fireEvent.click(screen.getByTestId('edit-item-ข้าวผัดกุ้ง'));
+    const drawer = await screen.findByTestId('item-drawer');
+    expect(within(drawer).getByTestId('open-option-editor')).toBeInTheDocument();
+
+    fireEvent.change(within(drawer).getByLabelText(/ราคา/), { target: { value: '70.00' } });
+    fireEvent.click(screen.getByTestId('item-drawer-save'));
+
+    await waitFor(() =>
+      expect(repository.updateItem).toHaveBeenCalledWith('item-1', { basePriceSatang: 7000 }),
+    );
   });
 });
 
