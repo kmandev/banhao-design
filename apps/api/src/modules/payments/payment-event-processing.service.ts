@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
+import { calculateFoodSubtotalCommissionSatang } from './commission-pricing';
 
 /** How many unprocessed `payment_events` one tick claims work from at most. */
 const BATCH_SIZE = 25;
@@ -85,12 +86,28 @@ interface PaymentAttemptRow {
  * silently recording money that may not exist or silently discarding a
  * signal that might.
  *
+ * ## Ledger posting — DEC-043
+ *
+ * A confirmed `PAID` order now posts exactly one ledger group representing
+ * `Merchant → commission → BANHAO` (DEC-025's direction, DEC-043's now-locked
+ * 8%-of-food-subtotal rate): `MERCHANT_PAYABLE` debited and `PLATFORM_REVENUE`
+ * credited by the same commission amount, so the group sums to zero on its
+ * own (DEC-034 — the group is the unit the zero-sum assertion runs over).
+ * `postCommissionLedger` runs on both the fresh transition and the
+ * already-PAID self-heal branch of `completeSuccessSideEffects` — the exact
+ * two places money is confirmed settled — anchored on
+ * `commission:<paymentId>:<providerTransactionId>`, so a duplicate delivery
+ * of the same event, or a retry of a partially-completed one, can never post
+ * the group twice (the same DEC-030 identity `payment_transactions` already
+ * uses). It deliberately does **not** run for `SURPLUS_PAYMENT` or
+ * `LATE_PAYMENT` — a payment that never (or no longer) genuinely settles this
+ * order commits no commission. **Delivery fee and its rider side are
+ * untouched: `RIDER_PAYABLE` is not posted here, and BQ-029 (rider earnings)
+ * is not resolved by this or any other part of this service.**
+ *
  * ## What this service deliberately does NOT do
  *
- * No `ledger_entry_groups`, no `ledger_entries`, no commission, no
- * merchant/rider/platform payable posting — DEC-025's own consequences
- * clause forbids writing that code until Q-010/BQ-028 (commission rate)
- * resolves. No refund of any kind — Q-020's mechanism does not exist. For
+ * No refund of any kind — Q-020's mechanism does not exist. For
  * `LATE_PAYMENT` and `SURPLUS_PAYMENT`, this service **only detects and
  * records** a `reconciliation_cases` row — DEC-029 and DEC-030 both leave
  * the business resolution `OPEN`; inventing one here would be exactly the
@@ -99,7 +116,9 @@ interface PaymentAttemptRow {
  * payment attempt is an ordinary, expected outcome the state machine already
  * models (`PAYMENT_LIFECYCLE.md`'s own `FAILED --> PENDING : retry` edge,
  * already reachable via `PaymentsService.regenerateAttempt`), not an anomaly
- * requiring operator review.
+ * requiring operator review. No `RIDER_PAYABLE`, no `CUSTOMER_PAYMENT`, no
+ * delivery-fee-to-rider posting — those require BQ-029, which is `OPEN` and
+ * out of scope here.
  */
 @Injectable()
 export class PaymentEventProcessingService {
@@ -379,7 +398,7 @@ export class PaymentEventProcessingService {
         }
       }
 
-      await this.completeSuccessSideEffects(event.id, payment, attempt);
+      await this.completeSuccessSideEffects(event.id, payment, attempt, providerTransactionId);
       return;
     }
 
@@ -399,20 +418,24 @@ export class PaymentEventProcessingService {
       return;
     }
 
-    await this.completeSuccessSideEffects(event.id, payment, attempt);
+    await this.completeSuccessSideEffects(event.id, payment, attempt, providerTransactionId);
   }
 
   /**
    * `payments → SUCCESS`, `payment_attempts → SUCCESS`, guarded
-   * `orders PENDING_PAYMENT → PAID`, `order_status_history`. Every write
-   * here is individually guarded (state-in-WHERE) so calling this twice for
-   * the same payment — the self-heal retry path above — never double-applies
-   * anything; a step already done simply matches 0 rows and is skipped.
+   * `orders PENDING_PAYMENT → PAID`, `order_status_history`, and the
+   * commission ledger group (DEC-043 — see this file's own doc comment).
+   * Every write here is individually guarded (state-in-WHERE, or the
+   * ledger's own `group_key` uniqueness) so calling this twice for the same
+   * payment — the self-heal retry path above — never double-applies
+   * anything; a step already done simply matches 0 rows, or a unique
+   * conflict, and is skipped.
    */
   private async completeSuccessSideEffects(
     eventId: string,
     payment: PaymentRow,
     attempt: PaymentAttemptRow | null,
+    providerTransactionId: string,
   ): Promise<void> {
     const now = new Date().toISOString();
 
@@ -450,6 +473,7 @@ export class PaymentEventProcessingService {
 
     if (transitionedOrder) {
       await this.writeOrderHistory(payment.order_id);
+      await this.postCommissionLedger(payment, providerTransactionId);
       // H-3 — fires only on the guarded-UPDATE winner (this branch), so a
       // self-heal retry of this same event (the earlier-run-already-recorded
       // path a few lines up) never reaches here and never double-notifies.
@@ -477,6 +501,7 @@ export class PaymentEventProcessingService {
       // deliberately not added here, no migration), so existence is
       // checked first, narrowly, only on this already-rare self-heal path.
       await this.ensureOrderHistoryRecorded(payment.order_id);
+      await this.postCommissionLedger(payment, providerTransactionId);
       return;
     }
 
@@ -535,6 +560,142 @@ export class PaymentEventProcessingService {
     }
 
     await this.writeOrderHistory(orderId);
+  }
+
+  /**
+   * DEC-043 — posts the `Merchant → commission → BANHAO` ledger group for a
+   * confirmed `PAID` order: `MERCHANT_PAYABLE` debited and `PLATFORM_REVENUE`
+   * credited by the same 8%-of-food-subtotal commission amount, so the group
+   * sums to zero on its own. Commission is derived from `orders.subtotal_satang`
+   * — the food subtotal only, never delivery fee, service fee, discount or
+   * the grand total — read fresh from the (immutable) order row, never from
+   * the client or from `payment.amount_satang`.
+   *
+   * Anchored on `commission:<paymentId>:<providerTransactionId>` — the same
+   * event identity `payment_transactions.provider_transaction_id` already
+   * uses for DEC-030 — via `ledger_entry_groups.group_key`'s own unique
+   * constraint (`20260811000007_ledger_domain.sql`), so a duplicate delivery
+   * of the same event, or a retry of a partially-completed one, can never
+   * post the group twice. No `RIDER_PAYABLE`, no `CUSTOMER_PAYMENT`: the
+   * delivery fee's rider side is BQ-029, `OPEN`, and out of scope.
+   */
+  private async postCommissionLedger(payment: PaymentRow, providerTransactionId: string): Promise<void> {
+    const { data: order, error: orderError } = await this.supabase.admin
+      .from('orders')
+      .select('id, restaurant_id, subtotal_satang')
+      .eq('id', payment.order_id)
+      .maybeSingle<{ id: string; restaurant_id: string; subtotal_satang: number }>();
+
+    if (orderError) {
+      throw new Error(`orders read for commission ledger failed: ${orderError.message}`);
+    }
+    if (!order) {
+      throw new Error(`orders read for commission ledger found no row for ${payment.order_id}`);
+    }
+
+    const { data: restaurant, error: restaurantError } = await this.supabase.admin
+      .from('restaurants')
+      .select('merchant_id')
+      .eq('id', order.restaurant_id)
+      .maybeSingle<{ merchant_id: string }>();
+
+    if (restaurantError) {
+      throw new Error(`restaurants read for commission ledger failed: ${restaurantError.message}`);
+    }
+    if (!restaurant) {
+      throw new Error(`restaurants read for commission ledger found no row for ${order.restaurant_id}`);
+    }
+
+    const commissionSatang = calculateFoodSubtotalCommissionSatang(order.subtotal_satang);
+    const groupKey = `commission:${payment.id}:${providerTransactionId}`;
+
+    const { data: group, error: groupError } = await this.supabase.admin
+      .from('ledger_entry_groups')
+      .insert({ group_key: groupKey, order_id: order.id, kind: 'MERCHANT_COMMISSION' })
+      .select('id')
+      .maybeSingle<{ id: string }>();
+
+    if (groupError) {
+      if (!isUniqueViolation(groupError)) {
+        throw new Error(`ledger_entry_groups insert failed: ${groupError.message}`);
+      }
+
+      // Already posted by an earlier run of this same event (self-heal), OR
+      // the group committed but the entries insert below did not (the same
+      // class of narrow crash window `ensureOrderHistoryRecorded` already
+      // handles for order_status_history) — told apart, and completed if
+      // needed, by ensureCommissionEntriesRecorded.
+      await this.ensureCommissionEntriesRecorded(groupKey, restaurant.merchant_id, commissionSatang);
+      return;
+    }
+
+    if (!group) {
+      throw new Error('ledger_entry_groups insert returned no row');
+    }
+
+    await this.insertCommissionEntries(group.id, restaurant.merchant_id, commissionSatang);
+  }
+
+  private async ensureCommissionEntriesRecorded(
+    groupKey: string,
+    merchantId: string,
+    commissionSatang: number,
+  ): Promise<void> {
+    const { data: existingGroup, error: groupReadError } = await this.supabase.admin
+      .from('ledger_entry_groups')
+      .select('id')
+      .eq('group_key', groupKey)
+      .maybeSingle<{ id: string }>();
+
+    if (groupReadError) {
+      throw new Error(`ledger_entry_groups read failed: ${groupReadError.message}`);
+    }
+    if (!existingGroup) {
+      throw new Error(`ledger_entry_groups read found no row for group_key ${groupKey}`);
+    }
+
+    const { data: existingEntries, error: entriesReadError } = await this.supabase.admin
+      .from('ledger_entries')
+      .select('id')
+      .eq('group_id', existingGroup.id)
+      .returns<{ id: string }[]>();
+
+    if (entriesReadError) {
+      throw new Error(`ledger_entries existence check failed: ${entriesReadError.message}`);
+    }
+    if (existingEntries && existingEntries.length > 0) {
+      return;
+    }
+
+    await this.insertCommissionEntries(existingGroup.id, merchantId, commissionSatang);
+  }
+
+  /** `MERCHANT_PAYABLE` debited, `PLATFORM_REVENUE` credited, by the same amount — sums to zero (DEC-034). */
+  private async insertCommissionEntries(
+    groupId: string,
+    merchantId: string,
+    commissionSatang: number,
+  ): Promise<void> {
+    const { error } = await this.supabase.admin.from('ledger_entries').insert([
+      {
+        group_id: groupId,
+        account: 'MERCHANT_PAYABLE',
+        party_type: 'MERCHANT',
+        party_id: merchantId,
+        amount_satang: -commissionSatang,
+      },
+      {
+        group_id: groupId,
+        account: 'PLATFORM_REVENUE',
+        party_type: 'PLATFORM',
+        party_id: null,
+        amount_satang: commissionSatang,
+      },
+    ]);
+
+    if (error) {
+      throw new Error(`ledger_entries insert failed: ${error.message}`);
+    }
   }
 
   private async openCase(
