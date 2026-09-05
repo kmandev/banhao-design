@@ -1674,6 +1674,50 @@ built on personal relationships.
 
 ---
 
+### BQ-040 — Delivery-side funding gap: who covers the difference between the customer delivery fee and the rider earning
+
+```yaml
+priority: P1
+owner: PRODUCT_OWNER
+status: RESOLVED
+decision: DEC-045
+blocks: nothing further
+related: BQ-026 (resolved, DEC-035), BQ-029 (resolved, DEC-044)
+```
+
+> **RESOLVED 2026-09-05 — DEC-045.** BANHAO absorbs the ฿2 (200 satang)
+> difference per completed delivery as a platform delivery write-off
+> (`PLATFORM_WRITE_OFF`), independent of merchant commission and service fee.
+> The discussion below is retained as the record of how the question arose —
+> read it as history, not as an open question.
+
+**Question:** DEC-035 sets the customer delivery fee at ฿10/order; DEC-044
+sets the rider earning at ฿12/completed delivery. Neither decision states who
+funds the ฿2 difference. Is it intentionally absorbed by BANHAO, expected to
+be covered by merchant commission, or a modeling gap requiring one of the two
+locked amounts to be reconsidered?
+
+**Why it matters:** DEC-023's own consequences clause and DEC-044's own
+consequences clause both explicitly flagged this gap without resolving it —
+`docs/SETTLEMENT_MODEL.md` § 4.1 documents the same shape of gap in its
+illustrative worked example. Without an answer, the rider-earning ledger
+group posted by `DeliveryCompletionService` is a single, non-zero-summing
+entry, and CON-003's "every order's ledger balances to exactly zero" cannot
+be satisfied for any order that reaches a completed delivery.
+
+**Options:** BANHAO platform write-off · merchant commission implicitly funds
+it (requires a new earmarking rule DEC-043 does not state) · a full
+customer-payment ledger flow · leave unresolved.
+
+**Recommendation:** platform write-off — `PLATFORM_WRITE_OFF` already exists
+in the ledger account enum and is unused, so recording it needs no migration.
+
+**Impact if wrong:** the rider-earning ledger group cannot be made to balance
+without either an invented cross-subsidy rule or a larger, separately
+authorized customer-payment ledger redesign.
+
+---
+
 ## Design questions from the Customer App (DQ-01…DQ-05)
 
 Required by §29 of the task brief. Source:

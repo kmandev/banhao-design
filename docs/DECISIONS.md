@@ -3599,4 +3599,113 @@ never folded into ordinary earnings)
 
 Resolves the rider-side half of DEC-023's `OPEN — NUMERIC PRICING` (the
 customer side was already resolved by DEC-035); DEC-023's money-flow model is
-otherwise unchanged. / None.
+otherwise unchanged. / None — but the ฿2-per-delivery gap this decision's own
+Consequences clause left unresolved is separately answered by **DEC-045**
+(BANHAO platform write-off). This decision's own ฿12 amount and model are
+unchanged by DEC-045.
+
+---
+
+## DEC-045 — The ฿2 delivery funding gap is a BANHAO platform write-off
+
+**Status:** ACCEPTED · **Date:** 2026-09-05 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Phase 1 intentionally subsidizes the difference between the customer delivery
+fee and rider earning. The customer is charged ฿10 (1,000 satang) per
+delivery under **DEC-035**, while the rider earns ฿12 (1,200 satang) per
+completed delivery under **DEC-044**. **BANHAO absorbs the ฿2 (200 satang)
+difference as a platform delivery write-off.** This write-off is independent
+of merchant commission and customer service fee and must not be treated as
+funded by either unless a later business decision explicitly changes this
+rule.
+
+**Accounting intent:** for each completed delivery, the ฿2 platform delivery
+subsidy is represented explicitly as `PLATFORM_WRITE_OFF`, so the rider
+earning obligation and its funding are auditable rather than silently
+absorbed. This resolves **BQ-040**, the funding-relationship question DEC-044's
+own Consequences clause left open.
+
+### Why
+
+Product Owner decision, 2026-09-05. Of the documented options, an explicit
+write-off is the smallest change that gives the ฿2 a named, auditable meaning:
+`PLATFORM_WRITE_OFF` already exists in the `ledger_entries.account` enum
+(`20260811000007_ledger_domain.sql`) and is currently unused, so recording it
+needs no migration and no new schema. It also avoids inventing an implicit
+cross-subsidy relationship between commission and delivery economics that no
+existing decision states.
+
+### Alternatives
+
+- **Merchant commission implicitly funds the gap** — rejected. DEC-043 defines
+  only the commission *rate*; it does not earmark commission revenue for
+  rider delivery funding, and asserting that here would be inventing a new
+  business rule alongside a documentation lock, not recording one. It also
+  would not produce an individually balanced rider-earning ledger group
+  without a broader customer-payment ledger model that does not exist today.
+- **A full customer-payment ledger flow** (`CUSTOMER_PAYMENT` posted at
+  payment time, distributing to every account including a delivery-side line)
+  — the most complete architecture, matching `SETTLEMENT_MODEL.md` § 4.1's own
+  worked example shape, but materially larger than the current implementation
+  and not required to answer the narrow question this decision settles: *who*
+  funds the ฿2, not how the whole order's money is eventually modeled.
+  Building it remains a separate, larger, not-yet-authorized engineering
+  question.
+- **Leave the gap unresolved** — rejected. `RIDER_PAYABLE −1200` would remain
+  permanently unbalanced, and CON-003's "every order's ledger balances to
+  exactly zero" would stay unsatisfied for every delivered order indefinitely.
+
+### Consequences
+
+- **This decision does not itself write a `PLATFORM_WRITE_OFF` ledger entry,
+  modify `DeliveryCompletionService`, or change any schema.** Posting the
+  offsetting entry is a separate, not-yet-authorized engineering task.
+- **DEC-035 (฿10 delivery fee), DEC-036 (฿5 service fee), DEC-043 (8%
+  commission) and DEC-044 (฿12 rider earning) are unaffected** — this
+  decision touches only the funding relationship between two already-locked
+  numbers, not either number itself.
+- **Merchant commission is not reinterpreted as rider funding.** Nothing here
+  earmarks `PLATFORM_REVENUE` (commission) for delivery economics; the two
+  remain separate ledger lines for separate economic events.
+- **Service fee is not reinterpreted as rider funding.** DEC-036's fee stays
+  exactly what it was: BANHAO revenue, unrelated to delivery.
+- **The existing broader ledger model is unchanged.** This decision does not
+  redesign the customer-payment flow, does not require posting
+  `CUSTOMER_PAYMENT`, and does not touch the merchant-commission ledger
+  implementation (DEC-043) or its own self-balanced group.
+- **BQ-024 (cancellation and waiting compensation) is untouched and remains
+  `OPEN`.** This decision concerns only the ordinary per-delivery earning
+  gap, never compensation.
+- **BQ-032 (settlement cycle) and BQ-034 (rider payout netting) are untouched
+  and remain `OPEN`.** This decision does not authorize or describe a
+  settlement/payout implementation.
+- **The intended accounting shape** is a `PLATFORM_WRITE_OFF` entry of 200
+  satang, representing BANHAO's absorbed cost for the delivery. **This
+  decision does not specify the exact sign convention, party fields, or code
+  shape of that future ledger entry** — only its account and amount. Making
+  the rider-earning group sum to zero correctly is an engineering
+  responsibility for the implementation task, not something this decision
+  fixes in advance.
+
+### Evidence
+
+Product Owner instruction, 2026-09-05 ("BANHAO — DECISION LOCK: DEC-045
+Delivery Funding Gap").
+
+### Related Requirements
+
+CON-003 (ledger balances to zero, integer satang)
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 3, § 4.1, § 8 · `docs/OPEN_BUSINESS_QUESTIONS.md`
+BQ-040 · `apps/api/src/modules/rider/delivery-completion.service.ts`
+(`insertRiderEarningEntry`, not modified by this decision)
+
+### Supersedes / Superseded By
+
+None / None. Resolves **BQ-040** and closes the funding-relationship question
+DEC-044's Consequences clause left open; does not supersede DEC-023, DEC-035,
+DEC-036, DEC-043, or DEC-044, each of which stands unchanged.

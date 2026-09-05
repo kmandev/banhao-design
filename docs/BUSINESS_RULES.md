@@ -441,9 +441,11 @@ Other rules:
 - `ACCEPTED` **DEC-023** — the delivery fee funds rider compensation.
   **DEC-035** sets the Phase 1 fee at a flat ฿10 (1000 satang). **DEC-044**
   (2026-09-05) resolves the rider side: a flat **฿12 (1200 satang) per
-  completed delivery**, no distance/base/zone component. The ฿2-per-delivery
-  gap between the two locked figures is documented, not funded, by either
-  decision.
+  completed delivery**, no distance/base/zone component. **DEC-045**
+  (2026-09-05) resolves the ฿2-per-delivery gap between the two locked
+  figures: **BANHAO absorbs it as a platform delivery write-off**
+  (`PLATFORM_WRITE_OFF`), independent of merchant commission (DEC-043) and
+  service fee (DEC-036) — neither is reinterpreted as funding it.
 - `ACCEPTED` **DEC-004 / REQ-001**, **dormant in Phase 1** — cash a rider
   collects is a platform liability, never income, displayed separately. No rider
   handles cash while COD is disabled (DEC-016), but the rule is not repealed.
