@@ -1142,7 +1142,7 @@ None / None.
 
 ## DEC-023 — Delivery fee funds rider compensation (model only)
 
-**Status:** ACCEPTED — MODEL · **numeric pricing resolved 2026-08-24 by DEC-035**
+**Status:** ACCEPTED — MODEL · **customer side resolved 2026-08-24 by DEC-035 · rider side resolved 2026-09-05 by DEC-044**
 **Date:** 2026-08-10
 **Owner:** PRODUCT_OWNER
 
@@ -1186,8 +1186,10 @@ CON-003
 
 ### Supersedes / Superseded By
 
-None / The `OPEN — NUMERIC PRICING` half is resolved by **DEC-035** (flat ฿10,
-1000 satang). The money-flow model recorded here is unchanged and still stands.
+None / The `OPEN — NUMERIC PRICING` half is resolved in two parts: the
+customer-side delivery fee by **DEC-035** (flat ฿10, 1000 satang), and the
+rider-side earning by **DEC-044** (flat ฿12, 1200 satang per completed
+delivery). The money-flow model recorded here is unchanged and still stands.
 
 ---
 
@@ -3498,3 +3500,103 @@ CON-003 (ledger balances to zero, integer satang)
 
 Resolves the `OPEN — NUMERIC RATE` half of DEC-025, which otherwise stands
 unchanged. / None.
+
+---
+
+## DEC-044 — Rider earning model: flat ฿12 per completed delivery
+
+**Status:** ACCEPTED · **Date:** 2026-09-05 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+The Phase 1 rider earning model is **flat per completed delivery**, at
+**1,200 satang (฿12)**. The earning applies when a delivery reaches the
+completed/delivered state. This resolves **BQ-029**, which DEC-023 left
+`OPEN` on the rider side.
+
+No distance component, no base-plus-distance, no zone pricing, no surge or
+peak-hour bonus, no minimum earnings guarantee, and no tips — none of these
+exists in Phase 1. No rider-side platform fee exists in Phase 1 either (see
+Consequences).
+
+### Why
+
+Product Owner decision, 2026-09-05. A flat per-delivery amount is the only
+model whose required input (a completed-delivery count) already exists in the
+live schema today — `deliveries.state` reaching its terminal delivered state.
+The other documented options (distance-based, base + distance, zone-based)
+each depend on a distance or zone capability that does not exist: no
+geocoding or routing provider is selected, `deliveries.distance_m` is never
+populated by any code path, and the zone/service-area tables are deferred
+from the schema — the same infrastructure gap **DEC-035** already cited as
+its own reason for rejecting distance-banded *delivery* pricing in Phase 1.
+
+### Alternatives
+
+- **Distance-based** and **base + distance** (`docs/RIDER_LIFECYCLE.md` § 9,
+  `docs/OPEN_BUSINESS_QUESTIONS.md` BQ-029) — rejected for Phase 1: no
+  distance-measurement capability exists to compute either.
+- **Zone-based** — rejected for Phase 1: the zone/service-area tables this
+  would need are deferred, not built.
+- **Peak/surge bonus, minimum guarantee, tips** — each considered as a
+  modifier layerable on the flat amount; none is approved for Phase 1. The
+  design's own `D-13` sample assumes a peak bonus (`โบนัสชั่วโมงเร่งด่วน ฿72`)
+  and a rider-side platform fee (`ค่าธรรมเนียมแพลตฟอร์ม −฿38`) exist —
+  **neither is activated by this decision.** They remain exactly what
+  DEC-023 already called the design's illustrative samples: evidence of
+  intent, not an approved rule.
+
+### Consequences
+
+- `deliveries.rider_earning_satang` may now be computed and written — a
+  separate, not-yet-authorized engineering task. This decision does not
+  itself write that code, add a migration, or change the ledger.
+- **No `RIDER_PAYABLE` ledger entry is authorized by this decision alone.**
+  Posting one is the engineering task the Consequences clause above defers.
+- **The ฿10 customer delivery fee (DEC-035) and the ฿12 rider earning locked
+  here are separate business values.** There is a ฿2-per-delivery difference
+  between them. This decision does **not** assign that ฿2 to merchant
+  commission, service fee, or any other revenue category — no funding rule is
+  created, and none should be inferred. The gap is documented, not resolved,
+  exactly as `docs/SETTLEMENT_MODEL.md` § 4.1 already flagged it as an open
+  unit-economics question, not something this decision settles.
+- **DEC-035 (delivery fee), DEC-036 (service fee) and DEC-043 (commission)
+  are unaffected** — this decision touches only the rider earning line.
+- **BQ-024 (cancellation and waiting compensation) is untouched and remains
+  `OPEN`.** Any future compensation is its own ledger line
+  (`RIDER_COMPENSATION`), never folded into the ฿12 flat earning locked here.
+- **Admin configurability is a stated future intent, not built by this
+  decision.** The ฿12 amount is recorded as the Phase 1 default/current
+  configured value; no Admin UI, configuration table, or API is authorized
+  here. Whatever mechanism eventually makes it configurable **must not
+  retroactively change an already-completed delivery's earning** — a future
+  change may only affect deliveries completed after the new value takes
+  effect, and a historical earning must remain auditable against the value
+  that was in effect when it was calculated. This decision fixes that
+  constraint; it does not design the mechanism that will satisfy it.
+- No schema change is required to record this rate: `deliveries.rider_earning_satang`
+  already exists as a nullable `bigint` (`20260811000009_delivery_domain.sql`),
+  and `ledger_entries.amount_satang` already stores a signed amount, not a
+  formula.
+
+### Evidence
+
+Product Owner instruction, 2026-09-05 ("BANHAO — BQ-029 RIDER EARNING MODEL —
+DECISION LOCK ONLY").
+
+### Related Requirements
+
+CON-003 (ledger balances to zero, integer satang) · REQ-001 (compensation is
+never folded into ordinary earnings)
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 8 · `docs/RIDER_LIFECYCLE.md` § 9 ·
+`docs/OPEN_BUSINESS_QUESTIONS.md` BQ-029 · `docs/DATABASE_DESIGN.md`
+(`deliveries.rider_earning_satang`)
+
+### Supersedes / Superseded By
+
+Resolves the rider-side half of DEC-023's `OPEN — NUMERIC PRICING` (the
+customer side was already resolved by DEC-035); DEC-023's money-flow model is
+otherwise unchanged. / None.

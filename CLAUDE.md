@@ -174,7 +174,8 @@ Decisions that change how anything gets built:
 | **DEC-020/021/022** | Broadcast → first accept from `MERCHANT_ACCEPTED`; rider cancellation reassigns and never cancels the order; no-rider escalates to an operator and never auto-cancels |
 | **DEC-023/024/025** | Delivery fee, service fee and commission — models accepted. **Delivery and service fee amounts (DEC-035, DEC-036) and the commission rate (DEC-043) are now all approved** |
 | **DEC-035/036** | **Phase 1 fees: delivery flat ฿10 (1000 satang), service fixed ฿5 (500 satang).** No distance, bands or zones in Phase 1 |
-| **DEC-043** | **Phase 1 merchant commission: 8% of the food subtotal, rounded to whole baht.** Delivery and service fees excluded from the base. Rider earnings (BQ-029) untouched, still `OPEN` |
+| **DEC-043** | **Phase 1 merchant commission: 8% of the food subtotal, rounded to whole baht.** Delivery and service fees excluded from the base |
+| **DEC-044** | **Phase 1 rider earning: flat ฿12 (1200 satang) per completed delivery** — no distance/base/zone, no surge/peak bonus, no minimum guarantee, no tips, no rider-side platform fee. Resolves BQ-029. BQ-024 (cancellation/waiting compensation) is untouched, still `OPEN` |
 | **DEC-026…030** | Settlement is its own domain; refund lives in payment; idempotency, late payment and duplicate-payment protection required |
 | **DEC-031/032** | Manual operations and operator fallback are intentional Phase 1 capabilities. **No Admin App yet** |
 
@@ -571,7 +572,9 @@ below. Treat C-14 as `UNVERIFIED`, not as passing.
    product decision, not an implementation one. **None of them is `MUST`
    scope**: M-06/M-09 are `SHOULD` and UX-SPEC M-13 (earnings) / M-14
    (settings) are `LATER` — and M-13 earnings is additionally money-blocked
-   (BQ-029, Q-032). With M-11, M-12, M-10 and M-AV built this no
+   (Q-032; BQ-029 itself is resolved — **DEC-044** — but the settlement-cycle
+   parameters an earnings screen would need to show a payout are still
+   `OPEN`). With M-11, M-12, M-10 and M-AV built this no
    longer blocks launch-critical merchant work. The next `MUST` gap in the
    product is the **Admin app (Phase I)**, which has no design artifact at all.
 2. **C-14 cannot be live-verified with the current test credentials.** The

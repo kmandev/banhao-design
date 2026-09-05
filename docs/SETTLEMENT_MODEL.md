@@ -83,7 +83,7 @@ the rider's side of the delivery fee remains open.
 
 | Flow | Decision | Model | Numbers |
 |---|---|---|---|
-| `Customer → delivery fee → rider earning` | **DEC-023** | `ACCEPTED` | Customer side **`ACCEPTED`** — flat ฿10 / 1000 satang (**DEC-035**). Rider side **`OPEN`** — BQ-029 |
+| `Customer → delivery fee → rider earning` | **DEC-023** | `ACCEPTED` | Customer side **`ACCEPTED`** — flat ฿10 / 1000 satang (**DEC-035**). Rider side **`ACCEPTED`** — flat ฿12 / 1200 satang per completed delivery (**DEC-044**, resolving BQ-029) |
 | `Customer → service fee → BANHAO` | **DEC-024** | `ACCEPTED` | **`ACCEPTED`** — fixed ฿5 / 500 satang (**DEC-036**) |
 | `Merchant → commission → BANHAO` | **DEC-025** | `ACCEPTED` | **`ACCEPTED`** — 8% of the food subtotal, rounded to whole baht (**DEC-043**) |
 
@@ -172,8 +172,12 @@ decisions. **None is settled by this lock:**
    against ฿12 paid to the rider; commission covers the gap. DEC-023 fixes the
    *direction* of the money, not that it balances. **DEC-035 has since set the
    Phase 1 delivery fee at exactly this ฿10**, so the gap this worked example
-   describes is now the approved position rather than a sample — whether it is
-   sustainable depends on the rider rate, still → **BQ-029, `OPEN`**.
+   describes is now the approved position rather than a sample.
+   **Resolved 2026-09-05 by DEC-044: the rider side is also now locked, at
+   exactly this ฿12** (flat, per completed delivery) — so the ฿2-per-delivery
+   gap between the two is the actual Phase 1 position, not a sample. DEC-044
+   records the gap; it does not fund it from commission or any other line —
+   no funding rule is created by either decision.
 3. **10% is internally consistent** across every sample (120→12, 180→18,
    260→26, 95→10, 75→8) and stated outright as `10% ของยอดอาหาร`. **DEC-025
    explicitly refuses to let that become the rate by default** → Q-010, BQ-028.
@@ -299,15 +303,21 @@ cash orders. Consequences:
 
 ## 8. Rider settlement
 
-`ACCEPTED` — the mechanism; `OPEN` — every number.
+`ACCEPTED` — the mechanism. **RESOLVED 2026-09-05 — DEC-044**: delivery
+earnings are a flat ฿12 (1200 satang) per completed delivery, with no bonus
+and no rider-side platform fee in Phase 1. Compensation and cash remain as
+below.
 
 ```
 rider round net =
-    Σ delivery earnings + bonuses
-  − platform fee charged to the rider     (documented in D-13; rate OPEN, BQ-029)
-  + compensation for platform-caused failures  (BQ-024 — likelier under DEC-021)
+    Σ delivery earnings                   (flat ฿12 / delivery — DEC-044)
+  + compensation for platform-caused failures  (BQ-024 — still OPEN, likelier under DEC-021)
   − outstanding cash held                 (DORMANT — DEC-016)
 ```
+
+No bonus term and no rider-side platform-fee deduction appear in Phase 1's
+formula — both were considered (the `D-13` design sample assumes a peak-hour
+bonus and a rider-side platform fee) and **neither is activated** by DEC-044.
 
 With COD disabled the cash-netting term is zero and the automatic cash-limit
 dispatch block cannot trigger. **DEC-004 and REQ-001 remain ACCEPTED and must
@@ -432,10 +442,11 @@ Q-004 (cash limit) · the cash half of BQ-034.
 funding) · BQ-015 (who bears the cost of wasted food). **Resolved 2026-08-24:**
 BQ-026 (DEC-035, flat ฿10) and the amount half of BQ-027 (DEC-036, fixed ฿5).
 **Resolved 2026-09-05:** Q-010 / BQ-028 (**DEC-043** — commission is 8% of the
-food subtotal, rounded to whole baht).
-**Still `OPEN` — P1:** BQ-029 (rider earnings formula) · BQ-031 (partial refund
-composition) · BQ-032 (settlement cycle) · BQ-034 (negative balances) · Q-011
-(chargebacks).
+food subtotal, rounded to whole baht) · BQ-029 (**DEC-044** — rider earning is
+a flat ฿12 per completed delivery; BQ-024 is unaffected and stays open below).
+**Still `OPEN` — P1:** BQ-024 (rider cancellation/waiting compensation) ·
+BQ-031 (partial refund composition) · BQ-032 (settlement cycle) · BQ-034
+(negative balances) · Q-011 (chargebacks).
 
 ⚖️ `LEGAL_REVIEW_REQUIRED` before any of this is implemented: payment
 facilitation licensing (Q-002), merchant of record, settlement legal structure,

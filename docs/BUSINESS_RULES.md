@@ -439,23 +439,33 @@ decides whether the product works at all.
 Other rules:
 
 - `ACCEPTED` **DEC-023** — the delivery fee funds rider compensation.
-  **DEC-035** sets the Phase 1 fee at a flat ฿10 (1000 satang). The rider side
-  of the flow is still `OPEN` (BQ-029).
+  **DEC-035** sets the Phase 1 fee at a flat ฿10 (1000 satang). **DEC-044**
+  (2026-09-05) resolves the rider side: a flat **฿12 (1200 satang) per
+  completed delivery**, no distance/base/zone component. The ฿2-per-delivery
+  gap between the two locked figures is documented, not funded, by either
+  decision.
 - `ACCEPTED` **DEC-004 / REQ-001**, **dormant in Phase 1** — cash a rider
   collects is a platform liability, never income, displayed separately. No rider
   handles cash while COD is disabled (DEC-016), but the rule is not repealed.
 - `ACCEPTED`, dormant — the cash-limit dispatch block and cash netting. Limit
   value still `OPEN` (Q-004).
-- `ACCEPTED` — riders pay a platform fee out of their earnings
-  (`ค่าธรรมเนียมแพลตฟอร์ม −฿38` in `D-13`). The rate is `OPEN` (BQ-029).
+- **`DEC-044` (2026-09-05) — no rider-side platform fee in Phase 1.** The
+  design's own `D-13` sample shows one (`ค่าธรรมเนียมแพลตฟอร์ม −฿38`); it is
+  not activated. This line was previously (incorrectly) tagged `ACCEPTED` in
+  this document while its rate was still `OPEN` under BQ-029 — DEC-044
+  supersedes that tag with an explicit no.
+- **`DEC-044` (2026-09-05) — no surge/peak bonus and no minimum earnings
+  guarantee in Phase 1.** The `D-13` sample's peak-hour bonus
+  (`โบนัสชั่วโมงเร่งด่วน ฿72`) is not activated either.
 - `ACCEPTED` **DEC-037** — the Phase 1 dispatch parameters: a **60-second**
   rider accept window, **60-second** broadcast rounds on the existing tick, and
   **one active delivery per rider**. Eligibility is `APPROVED` + online + a
   valid recorded location — **no radius, zone or ranking**. Resolves BQ-020 and
   BQ-021, and the working-area half of BQ-022.
-- `OPEN` — cancellation compensation (BQ-024) and **all rider money numbers**
-  (BQ-029); the rest of BQ-022 (onboarding, approval, contractor status) is
-  `OPEN` and `LEGAL_REVIEW_REQUIRED`.
+- `OPEN` — cancellation compensation and waiting fees (BQ-024, unaffected by
+  DEC-044 — its own separate `RIDER_COMPENSATION` ledger line); the rest of
+  BQ-022 (onboarding, approval, contractor status) is `OPEN` and
+  `LEGAL_REVIEW_REQUIRED`.
 - **Deferred with COD** — BQ-023, whether the rider fronts cash to the merchant
   at pickup. Unanswered; it returns the day COD does.
 

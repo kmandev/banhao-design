@@ -252,8 +252,9 @@ source: ai/RESEARCH/MARKETPLACE_PAYMENT_MODEL.md; docs/04-payment ledger example
 **Option A — 8% of the food subtotal, rounded to the nearest whole baht**
 (delivery fee and service fee excluded from the base). The 10% figure remains
 what it always was — a design illustration, not a rate — and is not
-retroactively treated as an approximation of 8%. Rider earnings (BQ-029) are
-untouched and remain `OPEN`.
+retroactively treated as an approximation of 8%. Rider earnings (BQ-029) were
+untouched by this decision and were separately resolved 2026-09-05 by
+DEC-044 (flat ฿12 per completed delivery).
 
 **Decision:** DEC-043 — 8% of food subtotal, round to whole baht
 

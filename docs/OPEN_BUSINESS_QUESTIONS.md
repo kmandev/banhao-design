@@ -98,10 +98,13 @@ than an order-creation blocker.
 Q-003, Q-009, Q-011, Q-012, Q-015, Q-016, Q-018, Q-019 ·
 BQ-001, BQ-002, BQ-003, BQ-005, BQ-006, BQ-007, BQ-008, BQ-011, BQ-013,
 BQ-016, BQ-017, BQ-022 (**onboarding, approval and contractor status
-only** — the working-area half is resolved by DEC-037), BQ-024, BQ-029, BQ-031,
+only** — the working-area half is resolved by DEC-037), BQ-024, BQ-031,
 BQ-032, BQ-034, BQ-035
 
-**BQ-020 and BQ-021 left this list on 2026-08-24 — DEC-037.** The rider accept
+**BQ-020 and BQ-021 left this list on 2026-08-24 — DEC-037. BQ-029 left this
+list on 2026-09-05 — DEC-044** (flat ฿12 / 1200 satang per completed
+delivery). BQ-024 (cancellation/waiting compensation) is unaffected and
+remains on this list. The rider accept
 window is 60 s, dispatch rounds are 60 s, and a rider holds one active delivery
 at a time.
 
@@ -1240,8 +1243,8 @@ related: Q-010 (extends it)
 > illustrative 10% remains a historical sample only and is **not** the
 > approved rate; do not read it as an approximation of 8%. The discussion below
 > is retained as the record of how the decision was reached — read it as
-> history, not as an open question. **BQ-029 (rider earnings) is untouched and
-> remains `OPEN`.**
+> history, not as an open question. **BQ-029 (rider earnings) was untouched by
+> this decision and was separately resolved 2026-09-05 by DEC-044.**
 
 **Question:** Percentage, fixed fee, hybrid, or subscription — and at what rate?
 
@@ -1281,10 +1284,23 @@ agreement has to be renegotiated.
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER
-status: OPEN
-blocks: Ledger, settlement, Driver App, rider terms
+status: RESOLVED
+decision: DEC-044
+blocks: nothing further — cancellation/waiting compensation remains BQ-024
 related: BQ-024, BQ-026
 ```
+
+> **RESOLVED 2026-09-05 — DEC-044.** Phase 1 uses **a flat ฿12 (1200 satang)
+> per completed delivery** — no distance, base+distance, or zone component; no
+> surge/peak bonus, no minimum guarantee, no tips; no rider-side platform fee.
+> The ฿10 customer delivery fee (DEC-035) and the ฿12 rider earning are
+> separate values with a documented ฿2-per-delivery difference — **DEC-044
+> does not assign that difference to commission, service fee, or any other
+> revenue category**, and none should be inferred from it. **BQ-024
+> (cancellation and waiting compensation) is untouched and remains `OPEN`** —
+> it is its own ledger line, never folded into this flat earning. The
+> discussion below is retained as the record of how the decision was reached
+> — read it as history, not as an open question.
 
 **Question:** How is a rider paid — per order, by distance, base + distance,
 with bonuses, surge, or a minimum guarantee — and are tips supported?
@@ -1303,6 +1319,13 @@ same numbers (customer pays ฿130 = food ฿120 + net fees ฿10) makes deliver
 revenue ฿10 against ฿12 paid out, i.e. **delivery runs at a loss covered by
 commission**. Which reading is intended changes the entire unit economics.
 Tips do not appear anywhere in the design.
+
+**Now that both numbers are locked** (DEC-035's ฿10 delivery fee, DEC-044's
+฿12 rider earning), the second reading is the actual Phase 1 position: a
+documented ฿2-per-delivery gap between what the customer's delivery fee
+collects and what the rider is paid. **DEC-044 does not resolve this gap or
+assign it to commission** — the arithmetic is recorded, not funded, by this
+lock.
 
 **Options:** per-order flat · distance-based · base + distance (the industry
 norm) · zone-based · any of these plus peak bonus, minimum guarantee, or tips.

@@ -259,7 +259,7 @@ what an operator may choose from:
 | **3. Merchant self-delivery** | Saves the order; merchant earns the fee | Not every shop has a spare person or bike; needs merchant-app support | `ACCEPTED` as an option; **per-merchant opt-in is `OPEN`** |
 | **4. Operator manual dispatch** | Very effective at this scale | Needs a human awake | **`ACCEPTED`** — DEC-022, DEC-032 |
 | **5. Cancel + refund** | Clean for the customer | Merchant loses cooked food; counts against the ≤5% ceiling | `ACCEPTED` as a **last** operator option |
-| **6. Retry with an incentive** | Pulls offline riders back | Costs money per rescue; needs a bonus mechanism | `PROPOSED` — depends on BQ-029 |
+| **6. Retry with an incentive** | Pulls offline riders back | Costs money per rescue; needs a bonus mechanism | `PROPOSED` — **DEC-044 locks no bonus mechanism for Phase 1**; this option needs a new decision, not a reopening of BQ-029 |
 | **7. Customer self-pickup** | Food not wasted | Not designed; only works if the customer is mobile | `PROPOSED` |
 
 ### Recommended operating ladder
@@ -320,9 +320,11 @@ cash UI: two blocks, never summed.
 
 `ACCEPTED` — **DEC-023**: the delivery fee funds rider compensation
 (`Customer → delivery fee → rider earning`).
-**`OPEN` — the numbers.** BQ-026 (fee), BQ-029 (earnings formula). Per DEC-023
-and §22 of the decision lock, **no agent may invent a delivery price, a distance
-band, a rider base rate or a bonus amount.**
+**The numbers are now resolved.** BQ-026 (fee) — **DEC-035**, flat ฿10.
+BQ-029 (earnings formula) — **RESOLVED 2026-09-05, DEC-044**: a flat ฿12
+(1200 satang) per completed delivery, with no distance/base/zone component,
+no surge or peak bonus, no minimum guarantee, no tips, and no rider-side
+platform fee in Phase 1.
 
 Design samples, retained as evidence of intent only (`D-13`, one day):
 
@@ -333,16 +335,20 @@ Design samples, retained as evidence of intent only (`D-13`, one day):
 รายได้สุทธิวันนี้               ฿442
 ```
 
-Three things the Product Owner should carry into the pricing decision:
+Three things the Product Owner carried into the pricing decision — **now
+settled by DEC-044, none of them activated:**
 
 1. **Riders pay a platform fee** — appears nowhere else in the repository, and
-   is not covered by DEC-025 (which is about merchant commission).
+   is not covered by DEC-025 (which is about merchant commission). **DEC-044:
+   no rider-side platform fee in Phase 1.**
 2. **A peak-hour bonus is already assumed** by the design; trigger and amount
-   undefined.
+   undefined. **DEC-044: no surge/peak bonus in Phase 1.**
 3. **Delivery may not cover itself.** In the documented ledger the net
    delivery-side contribution is ฿10 against ฿12 paid to the rider — see
    `SETTLEMENT_MODEL.md` § 3. DEC-023 fixes the direction of the money, not
-   whether it balances.
+   whether it balances. **DEC-044 confirms both numbers exactly as locked
+   (฿10 delivery fee, ฿12 rider earning) — the ฿2 gap is the actual Phase 1
+   position, and DEC-044 does not fund it from commission or any other line.**
 
 Whatever is chosen, **each component is a separate ledger line**. Folding
 compensation into "delivery earnings" destroys the separation REQ-001 requires
@@ -434,8 +440,9 @@ location, **no radius**).
 
 **Still `OPEN`:** BQ-022's remainder (onboarding artefacts, who approves them,
 contractor status — `LEGAL_REVIEW_REQUIRED`) · BQ-024 (cancellation
-compensation) · BQ-026 / BQ-029 (**all rider and delivery numbers**) · BQ-015
-(who bears the cost of wasted food — P0).
+compensation) · BQ-015 (who bears the cost of wasted food — P0). **Resolved:**
+BQ-026 (**DEC-035**, flat ฿10 delivery fee, 2026-08-24) and BQ-029 (**DEC-044**,
+flat ฿12 rider earning per completed delivery, 2026-09-05).
 
 **BQ-018 (proof of delivery) closed on 2026-08-26 — DEC-038** (§ 10). Its
 retention half is now also **locked — DEC-039** (§ 10): 90 days referenced /
@@ -444,5 +451,6 @@ decision** — the PDPA lawful-basis / legal-review half remains `OPEN`, and
 neither DEC-038 nor DEC-039 is a PDPA compliance or go-live approval.
 
 Dispatch **structure** may now be designed (DEC-020) and its **parameters** are
-fixed (DEC-037). Dispatch **economics** may not be built — every rider *money*
-number is still open (BQ-029).
+fixed (DEC-037). Dispatch **economics** — the rider earning amount — is now
+locked too (**DEC-044**, flat ฿12 per completed delivery); posting it to the
+ledger remains a separate, not-yet-authorized engineering task.
