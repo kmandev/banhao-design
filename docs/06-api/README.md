@@ -26,12 +26,20 @@ that guard is the only reason this file can be trusted.
 
 The same document is served at `http://localhost:3000/docs` by a running API.
 
-**Known limitation:** `components.schemas` is empty. The controllers annotate
-operations (`@ApiTags`, `@ApiOkResponse`, `@ApiBearerAuth`) but not request and
-response *shapes*, so the contract currently describes the surface — paths,
-methods, auth, status codes — and not the payloads. The payload contract lives
-in `@banhao/types` and is enforced at compile time across the monorepo. Filling
-`components.schemas` in is additive work, not a redesign.
+**`components.schemas` is empty — a structural property of the current
+Zod-first payload architecture, not an unfinished piece of this contract.**
+`@nestjs/swagger` remains responsible for exactly what it does above: operation
+metadata (`@ApiTags`, `@ApiOkResponse`, `@ApiBearerAuth`), paths, methods, auth,
+status codes. It cannot additionally derive a reusable schema from request and
+response *shapes* here, because every one of them is a TypeScript `type`/`interface`
+— `@banhao/types` / `z.infer<typeof …>` — and both `@ApiProperty()` and the
+Swagger CLI plugin need a class to attach decorator metadata to; a TS type is
+erased at compile time and has nothing to introspect. The payload contract
+itself is unaffected and still lives in `@banhao/types`, enforced at compile
+time across the monorepo. Populating `components.schemas` would need a
+class-based DTO strategy or a Zod/OpenAPI bridge (`zod-to-openapi`, `nestjs-zod`)
+— a new dependency, **not additive work** — which is a future Architecture
+Decision and is explicitly out of scope for the current V1.1 architecture.
 
 ## 2. Base path and versioning
 

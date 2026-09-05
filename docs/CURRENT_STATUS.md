@@ -94,10 +94,23 @@ catalogue, the three-guard authorization order, and the two endpoints
 deliberately excluded from the contract (`/internal/tick` and the payment
 webhook, both HMAC-guarded).
 
-**Known contract limitation:** `components.schemas` is empty. Controllers
-annotate operations but not payload shapes, so the document describes the
-surface and not the bodies. The payload contract is `@banhao/types`, enforced
-at compile time across the monorepo.
+**`components.schemas` is empty — by design under the current Zod-first
+payload architecture, not an unfinished piece of this section.** `@nestjs/swagger`
+remains responsible for everything it does today — operation metadata (`@ApiTags`,
+`@ApiOkResponse`, `@ApiBearerAuth`), paths, methods, auth, status codes. What it
+cannot do is derive a reusable schema from a TypeScript `type`/`interface`:
+every request and response shape in this codebase is `@banhao/types` /
+`z.infer<typeof …>`, and there is no class-based DTO anywhere for
+`@ApiProperty()` or the Swagger CLI plugin to introspect — both need a class,
+because decorator metadata attaches to a runtime prototype and a TS type is
+erased at compile time. The payload contract itself is unaffected: `@banhao/types`
+is still enforced at compile time across the monorepo, exactly as before.
+Populating `components.schemas` would need a class-based DTO strategy or a
+Zod/OpenAPI bridge (e.g. `zod-to-openapi`, `nestjs-zod`) — a new dependency and,
+for a bridge, a cross-controller touch of all ~49 operations — which is a future
+Architecture Decision (`CLAUDE.md` §10: "any deviation from V1.1 requires a new
+Architecture Decision, not an improvisation"), **explicitly out of scope for the
+current V1.1 architecture** and not undertaken here.
 
 ## 7. Observability
 
@@ -266,7 +279,6 @@ anywhere in the application.
 
 Everything in §13 is blocked on something outside engineering. What is not:
 
-- Filling `components.schemas` in the OpenAPI contract (§6).
 - Further test and contract hardening, on the pattern of the rider
   controller's HTTP-boundary suite.
 - Documentation reconciliation, of which this file is one instance.
