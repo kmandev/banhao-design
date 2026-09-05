@@ -108,7 +108,7 @@ the rider's side of the delivery fee remains open.
 | `MERCHANT_PAYABLE` | What the platform owes a merchant | Active |
 | `RIDER_PAYABLE` | What the platform owes a rider for delivery work | Active |
 | `PLATFORM_REVENUE` | Commission + service fee + delivery margin | Active |
-| `PROMOTION_FUNDING` | Whoever funds a discount | Active — funder `OPEN` (BQ-030) |
+| `PROMOTION_FUNDING` | Whoever funds a discount | Active — funder model **resolved** (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split); posting **not implemented**. Stacking still `OPEN` (BQ-030) |
 | `REFUND_PAYABLE` | Money owed back to a customer | Active — mechanism `OPEN` (Q-020) |
 | `RIDER_COMPENSATION` | Paid to a rider for a job lost through no fault of theirs | Active — amount `OPEN` (BQ-024) |
 | `PLATFORM_WRITE_OFF` | Cost the platform absorbs — food wasted on an operator cancellation (policy still `OPEN`, BQ-015), and, **as of DEC-045**, the ฿2 delivery-side funding gap per completed delivery | Active — BQ-015 half `OPEN`; delivery-gap half `ACCEPTED` (DEC-045) **and implemented** (`b813b5c6`) as part of the rider-earning completion ledger flow. This does not mean full settlement/payout or a `CUSTOMER_PAYMENT` ledger is implemented — those remain outside DEC-045's scope |
@@ -167,7 +167,11 @@ Three unit-economics findings the Product Owner should carry into the pricing
 decisions. **None is settled by this lock:**
 
 1. **The platform funds the discount.** The merchant is paid commission on the
-   full ฿120 menu price, not the discounted total → **BQ-030, `OPEN`**.
+   full ฿120 menu price, not the discounted total. As of **DEC-046** (2026-09-05)
+   this is now a recognized valid Phase 1 shape — a `PLATFORM`-funded
+   promotion — rather than an unexamined default; whether *this specific*
+   `BANHAO7` sample would be tagged `PLATFORM` or `MERCHANT` is a promotion-
+   definition detail, not decided by this worked example.
 2. **Delivery does not pay for itself.** ฿10 of net delivery-side revenue
    against ฿12 paid to the rider; commission covers the gap. DEC-023 fixes the
    *direction* of the money, not that it balances. **DEC-035 has since set the
@@ -377,21 +381,29 @@ order legitimately sits with money still held** until the refund completes
 
 ## 10. Promotion funding
 
-`OPEN` — BQ-030, and explicitly excluded from this lock (§22 of the decision
-lock keeps promotion budget open).
-
-Whatever is decided, the ledger requires one thing: **every promotion carries a
-funder, and the funder is copied onto the order.**
+**Funder model RESOLVED — DEC-046 (2026-09-05).** Every promotion carries a
+funder, decided per promotion, and the funder is copied onto the order. Phase
+1 allows exactly two funders — no other party, and no split:
 
 ```
 PROMOTION_FUNDING (platform-funded)  → PLATFORM_REVENUE absorbs the discount
 PROMOTION_FUNDING (merchant-funded)  → MERCHANT_PAYABLE is reduced by it
-PROMOTION_FUNDING (shared)           → split by the configured ratio
 ```
 
-Without a funder field, a discounted order cannot be reconciled at all — CON-003
-fails on the first coupon redemption. In the design's own worked example (§ 4.1)
-the platform absorbs it.
+The third line this section previously carried — a configured platform/merchant
+split — is **not supported in Phase 1** (DEC-046 rejects it explicitly). A
+future decision could add it back; nothing here forecloses that, but it is not
+today's rule.
+
+**Stacking remains `OPEN` — BQ-030.** DEC-046 resolves only who may fund a
+promotion, not how many promotions may combine on one order.
+
+**Posting is not implemented.** No `promotions`/`coupons` table, no `funder`
+column, and no `PROMOTION_FUNDING` ledger entry exist yet — DEC-046 is a
+business decision, not an engineering task, and building any of this remains
+separately unauthorized. Without them, a discounted order still cannot be
+reconciled — CON-003 would fail on the first coupon redemption — but the rule
+that will govern that ledger entry, once built, is no longer a guess.
 
 ---
 
@@ -448,14 +460,16 @@ duplicate payment (DEC-030).
 Q-004 (cash limit) · the cash half of BQ-034.
 
 **Still `OPEN` — P0:** Q-002 (legal settlement model) · BQ-027 (service fee
-**refundability** only — the amount is set by DEC-036) · BQ-030 (promotion
-funding) · BQ-015 (who bears the cost of wasted food). **Resolved 2026-08-24:**
-BQ-026 (DEC-035, flat ฿10) and the amount half of BQ-027 (DEC-036, fixed ฿5).
-**Resolved 2026-09-05:** Q-010 / BQ-028 (**DEC-043** — commission is 8% of the
-food subtotal, rounded to whole baht) · BQ-029 (**DEC-044** — rider earning is
-a flat ฿12 per completed delivery; BQ-024 is unaffected and stays open below)
-· BQ-040 (**DEC-045** — the ฿2 delivery funding gap is a BANHAO platform
-write-off).
+**refundability** only — the amount is set by DEC-036) · BQ-030 (**stacking**
+only — the funder model is resolved by DEC-046) · BQ-015 (who bears the cost
+of wasted food). **Resolved 2026-08-24:** BQ-026 (DEC-035, flat ฿10) and the
+amount half of BQ-027 (DEC-036, fixed ฿5). **Resolved 2026-09-05:** Q-010 /
+BQ-028 (**DEC-043** — commission is 8% of the food subtotal, rounded to whole
+baht) · BQ-029 (**DEC-044** — rider earning is a flat ฿12 per completed
+delivery; BQ-024 is unaffected and stays open below) · BQ-040 (**DEC-045** —
+the ฿2 delivery funding gap is a BANHAO platform write-off) · the **funder-model**
+half of BQ-030 (**DEC-046** — per-promotion funder, `PLATFORM` or `MERCHANT`,
+no split; stacking is unaffected and stays open above).
 **Still `OPEN` — P1:** BQ-024 (rider cancellation/waiting compensation) ·
 BQ-031 (partial refund composition) · BQ-032 (settlement cycle) · BQ-034
 (negative balances) · Q-011 (chargebacks).

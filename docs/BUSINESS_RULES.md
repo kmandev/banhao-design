@@ -568,7 +568,8 @@ initiative targets cash-on-delivery specifically (Q-017),
 
 ## 11. Promotions
 
-`ACCEPTED` (one example) / `OPEN` (the model — BQ-030)
+`ACCEPTED` (one example) / `ACCEPTED` (the funder model — DEC-046) /
+`OPEN` (stacking — BQ-030)
 
 The only documented promotion is `BANHAO7`: **฿10 off when the order reaches
 ฿100**, framed as "free delivery for the first 7 days" — a discount presented as
@@ -576,21 +577,25 @@ a delivery subsidy. The account screen shows a coupon wallet (`2 คูปอง
 `คูปองของฉัน`) and the admin sitemap has `โปรโมชั่นและคูปอง`.
 
 Derived from the design's own ledger arithmetic (see BQ-030): **the platform
-absorbs the discount** — the merchant is paid commission on the full,
-undiscounted menu price. This is a strong signal but it is inference from sample
-data, not policy.
+absorbs the discount** in the `BANHAO7` sample — the merchant is paid
+commission on the full, undiscounted menu price. That was inference from
+sample data, not policy, until **DEC-046** (2026-09-05) accepted a funder
+model: `PLATFORM`-funded is now one of two recognized Phase 1 shapes, decided
+per promotion, not a silent platform-wide default.
 
-`PROPOSED` model:
+`PROPOSED` model, funder row **`ACCEPTED` by DEC-046**, the rest still
+`PROPOSED`:
 
 | Dimension | Proposal |
 |---|---|
 | Types | Percentage off · fixed amount off · delivery-fee subsidy · free item |
 | Scope | Platform-wide · per merchant · per customer segment (e.g. first order) |
 | Conditions | Minimum spend · first order only · date window · usage cap |
-| **Funder** | **Recorded on the promotion and copied onto the order.** `PLATFORM` or `MERCHANT` or a split |
-| Stacking | At most one coupon **plus** one merchant promotion per order |
+| **Funder** | **`ACCEPTED` (DEC-046) — recorded on the promotion and copied onto the order.** Phase 1: `PLATFORM` or `MERCHANT` only. **No split** |
+| Stacking | `OPEN` (BQ-030) — at most one coupon **plus** one merchant promotion per order is a recommendation, not a locked rule |
 
 Without a funder field the ledger cannot balance a discounted order (CON-003).
+The field itself is not yet built — see `docs/CURRENT_STATUS.md`.
 
 ---
 

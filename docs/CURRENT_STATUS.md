@@ -270,11 +270,15 @@ effort alone.
 
 **6 P0 business decisions remain**, all of them a number, a provider or a
 legal question: Q-001, Q-002, Q-020, BQ-015, BQ-027
-(refundability only), BQ-030. The delivery and service fee **amounts** were
-approved 2026-08-24 (**DEC-035** flat ฿10, **DEC-036** fixed ฿5), and the
-merchant commission **rate** was approved 2026-09-05 (**DEC-043** — 8% of the
-food subtotal, round to whole baht). Under DEC-APP-007 these gate **F′ only**.
-Do not invent a default for any of them anywhere in the application.
+(refundability only), BQ-030 (**stacking only** — the funder model is now
+resolved). The delivery and service fee **amounts** were approved 2026-08-24
+(**DEC-035** flat ฿10, **DEC-036** fixed ฿5), the merchant commission **rate**
+was approved 2026-09-05 (**DEC-043** — 8% of the food subtotal, round to
+whole baht), and the promotion/discount **funder model** was approved the
+same day (**DEC-046** — per-promotion funder, `PLATFORM` or `MERCHANT`, no
+split; no promotion engine exists yet, so this is a decision lock only, not
+an implementation). Under DEC-APP-007 these gate **F′ only**. Do not invent a
+default for any of them anywhere in the application.
 
 ## 14. What is executable right now
 

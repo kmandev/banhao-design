@@ -53,6 +53,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
 | BQ-027 — service fee | **RESOLVED (amount)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**. **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036 |
 | BQ-028 — merchant commission | **RESOLVED** — BANHAO revenue; Phase 1 rate is **8% of the food subtotal, rounded to whole baht** | DEC-025, DEC-043 |
+| BQ-030 — promotion/discount funder | **RESOLVED (funder model)** — Option C: per-promotion funder, Phase 1 allows only `PLATFORM` or `MERCHANT`, no split. **Stacking is not locked and remains `OPEN`** | DEC-046 |
 
 Also decided, and not previously tracked as a `BQ`: online-payment-only with
 COD disabled but extensible (DEC-016), four separate state domains (DEC-018),
@@ -83,15 +84,17 @@ on. **Decide them before then, not during.**
 | Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
 | BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms. Sharpened by DEC-022: an operator cancelling a no-rider order needs this answer |
 | BQ-027 | Service fee **refundability** only — the amount is decided (DEC-036). Phase F scope; does **not** block order creation | Refund flow, ledger |
-| BQ-030 | Who funds promotions and discounts | Ledger, settlement |
+| BQ-030 | **Stacking only** — the funder model is decided (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split). Promotion-engine scope; does **not** block ledger/`CUSTOMER_PAYMENT` work, since `discount_satang` is always `0` today | Promotion engine only |
 
 **Six remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
 BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
 the **numeric** halves of BQ-026 (DEC-035) and BQ-027 (DEC-036) as of
 2026-08-24, and — as of 2026-09-05 — the **numeric** half of BQ-028 / Q-010
-(**DEC-043**, 8% of food subtotal, round to whole baht). Only BQ-027's
-refundability question is still carried above, and it is Phase F scope rather
-than an order-creation blocker.
+(**DEC-043**, 8% of food subtotal, round to whole baht). As of 2026-09-05 the
+**funder-model** half of BQ-030 is also resolved (**DEC-046**) — only its
+stacking sub-question is still carried above. BQ-027's refundability question
+and BQ-030's stacking question are both still carried above, and neither is
+an order-creation blocker.
 
 ### P1 — blocks a feature or launch readiness
 
@@ -1346,10 +1349,27 @@ money silently on every delivery.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
-blocks: Ledger, settlement, promotion engine
+status: RESOLVED — FUNDER MODEL (DEC-046) · OPEN — STACKING
+decision: DEC-046 (funder model only)
+blocks: Promotion engine (stacking rule only). Does not block ledger/CUSTOMER_PAYMENT work
 related: BQ-028, CON-003
 ```
+
+> **FUNDER MODEL RESOLVED 2026-09-05 — DEC-046.** Option C: every promotion
+> has an explicit funder, decided per promotion. Phase 1 allows only
+> `PLATFORM` or `MERCHANT` as funders — **no split funding**. The funder must
+> remain identifiable through the order for a future ledger implementation.
+>
+> ⚠️ **Still open: stacking.** DEC-046 explicitly does not lock the
+> recommendation below ("at most one coupon plus one merchant promotion per
+> order"). That remains a separate, undecided question. The options and
+> recommendation below are retained for the stacking question and as the
+> historical record of the funder analysis; they are no longer live for the
+> funder model itself, which DEC-046 has already settled.
+>
+> Also still open, and not addressed by DEC-046: whether a merchant-funded
+> discount should change DEC-043's commission base (currently the pre-discount
+> food subtotal regardless of funder). See DEC-046's Consequences.
 
 **Question:** When an order carries a ฿10 `BANHAO7` discount, whose money is it
 — BANHAO's, the merchant's, or shared?

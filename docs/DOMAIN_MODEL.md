@@ -469,14 +469,17 @@ required on every operation (**DEC-028**).
 #### `Promotion` · `Coupon` · `CouponRedemption`
 - **Purpose** — discounts and subsidies.
 - **Key fields** — `Promotion`: type (percentage / fixed / delivery subsidy /
-  free item), value, **funder (`PLATFORM` | `MERCHANT` | split)**, scope,
-  minimum spend, validity window, usage cap, per-customer cap.
-  `Coupon`: code (e.g. `BANHAO7`), promotion id, issued-to (nullable).
+  free item), value, **funder (`PLATFORM` | `MERCHANT` — no split in Phase 1,
+  DEC-046)**, scope, minimum spend, validity window, usage cap, per-customer
+  cap. `Coupon`: code (e.g. `BANHAO7`), promotion id, issued-to (nullable).
   `CouponRedemption`: coupon id, order id, customer id, amount applied.
 - **Lifecycle** — draft → active → expired/exhausted.
 - **Security** — public read while active; owner (platform or merchant) writes.
-- **Status** — `OPEN`, BQ-030. **The funder field is not optional**: without it
-  the ledger cannot balance a discounted order.
+- **Status** — funder model `ACCEPTED` (**DEC-046**, 2026-09-05); stacking
+  still `OPEN`, BQ-030. **The funder field is not optional**: without it the
+  ledger cannot balance a discounted order. **Not yet built**: no table, no
+  column, no migration exists for any of this — DEC-046 is a business
+  decision only.
 
 ### 5.9 Interaction
 

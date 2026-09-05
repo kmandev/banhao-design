@@ -90,7 +90,7 @@ Not designed here, to avoid building around an `OPEN` business question:
 
 | Deferred | Why |
 |---|---|
-| `promotions`, `coupons`, `coupon_redemptions` | **BQ-030 (who funds a discount) is `OPEN`.** Without a funder the ledger cannot balance a discounted order — the schema would be a guess. `orders.discount_satang` exists so the column is ready |
+| `promotions`, `coupons`, `coupon_redemptions` | **The funder model is now decided (DEC-046, 2026-09-05 — per-promotion, `PLATFORM` or `MERCHANT`, no split); stacking (BQ-030) is still `OPEN`.** The schema is no longer a guess, but building it remains a separate, not-yet-authorized engineering task. `orders.discount_satang` exists so the column is ready |
 | Cash tables (`rider_cash_balances`) | COD disabled (DEC-016). Modelled in `DOMAIN_MODEL.md`, not created |
 | Rider location history | 🔴 Q-012 unanswered (DBQ-005). **No location schema should exist before the legal basis does** |
 | Support tickets | BQ-037 `OPEN`; not on the critical path |
@@ -1232,8 +1232,10 @@ but deliberately unused in Phase 1 (`settlements`, `settlement_items`,
 
 \* already live.
 
-Not created: promotions/coupons (BQ-030 `OPEN`), cash/rider-cash tables
-(DEC-016), location history (Q-012), support tickets (BQ-037).
+Not created: promotions/coupons (funder model resolved — DEC-046 — but
+stacking, BQ-030, still `OPEN`, and the table itself is not authorized),
+cash/rider-cash tables (DEC-016), location history (Q-012), support tickets
+(BQ-037).
 
 **No migration was written. No SQL was executed. The live database is
 untouched.**

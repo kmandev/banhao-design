@@ -158,10 +158,14 @@ was (§8). Treat "implemented" and "verified live" as separate claims.
 `ACCEPTED` / `PROPOSED` / `OPEN` / `LEGAL_REVIEW_REQUIRED`, with
 `ACCEPTED — MODEL · OPEN — NUMBERS` used deliberately in the money sections.
 **Build only on `ACCEPTED`.** 6 P0 business questions remain, down from 15 —
-and every one of them is a number, a provider, or a legal question. The delivery
-and service fee amounts left that list on 2026-08-24 (DEC-035, DEC-036), and
-the merchant commission rate left it on 2026-09-05 (**DEC-043** — 8% of the
-food subtotal, round to whole baht).
+and every one of them is a number, a provider, a legal question, or (for
+BQ-030) a stacking rule. The delivery and service fee amounts left that list
+on 2026-08-24 (DEC-035, DEC-036), the merchant commission rate left it on
+2026-09-05 (**DEC-043** — 8% of the food subtotal, round to whole baht), and
+the same day the promotion/discount **funder model** left it too (**DEC-046**
+— per-promotion funder, `PLATFORM` or `MERCHANT` only, no split; BQ-030's
+stacking sub-question remains, and no promotion engine exists to build
+against it).
 
 Decisions that change how anything gets built:
 
@@ -176,6 +180,8 @@ Decisions that change how anything gets built:
 | **DEC-035/036** | **Phase 1 fees: delivery flat ฿10 (1000 satang), service fixed ฿5 (500 satang).** No distance, bands or zones in Phase 1 |
 | **DEC-043** | **Phase 1 merchant commission: 8% of the food subtotal, rounded to whole baht.** Delivery and service fees excluded from the base |
 | **DEC-044** | **Phase 1 rider earning: flat ฿12 (1200 satang) per completed delivery** — no distance/base/zone, no surge/peak bonus, no minimum guarantee, no tips, no rider-side platform fee. Resolves BQ-029. BQ-024 (cancellation/waiting compensation) is untouched, still `OPEN` |
+| **DEC-045** | **The ฿2 (200 satang) gap between the ฿10 delivery fee (DEC-035) and the ฿12 rider earning (DEC-044) is a BANHAO `PLATFORM_WRITE_OFF`.** Resolves BQ-040. Decision only did not itself post the ledger entry — implemented separately (`b813b5c6`) |
+| **DEC-046** | **Promotion/discount funder: per-promotion, `PLATFORM` or `MERCHANT` only, no split (Option C).** Resolves the funder half of BQ-030. **Stacking is not locked and stays `OPEN`.** No promotion engine, table, or ledger posting exists — decision only |
 | **DEC-026…030** | Settlement is its own domain; refund lives in payment; idempotency, late payment and duplicate-payment protection required |
 | **DEC-031/032** | Manual operations and operator fallback are intentional Phase 1 capabilities. **No Admin App yet** |
 
@@ -376,10 +382,13 @@ Running alongside, not blocking:
 
 1. **Answer the remaining 6 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
    Q-001, Q-002, Q-020, BQ-015, BQ-027 (**refundability only** —
-   the amount is decided), BQ-030. Q-010/BQ-028 (commission rate) left this
-   list 2026-09-05 (**DEC-043**). Every structural question is answered; what
-   is left is numbers, the provider, and legal. **These block F′ only** —
-   DEC-APP-007 keeps them off the critical path for the other eight phases.
+   the amount is decided), BQ-030 (**stacking only** — the funder model is
+   decided). Q-010/BQ-028 (commission rate) left this list 2026-09-05
+   (**DEC-043**), and the same day the funder half of BQ-030 left it too
+   (**DEC-046**). Every structural question is answered; what is left is
+   numbers, the provider, legal, and a stacking rule. **These block F′
+   only** — DEC-APP-007 keeps them off the critical path for the other
+   eight phases.
 2. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
    external lead time, gates real-money work.
 3. Verify on an Android emulator — per-weight Thai font families are untested and

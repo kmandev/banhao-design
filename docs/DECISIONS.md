@@ -3709,3 +3709,141 @@ BQ-040 · `apps/api/src/modules/rider/delivery-completion.service.ts`
 None / None. Resolves **BQ-040** and closes the funding-relationship question
 DEC-044's Consequences clause left open; does not supersede DEC-023, DEC-035,
 DEC-036, DEC-043, or DEC-044, each of which stands unchanged.
+
+---
+
+## DEC-046 — Promotion/discount funder model: platform or merchant, per promotion, no split
+
+**Status:** ACCEPTED · **Date:** 2026-09-05 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+**Option C.** Every promotion or discount must have an explicitly identified
+funder. In Phase 1 the allowed funders are **`PLATFORM`** and **`MERCHANT`**
+only — no other party may be named as a funder. The funder is a property of
+the *promotion*, decided at the promotion's own definition, not inferred from
+the order, the customer, or any other context. When a promotion applies to an
+order, its funder must remain identifiable on or through that order, so a
+future ledger/accounting implementation can correctly assign the funding leg
+without guessing or defaulting.
+
+**Accounting intent:** the funding responsibility for each discount is
+attributable to a named allowed funder rather than being implicitly assumed
+(as the design's own `BANHAO7` worked example did, silently, for `PLATFORM`).
+This resolves the funder half of **BQ-030**.
+
+**Split funding is NOT supported in Phase 1.** A single promotion may not
+divide its discount between `PLATFORM` and `MERCHANT` by a configured ratio.
+Options D (shared/split) and the split half of BQ-030's own Option C framing
+("`PLATFORM` or `MERCHANT` or a split," `docs/BUSINESS_RULES.md` § 11) are
+rejected for Phase 1 — see Alternatives.
+
+**Stacking is explicitly NOT locked by this decision.** BQ-030's own
+recommendation additionally proposed "at most one coupon plus one merchant
+promotion per order." This decision does not adopt, reject, or otherwise rule
+on that stacking question. Stacking remains a separate, open sub-question —
+see Consequences and BQ-030's status below.
+
+### Why
+
+Product Owner decision, 2026-09-05. BQ-030's own recommendation (Option C) is
+adopted because, per its own reasoning, both funding types will exist in
+reality — a merchant discounting a slow-moving dish is a different economic
+event from BANHAO subsidising a first-order coupon — and retrofitting a
+funder field onto live promotions and already-settled orders is materially
+harder than deciding it now, before any promotion engine exists. Restricting
+Phase 1 to exactly two funders (no split) is the smallest version of Option C
+that is still economically complete: `PROMOTION_FUNDING → PLATFORM` and
+`PROMOTION_FUNDING → MERCHANT` are both single, unambiguous ledger postings,
+while a split introduces a ratio that no current business rule defines and
+that this decision was not asked to supply.
+
+### Alternatives
+
+- **Option A — Platform-funded only** — rejected as the sole Phase 1 rule.
+  Matches the design's own worked example, but forecloses a real merchant-
+  funded promotion (a shop discounting its own menu) that BQ-030's own
+  reasoning treats as a genuine, distinct case, not a hypothetical.
+- **Option B — Merchant-funded only** — rejected as the sole Phase 1 rule,
+  for the same reason in reverse: it would misrepresent every
+  platform-subsidised acquisition coupon as a merchant cost.
+- **Option D — Shared, by a configured split** — rejected for Phase 1. No
+  existing decision or business rule defines a split ratio, a ratio-storage
+  location, or how a split would be validated, and inventing one here would
+  be supplying a business rule this decision was not given, not recording
+  one. Nothing in this decision forecloses a future decision adding split
+  funding; it is simply out of scope for Phase 1.
+- **Leaving BQ-030 fully open** — rejected. CON-003 (every order's ledger
+  balances to exactly zero) cannot be satisfied for a discounted order
+  without a named funder, and BQ-030 itself states this plainly. Deciding the
+  funder model now, without also deciding stacking, is possible because the
+  two questions are independent: knowing *who* pays a given promotion's
+  discount does not require knowing *how many* promotions may combine on one
+  order.
+
+### Consequences
+
+- **This decision does not itself create a `promotions`, `coupons`, or
+  `coupon_redemptions` table, add a `funder` column anywhere, write any
+  `PROMOTION_FUNDING` ledger entry, or modify any application code.** All of
+  that remains a separate, not-yet-authorized engineering task. `orders.discount_satang`
+  is unchanged and still always `0` in practice — no caller populates it today.
+  See `docs/DATABASE_DESIGN.md` § (deferred tables) and
+  `apps/api/src/modules/orders/orders.service.ts`.
+- **This decision does not prescribe a database column, table, or schema
+  shape.** It is a business decision about which parties may fund a
+  promotion and at what granularity (per-promotion, not per-order or
+  global) — the concrete representation is an implementation task for
+  whenever a promotion engine is authorized.
+- **Stacking remains open.** BQ-030's recommended stacking rule ("at most one
+  coupon plus one merchant promotion per order") is **not** adopted by this
+  decision and must not be treated as locked. It is a distinct question that
+  may be decided independently, before or after a promotion engine exists.
+- **Commission base treatment for a merchant-funded discount is an
+  explicitly unresolved follow-up, not decided here.** DEC-043 fixes the
+  commission base at the food subtotal captured *before* any discount is
+  applied (`orders.subtotal_satang`, see `commission-pricing.ts`), and this
+  decision does not reopen, reinterpret, or narrow that. But it leaves open
+  whether a *merchant-funded* discount should, as a matter of business
+  policy, reduce the commission base the merchant is charged against, since
+  the merchant is in that case receiving less than the full subtotal. This
+  decision takes no position on that question. It is not assigned a BQ
+  number here — one should be raised separately if and when a promotion
+  engine is designed.
+- **DEC-035 (฿10 delivery fee), DEC-036 (฿5 service fee), DEC-043 (8%
+  commission), DEC-044 (฿12 rider earning), and DEC-045 (฿2 platform
+  write-off) are unaffected.** This decision concerns only who funds a
+  discount, not any fee or earning amount, and does not touch any of their
+  bases, directions, or ledger treatments.
+- **Refund, cancellation, eligibility, maximum-discount, and platform-subsidy-
+  limit questions remain untouched and open.** None of them is answered,
+  narrowed, or implied by this decision.
+- **BQ-024, BQ-027 (refundability), BQ-032, and BQ-034 are untouched and
+  remain `OPEN`.** This decision does not touch rider compensation,
+  service-fee refundability, settlement cycle mechanics, or rider payout
+  netting.
+
+### Evidence
+
+Product Owner instruction, 2026-09-05 ("BANHAO — BQ-030 BUSINESS DECISION
+LOCK"), approving Option C with the two-funder, no-split Phase 1 scope stated
+above.
+
+### Related Requirements
+
+CON-003 (ledger balances to zero, integer satang)
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 3, § 10 · `docs/BUSINESS_RULES.md` § 11 ·
+`docs/DOMAIN_MODEL.md` § 5.8 · `docs/OPEN_BUSINESS_QUESTIONS.md` BQ-030 ·
+`ledger_entries.account` enum value `PROMOTION_FUNDING`
+(`20260811000007_ledger_domain.sql`, unused, no migration required to record
+this decision)
+
+### Supersedes / Superseded By
+
+None / None. Resolves the funder-model half of **BQ-030** only; does not
+resolve BQ-030's stacking recommendation, which remains open; does not
+supersede DEC-023, DEC-024, DEC-035, DEC-036, DEC-043, DEC-044, or DEC-045,
+each of which stands unchanged.

@@ -202,7 +202,7 @@ each aggregate; a module's tables are written **only** by that module's service
 | `drivers` | `rider`, `rider_document`, `rider_availability`, `rider_cash_balance` (dormant) | Rider lifecycle | BQ-022 `OPEN` |
 | `ledger` | `ledger_entry` | — (append-only) | CON-003, DEC-014 |
 | **`settlements`** | `settlement`, `settlement_item` | **Settlement** | DEC-026 — **not built** |
-| `promotions` | `promotion`, `coupon`, `coupon_redemption` | — | BQ-030 `OPEN` |
+| `promotions` | `promotion`, `coupon`, `coupon_redemption` | — | funder model `ACCEPTED` (DEC-046); stacking BQ-030 `OPEN`; table not built |
 | `notifications` | `notification`, `notification_delivery` | — | TQ-003 |
 | `geo` | `service_area`, `zone`, `delivery_fee_band` | — | DEC-031 |
 | `audit` | `audit_log`, `outbox` | — | DEC-032, ADR-006 |
