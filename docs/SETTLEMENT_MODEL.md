@@ -393,11 +393,13 @@ out of DEC-047's scope. Commission (DEC-043), merchant payable, rider
 earning (DEC-044) and the platform write-off (DEC-045) are untouched: the
 service fee is not part of the commission base.
 
-**Refunds:** DEC-047 does not resolve **BQ-027**. Whether the service fee
-survives a refund stays `OPEN` (Phase F) and must not be inferred from the
-recognition timing in either direction. A reversal, if one is ever decided,
-is a **new** group — historical `CUSTOMER_PAYMENT` and historical revenue
-entries are never mutated (`reject_mutation`).
+**Refunds:** DEC-047 itself does not resolve **BQ-027** — recognition timing
+and refundability are separate rules, and neither may be inferred from the
+other. Refundability was separately resolved 2026-09-06 by **DEC-048**
+(service fee included in an eligible full order refund; not implemented — see
+§ 9). A reversal, when implemented, is a **new** group — historical
+`CUSTOMER_PAYMENT` and historical revenue entries are never mutated
+(`reject_mutation`).
 
 **Reconciliation:** not implemented and not designed here. A future
 service-fee reconciliation must be able to tell apart missing, duplicate,
@@ -679,6 +681,16 @@ Two rules across every row: **a refund never mutates the original entries** —
 it writes reversing entries, and the pair still sums to zero; and a **cancelled
 order legitimately sits with money still held** until the refund completes
 (DEC-018 / DEC-027).
+
+**Service fee, specifically — DEC-048 (2026-09-06).** Where this table's
+"Platform fee reversal" column says `Fee reversed`, the **service-fee**
+component of that is now a decided policy: when a cause qualifies for a full
+order refund, the service fee is included and its `SERVICE_FEE_REVENUE` entry
+must eventually be reversed through a new group. DEC-048 decides only that —
+it does not decide *which causes qualify* (the `OPEN` rows above are
+unaffected), and it says nothing about the **commission** half of "fee
+reversed," which remains undecided and unimplemented for reversal. No
+reversal code exists for either.
 
 ---
 
@@ -1029,9 +1041,7 @@ duplicate payment (DEC-030).
 **Deferred by DEC-016:** BQ-023 (rider cash float) · BQ-033 (cash fee netting) ·
 Q-004 (cash limit) · the cash half of BQ-034.
 
-**Still `OPEN` — P0:** Q-002 (legal settlement model) · BQ-027 (service fee
-**refundability** only — the amount is set by DEC-036 and the **recognition
-timing** by DEC-047, § 3.2; neither decides refundability) · BQ-030 (**stacking**
+**Still `OPEN` — P0:** Q-002 (legal settlement model) · BQ-030 (**stacking**
 only — the funder model is resolved by DEC-046) · BQ-015 (who bears the cost
 of wasted food). **Resolved 2026-08-24:** BQ-026 (DEC-035, flat ฿10) and the
 amount half of BQ-027 (DEC-036, fixed ฿5). **Resolved 2026-09-05:** Q-010 /
@@ -1043,8 +1053,9 @@ half of BQ-030 (**DEC-046** — per-promotion funder, `PLATFORM` or `MERCHANT`,
 no split; stacking is unaffected and stays open above).
 **Resolved 2026-09-06:** the service fee's **recognition timing**
 (**DEC-047** — recognized as `PLATFORM_REVENUE` at payment success, § 3.2;
-posting implemented the same day, and BQ-027's refundability half stays open
-above).
+posting implemented the same day) and, the same day, its **refundability**
+(**DEC-048** — included in an eligible full order refund, § 9; not
+implemented). **BQ-027 is resolved in full and no longer appears above.**
 **Still `OPEN` — P1:** BQ-024 (rider cancellation/waiting compensation) ·
 BQ-031 (partial refund composition) · BQ-032 (settlement cycle) · BQ-034
 (negative balances) · Q-011 (chargebacks).

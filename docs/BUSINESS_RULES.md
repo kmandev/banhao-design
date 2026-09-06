@@ -379,10 +379,15 @@ service fee is **not** part of the merchant commission base (DEC-043
 unchanged). **Posting is implemented** (2026-09-06, `postServiceFeeLedger`).
 Shape: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § 3.2.
 
-**`OPEN`** — BQ-027's remaining half: whether the service fee survives a refund.
-That is **Phase F** scope, must not be inferred from DEC-036 **or DEC-047** —
-recognition and reversal are separate rules — and does not block order
-creation. The `฿5` in `apps/customer/src/mocks/pricing.ts` numerically
+`ACCEPTED — REFUNDABILITY` — **DEC-048** (2026-09-06): the service fee is
+**included** in an eligible full order refund (Option A). Its
+`SERVICE_FEE_REVENUE` entry must eventually be reversed through a new group —
+historical entries are never mutated. **Not implemented** — no refund code,
+reversal ledger group, or migration exists. **BQ-027 carries no further open
+half.** DEC-048 does not decide which cancellation causes qualify for a full
+refund (BQ-016, BQ-015, BQ-017 remain `OPEN`), partial-refund composition
+(BQ-031 remains `OPEN`), or the refund execution mechanism (Q-020 remains
+`OPEN`). The `฿5` in `apps/customer/src/mocks/pricing.ts` numerically
 matches the approved amount but remains a **sample** — the authority is DEC-036,
 and that constant must not be imported into backend code.
 
@@ -538,12 +543,11 @@ Full treatment: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md).
 - **Simplified by DEC-016** — the cash-order rule (cash orders skip the transfer
   round, commission netted from the next one) does not apply in Phase 1, so
   BQ-033 is deferred with COD.
-- `OPEN` — service fee **refundability** (BQ-027 — the amount is decided by
-  DEC-036, and the recognition timing by DEC-047), promotion **stacking**
-  only (BQ-030 — the funder model is decided by DEC-046), cycle specifics
-  (BQ-032), negative balances (BQ-034). The delivery and service fee
-  **amounts** (DEC-035, DEC-036) and the commission **rate** (DEC-043,
-  8% of the food subtotal) are decided.
+- `OPEN` — promotion **stacking** only (BQ-030 — the funder model is decided
+  by DEC-046), cycle specifics (BQ-032), negative balances (BQ-034). The
+  delivery and service fee **amounts** (DEC-035, DEC-036), the commission
+  **rate** (DEC-043, 8% of the food subtotal), and service fee **recognition
+  timing and refundability** (DEC-047, DEC-048) are decided.
 - ⚖️ `LEGAL_REVIEW_REQUIRED` — Q-002: merchant of record, settlement legal
   structure, tax structure, regulatory classification, and whether BANHAO's own
   split/transfer-round design is regulated payment facilitation.

@@ -57,6 +57,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-045** | **The ฿2 (200 satang) delivery funding gap between the ฿10 delivery fee and the ฿12 rider earning is a BANHAO `PLATFORM_WRITE_OFF`** | **ACCEPTED** | **2026-09-05** | `docs/SETTLEMENT_MODEL.md` § 3, § 4.1, § 8, BQ-040 |
 | **DEC-046** | **Promotion/discount funder model: platform or merchant, per promotion, no split (Option C)** | **ACCEPTED** | **2026-09-05** | `docs/SETTLEMENT_MODEL.md` § 3, § 10, `docs/BUSINESS_RULES.md` § 11, BQ-030 (funder half) |
 | **DEC-047** | **Phase 1 service fee revenue recognition: `PLATFORM_REVENUE` at the successful-payment economic-finality point** | **ACCEPTED — RECOGNITION TIMING · IMPLEMENTED 2026-09-06** | **2026-09-06** | `docs/SETTLEMENT_MODEL.md` § 3.2, `apps/api/src/modules/payments/payment-event-processing.service.ts`, BQ-027 (timing half) |
+| **DEC-048** | **Service fee refundability: included in an eligible full order refund (Option A)** | **ACCEPTED — REFUNDABILITY · NOT IMPLEMENTED** | **2026-09-06** | `docs/SETTLEMENT_MODEL.md` § 9, `docs/OPEN_BUSINESS_QUESTIONS.md` BQ-027 (resolved) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -1962,7 +1963,10 @@ BQ-027 (amount resolved; refundability still `OPEN`, Phase F)
 ### Supersedes / Superseded By
 
 Resolves the `OPEN — NUMERIC PRICING` half of DEC-024, which otherwise stands
-unchanged. / None.
+unchanged. / None — but the refundability question this decision's own
+Consequences clause left `OPEN` is separately answered by **DEC-048**
+(included in an eligible full order refund). This decision's own ฿5 amount
+and model are unchanged by DEC-048.
 
 ---
 
@@ -4050,3 +4054,164 @@ close BQ-027 (refundability), delivery-fee revenue recognition, gross
 merchant payable, order-level zero-sum (CON-003), or any of the settlement
 work `docs/SETTLEMENT_MODEL.md` § 13 still lists as open — none of those was
 in this decision's scope and none is resolved by this implementation.
+
+---
+
+## DEC-048 — Service fee refundability: included in an eligible full order refund
+
+**Status:** ACCEPTED — REFUNDABILITY · **NOT IMPLEMENTED** · **Date:** 2026-09-06 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+**Option A.** When an order/payment is determined eligible for a **full order
+refund**, the Phase 1 service fee (฿5 / 500 satang, DEC-036) **is included in
+the refundable amount**. This resolves the refundability half of **BQ-027**,
+which DEC-036 (amount) and DEC-047 (recognition timing) both left open.
+
+This decision answers exactly one question: *is the service fee refundable
+when a full refund is due?* It answers nothing about *when* a full refund is
+due, *how* a refund is executed, or *how* the reversal is posted — see Scope
+boundary below.
+
+1. **Amount.** Unchanged: ฿5 / 500 satang per order (DEC-036).
+2. **Trigger.** Only once an order/payment is **already determined eligible
+   for a full order refund** by whatever rule eventually settles that
+   question (BQ-016, BQ-015, BQ-017, and the existing `ACCEPTED` rows in
+   `docs/PAYMENT_LIFECYCLE.md` §8 / `docs/SETTLEMENT_MODEL.md` §9 for
+   pre-`MERCHANT_ACCEPTED` cancellation and merchant rejection/timeout). This
+   decision does **not** itself decide which causes qualify.
+3. **Ledger consequence, stated at the policy level only.** The
+   `SERVICE_FEE_REVENUE` entry recognized under DEC-047 must **eventually**
+   be reversed through a **new** reversal ledger group when the service fee
+   is included in a qualifying full refund. Historical `SERVICE_FEE_REVENUE`
+   entries are never mutated — the existing `ledger_entries` append-only
+   guarantee (`reject_mutation` trigger) already enforces this structurally,
+   and this decision adds no exception to it.
+4. **Amount source for any future reversal.** The immutable order snapshot
+   `orders.service_fee_satang` — never a hardcoded `500`, never derived from
+   `grand_total_satang` or the subtotal. Same rule DEC-047 already states for
+   the original recognition, extended to its reversal.
+5. **Conceptually separate from every other reversal.** The service-fee
+   reversal is its own fact, independent of:
+   - `CUSTOMER_PAYMENT` reversal,
+   - `MERCHANT_COMMISSION` reversal,
+   - delivery-fee treatment (customer side or rider side),
+   - rider earning / compensation.
+
+   This decision does **not** determine the treatment of any of those other
+   components. Each remains governed by its own existing rule or open
+   question, untouched by this entry.
+
+### Scope boundary — what this decision explicitly does NOT decide
+
+This is a business-decision lock only. **No implementation is authorized by
+this entry.** It does not decide, and must not be read as deciding:
+
+- what cancellation causes qualify for a full refund (**BQ-016** remains
+  `OPEN`),
+- who bears the cost of cooked-but-undelivered food (**BQ-015** remains
+  `OPEN`),
+- delivery-failure refund behavior (**BQ-017** remains `OPEN`),
+- partial-refund composition, including whether the service fee is refunded
+  on a *partial* refund at all (**BQ-031** remains `OPEN`),
+- the refund execution mechanism — PromptPay, wallet/store credit, manual
+  bank transfer, or any other (**Q-020** remains `OPEN` and unresolved; no
+  examined payment provider supports a native PromptPay refund),
+- merchant commission reversal, delivery-fee reversal, or rider
+  earning/compensation reversal — each is its own decision,
+- settlement, or refund reconciliation.
+- **The exact refund ledger posting shape** — whether the reversal is
+  single-entry or two-entry, whether it is zero-sum, whether it is paired
+  with a `REFUND_PAYABLE` entry or with a `CUSTOMER_PAYMENT` reversal — is a
+  future implementation/architecture decision, not this one. This entry
+  establishes only that the recognized revenue must eventually be reversed,
+  never how.
+
+None of BQ-016, BQ-015, BQ-017, BQ-031, or Q-020 is closed, narrowed, or
+otherwise acted on by this decision.
+
+### Relationship to DEC-047
+
+DEC-047 is **unchanged**. It still governs *recognition*: the service fee is
+recognized as `PLATFORM_REVENUE` at the successful-payment
+economic-finality point, in its own `SERVICE_FEE_REVENUE` group, amount from
+`orders.service_fee_satang`, no new account, no migration. DEC-048 governs
+*reversal eligibility* only — a separate rule, exactly as DEC-047 itself
+said recognition and reversal must be kept separate. DEC-048 does not alter
+DEC-047's recognition trigger, identity, group shape, or implementation.
+
+### Relationship to BQ-027
+
+Resolves BQ-027 in full: DEC-024 (model, 2026-08-10) + DEC-036 (amount,
+2026-08-24) + DEC-047 (recognition timing, 2026-09-06) + **DEC-048**
+(refundability, 2026-09-06) together answer every part of BQ-027's original
+question ("What is the ฿5 `ค่าบริการ` for, is it platform revenue, and is it
+refunded on cancellation?"). BQ-027 carries no further open half.
+
+### Why
+
+Product Owner decision, 2026-09-06, following the read-only recon this
+session performed (`docs/OPEN_BUSINESS_QUESTIONS.md` BQ-027's own on-file
+recommendation, "A for Phase 1" — ฿5 is not worth a customer dispute, and
+withholding it on an order BANHAO failed to deliver is a reputational risk
+disproportionate to the amount, in a district where word of mouth is the
+primary marketing channel).
+
+### Alternatives
+
+- **Option B — non-refundable** (`CUSTOMER_PAYMENT` reversed, `SERVICE_FEE_REVENUE`
+  stands) — rejected. Creates a customer-facing inconsistency the recon
+  flagged: the Customer App's existing refund copy does not distinguish
+  components, so a customer told "refunded" would not expect ฿5 silently
+  withheld.
+- **Option C — conditional refundability** (tied to BQ-016's timing boundary
+  or BQ-031's cause-based split) — rejected for this decision, not because it
+  is wrong, but because it would require BQ-016 and/or BQ-031 to be decided
+  first, and this entry answers only the question BQ-027 itself asks. A
+  future decision may still layer a condition onto *when* a full refund is
+  due; DEC-048 governs only what happens to the service fee once a full
+  refund is due.
+
+### Consequences
+
+- BQ-027 is fully resolved; no numeric, model, timing, or refundability half
+  remains open.
+- **No code, test, migration, schema, or ledger posting is authorized or
+  implied by this decision.** A future implementation task must design the
+  reversal's exact posting shape (group key, entries, sign, idempotency) as
+  its own gate, following the pattern DEC-047's own implementation already
+  established for recognition.
+- `docs/SETTLEMENT_MODEL.md` §9's per-cause table, which already marked "fee
+  reversed" `ACCEPTED` for pre-`MERCHANT_ACCEPTED` cancellation and merchant
+  rejection/timeout ahead of any DEC number existing for it, now has that
+  entry.
+- BQ-016, BQ-015, BQ-017, BQ-031 and Q-020 are unaffected and remain exactly
+  as open as before this decision.
+
+### Evidence
+
+Product Owner instruction, 2026-09-06 ("BANHAO — DEC-048 SERVICE FEE
+REFUNDABILITY DECISION LOCK"), following this session's BQ-027 refundability
+reconnaissance (existing `refunds` table with a flat, non-decomposed
+`amount_satang`; `NullPaymentProvider.refund()` unconditionally fails;
+`REFUND_PAYABLE` already reserved in `ledger_entries.account`'s CHECK; no
+application code writes to `refunds` or reverses any ledger group today).
+
+### Related Requirements
+
+BQ-027 (resolved in full by this decision, together with DEC-024/036/047) ·
+BQ-016, BQ-015, BQ-017, BQ-031, Q-020 (unaffected, remain `OPEN`) · CON-003
+(order-level zero-sum, unaffected — no reversal is posted by this decision) ·
+DEC-034 (zero-sum asserted in the application, per group — unaffected)
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 3.2, § 9 · `docs/PAYMENT_LIFECYCLE.md` § 8 ·
+`docs/OPEN_BUSINESS_QUESTIONS.md` BQ-027, BQ-031
+
+### Supersedes / Superseded By
+
+None / None. Resolves the **refundability** half of BQ-027 that DEC-036 and
+DEC-047 both explicitly left open. Does not supersede or modify DEC-024,
+DEC-036, DEC-043, DEC-044, DEC-045, DEC-046 or DEC-047, each of which stands
+unchanged.

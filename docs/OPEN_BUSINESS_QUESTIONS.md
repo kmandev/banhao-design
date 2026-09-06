@@ -51,7 +51,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
 | BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
-| BQ-027 — service fee | **RESOLVED (amount + recognition timing)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**, recognized as `PLATFORM_REVENUE` at payment success (implemented 2026-09-06). **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036, DEC-047 |
+| BQ-027 — service fee | **RESOLVED IN FULL** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**, recognized as `PLATFORM_REVENUE` at payment success (implemented 2026-09-06), and refundable when a full order refund is due (Option A, not implemented) | DEC-024, DEC-036, DEC-047, DEC-048 |
 | BQ-028 — merchant commission | **RESOLVED** — BANHAO revenue; Phase 1 rate is **8% of the food subtotal, rounded to whole baht** | DEC-025, DEC-043 |
 | BQ-030 — promotion/discount funder | **RESOLVED (funder model)** — Option C: per-promotion funder, Phase 1 allows only `PLATFORM` or `MERCHANT`, no split. **Stacking is not locked and remains `OPEN`** | DEC-046 |
 
@@ -83,18 +83,18 @@ on. **Decide them before then, not during.**
 | Q-002 | Legal / settlement model, merchant of record · `LEGAL_REVIEW_REQUIRED` | Payment, settlement, onboarding terms |
 | Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
 | BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms. Sharpened by DEC-022: an operator cancelling a no-rider order needs this answer |
-| BQ-027 | Service fee **refundability** only — the amount is decided (DEC-036) and the recognition timing is decided (DEC-047, which explicitly does **not** decide refundability). Phase F scope; does **not** block order creation | Refund flow, ledger |
 | BQ-030 | **Stacking only** — the funder model is decided (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split). Promotion-engine scope; does **not** block ledger/`CUSTOMER_PAYMENT` work, since `discount_satang` is always `0` today | Promotion engine only |
 
-**Six remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
+**Five remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
 BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
 the **numeric** halves of BQ-026 (DEC-035) and BQ-027 (DEC-036) as of
 2026-08-24, and — as of 2026-09-05 — the **numeric** half of BQ-028 / Q-010
 (**DEC-043**, 8% of food subtotal, round to whole baht). As of 2026-09-05 the
 **funder-model** half of BQ-030 is also resolved (**DEC-046**) — only its
-stacking sub-question is still carried above. BQ-027's refundability question
-and BQ-030's stacking question are both still carried above, and neither is
-an order-creation blocker.
+stacking sub-question is still carried above. **As of 2026-09-06, BQ-027 is
+resolved in full** — recognition timing by **DEC-047** and refundability by
+**DEC-048** — and no longer appears in the P0 table above. BQ-030's stacking
+question is still carried above, and is not an order-creation blocker.
 
 ### P1 — blocks a feature or launch readiness
 
@@ -1182,9 +1182,9 @@ rider economics (BQ-029) are built on the wrong base.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: RESOLVED — MODEL (DEC-024) · AMOUNT (DEC-036) · RECOGNITION TIMING (DEC-047) · OPEN — REFUNDABILITY
-decision: DEC-024 (model) + DEC-036 (Phase 1 shape and amount) + DEC-047 (revenue recognition timing)
-blocks: Refunds only (Phase F). Does not block order creation
+status: RESOLVED BY DEC-048
+decision: DEC-024 (model) + DEC-036 (Phase 1 shape and amount) + DEC-047 (revenue recognition timing) + DEC-048 (refundability)
+blocks: nothing further
 related: BQ-028, BQ-031
 ```
 
@@ -1201,11 +1201,18 @@ related: BQ-028, BQ-031
 > the amount read from the immutable `orders.service_fee_satang`. **Posting is
 > implemented** (`postServiceFeeLedger`, 2026-09-06).
 >
-> ⚠️ **Still open: refundability.** Whether the service fee survives a refund is
-> **not** decided by DEC-036 **or DEC-047** — recognition and reversal are
-> separate rules — and must not be inferred from either. It is Phase F
-> scope and does not block `POST /orders`, which reads only the amount. The
-> options and recommendation below remain live for that question alone.
+> **REFUNDABILITY RESOLVED 2026-09-06 — DEC-048.** Option A: when an
+> order/payment is eligible for a **full order refund**, the service fee is
+> included in the refundable amount, and its `SERVICE_FEE_REVENUE` entry must
+> eventually be reversed through a new group (never a mutation of history).
+> **Not implemented** — no reversal code, ledger group, or migration exists.
+> **DEC-048 decides only that the service fee is refundable when a full
+> refund is due — it does not decide which causes qualify for a full refund
+> (BQ-016, BQ-015, BQ-017 remain `OPEN`), partial-refund composition (BQ-031
+> remains `OPEN`), or the refund execution mechanism (Q-020 remains `OPEN`).**
+> BQ-027 itself carries no further open half. The discussion, options and
+> recommendation below are retained as the record of how DEC-048 was
+> reached — read as history, not as an open question.
 
 **Question:** What is the ฿5 `ค่าบริการ` for, is it platform revenue, and is it
 refunded on cancellation?
