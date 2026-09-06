@@ -3847,3 +3847,175 @@ None / None. Resolves the funder-model half of **BQ-030** only; does not
 resolve BQ-030's stacking recommendation, which remains open; does not
 supersede DEC-023, DEC-024, DEC-035, DEC-036, DEC-043, DEC-044, or DEC-045,
 each of which stands unchanged.
+
+---
+
+## DEC-047 — Phase 1 service fee revenue recognition: at payment success, as `PLATFORM_REVENUE`
+
+**Status:** ACCEPTED — RECOGNITION TIMING · **NOT IMPLEMENTED** · **Date:** 2026-09-06 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+The Phase 1 service fee is recognized as **`PLATFORM_REVENUE` at the existing
+successful-payment economic-finality point** — the same instant the
+`MERCHANT_COMMISSION` and `CUSTOMER_PAYMENT` ledger groups already post
+(`payments → SUCCESS` together with the guarded `orders PENDING_PAYMENT →
+PAID` transition). No later order-lifecycle milestone — acceptance,
+preparation, pickup or delivery — is the recognition point.
+
+This answers exactly one question: **when** service fee revenue is
+recognized. DEC-024 fixed the direction of the money and DEC-036 fixed the
+amount; neither said anything about timing, and that gap is what this
+decision closes.
+
+**Amount.** The Phase 1 amount is unchanged: **฿5 / 500 satang per order**
+(DEC-036). At implementation time the amount **must** be read from the
+immutable order snapshot `orders.service_fee_satang` — the value
+`create_order()` captured for that specific order and that
+`orders_enforce_immutable_columns` has protected ever since. The
+implementation must **not** hardcode `500`, must **not** derive the service
+fee from `grand_total_satang` (or from any other total), and must **not**
+treat `OrderPricingService`'s current pricing constant as the historical
+accounting source — that constant prices *new* orders and says nothing about
+what an already-placed order was charged.
+
+**Recognition identity and idempotency.** A future implementation must anchor
+on the payment/provider-transaction identity the payment flow already uses,
+`<paymentId>:<providerTransactionId>` — the same DEC-030 money-movement
+identity `commission:…` and `payment:…` already anchor on — and must be
+idempotent and self-healing under the established ledger-group pattern
+(attempt the `ledger_entry_groups` insert, treat a `group_key` unique
+violation as "already posted or partially posted", complete only what is
+missing). A duplicate webhook, a retried partially-completed event, or a
+concurrent tick must never produce two service-fee revenue entries.
+
+**Ledger group.** The posting belongs in its **own** group,
+`kind = 'SERVICE_FEE_REVENUE'`, with a deterministic group key derived from
+that same payment/provider-transaction identity. It must **not** be merged
+into the existing `CUSTOMER_PAYMENT` group: `group_key` uniqueness authorizes
+*creating* a group, not extending one (`docs/SETTLEMENT_MODEL.md` § 3.1), and
+the two are distinct facts — `CUSTOMER_PAYMENT` is the platform's total
+inbound funding for the order, service-fee revenue is one claim against that
+funding.
+
+**Sign and account.** The entry uses the already-locked positive sign
+convention for money the platform earns (`PLATFORM_REVENUE +amount`,
+§ 3.1 — the same convention the implemented commission group uses).
+**No new ledger account is introduced.** `PLATFORM_REVENUE` already exists in
+`ledger_entries.account`'s CHECK constraint, and
+`ledger_entry_groups.kind` — deliberately unconstrained free text
+(`20260811000007_ledger_domain.sql`) — is what distinguishes service-fee
+revenue from commission revenue. **No migration and no schema change are
+required or authorized by this decision.**
+
+**Commission interaction — unchanged.** The service fee is **not** part of
+the merchant commission base. DEC-043 (8% of the food subtotal, rounded to
+whole baht) is untouched, and so are `MERCHANT_PAYABLE`, `RIDER_PAYABLE`,
+rider earning (DEC-044) and the platform delivery write-off (DEC-045). This
+decision changes no amount, no rate and no other party's economics.
+
+**Scope of this decision.** BANHAO system and finance architecture policy
+only. It is not a claim of conformance with any external accounting standard;
+no such standard is cited as its justification, and the repository holds no
+authoritative accounting or legal decision that could supply one. Q-002
+(legal settlement model) and the `LEGAL_REVIEW_REQUIRED` items in
+`docs/SETTLEMENT_MODEL.md` § 13 are untouched.
+
+### Why
+
+Product Owner decision, 2026-09-06, following the recon recorded in this
+entry's Evidence section.
+
+Recognizing at payment success is the position already taken for the merchant
+commission, which posts at that same instant even though the merchant has not
+yet cooked anything. Recognizing the service fee later than the commission
+would introduce a new asymmetry that no business rule asks for. The
+recognition anchor, its idempotency identity, and the group pattern all
+already exist and are proven in production code, so the decision adds no new
+mechanism. And no approved milestone exists for the alternative: neither
+DEC-024 nor DEC-036 names one, so choosing "acceptance" or "delivery" would
+have meant inventing a policy value rather than locking one.
+
+### Alternatives
+
+- **Recognition at an order-lifecycle milestone** (`MERCHANT_ACCEPTED` or
+  `DELIVERED`) — **rejected for Phase 1.** No business rule names a milestone
+  for the service fee; selecting one would be an invented policy value. It
+  would also split service-fee recognition away from commission recognition
+  for no stated reason, and require a second anchor at an event the payment
+  flow has no other reason to know about.
+- **Deferred revenue, later reclassified into `PLATFORM_REVENUE`** —
+  **rejected.** `ledger_entries.account`'s CHECK holds no deferred/unearned
+  revenue account, and the ledger is append-only (`reject_mutation` blocks
+  UPDATE and DELETE for every role, `service_role` included), so a
+  reclassification would need both a new account and a migration. No business
+  or accounting requirement in this repository asks for deferral.
+- **Posting the service fee inside the existing `CUSTOMER_PAYMENT` group** —
+  **rejected.** It would conflate funding with revenue, and the ledger's
+  idempotency mechanism does not support extending an existing group.
+
+### Consequences
+
+- A future implementation task may post one `PLATFORM_REVENUE` entry per
+  successfully paid order in its own `SERVICE_FEE_REVENUE` group. **That
+  implementation is not authorized by this entry** — it is a separate task
+  behind its own gate. Nothing is implemented by this decision.
+- `PLATFORM_REVENUE` will then have **two** sources — commission and service
+  fee — distinguishable only by `ledger_entry_groups.kind`. Any query that
+  aggregates `PLATFORM_REVENUE` without filtering on `kind` will conflate
+  them. There is no per-component column and this decision does not add one.
+- **Order-level zero-sum is not achieved by this decision.** Gross merchant
+  food payable is still never posted (`docs/SETTLEMENT_MODEL.md` § 4's own
+  note) and the delivery fee's revenue side is still unrecognized, so an
+  order's groups will not net to zero after this posting exists — they will
+  net further from zero by the service-fee amount. CON-003's order-level
+  invariant remains a future capability, exactly as it was before this
+  decision. Both gaps are explicitly **out of scope here**.
+- **Refundability is NOT decided.** BQ-027's remaining half — whether the
+  service fee survives a refund — stays `OPEN` and is Phase F scope, and must
+  not be inferred from this decision in either direction. Recognition and
+  reversal are separate rules. If a reversal is ever required, it must be a
+  **new** ledger group; historical `CUSTOMER_PAYMENT` and historical revenue
+  entries are never mutated (already enforced by `ledger_entries`'
+  `reject_mutation` trigger).
+- **Reconciliation is not implemented by this decision.** When a service-fee
+  reconciliation is eventually built it must be able to distinguish missing,
+  duplicate, amount mismatch, identity mismatch, orphan, legacy-not-applicable
+  and in-flight/grace-period outcomes — described here as requirements, not as
+  locked category names. `PaymentReconciliationService` (read-only, payment ↔
+  `CUSTOMER_PAYMENT`) is unchanged and covers a different check.
+- Nothing else moves: no pricing change, no delivery-fee revenue decision, no
+  promotion decision, no settlement architecture, no new dependency, no API
+  surface.
+
+### Evidence
+
+Product Owner instruction, 2026-09-06 ("DEC-047 DECISION LOCK — Approved
+Business Decision"), given after a recon of the live ledger code
+(`postCommissionLedger` / `postCustomerPaymentLedger` in
+`apps/api/src/modules/payments/payment-event-processing.service.ts`,
+`delivery-completion.service.ts`'s `RIDER_EARNING` group), the ledger schema
+(`supabase/migrations/20260811000007_ledger_domain.sql`) and
+`docs/SETTLEMENT_MODEL.md` § 3.1, which together established that no
+service-fee revenue entry exists anywhere today.
+
+### Related Requirements
+
+BQ-027 (the **amount** half is DEC-036 and the **timing** half is this
+decision; **refundability remains OPEN**) · CON-003 (integer satang,
+order-level zero-sum) · DEC-028 (idempotency) · DEC-030 (money-movement
+identity) · DEC-034 (zero-sum asserted in the application, per group)
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 3, § 3.1, § 3.2 · `docs/BUSINESS_RULES.md` § 5.3 ·
+`apps/api/src/modules/payments/payment-event-processing.service.ts` (the
+existing recognition anchor; **unchanged by this decision**) ·
+`supabase/migrations/20260811000007_ledger_domain.sql`
+
+### Supersedes / Superseded By
+
+None / None. Resolves the **recognition-timing** question that DEC-024 and
+DEC-036 left unstated. Does not supersede or modify DEC-023, DEC-024,
+DEC-035, DEC-036, DEC-043, DEC-044, DEC-045 or DEC-046, each of which stands
+unchanged.

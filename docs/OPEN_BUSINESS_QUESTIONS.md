@@ -51,7 +51,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
 | BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
-| BQ-027 — service fee | **RESOLVED (amount)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**. **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036 |
+| BQ-027 — service fee | **RESOLVED (amount + recognition timing)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**, recognized as `PLATFORM_REVENUE` at payment success (posting not implemented). **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036, DEC-047 |
 | BQ-028 — merchant commission | **RESOLVED** — BANHAO revenue; Phase 1 rate is **8% of the food subtotal, rounded to whole baht** | DEC-025, DEC-043 |
 | BQ-030 — promotion/discount funder | **RESOLVED (funder model)** — Option C: per-promotion funder, Phase 1 allows only `PLATFORM` or `MERCHANT`, no split. **Stacking is not locked and remains `OPEN`** | DEC-046 |
 
@@ -83,7 +83,7 @@ on. **Decide them before then, not during.**
 | Q-002 | Legal / settlement model, merchant of record · `LEGAL_REVIEW_REQUIRED` | Payment, settlement, onboarding terms |
 | Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
 | BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms. Sharpened by DEC-022: an operator cancelling a no-rider order needs this answer |
-| BQ-027 | Service fee **refundability** only — the amount is decided (DEC-036). Phase F scope; does **not** block order creation | Refund flow, ledger |
+| BQ-027 | Service fee **refundability** only — the amount is decided (DEC-036) and the recognition timing is decided (DEC-047, which explicitly does **not** decide refundability). Phase F scope; does **not** block order creation | Refund flow, ledger |
 | BQ-030 | **Stacking only** — the funder model is decided (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split). Promotion-engine scope; does **not** block ledger/`CUSTOMER_PAYMENT` work, since `discount_satang` is always `0` today | Promotion engine only |
 
 **Six remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
@@ -1182,8 +1182,8 @@ rider economics (BQ-029) are built on the wrong base.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: RESOLVED — MODEL (DEC-024) · AMOUNT (DEC-036) · OPEN — REFUNDABILITY
-decision: DEC-024 (model) + DEC-036 (Phase 1 shape and amount)
+status: RESOLVED — MODEL (DEC-024) · AMOUNT (DEC-036) · RECOGNITION TIMING (DEC-047) · OPEN — REFUNDABILITY
+decision: DEC-024 (model) + DEC-036 (Phase 1 shape and amount) + DEC-047 (revenue recognition timing)
 blocks: Refunds only (Phase F). Does not block order creation
 related: BQ-028, BQ-031
 ```
@@ -1195,8 +1195,15 @@ related: BQ-028, BQ-031
 > of 500 satang (฿5) per order**. No percentage, cap, minimum, tier or
 > restaurant-specific variant is approved.
 >
+> **RECOGNITION TIMING RESOLVED 2026-09-06 — DEC-047.** The service fee is
+> recognized as `PLATFORM_REVENUE` at the successful-payment
+> economic-finality point, in its own `SERVICE_FEE_REVENUE` ledger group, with
+> the amount read from the immutable `orders.service_fee_satang`. **Posting is
+> not implemented** — DEC-047 is a decision lock only.
+>
 > ⚠️ **Still open: refundability.** Whether the service fee survives a refund is
-> **not** decided by DEC-036 and must not be inferred from it. It is Phase F
+> **not** decided by DEC-036 **or DEC-047** — recognition and reversal are
+> separate rules — and must not be inferred from either. It is Phase F
 > scope and does not block `POST /orders`, which reads only the amount. The
 > options and recommendation below remain live for that question alone.
 

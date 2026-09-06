@@ -104,10 +104,10 @@ the rider's side of the delivery fee remains open.
 
 | Account | Meaning | Phase 1 |
 |---|---|---|
-| `CUSTOMER_PAYMENT` | Money received from a customer online | Active — posting design **locked** (§ 3.1, 2026-09-05); posting itself **not implemented** |
+| `CUSTOMER_PAYMENT` | Money received from a customer online | Active — design locked (§ 3.1) and **posting implemented** 2026-09-05 (`postCustomerPaymentLedger`), with a **read-only** payment ↔ ledger reconciliation implemented 2026-09-06 (§ 11.1). No settlement or payout follows from either |
 | `MERCHANT_PAYABLE` | What the platform owes a merchant | Active |
 | `RIDER_PAYABLE` | What the platform owes a rider for delivery work | Active |
-| `PLATFORM_REVENUE` | Commission + service fee + delivery margin | Active |
+| `PLATFORM_REVENUE` | Commission + service fee + delivery margin | Active — **commission posted** (`postCommissionLedger`). **Service fee: recognition timing locked by DEC-047** (§ 3.2 — at payment success; posting **not implemented**). Delivery-fee revenue is still unrecognized. Once service fee posts, `ledger_entry_groups.kind` is the only thing separating the two revenue sources |
 | `PROMOTION_FUNDING` | Whoever funds a discount | Active — funder model **resolved** (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split); posting **not implemented**. Stacking still `OPEN` (BQ-030) |
 | `REFUND_PAYABLE` | Money owed back to a customer | Active — mechanism `OPEN` (Q-020) |
 | `RIDER_COMPENSATION` | Paid to a rider for a job lost through no fault of theirs | Active — amount `OPEN` (BQ-024) |
@@ -134,7 +134,10 @@ this repository's own precedent: the `MERCHANT_COMMISSION` group's shape
 `insertRiderEarningEntry`) were likewise never given their own `DEC-`, only
 implemented under the business decisions that authorized their accounts and
 amounts (DEC-043 and DEC-044/045 respectively). This design does the same for
-`CUSTOMER_PAYMENT`. **Not yet implemented** — see `docs/CURRENT_STATUS.md`.
+`CUSTOMER_PAYMENT`. **Implemented 2026-09-05** exactly as designed below
+(`postCustomerPaymentLedger`); the read-only reconciliation of § 11.1 followed
+on 2026-09-06. See `docs/CURRENT_STATUS.md` for what still does not follow
+from either (no settlement, no payout, no refund).
 
 **Model: Hybrid payment-funding group (Model C).** `CUSTOMER_PAYMENT` posts
 into its own ledger group, independent of the existing `MERCHANT_COMMISSION`
@@ -324,7 +327,110 @@ method inside `PaymentEventProcessingService` (alongside
 same insert-then-self-heal shape already proven there — not a new service,
 controller, or module.
 
+### 3.2 Service fee revenue recognition — locked by DEC-047 (2026-09-06)
+
+**Business decision, not merely an architecture note** — unlike § 3.1, this
+one answers a question no prior decision had answered: *when* the service fee
+becomes revenue. It is locked as **DEC-047**. **Not implemented** — this
+section describes the approved shape a future, separately-gated
+implementation task must follow, and authorizes no code.
+
+**Recognition point.** At the existing successful-payment economic-finality
+point — `payments → SUCCESS` together with the guarded `orders
+PENDING_PAYMENT → PAID` transition — the same instant `MERCHANT_COMMISSION`
+and `CUSTOMER_PAYMENT` already post. Not at acceptance, preparation, pickup
+or delivery: no business rule names such a milestone for the service fee, and
+inventing one is forbidden.
+
+**Entry:**
+```
+PLATFORM_REVENUE  +orders.service_fee_satang   party_type: PLATFORM, party_id: null
+```
+
+**Amount source:** `orders.service_fee_satang`, read fresh from the immutable
+order row — the snapshot `create_order()` captured and
+`orders_enforce_immutable_columns` has protected since. Phase 1 that value is
+500 satang (DEC-036), but the implementation must **never** hardcode `500`,
+**never** derive the fee from `grand_total_satang` or any other total, and
+**never** treat `OrderPricingService`'s pricing constant as the historical
+accounting source — that constant prices new orders, not past ones.
+
+**Sign:** positive, the same "money the platform earns" convention
+`PLATFORM_REVENUE +commission` already uses (§ 3.1). **No new account** —
+`PLATFORM_REVENUE` is already in `ledger_entries.account`'s CHECK, and
+`ledger_entry_groups.kind` (free text by design) is what separates
+service-fee revenue from commission revenue. **No migration, no schema
+change.**
+
+**Group:** its own, `kind = 'SERVICE_FEE_REVENUE'`, with a deterministic
+group key derived from the payment/provider-transaction identity
+`<paymentId>:<providerTransactionId>` that DEC-030 already anchors
+`commission:…` and `payment:…` on. It must **not** be merged into the
+`CUSTOMER_PAYMENT` group — `group_key` uniqueness authorizes creating a
+group, not extending one (§ 3.1), and funding and revenue are two distinct
+facts.
+
+**Idempotency:** the established pattern — attempt the `ledger_entry_groups`
+insert, treat a `group_key` unique violation as "already posted, or posted
+but incomplete", and fill in only what is missing. Called from the same two
+places `postCommissionLedger` already is (fresh transition and already-PAID
+self-heal), and posted for neither `SURPLUS_PAYMENT` nor `LATE_PAYMENT`. A
+duplicate webhook, a retry, or a concurrent tick must never produce two
+service-fee revenue entries.
+
+**Zero-sum:** this group is a single-entry group and is **not** required to
+sum to zero on its own — the same treatment `CUSTOMER_PAYMENT` (+grand_total)
+and `RIDER_EARNING` (−1000 residual, DEC-045) already have. Its funding
+counterpart is the `CUSTOMER_PAYMENT` entry, whose `grand_total_satang`
+already contains the service fee by `orders_total_check`; recognition is a
+claim against that funding, never a second receipt of money.
+
+**What it does not close.** Order-level zero-sum still does not hold after
+this posting exists — gross merchant food payable is still unposted and the
+delivery fee's revenue side is still unrecognized, so an order's groups will
+net *further* from zero by the service-fee amount, not closer. Both gaps are
+out of DEC-047's scope. Commission (DEC-043), merchant payable, rider
+earning (DEC-044) and the platform write-off (DEC-045) are untouched: the
+service fee is not part of the commission base.
+
+**Refunds:** DEC-047 does not resolve **BQ-027**. Whether the service fee
+survives a refund stays `OPEN` (Phase F) and must not be inferred from the
+recognition timing in either direction. A reversal, if one is ever decided,
+is a **new** group — historical `CUSTOMER_PAYMENT` and historical revenue
+entries are never mutated (`reject_mutation`).
+
+**Reconciliation:** not implemented and not designed here. A future
+service-fee reconciliation must be able to tell apart missing, duplicate,
+amount mismatch, identity mismatch, orphan, legacy-not-applicable and
+in-flight/grace-period outcomes — stated as requirements, not as locked
+category names. `PaymentReconciliationService` (§ 11.1) is a different check
+and is unchanged.
+
 ### 4.1 Online order — the Phase 1 path
+
+> ⚠️ **HISTORICAL / DEPRECATED — do not implement from this example, and do
+> not read its signs as the current convention.** It was written before the
+> ledger conventions that are now locked and implemented, and it predates
+> DEC-035/036/043/044/045/047. Two specific ways it is out of date:
+>
+> 1. **Its `PLATFORM_REVENUE −1 000` sign is not the current convention.**
+>    The authoritative convention is § 3.1's, which the implemented
+>    `MERCHANT_COMMISSION` group uses: money the platform earns is
+>    **positive** (`PLATFORM_REVENUE +commission`), an obligation the
+>    platform owes is negative (`MERCHANT_PAYABLE`, `RIDER_PAYABLE`). This
+>    example instead nets every line against the customer payment so the
+>    single table sums to zero — an order-level presentation, not the
+>    per-group posting the system actually performs. **§ 3.1 (and § 3.2)
+>    govern; this table does not.**
+> 2. **Its arithmetic uses superseded sample numbers** — 10% commission and a
+>    ฿15 delivery fee. The approved Phase 1 figures are elsewhere: DEC-035
+>    (฿10 delivery), DEC-036 (฿5 service), DEC-043 (8% commission),
+>    DEC-044 (฿12 rider earning), DEC-045 (฿2 platform write-off).
+>
+> The arithmetic below is **left exactly as originally published** rather than
+> rewritten — recomputing it would turn an illustration into a new,
+> unapproved business rule. It is kept only as the record of how the
+> unit-economics findings underneath it were reached.
 
 Figures from the design's own ledger for order `BH000125`, rebuilt in satang.
 **Illustrative arithmetic, not approved pricing** (DEC-023/024/025).
@@ -924,7 +1030,8 @@ duplicate payment (DEC-030).
 Q-004 (cash limit) · the cash half of BQ-034.
 
 **Still `OPEN` — P0:** Q-002 (legal settlement model) · BQ-027 (service fee
-**refundability** only — the amount is set by DEC-036) · BQ-030 (**stacking**
+**refundability** only — the amount is set by DEC-036 and the **recognition
+timing** by DEC-047, § 3.2; neither decides refundability) · BQ-030 (**stacking**
 only — the funder model is resolved by DEC-046) · BQ-015 (who bears the cost
 of wasted food). **Resolved 2026-08-24:** BQ-026 (DEC-035, flat ฿10) and the
 amount half of BQ-027 (DEC-036, fixed ฿5). **Resolved 2026-09-05:** Q-010 /
@@ -934,6 +1041,9 @@ delivery; BQ-024 is unaffected and stays open below) · BQ-040 (**DEC-045** —
 the ฿2 delivery funding gap is a BANHAO platform write-off) · the **funder-model**
 half of BQ-030 (**DEC-046** — per-promotion funder, `PLATFORM` or `MERCHANT`,
 no split; stacking is unaffected and stays open above).
+**Resolved 2026-09-06:** the service fee's **recognition timing**
+(**DEC-047** — recognized as `PLATFORM_REVENUE` at payment success, § 3.2;
+posting not implemented, and BQ-027's refundability half stays open above).
 **Still `OPEN` — P1:** BQ-024 (rider cancellation/waiting compensation) ·
 BQ-031 (partial refund composition) · BQ-032 (settlement cycle) · BQ-034
 (negative balances) · Q-011 (chargebacks).

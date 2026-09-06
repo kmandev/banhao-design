@@ -359,7 +359,7 @@ is flat, so no `ServiceArea`, `zones` or `delivery_fee_bands` table is required
 and none exists; the schema lock is untouched. The guidance returns if and when
 banded pricing is approved.
 
-### 5.3 Service fee — model and amount accepted; refundability still open
+### 5.3 Service fee — model, amount and recognition timing accepted; refundability still open
 
 `ACCEPTED — MODEL` — **DEC-024**: `Customer → service fee → BANHAO`. It is
 platform revenue, distinct from commission and from the delivery fee.
@@ -368,9 +368,22 @@ platform revenue, distinct from commission and from the delivery fee.
 order**. Not a percentage, not a percentage with a cap or minimum, not tiered,
 not restaurant-specific.
 
+`ACCEPTED — RECOGNITION TIMING` — **DEC-047**: the service fee is recognized
+as **`PLATFORM_REVENUE` at the successful-payment economic-finality point**,
+the same instant the merchant commission and `CUSTOMER_PAYMENT` already post
+— not at acceptance, preparation, pickup or delivery. At implementation time
+the amount must come from the immutable order snapshot
+`orders.service_fee_satang`, never a hardcoded `500`, never derived from
+`grand_total_satang`, and never taken from the current pricing constant. The
+service fee is **not** part of the merchant commission base (DEC-043
+unchanged). **Posting is not implemented** — DEC-047 is a decision lock, and
+the ledger work is a separate gated task. Shape:
+[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § 3.2.
+
 **`OPEN`** — BQ-027's remaining half: whether the service fee survives a refund.
-That is **Phase F** scope, must not be inferred from DEC-036, and does not block
-order creation. The `฿5` in `apps/customer/src/mocks/pricing.ts` numerically
+That is **Phase F** scope, must not be inferred from DEC-036 **or DEC-047** —
+recognition and reversal are separate rules — and does not block order
+creation. The `฿5` in `apps/customer/src/mocks/pricing.ts` numerically
 matches the approved amount but remains a **sample** — the authority is DEC-036,
 and that constant must not be imported into backend code.
 
