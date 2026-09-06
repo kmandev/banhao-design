@@ -5,6 +5,7 @@ import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { PaymentEventProcessingService } from './payment-event-processing.service';
 import { PaymentAttemptExpiryService } from './payment-attempt-expiry.service';
+import { PaymentReconciliationService } from './payment-reconciliation.service';
 
 /**
  * Wires the active PaymentProvider, payment initiation (Phase F-1),
@@ -23,7 +24,8 @@ import { PaymentAttemptExpiryService } from './payment-attempt-expiry.service';
     PaymentsService,
     PaymentEventProcessingService,
     PaymentAttemptExpiryService,
+    PaymentReconciliationService,
   ],
-  exports: [PAYMENT_PROVIDER, PaymentEventProcessingService, PaymentAttemptExpiryService],
+  exports: [PAYMENT_PROVIDER, PaymentEventProcessingService, PaymentAttemptExpiryService, PaymentReconciliationService],
 })
 export class PaymentsModule {}
