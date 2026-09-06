@@ -386,12 +386,21 @@ creation. The `฿5` in `apps/customer/src/mocks/pricing.ts` numerically
 matches the approved amount but remains a **sample** — the authority is DEC-036,
 and that constant must not be imported into backend code.
 
-### 5.4 Merchant commission — model accepted, rate open
+### 5.4 Merchant commission — model and rate both accepted
 
 `ACCEPTED — MODEL` — **DEC-025**: `Merchant → commission → BANHAO`.
-**`OPEN — NUMERIC RATE`** — Q-010, BQ-028. DEC-025 states explicitly that the
-10% appearing throughout the design samples **must not become a business rule by
-default.** Model comparison: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § 5.
+
+`ACCEPTED — PHASE 1 RATE` — **DEC-043** (2026-09-05): **8% of the food
+subtotal, rounded to the nearest whole baht**. The base is
+`orders.subtotal_satang` only — delivery fee and service fee are excluded,
+and so is any discount, since the subtotal is captured before
+`discount_satang` is applied. This resolves Q-010/BQ-028.
+
+The 10% appearing throughout the design samples **never became the business
+rule** — DEC-025 stated so explicitly, and DEC-043 confirms the approved rate
+is 8%, a different number, not a retroactive approximation of the 10%
+sample. Model comparison, retained as the record of how the rate was reached:
+[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § 5.
 
 ---
 
@@ -529,10 +538,12 @@ Full treatment: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md).
 - **Simplified by DEC-016** — the cash-order rule (cash orders skip the transfer
   round, commission netted from the next one) does not apply in Phase 1, so
   BQ-033 is deferred with COD.
-- `OPEN` — commission rate (Q-010/BQ-028), service fee **refundability**
-  (BQ-027 — the amount is decided by DEC-036), promotion funding (BQ-030),
-  cycle specifics (BQ-032), negative balances (BQ-034). The delivery and
-  service fee **amounts** are decided (DEC-035, DEC-036).
+- `OPEN` — service fee **refundability** (BQ-027 — the amount is decided by
+  DEC-036, and the recognition timing by DEC-047), promotion **stacking**
+  only (BQ-030 — the funder model is decided by DEC-046), cycle specifics
+  (BQ-032), negative balances (BQ-034). The delivery and service fee
+  **amounts** (DEC-035, DEC-036) and the commission **rate** (DEC-043,
+  8% of the food subtotal) are decided.
 - ⚖️ `LEGAL_REVIEW_REQUIRED` — Q-002: merchant of record, settlement legal
   structure, tax structure, regulatory classification, and whether BANHAO's own
   split/transfer-round design is regulated payment facilitation.

@@ -1333,9 +1333,12 @@ Tips do not appear anywhere in the design.
 **Now that both numbers are locked** (DEC-035's ฿10 delivery fee, DEC-044's
 ฿12 rider earning), the second reading is the actual Phase 1 position: a
 documented ฿2-per-delivery gap between what the customer's delivery fee
-collects and what the rider is paid. **DEC-044 does not resolve this gap or
-assign it to commission** — the arithmetic is recorded, not funded, by this
-lock.
+collects and what the rider is paid. **DEC-044 itself does not resolve this
+gap or assign it to commission** — the arithmetic was recorded, not funded,
+by this lock alone. ⚠️ **The gap was separately resolved the same day by
+DEC-045** (BANHAO absorbs it as a `PLATFORM_WRITE_OFF`, see **BQ-040**) —
+this paragraph is kept as the record of the gap as DEC-044 alone left it, not
+as the current position.
 
 **Options:** per-order flat · distance-based · base + distance (the industry
 norm) · zone-based · any of these plus peak bonus, minimum guarantee, or tips.
