@@ -3852,7 +3852,8 @@ each of which stands unchanged.
 
 ## DEC-047 — Phase 1 service fee revenue recognition: at payment success, as `PLATFORM_REVENUE`
 
-**Status:** ACCEPTED — RECOGNITION TIMING · **NOT IMPLEMENTED** · **Date:** 2026-09-06 · **Owner:** PRODUCT_OWNER
+**Status:** ACCEPTED — RECOGNITION TIMING · **IMPLEMENTED 2026-09-06** — see
+*Implementation status* at the end. · **Date:** 2026-09-06 · **Owner:** PRODUCT_OWNER
 
 ### Decision
 
@@ -4019,3 +4020,26 @@ None / None. Resolves the **recognition-timing** question that DEC-024 and
 DEC-036 left unstated. Does not supersede or modify DEC-023, DEC-024,
 DEC-035, DEC-036, DEC-043, DEC-044, DEC-045 or DEC-046, each of which stands
 unchanged.
+
+### Implementation status (added 2026-09-06, after the entry above)
+
+Implemented the same day, in `PaymentEventProcessingService`
+(`apps/api/src/modules/payments/payment-event-processing.service.ts`):
+`postServiceFeeLedger` posts `PLATFORM_REVENUE +orders.service_fee_satang` in
+its own `SERVICE_FEE_REVENUE` group, keyed
+`servicefee:<paymentId>:<providerTransactionId>`, from both the
+fresh-transition and already-PAID self-heal branches of
+`completeSuccessSideEffects`, alongside `postCommissionLedger` and
+`postCustomerPaymentLedger`. The amount is read fresh from the order row on
+every call — never hardcoded, never derived from `grand_total_satang` or the
+subtotal, never taken from `OrderPricingService`'s pricing constant. No
+migration, no new `ledger_entries.account` value, no schema change. 7 new
+tests (happy path, snapshot-authority, `SURPLUS_PAYMENT`/`LATE_PAYMENT`
+exclusion, self-heal crash-window recreation, idempotent duplicate delivery,
+commission-base isolation); full API suite 1540/1540.
+
+This closes the *implementation* gap this decision authorized. It does not
+close BQ-027 (refundability), delivery-fee revenue recognition, gross
+merchant payable, order-level zero-sum (CON-003), or any of the settlement
+work `docs/SETTLEMENT_MODEL.md` § 13 still lists as open — none of those was
+in this decision's scope and none is resolved by this implementation.

@@ -376,9 +376,8 @@ the amount must come from the immutable order snapshot
 `orders.service_fee_satang`, never a hardcoded `500`, never derived from
 `grand_total_satang`, and never taken from the current pricing constant. The
 service fee is **not** part of the merchant commission base (DEC-043
-unchanged). **Posting is not implemented** — DEC-047 is a decision lock, and
-the ledger work is a separate gated task. Shape:
-[`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § 3.2.
+unchanged). **Posting is implemented** (2026-09-06, `postServiceFeeLedger`).
+Shape: [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) § 3.2.
 
 **`OPEN`** — BQ-027's remaining half: whether the service fee survives a refund.
 That is **Phase F** scope, must not be inferred from DEC-036 **or DEC-047** —

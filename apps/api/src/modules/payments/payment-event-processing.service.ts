@@ -88,9 +88,9 @@ interface PaymentAttemptRow {
  *
  * ## Ledger posting — DEC-043, and CUSTOMER_PAYMENT (SETTLEMENT_MODEL.md § 3.1)
  *
- * A confirmed `PAID` order posts two independent ledger groups, each summing
- * to zero or not on its own terms, per the hybrid design locked in
- * `docs/SETTLEMENT_MODEL.md` § 3.1:
+ * A confirmed `PAID` order posts three independent ledger groups, each
+ * summing to zero or not on its own terms, per the hybrid design locked in
+ * `docs/SETTLEMENT_MODEL.md` § 3.1 and, for the service fee, § 3.2 (DEC-047):
  *
  * - `MERCHANT_COMMISSION` — `Merchant → commission → BANHAO` (DEC-025's
  *   direction, DEC-043's 8%-of-food-subtotal rate): `MERCHANT_PAYABLE`
@@ -103,16 +103,26 @@ interface PaymentAttemptRow {
  *   deliberately **not** zero-sum on its own — it is a funding/source group,
  *   symmetric with the `RIDER_EARNING` group's own accepted `-1000` residual
  *   (DEC-045). See `postCustomerPaymentLedger`.
+ * - `SERVICE_FEE_REVENUE` (DEC-047) — a single
+ *   `PLATFORM_REVENUE +orders.service_fee_satang` entry, recognized at this
+ *   same payment-success point. Also **not** zero-sum on its own — the
+ *   service fee is a claim against the `CUSTOMER_PAYMENT` funding, not a
+ *   second receipt of money. Distinguished from `MERCHANT_COMMISSION`'s own
+ *   `PLATFORM_REVENUE` entry only by `ledger_entry_groups.kind` — a query
+ *   that aggregates `PLATFORM_REVENUE` without filtering `kind` conflates
+ *   the two. See `postServiceFeeLedger`.
  *
- * Both run on both the fresh transition and the already-PAID self-heal
+ * All three run on both the fresh transition and the already-PAID self-heal
  * branch of `completeSuccessSideEffects` — the exact two places money is
  * confirmed settled — anchored on their own deterministic, DEC-030-derived
- * identities (`commission:<paymentId>:<providerTransactionId>` and
- * `payment:<paymentId>:<providerTransactionId>` respectively), so a
+ * identities (`commission:<paymentId>:<providerTransactionId>`,
+ * `payment:<paymentId>:<providerTransactionId>`, and
+ * `servicefee:<paymentId>:<providerTransactionId>` respectively), so a
  * duplicate delivery of the same event, or a retry of a partially-completed
- * one, can never post either group twice. Neither runs for
- * `SURPLUS_PAYMENT` or `LATE_PAYMENT` — a payment that never (or no longer)
- * genuinely settles this order commits no commission and funds nothing.
+ * one, can never post any of them twice. None runs for `SURPLUS_PAYMENT` or
+ * `LATE_PAYMENT` — a payment that never (or no longer) genuinely settles
+ * this order commits no commission, funds nothing, and earns no service-fee
+ * revenue.
  * **Delivery fee's rider side is untouched here: `RIDER_PAYABLE` and
  * `PLATFORM_WRITE_OFF` are posted by `delivery-completion.service.ts`
  * (DEC-044/045), not this service.**
@@ -487,6 +497,7 @@ export class PaymentEventProcessingService {
       await this.writeOrderHistory(payment.order_id);
       await this.postCommissionLedger(payment, providerTransactionId);
       await this.postCustomerPaymentLedger(payment, providerTransactionId);
+      await this.postServiceFeeLedger(payment, providerTransactionId);
       // H-3 — fires only on the guarded-UPDATE winner (this branch), so a
       // self-heal retry of this same event (the earlier-run-already-recorded
       // path a few lines up) never reaches here and never double-notifies.
@@ -516,6 +527,7 @@ export class PaymentEventProcessingService {
       await this.ensureOrderHistoryRecorded(payment.order_id);
       await this.postCommissionLedger(payment, providerTransactionId);
       await this.postCustomerPaymentLedger(payment, providerTransactionId);
+      await this.postServiceFeeLedger(payment, providerTransactionId);
       return;
     }
 
@@ -824,6 +836,119 @@ export class PaymentEventProcessingService {
         party_type: 'CUSTOMER',
         party_id: customerId,
         amount_satang: amountSatang,
+      },
+    ]);
+
+    if (error) {
+      throw new Error(`ledger_entries insert failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * DEC-047 — posts the Phase 1 service fee as `PLATFORM_REVENUE`, at the
+   * same successful-payment economic-finality point as
+   * `postCommissionLedger`/`postCustomerPaymentLedger`, in its own
+   * `SERVICE_FEE_REVENUE` group (never merged into `CUSTOMER_PAYMENT` —
+   * `group_key` uniqueness authorizes creating a group, not extending one).
+   *
+   * Amount is read fresh from `orders.service_fee_satang` — the immutable
+   * snapshot `create_order()` captured for this specific order
+   * (`orders_enforce_immutable_columns`) — never hardcoded, never derived
+   * from `grand_total_satang` or any other total, and never taken from
+   * `OrderPricingService`'s current pricing constant, which prices new
+   * orders and says nothing about what an already-placed order was charged.
+   *
+   * Anchored on `servicefee:<paymentId>:<providerTransactionId>` — the same
+   * event identity `commission:…` and `payment:…` already use for DEC-030 —
+   * via `ledger_entry_groups.group_key`'s own unique constraint, so a
+   * duplicate delivery of the same event, or a retry of a
+   * partially-completed one, can never post the group twice. Does not touch
+   * `MERCHANT_PAYABLE`, `RIDER_PAYABLE`, `PLATFORM_WRITE_OFF` or the
+   * commission base (DEC-043) — the service fee is not commission.
+   */
+  private async postServiceFeeLedger(payment: PaymentRow, providerTransactionId: string): Promise<void> {
+    const { data: order, error: orderError } = await this.supabase.admin
+      .from('orders')
+      .select('id, service_fee_satang')
+      .eq('id', payment.order_id)
+      .maybeSingle<{ id: string; service_fee_satang: number }>();
+
+    if (orderError) {
+      throw new Error(`orders read for service fee ledger failed: ${orderError.message}`);
+    }
+    if (!order) {
+      throw new Error(`orders read for service fee ledger found no row for ${payment.order_id}`);
+    }
+
+    const groupKey = `servicefee:${payment.id}:${providerTransactionId}`;
+
+    const { data: group, error: groupError } = await this.supabase.admin
+      .from('ledger_entry_groups')
+      .insert({ group_key: groupKey, order_id: order.id, kind: 'SERVICE_FEE_REVENUE' })
+      .select('id')
+      .maybeSingle<{ id: string }>();
+
+    if (groupError) {
+      if (!isUniqueViolation(groupError)) {
+        throw new Error(`ledger_entry_groups insert failed: ${groupError.message}`);
+      }
+
+      // Already posted by an earlier run of this same event (self-heal), OR
+      // the group committed but the entry insert below did not — told apart,
+      // and completed if needed, by ensureServiceFeeEntryRecorded, the same
+      // crash-window shape ensureCommissionEntriesRecorded and
+      // ensureCustomerPaymentEntryRecorded already handle for their own
+      // groups.
+      await this.ensureServiceFeeEntryRecorded(groupKey, order.service_fee_satang);
+      return;
+    }
+
+    if (!group) {
+      throw new Error('ledger_entry_groups insert returned no row');
+    }
+
+    await this.insertServiceFeeEntry(group.id, order.service_fee_satang);
+  }
+
+  private async ensureServiceFeeEntryRecorded(groupKey: string, serviceFeeSatang: number): Promise<void> {
+    const { data: existingGroup, error: groupReadError } = await this.supabase.admin
+      .from('ledger_entry_groups')
+      .select('id')
+      .eq('group_key', groupKey)
+      .maybeSingle<{ id: string }>();
+
+    if (groupReadError) {
+      throw new Error(`ledger_entry_groups read failed: ${groupReadError.message}`);
+    }
+    if (!existingGroup) {
+      throw new Error(`ledger_entry_groups read found no row for group_key ${groupKey}`);
+    }
+
+    const { data: existingEntries, error: entriesReadError } = await this.supabase.admin
+      .from('ledger_entries')
+      .select('id')
+      .eq('group_id', existingGroup.id)
+      .returns<{ id: string }[]>();
+
+    if (entriesReadError) {
+      throw new Error(`ledger_entries existence check failed: ${entriesReadError.message}`);
+    }
+    if (existingEntries && existingEntries.length > 0) {
+      return;
+    }
+
+    await this.insertServiceFeeEntry(existingGroup.id, serviceFeeSatang);
+  }
+
+  /** `PLATFORM_REVENUE` credited, positive — money the platform earns, per DEC-047. Not zero-sum on its own (see this method's own doc comment on `postServiceFeeLedger`). */
+  private async insertServiceFeeEntry(groupId: string, serviceFeeSatang: number): Promise<void> {
+    const { error } = await this.supabase.admin.from('ledger_entries').insert([
+      {
+        group_id: groupId,
+        account: 'PLATFORM_REVENUE',
+        party_type: 'PLATFORM',
+        party_id: null,
+        amount_satang: serviceFeeSatang,
       },
     ]);
 

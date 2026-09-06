@@ -51,7 +51,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
 | BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
-| BQ-027 — service fee | **RESOLVED (amount + recognition timing)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**, recognized as `PLATFORM_REVENUE` at payment success (posting not implemented). **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036, DEC-047 |
+| BQ-027 — service fee | **RESOLVED (amount + recognition timing)** — BANHAO revenue; Phase 1 fee is **fixed ฿5 (500 satang)**, recognized as `PLATFORM_REVENUE` at payment success (implemented 2026-09-06). **Refundability still `OPEN`** (Phase F) | DEC-024, DEC-036, DEC-047 |
 | BQ-028 — merchant commission | **RESOLVED** — BANHAO revenue; Phase 1 rate is **8% of the food subtotal, rounded to whole baht** | DEC-025, DEC-043 |
 | BQ-030 — promotion/discount funder | **RESOLVED (funder model)** — Option C: per-promotion funder, Phase 1 allows only `PLATFORM` or `MERCHANT`, no split. **Stacking is not locked and remains `OPEN`** | DEC-046 |
 
@@ -1199,7 +1199,7 @@ related: BQ-028, BQ-031
 > recognized as `PLATFORM_REVENUE` at the successful-payment
 > economic-finality point, in its own `SERVICE_FEE_REVENUE` ledger group, with
 > the amount read from the immutable `orders.service_fee_satang`. **Posting is
-> not implemented** — DEC-047 is a decision lock only.
+> implemented** (`postServiceFeeLedger`, 2026-09-06).
 >
 > ⚠️ **Still open: refundability.** Whether the service fee survives a refund is
 > **not** decided by DEC-036 **or DEC-047** — recognition and reversal are

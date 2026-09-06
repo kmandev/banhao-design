@@ -107,7 +107,7 @@ the rider's side of the delivery fee remains open.
 | `CUSTOMER_PAYMENT` | Money received from a customer online | Active — design locked (§ 3.1) and **posting implemented** 2026-09-05 (`postCustomerPaymentLedger`), with a **read-only** payment ↔ ledger reconciliation implemented 2026-09-06 (§ 11.1). No settlement or payout follows from either |
 | `MERCHANT_PAYABLE` | What the platform owes a merchant | Active |
 | `RIDER_PAYABLE` | What the platform owes a rider for delivery work | Active |
-| `PLATFORM_REVENUE` | Commission + service fee + delivery margin | Active — **commission posted** (`postCommissionLedger`). **Service fee: recognition timing locked by DEC-047** (§ 3.2 — at payment success; posting **not implemented**). Delivery-fee revenue is still unrecognized. Once service fee posts, `ledger_entry_groups.kind` is the only thing separating the two revenue sources |
+| `PLATFORM_REVENUE` | Commission + service fee + delivery margin | Active — **commission posted** (`postCommissionLedger`) and **service fee posted** (`postServiceFeeLedger`, DEC-047, § 3.2, 2026-09-06). Delivery-fee revenue is still unrecognized. `ledger_entry_groups.kind` is the only thing separating the commission and service-fee revenue sources — a query that aggregates `PLATFORM_REVENUE` without filtering `kind` conflates them |
 | `PROMOTION_FUNDING` | Whoever funds a discount | Active — funder model **resolved** (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split); posting **not implemented**. Stacking still `OPEN` (BQ-030) |
 | `REFUND_PAYABLE` | Money owed back to a customer | Active — mechanism `OPEN` (Q-020) |
 | `RIDER_COMPENSATION` | Paid to a rider for a job lost through no fault of theirs | Active — amount `OPEN` (BQ-024) |
@@ -331,9 +331,9 @@ controller, or module.
 
 **Business decision, not merely an architecture note** — unlike § 3.1, this
 one answers a question no prior decision had answered: *when* the service fee
-becomes revenue. It is locked as **DEC-047**. **Not implemented** — this
-section describes the approved shape a future, separately-gated
-implementation task must follow, and authorizes no code.
+becomes revenue. It is locked as **DEC-047**. **Implemented 2026-09-06**
+(`postServiceFeeLedger` in `payment-event-processing.service.ts`), exactly to
+the shape this section describes.
 
 **Recognition point.** At the existing successful-payment economic-finality
 point — `payments → SUCCESS` together with the guarded `orders
@@ -1043,7 +1043,8 @@ half of BQ-030 (**DEC-046** — per-promotion funder, `PLATFORM` or `MERCHANT`,
 no split; stacking is unaffected and stays open above).
 **Resolved 2026-09-06:** the service fee's **recognition timing**
 (**DEC-047** — recognized as `PLATFORM_REVENUE` at payment success, § 3.2;
-posting not implemented, and BQ-027's refundability half stays open above).
+posting implemented the same day, and BQ-027's refundability half stays open
+above).
 **Still `OPEN` — P1:** BQ-024 (rider cancellation/waiting compensation) ·
 BQ-031 (partial refund composition) · BQ-032 (settlement cycle) · BQ-034
 (negative balances) · Q-011 (chargebacks).
