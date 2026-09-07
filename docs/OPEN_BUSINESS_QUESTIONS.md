@@ -50,6 +50,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-014 — `NO_DRIVER` / "food not cooked" contradiction | **ACCEPTED** — search starts at `MERCHANT_ACCEPTED`; no-rider is not an order state | DEC-019, DEC-022 |
 | BQ-015 — cooked-but-undelivered food | **RESOLVED** — allocated **by cause**: platform-caused loss to **BANHAO** (`PLATFORM_WRITE_OFF`), merchant-caused to the **merchant**; prepared from **`PREPARING`**; valuation basis `orders.subtotal_satang` (not net of commission, not a payable). **No merchant penalty, no customer charge, no partial refund.** Post-`PICKED_UP` cases belong to BQ-017. The customer-caused pre-pickup branch is absorbed by **BANHAO** (**DEC-052**, closing DEC-051's residual). **Runtime not implemented** | DEC-051, DEC-052 |
 | BQ-016 — cancellation windows, fees, post-pickup policy | **RESOLVED** — free cancellation through `MERCHANT_ACCEPTED`; **no Phase 1 cancellation fee**; merchant-confirmed `PREPARING` cancellation is a **full** refund; repeat cancellation is an error. **Runtime not implemented** (code stops at `PAID`). Cooked-food cost (BQ-015), post-pickup refusal (BQ-017), partial refunds (BQ-031) and the mechanism (Q-020) stay `OPEN` | DEC-050 |
+| BQ-017 — post-pickup delivery failure | **RESOLVED** — delivery **`FAILED`** / order **`DELIVERY_FAILED`**, declared by an **operator** after **2 contact attempts** and a **5-minute** wait from `ARRIVED`. Economics are **cause-dependent**: customer-caused → no refund and the merchant absorbs the food loss; all other causes → full eligible refund (service fee per DEC-048, delivery fee refunded) with the food loss on BANHAO, except merchant-caused where the merchant absorbs it. Rider compensation **eligible** in every case (amount → BQ-024). Safe drop-off **not** authorized. **Runtime not implemented** | DEC-053 |
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
 | BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
@@ -107,7 +108,7 @@ not an order-creation blocker.
 
 Q-003, Q-009, Q-011, Q-012, Q-015, Q-016, Q-018, Q-019 ·
 BQ-001, BQ-002, BQ-003, BQ-005, BQ-006, BQ-007, BQ-008, BQ-011, BQ-013,
-BQ-017, BQ-022 (**onboarding, approval and contractor status
+BQ-022 (**onboarding, approval and contractor status
 only** — the working-area half is resolved by DEC-037), BQ-024, BQ-031,
 BQ-032, BQ-034, BQ-035
 
@@ -852,10 +853,74 @@ the free window through `MERCHANT_ACCEPTED`, no cancellation fee, and a
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER
-status: OPEN
-blocks: Order state machine, Driver App, ledger
-related: BQ-015, BQ-018
+status: RESOLVED
+decision: DEC-053
+blocks: nothing further — runtime implementation is a separate gate
+related: BQ-015 (pre-pickup only), BQ-018, BQ-024, BQ-031, Q-020, UX-Q-006
 ```
+
+> **RESOLVED 2026-09-07 — DEC-053.**
+>
+> - **Terminal states:** delivery **`FAILED`**, order **`DELIVERY_FAILED`** —
+>   not `CANCELLED`.
+> - **Operator-controlled resolution.** `ARRIVED` → rider contacts the
+>   customer → evidence → contact requirement met → wait timer completes →
+>   **the operator declares the failure**. A rider action never determines
+>   refund, merchant loss, platform loss, customer liability or rider
+>   compensation (OD-04, OD-06).
+> - **Contact attempts: 2. Wait timer: 5 minutes, starting at `ARRIVED`.**
+>   Failure cannot be resolved before both are satisfied. ⚠️ The 10-minute
+>   figure in the options below was only an illustration inside this open
+>   question and **is not the policy**.
+> - **Safe drop-off is not authorized** — deferred to **UX-Q-006 / OD-04**.
+> - **Cause-dependent economics:**
+>
+> | Cause | Customer refund | Service fee | Delivery fee | Cooked-food loss | Rider compensation |
+> |---|---|---|---|---|---|
+> | `CUSTOMER_UNREACHABLE` | **No** | No | No | **Merchant** | Eligible |
+> | `CUSTOMER_REFUSED` | **No** | No | No | **Merchant** | Eligible |
+> | `RIDER_CAUSED` | Full eligible refund | Follow DEC-048 | Refunded | **BANHAO** | Eligible |
+> | `MERCHANT_CAUSED` | Full eligible refund | Follow DEC-048 | Refunded | **Merchant** | Eligible |
+> | `PLATFORM_CAUSED` | Full eligible refund | Follow DEC-048 | Refunded | **BANHAO** | Eligible |
+> | `INDETERMINATE` | Full eligible refund | Follow DEC-048 | Refunded | **BANHAO — provisional** | Eligible |
+>
+> Customer-caused failure produces no refund of any component. **This is not a
+> cancellation fee** — DEC-050 is unchanged and still governs the pre-pickup
+> window and its no-fee rule.
+> - **Cooked-food valuation:** `orders.subtotal_satang` — a valuation basis,
+>   **not** a merchant payable. BANHAO-absorbed loss uses the existing
+>   `PLATFORM_WRITE_OFF`; no new account.
+> - **Rider compensation eligibility: YES** in every row, including
+>   rider-caused — no rider penalty is created. **Amount is owned by BQ-024**,
+>   still `OPEN`. DEC-044's ฿12 completed-delivery earning is unchanged and
+>   does not apply to a failed delivery.
+> - **Food disposition:** return to the merchant where reasonably possible,
+>   otherwise dispose. No rider retention by default, and no salvaged-food
+>   asset model.
+> - **Operator post-pickup cancellation** is henceforth a *controlled
+>   failure-resolution path*, not an ordinary cancellation.
+>
+> ⚠️ **RUNTIME NOT IMPLEMENTED.** No failure route or UI exists;
+> `release_rider_assignment()` refuses post-pickup states; nothing monitors
+> post-pickup deliveries so the 5-minute timer has no runner; `FAILED`,
+> `failed_at` and `failure_cause` are never written; `DELIVERY_FAILED` is
+> still gated by **DEC-APP-006**, which also depends on **BQ-013** (`OPEN`);
+> **four of the six cause classes do not exist** (only `CUSTOMER_UNREACHABLE`
+> and `CUSTOMER_REFUSED` appear, as `PROPOSED`, in `ORDER_LIFECYCLE.md` § 6)
+> and the cancel API rejects `causeCode`; no refund can execute (**Q-020**);
+> and operator post-pickup cancellation still strands the delivery row.
+>
+> **Deliberately not decided:** rider compensation amount (**BQ-024**),
+> partial-refund composition (**BQ-031**), refund mechanism (**Q-020**),
+> safe-drop-off eligibility (**UX-Q-006 / OD-04**), merchant auto-pause
+> (**BQ-013**). DEC-044, DEC-048, DEC-049, DEC-050, DEC-051 and DEC-052 are
+> unchanged.
+>
+> The question, options and recommendation below are retained as the record of
+> how DEC-053 was reached — read them as history. **The recon's contradictions
+> are preserved deliberately**, including that this entry's own recommendation
+> deferred its money consequences to BQ-015, which DEC-051 has since scoped to
+> pre-pickup only.
 
 **Question:** What does a rider do when the customer does not answer or refuses
 the order, and what state does the order end in?

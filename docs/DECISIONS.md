@@ -62,6 +62,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-050** | **Phase 1 cancellation window and refund eligibility: free through `MERCHANT_ACCEPTED`, no cancellation fee, merchant-confirmed `PREPARING` cancellation is a full refund** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/BUSINESS_RULES.md` § 2.4, `docs/ORDER_LIFECYCLE.md` § 5, `docs/PAYMENT_LIFECYCLE.md` § 8, BQ-016 (resolved) |
 | **DEC-051** | **Cooked-food loss is allocated by cause — platform-caused to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant — from `PREPARING` onward, valued at `orders.subtotal_satang`** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/SETTLEMENT_MODEL.md` § 3, § 9, `docs/ORDER_LIFECYCLE.md` § 5, § 6, BQ-015 (resolved) |
 | **DEC-052** | **Customer-caused pre-pickup cooked-food loss is absorbed by BANHAO (`PLATFORM_WRITE_OFF`) — a narrow clarification closing DEC-051's recorded residual** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/DECISIONS.md` DEC-051, `docs/SETTLEMENT_MODEL.md` § 9, BQ-015 (remains resolved) |
+| **DEC-053** | **Post-pickup delivery failure: operator-resolved `DELIVERY_FAILED` / delivery `FAILED`, 2 contact attempts + 5-minute wait from `ARRIVED`, cause-dependent economics** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/ORDER_LIFECYCLE.md` § 4, § 5, § 6, `docs/SETTLEMENT_MODEL.md` § 9, BQ-017 (resolved) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -4882,7 +4883,9 @@ day by DEC-052**: a customer-caused cancellation of prepared food before
 `PICKED_UP` is absorbed by BANHAO as `PLATFORM_WRITE_OFF`. Every other part of
 this decision — the platform-caused and merchant-caused branches, the
 `PREPARING` boundary, the valuation basis and BQ-017's ownership — is
-unchanged by it.
+unchanged by it. **The post-`PICKED_UP` boundary this entry assigned to
+BQ-017 was decided the same day by DEC-053**; this decision's own pre-pickup
+scope is unchanged by it.
 
 ---
 
@@ -5056,3 +5059,283 @@ UX-Q-006 — **all remain `OPEN` and untouched**
 None / None. **Clarifies DEC-051** by closing the residual it recorded; it
 amends no other part of that decision. Does not supersede or modify DEC-043,
 DEC-045, DEC-048, DEC-049, DEC-050 or DEC-051, each of which stands unchanged.
+
+---
+
+## DEC-053 — Post-pickup delivery failure and customer unreachable: operator-resolved `DELIVERY_FAILED`, cause-dependent economics
+
+**Status:** ACCEPTED — POLICY · **RUNTIME NOT IMPLEMENTED** · **Date:** 2026-09-07 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Resolves **BQ-017**. Owns the **post-`PICKED_UP`** failure boundary: customer
+unreachable, customer refusal, and any other delivery that cannot be completed
+after the rider has taken the food. Pre-pickup allocation stays with
+DEC-050/051/052 and is not touched.
+
+**1. Operational model — terminal states.**
+
+| Domain | Terminal state |
+|---|---|
+| Delivery | **`FAILED`** |
+| Order | **`DELIVERY_FAILED`** |
+
+`CANCELLED` is **not** the normal post-pickup delivery-failure outcome. It
+remains valid on the lifecycle paths where it is already defined (customer and
+operator cancellation under DEC-050/DEC-022); this decision's path is
+`DELIVERY_FAILED` with delivery `FAILED`.
+
+**2. Operator-controlled resolution.** The failure is declared through an
+**operator-controlled resolution path**. The rider performs the operational
+steps and produces evidence; the **operator is the authority** that declares
+the failure. This implements OD-04's "the rider decides no financial outcome"
+and OD-06's "after pickup, controlled resolution" rather than replacing them.
+
+The flow:
+
+1. Delivery reaches `ARRIVED`.
+2. Rider attempts to contact the customer.
+3. Rider records/produces the evidence the operational system supports.
+4. The contact-attempt requirement is satisfied.
+5. The wait timer completes.
+6. The operator declares — or confirms the resolution of — the delivery failure.
+7. Delivery transitions to **`FAILED`**.
+8. Order transitions to **`DELIVERY_FAILED`**.
+
+A rider action may never, on its own, determine the refund, the merchant loss,
+the platform loss, any customer financial liability, or rider compensation.
+Those follow the cause and economic policy locked below.
+
+**3. Contact and wait rule.**
+
+| Parameter | Phase 1 value |
+|---|---|
+| Contact attempts | **2** |
+| Wait timer | **5 minutes** |
+| Timer start | when the delivery reaches **`ARRIVED`** |
+
+Failure **cannot** be resolved before both the contact-attempt requirement and
+the 5-minute wait are satisfied, and operator resolution remains required
+regardless.
+
+> ⚠️ **The wait timer is 5 minutes.** An earlier figure of 10 minutes appeared
+> only as an illustrative example inside BQ-017's own open-question text. It
+> was never approved and **is not the policy**. No document may state 10
+> minutes as the active rule.
+
+Per DEC-031 the timer is **configuration, not a constant**. No additional
+contact channel and no evidence requirement beyond what the existing
+architecture already supports is introduced here.
+
+**4. Safe drop-off is NOT authorized.** This decision grants no safe-drop-off
+permission of any kind. Safe-drop-off eligibility remains deferred to
+**UX-Q-006** and **OD-04**, both still open. A delivery that cannot be
+completed goes to the failure path above.
+
+**5. Cause-dependent economics.** Post-pickup failure outcomes depend on the
+cause:
+
+| Cause | Customer refund | Service fee | Delivery fee | Cooked-food loss | Rider compensation |
+|---|---|---|---|---|---|
+| `CUSTOMER_UNREACHABLE` | **No** | **No** | **No** | **Merchant** | **Eligible** |
+| `CUSTOMER_REFUSED` | **No** | **No** | **No** | **Merchant** | **Eligible** |
+| `RIDER_CAUSED` | **Full eligible refund** | Follow DEC-048 | **Refunded** | **BANHAO** | **Eligible** |
+| `MERCHANT_CAUSED` | **Full eligible refund** | Follow DEC-048 | **Refunded** | **Merchant** | **Eligible** |
+| `PLATFORM_CAUSED` | **Full eligible refund** | Follow DEC-048 | **Refunded** | **BANHAO** | **Eligible** |
+| `INDETERMINATE` | **Full eligible refund** | Follow DEC-048 | **Refunded** | **BANHAO — provisional** | **Eligible** |
+
+**Customer-caused failure produces no refund of any component.** This is **not
+a cancellation fee**: it is the economic consequence of a post-pickup,
+customer-caused delivery failure, reached after the food has been cooked,
+collected and carried to the customer. **DEC-050 is unchanged** and remains
+authoritative for the pre-pickup cancellation window and its no-fee rule.
+
+**Non-customer-caused failure gives the customer a full eligible order
+refund**, executed under the refund architecture already locked — **DEC-048**
+for the service fee, **DEC-049** for the ledger representation. This decision
+creates **no new refund architecture**.
+
+**6. Delivery fee.** Cause-dependent, exactly as the table states: **not
+refunded** where the failure is customer-caused; **refunded** as part of the
+eligible full refund otherwise. This is a customer-side fee rule and is **not**
+a rider earning rule — **DEC-044 governs rider earning and is unchanged**.
+
+**7. Cooked-food valuation.** Where cooked-food loss must be valued, the basis
+is **`orders.subtotal_satang`** — never `grand_total_satang`, never the
+merchant amount net of the 8% commission (DEC-043), and excluding delivery
+fee, service fee and promotion funding.
+
+> This is a **valuation basis only. It does not create or imply a merchant
+> payable.** Gross merchant payable remains unbuilt and outside this decision.
+
+Where BANHAO absorbs the loss, the intended economic account is the existing
+**`PLATFORM_WRITE_OFF`** — **no new ledger account is created**, and no ledger
+posting is designed or authorized here. DEC-049 remains authoritative for
+ledger architecture.
+
+**8. Rider compensation eligibility: YES.** A rider who carried out a
+post-pickup failed-delivery attempt **is eligible** for separate compensation
+in every cause row above, including where the rider caused the failure —
+because **this decision creates no rider penalty**. The **amount**, any
+waiting compensation and the calculation are **owned by BQ-024** and are not
+decided here. This is distinct from DEC-044's ฿12 completed-delivery earning,
+which is unchanged and does not apply to a failed delivery.
+
+**9. Cause taxonomy.** This decision recognizes six cause classes:
+`CUSTOMER_UNREACHABLE`, `CUSTOMER_REFUSED`, `RIDER_CAUSED`, `MERCHANT_CAUSED`,
+`PLATFORM_CAUSED`, `INDETERMINATE`.
+
+⚠️ **Only two of these exist today**, and only as `PROPOSED` entries in
+`docs/ORDER_LIFECYCLE.md` § 6: `CUSTOMER_UNREACHABLE` and `CUSTOMER_REFUSED`,
+both already mapped to terminal state `DELIVERY_FAILED`. **`RIDER_CAUSED`,
+`MERCHANT_CAUSED` (post-pickup), `PLATFORM_CAUSED` (post-pickup) and
+`INDETERMINATE` do not exist in any taxonomy or in any code.** Adding them,
+and enforcing cause capture at all, is future runtime work recorded under
+*Implementation status* — this decision claims no existing support for them.
+
+**10. Indeterminate cause.** Where the cause cannot be determined at
+resolution time, the cause is **`INDETERMINATE`** and the economic default is
+**platform-like residual treatment pending investigation**: the customer
+receives the full eligible refund, the service fee follows DEC-048, the
+delivery fee is refunded, **BANHAO provisionally absorbs the cooked-food
+loss**, and rider compensation remains eligible subject to BQ-024. This is a
+**newly locked policy**, not a pre-existing repository rule.
+
+**11. Food disposition.** The preferred operational disposition is to **return
+the food to the merchant where reasonably possible**; where return is not
+reasonably possible, the food is **disposed of**. **Rider retention is not a
+default policy.** No recoverable-food asset model and no ledger asset for
+salvaged food is created — food disposition is an operational rule and is
+deliberately kept separate from who bears the economic loss.
+
+**12. Operator cancellation after pickup.** Today `OrdersService.operatorCancel`
+permits cancellation at `PICKED_UP`/`DELIVERING` while performing no refund,
+writing no ledger fact, setting no cause, resolving no delivery state and
+sending no notification — leaving the delivery row stranded. **For post-pickup
+delivery failure, operator cancellation is henceforth a controlled
+failure-resolution path**, not an ordinary order cancellation that terminates
+the order without resolving the delivery and its economic consequences. **The
+runtime change implementing this is later work and is not made here**; until
+it lands, the gap described above remains live.
+
+### Explicit non-decisions
+
+This decision does **not** decide, and does not reopen:
+
+- **BQ-024** — rider compensation amount and waiting compensation.
+- **BQ-031** — partial refund composition. No partial refund is introduced.
+- **Q-020** — the refund execution mechanism. Nothing here can execute until
+  it is answered.
+- **UX-Q-006 / OD-04** — safe-drop-off eligibility.
+- **BQ-013** — merchant auto-pause and accept-timeout behaviour.
+- Payment-provider webhook mechanics, refund API implementation, ledger
+  runtime implementation, notification implementation, settlement/payout
+  implementation.
+- Any evidence schema beyond what existing policy and architecture support.
+- Promotion-funding reversal and merchant commission reversal mechanics —
+  each remains exactly as (un)decided elsewhere.
+
+**DEC-044, DEC-048, DEC-049, DEC-050, DEC-051 and DEC-052 are authoritative
+and unmodified.** In particular: DEC-048's service-fee refundability is
+applied, not redefined; DEC-049's refund ledger architecture is used, not
+redesigned; DEC-050's pre-pickup window and no-cancellation-fee rule stand;
+and DEC-051/DEC-052's cooked-food allocation stays pre-pickup — this decision
+owns the post-pickup half rather than extending theirs.
+
+### Why
+
+Product Owner decision, 2026-09-07, following this session's BQ-017
+reconnaissance and decision gate. The recon established that post-pickup is
+currently a one-way street to `DELIVERED`: `deliveries.state` already carries
+`FAILED`/`ABANDONED` and `orders.state` already carries `DELIVERY_FAILED`, yet
+nothing writes them; `release_rider_assignment()` refuses post-pickup states;
+no failure route or driver affordance exists; nothing monitors post-pickup
+deliveries; and no question owned the post-pickup economics once DEC-051
+scoped BQ-015 to pre-pickup only.
+
+The A+C combination was chosen because the existing `PROPOSED` cause taxonomy
+already maps `CUSTOMER_UNREACHABLE` and `CUSTOMER_REFUSED` to
+`DELIVERY_FAILED`, so option A needs no new state names and no migration,
+while option C's operator authority is what OD-04 and OD-06 already require of
+any post-pickup resolution.
+
+### Consequences
+
+- **`DELIVERY_FAILED` is still gated by DEC-APP-006**, which blocks the
+  exception states until BQ-013, BQ-015 and BQ-017 are all closed. BQ-015 and
+  BQ-017 now are; **BQ-013 is not**, so this decision does not by itself lift
+  that gate.
+- **Customer-caused failure retains the customer's payment while the merchant
+  absorbs the food loss.** A future settlement engine must therefore
+  **exclude a customer-caused `DELIVERY_FAILED` order from merchant payout** —
+  otherwise the merchant would be paid from a payment that was retained
+  precisely because they were not made whole. This consequence is recorded as
+  an implementation requirement; the settlement engine and gross merchant
+  payable remain unbuilt and outside this decision.
+- Rider-caused failure has BANHAO absorbing the food loss, so **no rider
+  penalty exists** — consistent with OD-06's "may not decide a penalty" and
+  with DEC-051's refusal to create a merchant penalty schedule.
+- `PLATFORM_WRITE_OFF` gains a fourth intended use, alongside DEC-045's ฿2
+  delivery gap (implemented) and DEC-051/052's pre-pickup food loss (policy).
+- Nothing executes today: no refund can be issued (Q-020), no cause can be
+  recorded (the cancel API rejects `causeCode`), and no failure can be
+  declared at all.
+
+### Implementation status
+
+**POLICY LOCKED — RUNTIME NOT IMPLEMENTED.** No runtime code, schema,
+migration, API route, DTO, UI, notification, refund execution, ledger posting,
+automated timer or cause-code enforcement is created by this decision. Gaps:
+
+- no post-pickup failure route; the rider and operator have no failure action
+- `release_rider_assignment()` deliberately excludes post-pickup states
+- nothing monitors post-pickup deliveries; the 5-minute timer has no runner
+- `deliveries.state = 'FAILED'`, `failed_at` and `failure_cause` are never written
+- `orders.state = 'DELIVERY_FAILED'` is blocked by DEC-APP-006 (BQ-013 open)
+- four of the six cause classes do not exist; the cancel API's `.strict()`
+  schema rejects `causeCode`, pinned by tests, and nothing writes
+  `orders.cause_code`
+- no refund initiation or mechanism (Q-020); no `PLATFORM_WRITE_OFF` posting
+  for food loss; no gross merchant payable
+- no operator/supervisor command (the console's `blockedBy` still names the
+  open decisions); no customer or rider notification
+- operator post-pickup cancellation remains reachable with the stranding
+  behaviour described in clause 12
+
+### Evidence
+
+Product Owner instruction, 2026-09-07 ("BANHAO — DEC-053 POST-PICKUP DELIVERY
+FAILURE & CUSTOMER UNREACHABLE"), following this session's BQ-017 read-only
+reconnaissance and decision gate: `docs/ORDER_LIFECYCLE.md` § 4 (rider wait
+`OPEN — BQ-017`), § 5 (`PICKED_UP` onward `OPEN`), § 6 (the `PROPOSED` cause
+taxonomy already mapping the two customer causes to `DELIVERY_FAILED`);
+`docs/SETTLEMENT_MODEL.md` § 9's delivery-failed row (`OPEN — BQ-017`);
+`supabase/migrations/20260811000009_delivery_domain.sql` (`FAILED`,
+`ABANDONED`, `failed_at`, `failure_cause` — all unwritten);
+`supabase/migrations/20260811000013_rider_reassignment_atomicity.sql`
+(release restricted to `RIDER_ASSIGNED`/`RIDER_REASSIGNING`); and the design
+package's OD-04 and OD-06, which DEC-040 § 10 records as locked.
+
+### Related Requirements
+
+BQ-017 (**resolved by this decision**) · BQ-024 (rider compensation amount —
+**`OPEN`**) · BQ-031 (partial refund composition — **`OPEN`**) · Q-020 (refund
+mechanism — **`OPEN`**) · BQ-013 (merchant accept timeout — **`OPEN`**, and
+still gating DEC-APP-006) · UX-Q-006, OD-04 (safe-drop-off eligibility —
+**deferred**) · DEC-038 (mandatory completion photo — unchanged) · DEC-044,
+DEC-048, DEC-049, DEC-050, DEC-051, DEC-052 (all unchanged) · DEC-022,
+DEC-032 (operator authority and mandatory reason) · CON-003
+
+### Related Architecture
+
+`docs/ORDER_LIFECYCLE.md` § 3, § 4, § 5, § 6 · `docs/SETTLEMENT_MODEL.md` § 3,
+§ 9 · `docs/PAYMENT_LIFECYCLE.md` § 8 · `docs/BUSINESS_RULES.md` § 2.4, § 6 ·
+`supabase/migrations/20260811000005_order_domain.sql`,
+`…20260811000009_delivery_domain.sql` (**both unchanged by this decision**)
+
+### Supersedes / Superseded By
+
+None / None. Resolves **BQ-017** and owns the post-`PICKED_UP` failure
+boundary that DEC-050 and DEC-051 each explicitly assigned to it. Does not
+supersede or modify DEC-022, DEC-038, DEC-043, DEC-044, DEC-045, DEC-048,
+DEC-049, DEC-050, DEC-051 or DEC-052, each of which stands unchanged.

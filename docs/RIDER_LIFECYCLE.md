@@ -143,7 +143,7 @@ Mapping to Order state (the customer-facing single source of truth, REQ-002):
 | `PICKED_UP` | `PICKED_UP` | — |
 | `EN_ROUTE` | `DELIVERING` | — |
 | `DELIVERED` | `DELIVERED` | — |
-| `FAILED` | `DELIVERY_FAILED` ⬦ | State name `PROPOSED` — BQ-017 |
+| `FAILED` | `DELIVERY_FAILED` | **`ACCEPTED` — DEC-053** (operator-declared after 2 contact attempts and a 5-minute wait from `ARRIVED`). **Not implemented** — nothing writes either state, and `DELIVERY_FAILED` is still gated by DEC-APP-006 (BQ-013 `OPEN`) |
 
 Operator **force-unassign** (`ปุ่มบังคับปลดงาน`) is `ACCEPTED` (DEC-032) and
 routes through `RIDER_REASSIGNING` with an audit record.

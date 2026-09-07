@@ -298,7 +298,7 @@ back — the rider did the work), and the **platform fee reversal**.
 | Payment failed / expired | Nothing was taken | `ACCEPTED` |
 | Duplicate transfer | The duplicate | `ACCEPTED` (DEC-030); mechanism `OPEN` |
 | Missing or wrong item | Partial | `OPEN` — BQ-031 |
-| Delivery failed, incl. customer refusal after `PICKED_UP` | — | `OPEN` — **BQ-017** (DEC-050 and DEC-051 both assign this case to BQ-017, not to BQ-015) |
+| Delivery failed, incl. customer refusal after `PICKED_UP` | **Cause-dependent** — none where customer-caused; full otherwise | **`ACCEPTED` — DEC-053**; service fee follows DEC-048, delivery fee refunded only on non-customer-caused failure. Not implemented |
 | Quality complaint after delivery | — | `OPEN` — Q-003, BQ-031 |
 
 **No cancellation fee is deducted from any of the above** — DEC-050 sets none
@@ -393,12 +393,13 @@ refund/order separation (DEC-027) · Phase 1 payment scope (DEC-016).
 `LEGAL_REVIEW_REQUIRED`) · Q-020 (PromptPay refund mechanism) · BQ-027 (service
 fee refundability).
 **Still `OPEN` — P1:** Q-011 (chargebacks) · BQ-031 (partial refund
-composition) · Q-003 (the refund edge cases DEC-050 did not cover) · BQ-017
-(delivery failure, and customer refusal after `PICKED_UP`) · the late-payment
-business handling under DEC-029.
+composition) · Q-003 (the refund edge cases DEC-050 did not cover) · BQ-024
+(rider compensation amount) · the late-payment business handling under
+DEC-029.
 **Resolved 2026-09-07:** BQ-016 — cancellation window, cancellation fee and
-the merchant-confirmed `PREPARING` outcome (**DEC-050**; runtime not
-implemented).
+the merchant-confirmed `PREPARING` outcome (**DEC-050**) · BQ-017 —
+post-pickup delivery failure, with cause-dependent refund treatment
+(**DEC-053**). Both policy only; **neither is implemented**.
 
 **Design question closed by this document:** DQ-02 — screen 12f's trigger is the
 documented duplicate-payment case, now formalised by DEC-030.

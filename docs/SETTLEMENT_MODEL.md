@@ -111,7 +111,7 @@ the rider's side of the delivery fee remains open.
 | `PROMOTION_FUNDING` | Whoever funds a discount | Active — funder model **resolved** (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split); posting **not implemented**. Stacking still `OPEN` (BQ-030) |
 | `REFUND_PAYABLE` | Money owed back to a customer | Active — mechanism `OPEN` (Q-020) |
 | `RIDER_COMPENSATION` | Paid to a rider for a job lost through no fault of theirs | Active — amount `OPEN` (BQ-024) |
-| `PLATFORM_WRITE_OFF` | Cost the platform absorbs — **as of DEC-051**, the merchant's eligible cooked-food loss on a **platform-caused** failure (no rider; operator cancellation from the platform's own inability to deliver); **as of DEC-052**, the same loss on a **customer-caused** cancellation of prepared food **before `PICKED_UP`**; and, **as of DEC-045**, the ฿2 delivery-side funding gap per completed delivery | Active — all three uses now `ACCEPTED`. Delivery gap **implemented** (`b813b5c6`, DEC-045) in the rider-earning completion flow; **both cooked-food uses are policy only (DEC-051, DEC-052) and unimplemented** — no posting exists, and they need a cause code the API does not yet accept. None of this means settlement or payout is implemented |
+| `PLATFORM_WRITE_OFF` | Cost the platform absorbs — **as of DEC-051**, the merchant's eligible cooked-food loss on a **platform-caused** failure (no rider; operator cancellation from the platform's own inability to deliver); **as of DEC-052**, the same loss on a **customer-caused** cancellation of prepared food **before `PICKED_UP`**; **as of DEC-053**, the cooked-food loss on a **post-pickup delivery failure** that is rider-caused, platform-caused or `INDETERMINATE`; and, **as of DEC-045**, the ฿2 delivery-side funding gap per completed delivery | Active — all four uses now `ACCEPTED`. Delivery gap **implemented** (`b813b5c6`, DEC-045) in the rider-earning completion flow; **all three cooked-food uses are policy only (DEC-051, DEC-052, DEC-053) and unimplemented** — no posting exists, and they need a cause code the API does not yet accept. None of this means settlement or payout is implemented |
 | `RIDER_CASH_HELD` | Cash a rider holds on the platform's behalf | **Dormant — DEC-016** |
 
 Rules, `ACCEPTED` via DEC-014 / CON-003 / DEC-028:
@@ -686,7 +686,7 @@ them is how refunds corrupt a ledger:
 | Cancelled during `PREPARING` (merchant agrees) | **Full refund — DEC-050** | Food loss allocated **by cause** — **DEC-051** (prepared from `PREPARING`); where the cancellation is **customer-caused**, **BANHAO** absorbs it as `PLATFORM_WRITE_OFF` — **DEC-052** | Nothing | Fee reversed | **`ACCEPTED`** — DEC-050/051/052; not implemented |
 | **Operator cancels for no rider, food cooked** (DEC-022) | Full refund | Loss borne by **BANHAO**, not the merchant | Compensation? — `OPEN`, BQ-024 | **`PLATFORM_WRITE_OFF`** | **`ACCEPTED` — DEC-051**; not implemented |
 | Rider cancelled, delivery reassigned (DEC-021) | No refund | Paid | Compensation to the first rider | Absorbs it | Amount `OPEN` — BQ-024 |
-| Delivery failed — customer unreachable | `OPEN` | Paid | **Paid** | `OPEN` | `OPEN` — BQ-017 |
+| Delivery failed after pickup (**DEC-053**) | **No refund** if customer-caused; **full eligible refund** otherwise | Absorbs the cooked-food loss when customer- or merchant-caused | **No ฿12 earning** (DEC-044 pays on completion only); separate compensation **eligible** — amount `OPEN`, BQ-024 | Absorbs the cooked-food loss when rider-, platform-caused or `INDETERMINATE` — `PLATFORM_WRITE_OFF`, valued at `orders.subtotal_satang` | **`ACCEPTED` — DEC-053**; not implemented |
 | Missing item | Partial | Item reversal | **Paid in full** | Commission reversed proportionally | `OPEN` — BQ-031 |
 | Duplicate payment (DEC-030) | Refund the duplicate | Unaffected | Unaffected | Unaffected | Mechanism `OPEN` |
 
@@ -717,9 +717,10 @@ decides representation only. **Eligibility was separately decided the next
 day by DEC-050** (BQ-016): free customer cancellation through
 `MERCHANT_ACCEPTED`, no Phase 1 cancellation fee, and a **full** refund on a
 merchant-confirmed `PREPARING` cancellation. Still `OPEN` after both:
-post-pickup refusal and delivery failure (BQ-017), partial-refund composition
-(BQ-031), whether `CUSTOMER_PAYMENT` is reversed in any given case, and the
-mechanism that establishes finality (Q-020). The cooked-food cost left the
+partial-refund composition (BQ-031), whether `CUSTOMER_PAYMENT` is reversed in
+any given case, and the mechanism that establishes finality (Q-020).
+Post-pickup refusal and delivery failure left the open list on 2026-09-07
+(**DEC-053**). The cooked-food cost left the
 open list on 2026-09-07 (**DEC-051**, allocated by cause). Nothing is
 implemented.
 
@@ -1099,8 +1100,11 @@ implemented). **BQ-027 is resolved in full and no longer appears above.**
 eligibility) · BQ-015 (**DEC-051** — cooked-food loss allocated by cause,
 platform-caused to `PLATFORM_WRITE_OFF`, from `PREPARING`, valued at
 `orders.subtotal_satang`; its customer-caused pre-pickup residual closed the
-same day by **DEC-052**, also to `PLATFORM_WRITE_OFF`). All policy only; none
-implemented.
+same day by **DEC-052**, also to `PLATFORM_WRITE_OFF`) · BQ-017 (**DEC-053** —
+post-pickup delivery failure: operator-declared `DELIVERY_FAILED`,
+cause-dependent economics, BANHAO-absorbed food loss to `PLATFORM_WRITE_OFF`
+on rider-, platform-caused and `INDETERMINATE` failures). All policy only;
+none implemented.
 **Still `OPEN` — P1:** BQ-024 (rider cancellation/waiting compensation) ·
 BQ-031 (partial refund composition) · BQ-032 (settlement cycle) · BQ-034
 (negative balances) · Q-011 (chargebacks).

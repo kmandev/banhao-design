@@ -176,10 +176,10 @@ stateDiagram-v2
 | **Payment expiration** | QR expires after 10 minutes; **the order survives**; a new QR is a new attempt | `ACCEPTED` — design canvas |
 | **Late payment** | Must be resolvable to an order and attempt; accept / refund / manual review | `ACCEPTED` technically — DEC-029; **`OPEN`** for the policy |
 | **Merchant rejection** | 3-minute accept window; on rejection notify the customer, refund, suggest nearby shops | Window and flow `ACCEPTED` (design canvas); auto-reject-vs-escalate `OPEN` — BQ-013 |
-| **Customer cancellation** | Free through **`MERCHANT_ACCEPTED`**; merchant confirmation during `PREPARING` (confirmed = **full refund**); support-only after `PICKED_UP` | **`ACCEPTED` — DEC-050** (resolves BQ-016). **No Phase 1 cancellation fee.** Post-pickup outcome `OPEN` — BQ-017; cooked-food cost `OPEN` — BQ-015. **Runtime stops at `PAID`** — not yet implemented |
+| **Customer cancellation** | Free through **`MERCHANT_ACCEPTED`**; merchant confirmation during `PREPARING` (confirmed = **full refund**); support-only after `PICKED_UP` | **`ACCEPTED` — DEC-050** (resolves BQ-016). **No Phase 1 cancellation fee.** Post-pickup outcome is **DEC-053**; cooked-food cost is **DEC-051/052**. **Runtime stops at `PAID`** — not yet implemented |
 | **Rider cancellation** | Delivery reassigns; **the order is not cancelled** | `ACCEPTED` — **DEC-021** |
 | **No rider** | Retry → manual dispatch → operator decision. **Never auto-cancel** | `ACCEPTED` — **DEC-022** |
-| **Delivery failure** | Rider escalates; order does not silently complete | `PROPOSED` — BQ-017 |
+| **Delivery failure** | `ARRIVED` → 2 contact attempts → 5-minute wait → **operator declares failure**; delivery `FAILED`, order `DELIVERY_FAILED`. Economics are cause-dependent | **`ACCEPTED` — DEC-053**; runtime not implemented, and `DELIVERY_FAILED` is still gated by DEC-APP-006 (BQ-013 `OPEN`) |
 | **Cost of wasted food** | Allocated **by cause** — platform-caused **and customer-caused pre-pickup** to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant; prepared from `PREPARING`, valued at `orders.subtotal_satang` | **`ACCEPTED` — DEC-051, DEC-052**; runtime not implemented |
 
 ### No-rider, in the order domain
@@ -206,7 +206,7 @@ The customer must still be told rather than left in silence; the existing
 | Rider accept window per offer | **60 s** | **`ACCEPTED`** — DEC-037 (resolves BQ-020; the design's 20 s / 12 s were contradictory and neither is the answer) |
 | Rider broadcast round interval | **60 s** | **`ACCEPTED`** — DEC-037, aligned to the one-minute tick (DEC-APP-010) |
 | Rider search escalation timings | — | **`OPEN`** — DEC-022 sets the shape, not the timings; DEC-037 fixes the round interval only |
-| Rider wait at customer before failing | — | **`OPEN` — BQ-017** |
+| Rider wait at customer before failing | **5 minutes**, from `ARRIVED`, after **2 contact attempts** | **`ACCEPTED` — DEC-053** (configuration, not a constant — DEC-031); no runner exists yet |
 
 All timers must be **configuration**, not constants (DEC-031).
 
@@ -225,7 +225,7 @@ cited.
 | `MERCHANT_ACCEPTED` | ✅ free — **DEC-050** (last free state) | ⚠️ merchant fault | — | ✅ | Full refund |
 | `PREPARING` | ⚠️ merchant confirms — **DEC-050** | ⚠️ merchant fault | ❌ **DEC-021** | ✅ | **Full if confirmed — DEC-050**; unconfirmed outcome `OPEN` |
 | `READY_FOR_PICKUP` | ⚠️ merchant confirms | ❌ | ❌ **DEC-021** | ✅ **DEC-022** | Food cooked — cost allocated **by cause, DEC-051** (platform-caused to BANHAO, merchant-caused to the merchant) and **DEC-052** (customer-caused, pre-pickup → BANHAO) |
-| `PICKED_UP` onward | ❌ support only — **DEC-050** | ❌ | ❌ | ✅ | `OPEN` — **BQ-017 owns this**, not BQ-016 |
+| `PICKED_UP` onward | ❌ support only — **DEC-050** | ❌ | ❌ | ✅ | **`ACCEPTED` — DEC-053**: operator-declared `DELIVERY_FAILED`; cause-dependent economics (customer-caused → no refund) |
 | `DELIVERED` | ❌ | ❌ | ❌ | ✅ refund only | Not ordinary cancellation — partial refund `OPEN`, BQ-031 |
 
 ✅ allowed · ⚠️ conditional · ❌ not allowed
@@ -318,12 +318,16 @@ restaurant — DEC-017).
 
 **Also resolved since:** BQ-016 (cancellation windows, fees and post-pickup
 policy — **DEC-050**, 2026-09-07) · BQ-015 (cooked-food loss allocated by
-cause — **DEC-051**, 2026-09-07). Both are policy locks; **neither is
-implemented**.
+cause — **DEC-051**, 2026-09-07) · BQ-017 (post-pickup delivery failure —
+**DEC-053**, 2026-09-07: operator-declared `DELIVERY_FAILED`/`FAILED`, 2
+contact attempts, 5-minute wait, cause-dependent economics). All are policy
+locks; **none is implemented**.
 
-**Still `OPEN`:** BQ-013 (merchant accept timeout behaviour) · Q-003 (the refund edge cases DEC-050
-did not cover) · BQ-017 (delivery failure, and post-pickup customer refusal) ·
+**Still `OPEN`:** BQ-013 (merchant accept timeout behaviour — and it still
+gates DEC-APP-006's exception states) · Q-003 (the refund edge cases DEC-050
+did not cover) · BQ-024 (rider compensation amount) ·
 BQ-031 (partial refund composition) · Q-020 (refund mechanism) ·
+UX-Q-006 / OD-04 (safe-drop-off eligibility) ·
 BQ-018 (proof of delivery) · BQ-011 (cart revalidation) · exception **state
 names**.
 
