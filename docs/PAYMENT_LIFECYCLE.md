@@ -294,11 +294,11 @@ back — the rider did the work), and the **platform fee reversal**.
 | Customer cancels through `MERCHANT_ACCEPTED` | Full | **`ACCEPTED` — DEC-050** (the free window ends when `PREPARING` begins) |
 | Customer cancels during `PREPARING` (merchant confirms) | Full | **`ACCEPTED` — DEC-050**; explicitly **not** partial |
 | Merchant rejects or times out | Full | `ACCEPTED` |
-| Operator cancels for no rider (DEC-022) | Full to the customer | `ACCEPTED`; **who absorbs the food cost is `OPEN` — BQ-015** |
+| Operator cancels for no rider (DEC-022) | Full to the customer | `ACCEPTED`; the cooked-food cost is **absorbed by BANHAO** as a platform-caused loss — **DEC-051** (`PLATFORM_WRITE_OFF`; not implemented) |
 | Payment failed / expired | Nothing was taken | `ACCEPTED` |
 | Duplicate transfer | The duplicate | `ACCEPTED` (DEC-030); mechanism `OPEN` |
 | Missing or wrong item | Partial | `OPEN` — BQ-031 |
-| Delivery failed, incl. customer refusal after `PICKED_UP` | — | `OPEN` — BQ-015, BQ-017 (**DEC-050 assigns this case to BQ-017**) |
+| Delivery failed, incl. customer refusal after `PICKED_UP` | — | `OPEN` — **BQ-017** (DEC-050 and DEC-051 both assign this case to BQ-017, not to BQ-015) |
 | Quality complaint after delivery | — | `OPEN` — Q-003, BQ-031 |
 
 **No cancellation fee is deducted from any of the above** — DEC-050 sets none

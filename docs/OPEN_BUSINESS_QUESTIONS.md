@@ -48,6 +48,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-010 — one merchant per cart? | **ACCEPTED** — yes, one cart = one restaurant | DEC-017 |
 | BQ-012 — the missing `PENDING_PAYMENT` state | **ACCEPTED** — it exists in the approved lifecycle | DEC-019 |
 | BQ-014 — `NO_DRIVER` / "food not cooked" contradiction | **ACCEPTED** — search starts at `MERCHANT_ACCEPTED`; no-rider is not an order state | DEC-019, DEC-022 |
+| BQ-015 — cooked-but-undelivered food | **RESOLVED** — allocated **by cause**: platform-caused loss to **BANHAO** (`PLATFORM_WRITE_OFF`), merchant-caused to the **merchant**; prepared from **`PREPARING`**; valuation basis `orders.subtotal_satang` (not net of commission, not a payable). **No merchant penalty, no customer charge, no partial refund.** Post-`PICKED_UP` cases belong to BQ-017. **Runtime not implemented**; one customer-caused pre-pickup branch recorded as an explicit residual | DEC-051 |
 | BQ-016 — cancellation windows, fees, post-pickup policy | **RESOLVED** — free cancellation through `MERCHANT_ACCEPTED`; **no Phase 1 cancellation fee**; merchant-confirmed `PREPARING` cancellation is a **full** refund; repeat cancellation is an error. **Runtime not implemented** (code stops at `PAID`). Cooked-food cost (BQ-015), post-pickup refusal (BQ-017), partial refunds (BQ-031) and the mechanism (Q-020) stay `OPEN` | DEC-050 |
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
@@ -83,10 +84,9 @@ on. **Decide them before then, not during.**
 | Q-001 | **Payment provider** — more urgent since DEC-016 made online the only method | Payment module, webhooks |
 | Q-002 | Legal / settlement model, merchant of record · `LEGAL_REVIEW_REQUIRED` | Payment, settlement, onboarding terms |
 | Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
-| BQ-015 | Who bears the cost of cooked-but-undelivered food | Ledger, merchant terms. Sharpened by DEC-022: an operator cancelling a no-rider order needs this answer |
 | BQ-030 | **Stacking only** — the funder model is decided (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split). Promotion-engine scope; does **not** block ledger/`CUSTOMER_PAYMENT` work, since `discount_satang` is always `0` today | Promotion engine only |
 
-**Five remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
+**Four remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
 BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
 the **numeric** halves of BQ-026 (DEC-035) and BQ-027 (DEC-036) as of
 2026-08-24, and — as of 2026-09-05 — the **numeric** half of BQ-028 / Q-010
@@ -94,8 +94,13 @@ the **numeric** halves of BQ-026 (DEC-035) and BQ-027 (DEC-036) as of
 **funder-model** half of BQ-030 is also resolved (**DEC-046**) — only its
 stacking sub-question is still carried above. **As of 2026-09-06, BQ-027 is
 resolved in full** — recognition timing by **DEC-047** and refundability by
-**DEC-048** — and no longer appears in the P0 table above. BQ-030's stacking
-question is still carried above, and is not an order-creation blocker.
+**DEC-048** — and no longer appears in the P0 table above. **As of 2026-09-07,
+BQ-015 is resolved too — DEC-051** (cooked-food loss allocated by cause:
+platform-caused to BANHAO as `PLATFORM_WRITE_OFF`, merchant-caused to the
+merchant, from `PREPARING` onward, valued at `orders.subtotal_satang`; runtime
+not implemented, and one customer-caused pre-pickup branch recorded as an
+explicit residual). BQ-030's stacking question is still carried above, and is
+not an order-creation blocker.
 
 ### P1 — blocks a feature or launch readiness
 
@@ -660,14 +665,61 @@ rule, or the customer app tells customers something false at the worst moment.
 ```yaml
 priority: P0
 owner: PRODUCT_OWNER
-status: OPEN
-blocks: Ledger, merchant/rider terms, refund rules
-related: BQ-014, BQ-017, Q-003
+status: RESOLVED
+decision: DEC-051
+blocks: nothing further — runtime implementation is a separate gate
+related: BQ-014, BQ-017 (owns every post-`PICKED_UP` case), BQ-024, Q-003
 ```
 
-**Question:** When an order fails after the merchant has cooked it — no rider
-found, customer not reachable, customer refuses delivery — who pays for the
-food?
+> **RESOLVED 2026-09-07 — DEC-051.** Cooked-food loss is allocated **by
+> cause** (Option C):
+>
+> | Cause | Bears the eligible cooked-food loss |
+> |---|---|
+> | **Platform-caused** — no rider found; operator cancellation from the platform's own inability to fulfil delivery | **BANHAO**, named as `PLATFORM_WRITE_OFF` |
+> | **Merchant-caused** — the merchant's own late cancellation or inability to supply after accepting | **The merchant** |
+> | **Customer-caused after `PICKED_UP`** | **Not owned here — BQ-017**, still `OPEN` |
+>
+> - **Economic boundary: food counts as prepared from `PREPARING`.**
+>   `READY_FOR_PICKUP` is a later state within the same policy, not a separate
+>   threshold. No order state is renamed and no state semantics change.
+> - **Valuation basis: `orders.subtotal_satang`** — not reduced by the 8%
+>   commission (DEC-043), not `grand_total_satang`, excluding delivery fee,
+>   service fee and promotion funding. ⚠️ It is a **valuation basis, not a
+>   payable**: it does not decide the merchant's settlement amount or the
+>   gross-merchant-payable architecture, both still unbuilt.
+> - **No merchant penalty schedule, no customer charge, no cancellation fee**
+>   — DEC-050 remains authoritative on the fee, and no partial refund is
+>   introduced (BQ-031 stays `OPEN`).
+> - **Cause attribution is required.** `orders.cause_code` is the intended
+>   field and the § 6 taxonomy the intended vocabulary, neither expanded here.
+>
+> ⚠️ **RUNTIME NOT IMPLEMENTED.** The cancel API rejects `causeCode`
+> (`.strict()` schema, two tests pin it) and nothing writes
+> `orders.cause_code`; no gross merchant payable exists, so "the merchant is
+> made whole" has no ledger substrate; there is no `PLATFORM_WRITE_OFF`
+> posting for food loss, no refund initiation, and no cancellation
+> notification.
+>
+> ⚠️ **Known residual, recorded not decided:** a **customer-caused
+> cancellation of already-prepared food *before* pickup** — permitted by
+> DEC-050 with a full refund and no fee — has **no bearer assigned**. It sits
+> between the platform-caused and merchant-caused branches and outside
+> BQ-017's post-pickup scope. It must not be closed by inference; see DEC-051.
+>
+> **Scope correction (P0, made by DEC-051):** the original question below
+> claimed "customer not reachable, customer refuses delivery" — both are
+> **post-`PICKED_UP` cases owned by BQ-017**, not by this question. BQ-015
+> owns only the pre-pickup prepared-food loss. The text is retained as history
+> with that correction stated here.
+>
+> The discussion, options and recommendation below are the record of how
+> DEC-051 was reached — read them as history.
+
+**Question** *(historical wording — see the scope correction above; the
+customer-unreachable and refusal cases belong to **BQ-017**)***:** When an
+order fails after the merchant has cooked it — no rider found, customer not
+reachable, customer refuses delivery — who pays for the food?
 
 **Why it matters:** CON-003 requires every order's ledger to balance to exactly
 zero. A refunded customer plus a merchant who must still be paid means someone
@@ -685,11 +737,16 @@ records a **damaged-order** concept but assigns no cost to anyone.
   pays when the customer failed (unreachable, refused).
 - **D. Customer pays** where the customer is at fault.
 
-**Recommendation:** **C**, with a documented cause code on every failed order,
-and BANHAO absorbing the no-rider case specifically — that failure is the
-platform's, and pushing it onto merchants in a 20–30-shop district would end
-merchant participation quickly. Whatever is chosen must appear as an explicit
-ledger account (e.g. `PLATFORM_WRITE_OFF`), not as a rounding difference.
+**Recommendation** *(historical — **adopted** by DEC-051)*: **C**, with a
+documented cause code on every failed order, and BANHAO absorbing the no-rider
+case specifically — that failure is the platform's, and pushing it onto
+merchants in a 20–30-shop district would end merchant participation quickly.
+Whatever is chosen must appear as an explicit ledger account (e.g.
+`PLATFORM_WRITE_OFF`), not as a rounding difference. **DEC-051 adopted this
+recommendation**, scoped to pre-pickup prepared food and with the customer
+branch left to BQ-017. Options A, B and D were rejected — D additionally
+because DEC-050 leaves no cancellation fee through which a customer could
+bear it.
 
 **Impact if wrong:** The ledger cannot balance, and merchant/rider agreements
 have to be renegotiated after launch.

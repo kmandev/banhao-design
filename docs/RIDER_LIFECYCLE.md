@@ -282,15 +282,19 @@ Rules that hold across the ladder:
 
 - **The customer is never left in silence past 5 minutes.**
 - **Cancellation is a decision, never a timeout** — DEC-022.
-- **`NO_RIDER` is the platform's failure.** Whether the merchant is still paid
-  for food they cooked is **`OPEN` — BQ-015**, and it is P0.
+- **`NO_RIDER` is the platform's failure**, and **as of DEC-051 the platform
+  bears the cost of it**: a no-rider failure is platform-caused, so BANHAO
+  absorbs the merchant's eligible cooked-food loss as a `PLATFORM_WRITE_OFF`.
+  Policy only — no posting exists, and it needs a cause code the API does not
+  yet accept.
 - **The t=5m "keep waiting or cancel" option is consistent with DEC-050**
   (2026-09-07), which puts the customer's free cancellation window through
   `MERCHANT_ACCEPTED`. Rider search begins at `MERCHANT_ACCEPTED`, so a
   customer taking the cancel option before the order reaches `PREPARING` is
   exercising that approved window; once cooking has started it becomes a
   merchant-confirmed cancellation (full refund if confirmed), with the
-  cooked-food cost still `OPEN` under BQ-015. ⚠️ **Not yet implemented** —
+  cooked-food cost allocated by cause under DEC-051 (platform-caused to
+  BANHAO). ⚠️ **Not yet implemented** —
   the running system allows customer cancellation only through `PAID`, so
   this option cannot currently be served by the API. DEC-050 changes no
   timing in this ladder.
@@ -450,7 +454,7 @@ location, **no radius**).
 
 **Still `OPEN`:** BQ-022's remainder (onboarding artefacts, who approves them,
 contractor status — `LEGAL_REVIEW_REQUIRED`) · BQ-024 (cancellation
-compensation) · BQ-015 (who bears the cost of wasted food — P0). **Resolved:**
+compensation). **Resolved:** BQ-015 (cost of wasted food — **DEC-051**, allocated by cause; not implemented) ·
 BQ-026 (**DEC-035**, flat ฿10 delivery fee, 2026-08-24) and BQ-029 (**DEC-044**,
 flat ฿12 rider earning per completed delivery, 2026-09-05).
 

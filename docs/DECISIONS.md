@@ -60,6 +60,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-048** | **Service fee refundability: included in an eligible full order refund (Option A)** | **ACCEPTED — REFUNDABILITY · NOT IMPLEMENTED** | **2026-09-06** | `docs/SETTLEMENT_MODEL.md` § 9, `docs/OPEN_BUSINESS_QUESTIONS.md` BQ-027 (resolved) |
 | **DEC-049** | **Refund ledger architecture: independent reversal groups over a mutable refund domain record; no `REFUND_PAYABLE` bridge, no zero-sum requirement, posting only at verified refund finality** | **ACCEPTED — ARCHITECTURE · NOT IMPLEMENTED** | **2026-09-07** | `docs/SETTLEMENT_MODEL.md` § 3.1, § 3.2, § 9, § 11.1, `supabase/migrations/20260811000007_ledger_domain.sql` |
 | **DEC-050** | **Phase 1 cancellation window and refund eligibility: free through `MERCHANT_ACCEPTED`, no cancellation fee, merchant-confirmed `PREPARING` cancellation is a full refund** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/BUSINESS_RULES.md` § 2.4, `docs/ORDER_LIFECYCLE.md` § 5, `docs/PAYMENT_LIFECYCLE.md` § 8, BQ-016 (resolved) |
+| **DEC-051** | **Cooked-food loss is allocated by cause — platform-caused to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant — from `PREPARING` onward, valued at `orders.subtotal_satang`** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/SETTLEMENT_MODEL.md` § 3, § 9, `docs/ORDER_LIFECYCLE.md` § 5, § 6, BQ-015 (resolved) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -4639,3 +4640,239 @@ None / None. Resolves **BQ-016** and closes its Option B (partial refund
 during `PREPARING`) and Option C (repeat-canceller penalty) as rejected. Does
 not supersede or modify DEC-021, DEC-022, DEC-027, DEC-048 or DEC-049, each
 of which stands unchanged.
+
+---
+
+## DEC-051 — Cooked-food loss is allocated by cause: platform-caused to BANHAO, merchant-caused to the merchant, from `PREPARING` onward
+
+**Status:** ACCEPTED — POLICY · **RUNTIME NOT IMPLEMENTED** · **Date:** 2026-09-07 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Resolves **BQ-015** (who bears the cost of cooked-but-undelivered food). It
+allocates the **merchant-side economic loss** on food that has already entered
+preparation. It decides no refund amount, no ledger posting, no settlement
+figure, and no post-pickup outcome.
+
+**1. Scope — pre-pickup prepared food only.**
+This decision owns the merchant-side cooked-food loss arising at:
+
+- `PREPARING`
+- `READY_FOR_PICKUP`
+- a no-rider operator cancellation where the merchant has already prepared the
+  food
+
+It does **not** own — and does not answer — customer-unreachable, customer
+refusal, or delivery failure **after `PICKED_UP`**. Those remain **BQ-017**,
+`OPEN`. BQ-015's original question text claimed two of those cases; that
+overreach is corrected in `docs/OPEN_BUSINESS_QUESTIONS.md` and is not
+inherited here.
+
+**2. Allocation model — Option C, cause-based.**
+The party bearing the eligible cooked-food loss depends on the cause of the
+failure:
+
+| Cause of failure | Bears the eligible cooked-food loss |
+|---|---|
+| **Platform-caused** — no rider found; operator cancellation arising from the platform's own inability to fulfil delivery | **BANHAO**, named as a platform write-off (§ 5) |
+| **Merchant-caused** — the merchant's own late cancellation or inability to supply after accepting | **The merchant** |
+| **Customer-caused after `PICKED_UP`** | **Not owned here — BQ-017**, `OPEN` |
+
+**No merchant penalty schedule is created.** "Merchant absorbs" means the
+merchant is not made whole for that food; it introduces no percentage, no
+fixed penalty, no fine, no automatic charge, and no compensation formula. Any
+future calculation mechanism is separate follow-up work, not this decision.
+
+**No customer charge is created.** DEC-050 remains authoritative: **there is
+no Phase 1 cancellation fee**, and this decision introduces none.
+
+**3. Economic boundary — food is prepared from `PREPARING`.**
+For this policy, food counts as prepared from the moment the order enters
+`PREPARING`. `READY_FOR_PICKUP` is a later state **within** the same
+prepared-food policy, not a separate threshold. The reason is DEC-050's own
+shape: a merchant-confirmed cancellation during `PREPARING` already gives the
+customer a **full refund**, so a merchant-side loss is live from that moment
+and must be covered. **No order state is renamed and no state semantics
+change.**
+
+**4. Valuation basis — `orders.subtotal_satang`.**
+The authoritative valuation basis for the food-loss allocation is the order's
+immutable food-subtotal snapshot, `orders.subtotal_satang`. It is **not**
+reduced by the 8% merchant commission (DEC-043), and it is **not**
+`grand_total_satang`; delivery fee, service fee and promotion funding are all
+excluded. No separate food-cost percentage and no fixed compensation amount is
+invented.
+
+> ⚠️ **This is a valuation basis, not a payable.** `orders.subtotal_satang`
+> states what the lost food is worth for allocation purposes. It does **not**
+> decide the merchant's settlement amount, the commission calculation, or the
+> gross-merchant-payable architecture — all of which remain separate and
+> unbuilt. Nothing here may be read as creating a merchant payable equal to
+> `orders.subtotal_satang`.
+
+**5. Platform account — `PLATFORM_WRITE_OFF`.**
+Where BANHAO bears the loss, the intended economic account is the existing
+`PLATFORM_WRITE_OFF`, following the DEC-045 precedent that a platform-absorbed
+cost is named explicitly rather than left as a residual. **This is an account
+designation only.** No ledger entry, group, posting shape or zero-sum
+behaviour is designed or authorized here — **DEC-049 remains authoritative**
+for ledger architecture. No new ledger account is created.
+
+**6. Cause attribution is required.**
+Cause-based allocation is only determinable if the cause is recorded, so a
+failed or cancelled-after-preparation event must carry a cause code. The
+existing `orders.cause_code` column is the intended domain field — it exists,
+and the schema already treats it as one of the few mutable columns
+(`20260811000005_order_domain.sql`). The cause taxonomy in
+`docs/ORDER_LIFECYCLE.md` § 6, with its Fault column, is the intended
+vocabulary and is **not expanded here**; if it proves insufficient in
+implementation, that gap is raised as a new open question rather than filled
+silently.
+
+⚠️ **Not implemented.** The cancel API's request schema is `.strict()` and
+currently **rejects** a `causeCode` field with `VALIDATION_FAILED`, with tests
+pinning that behaviour, and no application code writes `orders.cause_code`.
+Closing that gap is later implementation work; **no validation, API, schema or
+test change is made by this decision.**
+
+**7. Relationship to DEC-050 — unchanged, and deliberately separate.**
+DEC-050 stands exactly as written: customer cancellation during `PREPARING`
+requires merchant confirmation, a confirmed cancellation is a **full** refund,
+and there is no cancellation fee. This decision determines only the
+**merchant-side food-loss** consequence of such an event. **The customer's
+refund and the merchant's food loss are two separate economic consequences of
+one event.** No partial refund is introduced — partial refund composition
+remains **BQ-031**, `OPEN`.
+
+**8. No-rider case.** A no-rider failure falls under this decision **only**
+where it produces merchant cooked-food loss **before pickup**; BANHAO bears
+that eligible loss. Post-`PICKED_UP` delivery failure, refusal and
+unreachable-customer cases stay with **BQ-017** and must not be collapsed into
+this rule.
+
+### Known residual — recorded, not decided
+
+**A customer-caused cancellation of already-prepared food *before* pickup has
+no bearer assigned by this decision.** The three branches locked in § 2 cover
+platform-caused, merchant-caused, and customer-caused *post-pickup* (BQ-017).
+A merchant-confirmed customer cancellation during `PREPARING` — permitted by
+DEC-050, with a full customer refund and no cancellation fee — is
+customer-caused and pre-pickup, so it falls between them.
+
+This is recorded as an **explicit open residual of BQ-015**, not resolved by
+inference. It must not be closed by assuming the merchant absorbs it because
+they confirmed the cancellation, nor by assuming BANHAO absorbs it because the
+customer cannot be charged. Whichever is intended requires the Product
+Owner to say so. Nothing in this decision may be read as having decided it.
+
+### Explicit non-decisions
+
+Untouched and still `OPEN`: **BQ-017** (post-pickup refusal, unreachable
+customer, delivery failure), **BQ-031** (partial refund composition),
+**Q-020** (refund mechanism), **BQ-024** (rider cancellation/waiting
+compensation), **BQ-013** (merchant accept-timeout behaviour), **UX-Q-006**
+(operator options on a no-rider order).
+
+Also not decided here: the refund provider or webhook mechanism, refund
+transaction mechanics, rider compensation of any kind, customer-caused
+post-pickup loss, **gross merchant payable**, settlement, reconciliation, and
+cancellation-notification implementation. **DEC-048, DEC-049 and DEC-050 are
+authoritative and unmodified.**
+
+### Why
+
+Product Owner decision, 2026-09-07, following the read-only BQ-015
+reconnaissance in the same session. The recon established that nothing about
+cooked-food cost was locked anywhere — no rule, no percentage, no amount, no
+code — while an operator can already cancel a `READY_FOR_PICKUP` order in the
+running system with no refund, no ledger entry and no cause recorded. It also
+found the cause taxonomy and the `orders.cause_code` column already in place,
+and `PLATFORM_WRITE_OFF` already proven by DEC-045. Cause-based allocation was
+chosen because it is the option the question itself recommended, because the
+repository already carries the fault vocabulary it needs, and because a flat
+"merchant absorbs" rule risks merchant participation in a 20–30-shop district
+while a flat "BANHAO absorbs" rule would have the platform funding
+merchant-caused failures.
+
+### Alternatives
+
+- **Option A — BANHAO absorbs everything** — rejected. Simplest to operate,
+  but it makes the platform fund merchant-caused failures with no limit.
+- **Option B — merchant absorbs everything** — rejected. BQ-015's own text
+  warns it "would end merchant participation quickly" at launch scale.
+- **Option D — customer pays where at fault** — rejected for the cases this
+  decision owns; it is foreclosed by DEC-050's no-cancellation-fee rule, and
+  the post-pickup customer cases belong to BQ-017.
+- **Requiring `READY_FOR_PICKUP` before the policy applies** — rejected. It
+  would leave a merchant-confirmed `PREPARING` cancellation — already a full
+  customer refund under DEC-050 — with no loss allocation at all.
+
+### Consequences
+
+- The `PLATFORM_WRITE_OFF` account gains a second intended use alongside
+  DEC-045's ฿2 delivery gap. Its BQ-015 half moves from `OPEN` to a policy
+  awaiting implementation.
+- **Cause attribution becomes load-bearing.** Allocation cannot be computed
+  without a recorded cause, so the cause-code gap is now a functional
+  prerequisite rather than a nicety.
+- Nothing changes in the running system. An operator can still cancel a
+  cooked order with no refund, no cost allocation, no cause code and no
+  notification; this decision makes that a documented gap rather than an
+  unanswered question.
+- BQ-015 leaves the P0 open list, which drops from five to four
+  (Q-001, Q-002, Q-020, BQ-030).
+- `DEC-APP-006`'s gate on exception-path implementation is **not** lifted: it
+  also depends on BQ-013 and BQ-017, both still open.
+- The residual above means BQ-015's own scope is closed but one branch of its
+  allocation table remains unassigned; that is stated, not hidden.
+
+### Implementation status
+
+**DECISION LOCKED — RUNTIME NOT IMPLEMENTED.** Gaps, none addressed here:
+
+- `causeCode` is rejected by the cancel API (`.strict()` schema, two tests pin
+  it); nothing writes `orders.cause_code`
+- no gross merchant payable exists — only the 8% commission is posted against
+  `MERCHANT_PAYABLE`, so "the merchant is made whole" has no ledger substrate
+- no `PLATFORM_WRITE_OFF` posting for food loss (DEC-045's delivery-gap
+  posting is unrelated)
+- no refund initiation, mechanism, or state transition (Q-020)
+- no cancellation notification; neither cancel path emits an outbox event
+- no merchant-confirmation flow for a `PREPARING` cancellation
+- no settlement or reconciliation
+
+### Evidence
+
+Product Owner instruction, 2026-09-07 ("BANHAO — BQ-015 DECISION LOCK"),
+following this session's BQ-015 reconnaissance: a repository-wide search
+finding **no** cooked-food rule, percentage, amount or code anywhere;
+`docs/ORDER_LIFECYCLE.md` § 6's cause taxonomy with its Fault column
+(`PROPOSED`); `orders.cause_code` present and mutable
+(`supabase/migrations/20260811000005_order_domain.sql`);
+`packages/validation/src/order.ts`'s strict cancel schema rejecting
+`causeCode`; `docs/SETTLEMENT_MODEL.md` § 3's `PLATFORM_WRITE_OFF` row with
+its BQ-015 half open; and § 9's cause table marking the no-rider row
+`OPEN — BQ-015, P0`.
+
+### Related Requirements
+
+BQ-015 (**resolved by this decision**, with the residual above recorded) ·
+BQ-017, BQ-031, Q-020, BQ-024, BQ-013, UX-Q-006 — **all remain `OPEN` and
+untouched** · CON-003 (order-level zero-sum) · DEC-022 (operator cancellation
+of a no-rider order) · DEC-043 (commission — **not** deducted from the
+valuation basis) · DEC-045 (platform write-off precedent) · DEC-048, DEC-049,
+DEC-050 (unchanged)
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 3, § 9 · `docs/ORDER_LIFECYCLE.md` § 5, § 6 ·
+`docs/BUSINESS_RULES.md` § 2.4 · `docs/PAYMENT_LIFECYCLE.md` § 8 ·
+`supabase/migrations/20260811000005_order_domain.sql` (`cause_code`,
+`subtotal_satang` — **both unchanged by this decision**)
+
+### Supersedes / Superseded By
+
+None / None. Resolves **BQ-015** and corrects its original question text,
+which claimed ownership of post-pickup customer cases that belong to
+**BQ-017**. Does not supersede or modify DEC-022, DEC-043, DEC-045, DEC-048,
+DEC-049 or DEC-050, each of which stands unchanged.

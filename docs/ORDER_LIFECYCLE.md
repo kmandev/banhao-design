@@ -180,7 +180,7 @@ stateDiagram-v2
 | **Rider cancellation** | Delivery reassigns; **the order is not cancelled** | `ACCEPTED` — **DEC-021** |
 | **No rider** | Retry → manual dispatch → operator decision. **Never auto-cancel** | `ACCEPTED` — **DEC-022** |
 | **Delivery failure** | Rider escalates; order does not silently complete | `PROPOSED` — BQ-017 |
-| **Cost of wasted food** | Who pays when a cooked order fails | **`OPEN` — BQ-015** |
+| **Cost of wasted food** | Allocated **by cause** — platform-caused to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant; prepared from `PREPARING`, valued at `orders.subtotal_satang` | **`ACCEPTED` — DEC-051**; runtime not implemented |
 
 ### No-rider, in the order domain
 
@@ -224,7 +224,7 @@ cited.
 | `PAID` | ✅ free — **DEC-050** | ✅ (rejection) | — | ✅ | Full refund |
 | `MERCHANT_ACCEPTED` | ✅ free — **DEC-050** (last free state) | ⚠️ merchant fault | — | ✅ | Full refund |
 | `PREPARING` | ⚠️ merchant confirms — **DEC-050** | ⚠️ merchant fault | ❌ **DEC-021** | ✅ | **Full if confirmed — DEC-050**; unconfirmed outcome `OPEN` |
-| `READY_FOR_PICKUP` | ⚠️ merchant confirms | ❌ | ❌ **DEC-021** | ✅ **DEC-022** | Food cooked — cost allocation **`OPEN`, BQ-015** |
+| `READY_FOR_PICKUP` | ⚠️ merchant confirms | ❌ | ❌ **DEC-021** | ✅ **DEC-022** | Food cooked — cost allocated **by cause, DEC-051** (platform-caused to BANHAO, merchant-caused to the merchant) |
 | `PICKED_UP` onward | ❌ support only — **DEC-050** | ❌ | ❌ | ✅ | `OPEN` — **BQ-017 owns this**, not BQ-016 |
 | `DELIVERED` | ❌ | ❌ | ❌ | ✅ refund only | Not ordinary cancellation — partial refund `OPEN`, BQ-031 |
 
@@ -247,8 +247,17 @@ returns the *delivery* to `RIDER_SEARCHING`.
 
 ## 6. Cause codes
 
-`PROPOSED`. Every terminal failure carries one, so the ledger can allocate cost
-(BQ-015) and operations can answer "why?" without reading a timeline.
+`PROPOSED` as a taxonomy. Every terminal failure carries one, so the ledger can
+allocate cost and operations can answer "why?" without reading a timeline.
+
+**DEC-051 (2026-09-07) makes the Fault column load-bearing**: cooked-food loss
+is allocated by cause, so a failed or cancelled-after-preparation event must
+carry a cause code. `orders.cause_code` is the intended field and this table
+the intended vocabulary — **neither is expanded by DEC-051**; an insufficiency
+found in implementation is raised as a new open question, not filled silently.
+⚠️ **Not implemented:** the cancel API's `.strict()` schema rejects
+`causeCode` (`VALIDATION_FAILED`, pinned by tests) and no code writes
+`orders.cause_code`.
 
 | Code | Terminal state | Fault |
 |---|---|---|
@@ -283,7 +292,9 @@ compensation is `OPEN` (BQ-024).
 **C. No rider found.** Search continues past the customer notification; an
 operator is alerted and chooses: keep searching, merchant delivery, or cancel +
 refund (DEC-022). Only the last moves the order, to `CANCELLED`. **Who pays for
-the cooked food is `OPEN` (BQ-015).**
+the cooked food is allocated by cause — **DEC-051**: a no-rider failure is
+platform-caused, so BANHAO absorbs the merchant's eligible cooked-food loss
+(`PLATFORM_WRITE_OFF`). Runtime not implemented.**
 
 **D. Merchant never responds.** 3 minutes elapse → rejection → refund → nearby
 suggestions. Auto vs escalate is `OPEN` (BQ-013); the refund **mechanism** is
@@ -306,10 +317,11 @@ is `OPEN`.
 restaurant — DEC-017).
 
 **Also resolved since:** BQ-016 (cancellation windows, fees and post-pickup
-policy — **DEC-050**, 2026-09-07; runtime not implemented).
+policy — **DEC-050**, 2026-09-07) · BQ-015 (cooked-food loss allocated by
+cause — **DEC-051**, 2026-09-07). Both are policy locks; **neither is
+implemented**.
 
-**Still `OPEN`:** BQ-013 (merchant accept timeout behaviour) · BQ-015 (**who
-bears the cost of wasted food** — P0) · Q-003 (the refund edge cases DEC-050
+**Still `OPEN`:** BQ-013 (merchant accept timeout behaviour) · Q-003 (the refund edge cases DEC-050
 did not cover) · BQ-017 (delivery failure, and post-pickup customer refusal) ·
 BQ-031 (partial refund composition) · Q-020 (refund mechanism) ·
 BQ-018 (proof of delivery) · BQ-011 (cart revalidation) · exception **state

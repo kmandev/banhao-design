@@ -152,7 +152,7 @@ where a past order went.
 |---|---|---|
 | `CREATED` · `PENDING_PAYMENT` · `PAID` · **`MERCHANT_ACCEPTED`** | Free cancellation. Full refund where money was taken, automatic | **`ACCEPTED` — DEC-050** |
 | During `PREPARING` | Requires merchant confirmation. Where the merchant confirms: **full refund** — never a partial one | **`ACCEPTED` — DEC-050** |
-| `READY_FOR_PICKUP` | Merchant confirmation as above; **who bears the cooked-food cost is `OPEN`** | `OPEN` — BQ-015 |
+| `READY_FOR_PICKUP` | Merchant confirmation as above; the cooked-food loss is allocated **by cause** — platform-caused to BANHAO, merchant-caused to the merchant | **`ACCEPTED` — DEC-051** (food is prepared from `PREPARING`; runtime not implemented) |
 | After `PICKED_UP` | Cannot cancel; must go through the support centre. Customer refusal past pickup is **delivery failure**, not cancellation | `OPEN` — BQ-017 owns the outcome |
 | After `DELIVERED` | Not ordinary cancellation — dispute/quality territory | `OPEN` — Q-003, BQ-031 |
 
@@ -169,9 +169,10 @@ cancellation UI, and can execute no refund at all. **The code is narrower
 than approved policy and requires a later implementation change.**
 
 What DEC-050 deliberately did **not** decide, and remains `OPEN`: the
-cooked-food cost (BQ-015), post-pickup refusal and delivery failure (BQ-017),
-what a partial refund contains (BQ-031), the refund mechanism (Q-020), and
-Q-003's remaining refund edge cases.
+post-pickup refusal and delivery failure (BQ-017), what a partial refund
+contains (BQ-031), the refund mechanism (Q-020), and Q-003's remaining refund
+edge cases. **The cooked-food cost is no longer open — DEC-051** (2026-09-07)
+allocates it by cause; see § 6.
 
 **⚠️ The refund promise the app currently makes may not be deliverable.** The
 Customer App tells customers *"เงินจะเข้าบัญชีเดิมที่ใช้จ่าย ภายใน 1–3 วันทำการ"*
@@ -452,8 +453,18 @@ Other load-bearing rules:
   auto-cancels an order.
 - **Resolved by the lock:** BQ-012 (`PENDING_PAYMENT` now exists) and BQ-014
   (the `NO_DRIVER` contradiction).
-- `OPEN` — **who pays for wasted food (BQ-015, P0)**, merchant accept-timeout
-  behaviour (BQ-013), delivery failure (BQ-017), exception **state names**.
+- `ACCEPTED` **DEC-051** — **who pays for wasted food**: allocated **by
+  cause**. Platform-caused loss (no rider; operator cancellation from the
+  platform's own inability to deliver) is absorbed by BANHAO as
+  `PLATFORM_WRITE_OFF`; merchant-caused loss is absorbed by the merchant.
+  Food counts as prepared from **`PREPARING`**, valued at
+  `orders.subtotal_satang` — a valuation basis, **not** a merchant payable,
+  and **not** net of the 8% commission. No merchant penalty, no customer
+  charge, no partial refund. Post-`PICKED_UP` cases belong to BQ-017.
+  **Runtime not implemented**, and a customer-caused pre-pickup branch is
+  recorded as an explicit residual.
+- `OPEN` — merchant accept-timeout behaviour (BQ-013), delivery failure
+  (BQ-017), exception **state names**.
 
 ---
 
@@ -675,8 +686,8 @@ The refund **policy** is now partly decided: **DEC-050** (2026-09-07) fixes the
 cancellation window, the absence of a Phase 1 cancellation fee, and a **full**
 refund on a merchant-confirmed `PREPARING` cancellation (§ 2.4). What each
 component contributes to a **partial** refund (**BQ-031**), post-pickup
-outcomes (**BQ-017**), the cooked-food cost (**BQ-015**) and Q-003's remaining
-edge cases all remain `OPEN`. §29 of the decision lock keeps the rest of
+outcomes (**BQ-017**) and Q-003's remaining edge cases remain `OPEN`; the
+cooked-food cost was allocated by cause on 2026-09-07 (**DEC-051**). §29 of the decision lock keeps the rest of
 refund policy explicitly out of scope.
 
 ---
