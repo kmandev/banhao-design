@@ -203,6 +203,36 @@ export interface RiderArrivedAtCustomerResponse {
   riderId: string;
 }
 
+/**
+ * `POST /api/v1/rider/deliveries/:id/contact-attempt` — BQ-017 Slice #2.
+ *
+ * The rider records that they tried to reach the customer. No request body:
+ * the delivery comes from the route, the rider from the verified JWT, and the
+ * timestamp from the server — a client-supplied `attemptedAt` would let the
+ * evidence an operator relies on be backdated.
+ *
+ * **This endpoint declares nothing.** It records one operational fact.
+ * It does not fail the delivery, does not mark the customer unreachable, does
+ * not choose a cause, and does not start or extend any timer: DEC-053 § 2
+ * makes the operator the failure authority precisely so a rider never
+ * determines a financial outcome. Recording the second attempt satisfies one
+ * of the operator's preconditions; it does not resolve anything.
+ *
+ * Carries no money field, same reasoning as `RiderOfferAcceptResponse`.
+ */
+export interface RiderContactAttemptResponse {
+  deliveryId: string;
+  /** 1 or 2 — this attempt's ordinal, assigned by the server. */
+  attemptNo: number;
+  /** ISO-8601, server clock. */
+  attemptedAt: string;
+  /** How many attempts this delivery now has on record, including this one. */
+  attemptsRecorded: number;
+  /** DEC-053 § 3's requirement, so the app states the policy rather than hard-coding it. */
+  attemptsRequired: number;
+  riderId: string;
+}
+
 export interface RiderProofUploadUrlResponse {
   /** A presigned PUT, scoped to one object, one operation, one content type, 5 minutes. */
   uploadUrl: string;

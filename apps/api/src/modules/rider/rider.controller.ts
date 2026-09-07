@@ -16,6 +16,7 @@ import {
   type RiderArrivedAtCustomerResponse,
   type RiderArrivedResponse,
   type RiderCancelDeliveryResponse,
+  type RiderContactAttemptResponse,
   type RiderDeliveredResponse,
   type RiderEnRouteResponse,
   type RiderLocationResponse,
@@ -31,6 +32,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { DeliveryArrivalService } from './delivery-arrival.service';
 import { DeliveryCompletionService } from './delivery-completion.service';
+import { DeliveryContactAttemptService } from './delivery-contact-attempt.service';
 import { DeliveryCustomerArrivalService } from './delivery-customer-arrival.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
 import { DeliveryProofService } from './delivery-proof.service';
@@ -66,6 +68,7 @@ export class RiderController {
     private readonly releases: DeliveryReleaseService,
     private readonly arrivals: DeliveryArrivalService,
     private readonly customerArrivals: DeliveryCustomerArrivalService,
+    private readonly contactAttempts: DeliveryContactAttemptService,
     private readonly pickups: DeliveryPickupService,
     private readonly departures: DeliveryEnRouteService,
     private readonly completions: DeliveryCompletionService,
@@ -239,6 +242,46 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderArrivedAtCustomerResponse> {
     return this.customerArrivals.arriveAtCustomer(requireUser(user), id);
+  }
+
+  /**
+   * The rider records an attempt to reach the customer at the door — BQ-017
+   * Slice #2, DEC-053 § 3. One append-only evidence row, at most two per
+   * delivery.
+   *
+   * **This endpoint declares nothing.** It does not fail the delivery, mark
+   * the customer unreachable, choose a cause, touch the order, or start any
+   * timer. DEC-053 § 2 makes the **operator** the failure authority, precisely
+   * so that a rider never determines a financial outcome; recording the second
+   * attempt satisfies one of the operator's preconditions and resolves
+   * nothing. The failure command is
+   * `POST /api/v1/admin/supervisor/deliveries/:id/fail`, and no rider route
+   * reaches it.
+   *
+   * No request body: the delivery comes from the route, the rider from the
+   * verified JWT, and the timestamp from the server — a client-supplied
+   * `attemptedAt` would let evidence an operator relies on be backdated.
+   *
+   * Only valid while the delivery is `ARRIVED` (DEC-054): an attempt before
+   * the rider reached the customer would be evidence of nothing.
+   */
+  @Post('deliveries/:id/contact-attempt')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The attempt was recorded, with the running count' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiNotFoundResponse({ description: 'Delivery not found' })
+  @ApiConflictResponse({
+    description:
+      'INVALID_TRANSITION — the delivery is not currently ARRIVED. ' +
+      'CONFLICT — this delivery already has the maximum of 2 recorded attempts (DEC-053 § 3)',
+  })
+  async recordContactAttempt(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<RiderContactAttemptResponse> {
+    return this.contactAttempts.recordContactAttempt(requireUser(user), id);
   }
 
   /**

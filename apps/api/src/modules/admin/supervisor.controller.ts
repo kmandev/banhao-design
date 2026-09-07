@@ -8,8 +8,9 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { resolveSupervisorCaseSchema } from '@banhao/validation';
+import { failDeliverySchema, resolveSupervisorCaseSchema } from '@banhao/validation';
 import type {
+  FailDeliveryResponse,
   ResolveSupervisorCaseResponse,
   SupervisorIdentityResponse,
   SupervisorCaseDetailResponse,
@@ -20,6 +21,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { parseOrThrow } from '../../common/validation/parse';
 import type { AuthenticatedUser } from '../../common/types';
 import { SupervisorCaseService } from './supervisor-case.service';
+import { DeliveryFailureService } from './delivery-failure.service';
 
 /**
  * Human Supervisor console — Phase I, screens S-02, S-03 and S-06 of the AI
@@ -55,7 +57,10 @@ import { SupervisorCaseService } from './supervisor-case.service';
 @Roles('OPERATOR', 'ADMIN')
 @Controller('api/v1/admin/supervisor')
 export class SupervisorController {
-  constructor(private readonly cases: SupervisorCaseService) {}
+  constructor(
+    private readonly cases: SupervisorCaseService,
+    private readonly failures: DeliveryFailureService,
+  ) {}
 
   /**
    * Who the console is signed in as, and with which grant.
@@ -115,5 +120,49 @@ export class SupervisorController {
   ): Promise<ResolveSupervisorCaseResponse> {
     const request = parseOrThrow(resolveSupervisorCaseSchema, body);
     return this.cases.resolveCase(id, request, user);
+  }
+
+  /**
+   * BQ-017 — the operator declares a post-pickup delivery failure (DEC-053,
+   * operationally unblocked by DEC-054). `ARRIVED -> FAILED` on the delivery,
+   * `DELIVERING -> DELIVERY_FAILED` on the order, one cause on both.
+   *
+   * **The first supervisor command that moves domain state.** Everything above
+   * it appends an audit row and changes nothing; this one transitions two
+   * domains, because DEC-053 § 2 puts the authority here and nowhere else —
+   * the rider performs the operational steps and produces the evidence, the
+   * operator declares the failure. A rider-, customer- or merchant-declared
+   * failure is refused by construction: there is no such route, and this one
+   * sits behind the class-level `@Roles('OPERATOR','ADMIN')` grant.
+   *
+   * DEC-053 § 3's preconditions — two recorded contact attempts and five
+   * minutes since **customer** arrival (`deliveries.arrived_at`, DEC-054) —
+   * are enforced server-side by `DeliveryFailureService`, not by the console,
+   * and there is no override: DEC-053 makes the operator the authority once
+   * its conditions are met, not instead of them.
+   *
+   * **Nothing financial happens.** No refund, ledger reversal, write-off,
+   * rider compensation or settlement — Q-020 and BQ-024 are open, and the
+   * response carries no amount.
+   *
+   * `200`, not `201`: nothing is created that the caller can address.
+   */
+  @Post('deliveries/:id/fail')
+  @HttpCode(200)
+  @ApiOkResponse({ description: 'The delivery now FAILED, and the order now DELIVERY_FAILED' })
+  @ApiNotFoundResponse({ description: 'Delivery or order not found' })
+  @ApiConflictResponse({
+    description:
+      'CONFLICT — a DEC-053 precondition is unmet (order not DELIVERING, fewer than 2 contact ' +
+      'attempts, or less than 5 minutes since customer arrival), or the delivery was already ' +
+      'failed under a different cause. INVALID_TRANSITION — the delivery is not ARRIVED',
+  })
+  async failDelivery(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<FailDeliveryResponse> {
+    const request = parseOrThrow(failDeliverySchema, body);
+    return this.failures.failDelivery(user, id, request);
   }
 }

@@ -4,6 +4,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { OfferAcceptanceService } from './offer-acceptance.service';
 import type { DeliveryReleaseService } from './delivery-release.service';
 import type { DeliveryArrivalService } from './delivery-arrival.service';
+import type { DeliveryContactAttemptService } from './delivery-contact-attempt.service';
 import type { DeliveryCustomerArrivalService } from './delivery-customer-arrival.service';
 import type { DeliveryPickupService } from './delivery-pickup.service';
 import type { DeliveryEnRouteService } from './delivery-en-route.service';
@@ -189,6 +190,7 @@ describe('RiderController — the location route accepts no rider identity from 
   const releases = {} as DeliveryReleaseService;
   const arrivals = {} as DeliveryArrivalService;
   const customerArrivals = {} as DeliveryCustomerArrivalService;
+  const contactAttempts = {} as DeliveryContactAttemptService;
   const pickups = {} as DeliveryPickupService;
   const departures = {} as DeliveryEnRouteService;
   const completions = {} as DeliveryCompletionService;
@@ -205,6 +207,7 @@ describe('RiderController — the location route accepts no rider identity from 
       releases,
       arrivals,
       customerArrivals,
+      contactAttempts,
       pickups,
       departures,
       completions,
@@ -224,6 +227,7 @@ describe('RiderController — the location route accepts no rider identity from 
       releases,
       arrivals,
       customerArrivals,
+      contactAttempts,
       pickups,
       departures,
       completions,
@@ -244,6 +248,7 @@ describe('RiderController — the location route accepts no rider identity from 
       releases,
       arrivals,
       customerArrivals,
+      contactAttempts,
       pickups,
       departures,
       completions,

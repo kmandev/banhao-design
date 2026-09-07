@@ -1,5 +1,6 @@
 import { SupervisorCaseService } from './supervisor-case.service';
 import { SupervisorController } from './supervisor.controller';
+import type { DeliveryFailureService } from './delivery-failure.service';
 import { blockedByFor, isEscalationRow, type AuditRowForProjection } from './supervisor-case.projection';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
@@ -393,7 +394,7 @@ describe('Phase I — resolving a case (S-06)', () => {
 
 describe('Phase I — the controller boundary', () => {
   it('rejects a body with no reason, so a blank reason never reaches the database CHECK', async () => {
-    const controller = new SupervisorController({} as SupervisorCaseService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService);
 
     await expect(
       controller.resolve(CASE_ID, { outcome: 'RESOLVED', reason: '   ' }, staffUser()),
@@ -405,7 +406,7 @@ describe('Phase I — the controller boundary', () => {
   });
 
   it('refuses a body smuggling an actor or a case id', async () => {
-    const controller = new SupervisorController({} as SupervisorCaseService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService);
 
     await expect(
       controller.resolve(
@@ -416,18 +417,39 @@ describe('Phase I — the controller boundary', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 
-  it('exposes no route that mutates domain state', () => {
+  it('exposes exactly one domain-mutating route — DEC-053’s operator failure command, and nothing else', () => {
     const methods = Object.getOwnPropertyNames(SupervisorController.prototype).filter(
       (name) => name !== 'constructor',
     );
 
-    // Three reads and one audit-only write. Nothing here cancels, releases,
-    // redispatches, pauses, refunds or writes any domain row.
-    expect(methods.sort()).toEqual(['detail', 'list', 'me', 'resolve']);
+    // Three reads, one audit-only write, and `failDelivery` — the single
+    // command DEC-054 carved out of DEC-APP-006 for DEC-053's post-pickup
+    // failure path. Every other operational command remains ABSENT rather
+    // than disabled: no cancel, release, redispatch, pause, refund, ledger or
+    // settlement route exists here, because each is still gated on an open
+    // decision (BQ-013, UX-Q-006, Q-001, Q-002, Q-020, Q-032).
+    expect(methods.sort()).toEqual(['detail', 'failDelivery', 'list', 'me', 'resolve']);
+  });
+
+  it.each([
+    'cancel',
+    'cancelOrder',
+    'release',
+    'releaseRider',
+    'redispatch',
+    'pauseMerchant',
+    'refund',
+    'issueRefund',
+    'settle',
+    'adjustLedger',
+    'updateRow',
+    'executeSql',
+  ])('exposes no %s route — a blocked command is absent, never disabled', (method) => {
+    expect(Object.getOwnPropertyNames(SupervisorController.prototype)).not.toContain(method);
   });
 
   it('reports the grant held without reading anything', () => {
-    const controller = new SupervisorController({} as SupervisorCaseService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService);
 
     expect(controller.me(staffUser('ADMIN'))).toEqual({
       userId: STAFF_USER_ID,

@@ -80,3 +80,33 @@ export function isDeliveryFailureCause(value: unknown): value is DeliveryFailure
     typeof value === 'string' && (DELIVERY_FAILURE_CAUSES as readonly string[]).includes(value)
   );
 }
+
+/**
+ * How many customer contact attempts DEC-053 § 3 requires before a post-pickup
+ * failure may be resolved, and the maximum any delivery may record.
+ *
+ * One number, two meanings, because DEC-053 makes them the same number: the
+ * operator may not declare a failure with fewer, and the rider may not record
+ * more. The database enforces the ceiling structurally
+ * (`delivery_contact_attempts`' `attempt_no` CHECK plus its
+ * `(delivery_id, attempt_no)` unique constraint); this constant is what the
+ * API and the driver app read so neither restates the policy independently.
+ *
+ * **Not configuration.** Same reasoning `NO_RIDER_NOTICE_SECONDS` and
+ * `dispatch-policy.ts`'s DEC-037 numbers are constants: an approved decision
+ * belongs in code that cites it, until an admin surface exists to administer
+ * it from. DEC-053 records the timer as configuration *in principle* (DEC-031);
+ * nothing in this slice makes it so, and inventing an environment variable for
+ * it would be inventing the surface too.
+ */
+export const DELIVERY_CONTACT_ATTEMPTS_REQUIRED = 2;
+
+/**
+ * DEC-053 § 3's wait, measured from `deliveries.arrived_at` — the
+ * customer-arrival anchor DEC-054 locked, never merchant arrival, never
+ * `picked_up_at`, `assigned_at` or `created_at`.
+ *
+ * **Five minutes.** DEC-053 states explicitly that the 10-minute figure which
+ * appears in BQ-017's historical text was an illustration and is not policy.
+ */
+export const DELIVERY_FAILURE_WAIT_SECONDS = 5 * 60;

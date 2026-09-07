@@ -3,6 +3,7 @@ import type {
   AcceptOrderRequest,
   CreateOrderRequest,
   CreateOrderResponse,
+  DeliveryFailureCause,
   OrderTransitionResponse,
 } from '@banhao/validation';
 import { uuidSchema } from '@banhao/validation';
@@ -64,11 +65,33 @@ type ActorType = 'CUSTOMER' | 'MERCHANT' | 'RIDER' | 'OPERATOR';
 const CUSTOMER_CANCELLABLE_STATES = ['CREATED', 'PENDING_PAYMENT', 'PAID'] as const;
 
 /**
- * DEC-022 — an operator may cancel any non-terminal order before `DELIVERED`.
- * The five exception states are excluded because they are not implemented
- * (DEC-APP-006) and therefore never reachable in practice, but listing only
- * the nine core states keeps this array an honest description of what the
- * running system can actually be in.
+ * DEC-022 — an operator may cancel a non-terminal order **before the food
+ * leaves the shop**.
+ *
+ * `PICKED_UP` and `DELIVERING` were removed by BQ-017 Slice #2, and their
+ * absence is the point. Generic cancellation from either state moved
+ * `orders.state` and nothing else: the delivery kept its own state, the
+ * `rider_assignments` row stayed `ACCEPTED`, and
+ * `rider_availability.active_delivery_count` stayed at 1 — so the delivery was
+ * stranded with no legal transition left *and the rider was blocked from all
+ * further work* until something else reset the slot. DEC-053 clause 12 records
+ * the stranding; the rider half was found by this slice's reconnaissance.
+ *
+ * Post-pickup now has exactly one resolution:
+ * `POST /api/v1/admin/supervisor/deliveries/:id/fail` (DEC-053, DEC-054),
+ * which closes the assignment, releases the slot, records a cause and moves
+ * both domains together.
+ *
+ * **A post-pickup cancel is refused, not silently redirected.** DEC-053's
+ * failure path carries preconditions this method knows nothing about — two
+ * contact attempts, five minutes since customer arrival, a required cause —
+ * so turning a cancellation into a failure would bypass every one of them.
+ * The operator is told to use the failure command; the system does not guess
+ * on their behalf.
+ *
+ * The five exception states remain excluded because they are not implemented
+ * (DEC-APP-006). DEC-054's carve-out admits `DELIVERY_FAILED` on DEC-053's
+ * path only, and that path is not this one.
  */
 const OPERATOR_CANCELLABLE_STATES = [
   'CREATED',
@@ -77,8 +100,6 @@ const OPERATOR_CANCELLABLE_STATES = [
   'MERCHANT_ACCEPTED',
   'PREPARING',
   'READY_FOR_PICKUP',
-  'PICKED_UP',
-  'DELIVERING',
 ] as const;
 
 /**
@@ -357,6 +378,66 @@ export class OrdersService {
   /** `DELIVERING → DELIVERED`. Terminal success. */
   async completeDelivery(user: AuthenticatedUser, orderId: string): Promise<OrderTransitionResponse> {
     return this.riderTransition(user, orderId, 'DELIVERING', 'DELIVERED', 'delivered_at');
+  }
+
+  /**
+   * `DELIVERING → DELIVERY_FAILED` — DEC-053's post-pickup failure, declared
+   * by an operator. The order half of
+   * `POST /api/v1/admin/supervisor/deliveries/:id/fail`.
+   *
+   * **The one exception state this service implements**, and only because
+   * DEC-054 carved it out of DEC-APP-006 for exactly this path.
+   * `PAYMENT_FAILED`, `PAYMENT_EXPIRED` and `MERCHANT_REJECTED` stay
+   * unimplemented — BQ-013 still gates them — and this method is reachable
+   * only from `DeliveryFailureService`, which enforces DEC-053's operational
+   * preconditions first. It is deliberately **not** wired to any customer,
+   * merchant or rider route.
+   *
+   * Writes `orders.cause_code` in the same guarded statement as the state, so
+   * there is no window in which an order is `DELIVERY_FAILED` with no cause,
+   * and no second write a retry could use to change one. `cause_code` is
+   * outside `orders_enforce_immutable_columns`' protected set (it is one of
+   * the three columns that migration allows to change), so this is a legal
+   * write — and the guard is what makes it effectively write-once.
+   *
+   * **No money column is touched**: not `subtotal_satang`, not
+   * `delivery_fee_satang`, not `service_fee_satang`, not `discount_satang`,
+   * not `grand_total_satang` — the immutability trigger would refuse them for
+   * every role in any case. DEC-053's economics are policy that nothing
+   * executes: refunds are blocked on Q-020 and rider compensation on BQ-024.
+   *
+   * No `cancelled_at`: this is not a cancellation, and `orders` has no
+   * `failed_at` column. Inventing one would be a migration this slice's
+   * decision does not authorise. `deliveries.failed_at` is where the moment
+   * is recorded.
+   */
+  async failDelivery(
+    user: AuthenticatedUser,
+    orderId: string,
+    causeCode: DeliveryFailureCause,
+    reason: string,
+  ): Promise<OrderTransitionResponse> {
+    const { data, error } = await this.supabase.admin
+      .from('orders')
+      .update({ state: 'DELIVERY_FAILED', cause_code: causeCode })
+      .eq('id', orderId)
+      .eq('state', 'DELIVERING')
+      .select('id, restaurant_id, state, customer_id')
+      .maybeSingle<OrderDiagnosisRow>();
+
+    if (error) {
+      this.failTransition(orderId, 'DELIVERING', 'DELIVERY_FAILED', error.message);
+    }
+
+    if (!data) {
+      throw await this.buildFailedTransitionError(orderId);
+    }
+
+    // DEC-032 — an operator action carries a mandatory reason, and this is the
+    // order domain's own record of it.
+    await this.writeHistory(orderId, 'DELIVERING', 'DELIVERY_FAILED', 'OPERATOR', user.id, reason);
+
+    return { orderId: data.id, state: data.state };
   }
 
   /**

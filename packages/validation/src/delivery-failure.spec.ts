@@ -1,8 +1,11 @@
 import {
+  DELIVERY_CONTACT_ATTEMPTS_REQUIRED,
   DELIVERY_FAILURE_CAUSES,
+  DELIVERY_FAILURE_WAIT_SECONDS,
   deliveryFailureCauseSchema,
   isDeliveryFailureCause,
 } from './delivery-failure';
+import { failDeliverySchema } from './supervisor';
 import { cancelOrderRequestSchema } from './order';
 
 describe('DELIVERY_FAILURE_CAUSES', () => {
@@ -97,5 +100,74 @@ describe('the cancel API is unchanged by the cause vocabulary', () => {
 
   it('still accepts a bare reason', () => {
     expect(cancelOrderRequestSchema.safeParse({ reason: 'ok' }).success).toBe(true);
+  });
+});
+
+describe('DEC-053 § 3 constants', () => {
+  it('requires exactly 2 contact attempts', () => {
+    expect(DELIVERY_CONTACT_ATTEMPTS_REQUIRED).toBe(2);
+  });
+
+  /**
+   * DEC-053 states explicitly that the 10-minute figure in BQ-017's historical
+   * text was an illustration and never policy. This pins the approved value so
+   * a future edit cannot quietly restore it.
+   */
+  it('waits exactly 5 minutes, not the 10 minutes BQ-017 illustrated', () => {
+    expect(DELIVERY_FAILURE_WAIT_SECONDS).toBe(300);
+    expect(DELIVERY_FAILURE_WAIT_SECONDS).not.toBe(600);
+  });
+});
+
+describe('failDeliverySchema', () => {
+  it.each(DELIVERY_FAILURE_CAUSES)('accepts %s with a reason', (causeCode) => {
+    expect(failDeliverySchema.safeParse({ causeCode, reason: 'ok' }).success).toBe(true);
+  });
+
+  it('requires a causeCode', () => {
+    expect(failDeliverySchema.safeParse({ reason: 'ok' }).success).toBe(false);
+  });
+
+  it('rejects a cause outside DEC-053’s six', () => {
+    expect(
+      failDeliverySchema.safeParse({ causeCode: 'CUSTOMER_CANCELLED', reason: 'ok' }).success,
+    ).toBe(false);
+  });
+
+  it('requires a reason — audit_logs_operator_reason_check makes it a database invariant', () => {
+    expect(failDeliverySchema.safeParse({ causeCode: 'RIDER_CAUSED' }).success).toBe(false);
+  });
+
+  it.each(['', '   ', '\t\n'])('rejects the blank reason %p', (reason) => {
+    expect(failDeliverySchema.safeParse({ causeCode: 'RIDER_CAUSED', reason }).success).toBe(false);
+  });
+
+  it('trims the reason', () => {
+    const result = failDeliverySchema.safeParse({ causeCode: 'RIDER_CAUSED', reason: '  ok  ' });
+    expect(result.success && result.data.reason).toBe('ok');
+  });
+
+  it('accepts a reason of exactly 500 characters and rejects 501', () => {
+    expect(
+      failDeliverySchema.safeParse({ causeCode: 'RIDER_CAUSED', reason: 'x'.repeat(500) }).success,
+    ).toBe(true);
+    expect(
+      failDeliverySchema.safeParse({ causeCode: 'RIDER_CAUSED', reason: 'x'.repeat(501) }).success,
+    ).toBe(false);
+  });
+
+  it('is strict — no actor, state, timestamp or amount may be smuggled in', () => {
+    for (const extra of [
+      { actorId: 'someone-else' },
+      { state: 'FAILED' },
+      { failedAt: '1999-01-01T00:00:00.000Z' },
+      { refundSatang: 10500 },
+      { riderCompensationSatang: 1200 },
+      { deliveryId: 'another' },
+    ]) {
+      expect(
+        failDeliverySchema.safeParse({ causeCode: 'RIDER_CAUSED', reason: 'ok', ...extra }).success,
+      ).toBe(false);
+    }
   });
 });

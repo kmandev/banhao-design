@@ -283,4 +283,18 @@ if grep -q "FAIL" /tmp/banhao-arrival-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL VERIFICATION PASSED"
+echo "==> Running BQ-017 Slice #2 contact-attempt assertions (20260907000002)"
+docker cp "$REPO_ROOT/supabase/tests/delivery_contact_attempts_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/delivery_contact_attempts_test.sql 2>&1 | tee /tmp/banhao-contact-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> BQ-017 contact-attempt verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-contact-out.log; then
+  echo "==> BQ-017 contact-attempt verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS VERIFICATION PASSED"

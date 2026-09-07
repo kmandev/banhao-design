@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { deliveryFailureCauseSchema, type DeliveryFailureCause } from './delivery-failure';
 
 /**
  * Human Supervisor console — Phase I, aligned to DEC-040 and the AI Operations
@@ -177,4 +178,79 @@ export interface SupervisorIdentityResponse {
   userId: string;
   /** `OPERATOR` or `ADMIN` — the two values `platform_staff.staff_role` allows. */
   staffRole: string;
+}
+
+/**
+ * `POST /api/v1/admin/supervisor/deliveries/:id/fail` — BQ-017 Slice #2.
+ *
+ * The operator declares a post-pickup delivery failure (DEC-053), the first
+ * supervisor command that moves domain state. Everything above this point in
+ * this file writes an audit row and nothing else; this one transitions a
+ * delivery and its order, which is why its preconditions are enforced by the
+ * server and not by the console.
+ *
+ * ## Why the operator, and only the operator
+ *
+ * DEC-053 § 2: "the rider performs the operational steps and produces the
+ * evidence; the operator is the authority that declares the failure." A rider,
+ * customer or merchant may not, because the cause selects an economic outcome
+ * (DEC-053 § 5) and no party to the delivery may choose their own. The route
+ * lives under `/admin/supervisor` behind the existing
+ * `@Roles('OPERATOR','ADMIN')` grant for exactly that reason — no new role and
+ * no new permission model.
+ *
+ * ## `causeCode` is required, and it is not the cancel API's field
+ *
+ * DEC-053 recognises six causes and this schema accepts exactly those
+ * ({@link deliveryFailureCauseSchema}). `cancelOrderRequestSchema` remains
+ * `.strict()` with `reason` only and still rejects `causeCode`: a cancellation
+ * is not a post-pickup delivery failure, and widening it would let one path
+ * write another path's outcome.
+ *
+ * ## `reason` is required by the database, not by taste
+ *
+ * `audit_logs_operator_reason_check` makes `reason` non-null for every
+ * `OPERATOR` row (DEC-032). A blank reason cannot reach the table, so it must
+ * not reach the button — the same reasoning
+ * {@link resolveSupervisorCaseSchema} states for case resolution. The 500-char
+ * ceiling matches `cancelOrderRequestSchema`'s own free-text bound rather than
+ * this file's 2000, because this reason accompanies a domain transition and
+ * sits alongside the order's own cancellation reasons in the same history.
+ *
+ * `.strict()` stops a client from smuggling a state, an actor, a timestamp or
+ * an amount into the body: the delivery comes from the route, the operator
+ * from the verified JWT, and the clock from the server.
+ */
+export const failDeliverySchema = z
+  .object({
+    causeCode: deliveryFailureCauseSchema,
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export type FailDeliveryRequest = z.infer<typeof failDeliverySchema>;
+
+/**
+ * What the operator is left with after a successful failure resolution.
+ *
+ * **No financial field, deliberately** — no refund, no amount, no rider
+ * compensation, no write-off. DEC-053's economics are real policy but nothing
+ * executes them: refunds are blocked on Q-020 and rider compensation on
+ * BQ-024. A response that named a refund would be reporting an effect that did
+ * not happen.
+ *
+ * Both domains are reported because both moved and they use different words
+ * (DEC-018) — the delivery is `FAILED`, the order is `DELIVERY_FAILED`.
+ */
+export interface FailDeliveryResponse {
+  deliveryId: string;
+  orderId: string;
+  /** Always `FAILED` on success — the **delivery** domain's terminal state for this path. */
+  state: string;
+  /** Always `DELIVERY_FAILED` on success — the **order** domain's terminal state for this path. */
+  orderState: string;
+  /** The cause recorded on both `deliveries.failure_cause` and `orders.cause_code`. */
+  causeCode: DeliveryFailureCause;
+  /** `deliveries.failed_at`, the moment the failure was declared. */
+  failedAt: string | null;
 }

@@ -795,6 +795,128 @@ describe('OrdersService.cancelOrder — customer', () => {
   });
 });
 
+/**
+ * `DELIVERING -> DELIVERY_FAILED` — DEC-053's post-pickup failure, the one
+ * exception state DEC-054 carved out of DEC-APP-006. Reachable only from
+ * `DeliveryFailureService`, which enforces the operational preconditions
+ * first; this describes the order half in isolation.
+ */
+describe('OrdersService.failDelivery — DEC-053', () => {
+  it('moves DELIVERING -> DELIVERY_FAILED and writes the cause in the same guarded statement', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('DELIVERY_FAILED'),
+      { data: null, error: null },
+    ]);
+
+    const result = await subject.failDelivery(
+      operatorUser(),
+      ORDER_ID,
+      'CUSTOMER_UNREACHABLE',
+      'two attempts, no answer at the gate',
+    );
+
+    expect(result).toEqual({ orderId: ORDER_ID, state: 'DELIVERY_FAILED' });
+
+    const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
+    // The pre-state is in the WHERE clause, not a prior SELECT (ADR-003).
+    expect(updateCall?.eq).toMatchObject({ id: ORDER_ID, state: 'DELIVERING' });
+    // State and cause together: no window with a failed order and no cause,
+    // and no second write a retry could use to change one.
+    expect(updateCall?.payload).toEqual({
+      state: 'DELIVERY_FAILED',
+      cause_code: 'CUSTOMER_UNREACHABLE',
+    });
+  });
+
+  it.each([
+    'CUSTOMER_UNREACHABLE',
+    'CUSTOMER_REFUSED',
+    'RIDER_CAUSED',
+    'MERCHANT_CAUSED',
+    'PLATFORM_CAUSED',
+    'INDETERMINATE',
+  ] as const)('records %s verbatim on orders.cause_code', async (causeCode) => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('DELIVERY_FAILED'),
+      { data: null, error: null },
+    ]);
+
+    await subject.failDelivery(operatorUser(), ORDER_ID, causeCode, 'operator note');
+
+    const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
+    expect(updateCall?.payload).toMatchObject({ cause_code: causeCode });
+  });
+
+  it('writes one OPERATOR history row carrying the mandatory reason (DEC-032)', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('DELIVERY_FAILED'),
+      { data: null, error: null },
+    ]);
+
+    await subject.failDelivery(operatorUser(), ORDER_ID, 'RIDER_CAUSED', 'rider dropped the food');
+
+    const history = calls.filter((c) => c.table === 'order_status_history');
+    expect(history).toHaveLength(1);
+    expect(history[0]?.payload).toMatchObject({
+      order_id: ORDER_ID,
+      from_state: 'DELIVERING',
+      to_state: 'DELIVERY_FAILED',
+      actor_type: 'OPERATOR',
+      reason: 'rider dropped the food',
+    });
+  });
+
+  it('touches no money column — DEC-053 economics are policy nothing executes (Q-020, BQ-024)', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('DELIVERY_FAILED'),
+      { data: null, error: null },
+    ]);
+
+    await subject.failDelivery(operatorUser(), ORDER_ID, 'PLATFORM_CAUSED', 'our fault');
+
+    const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
+    for (const money of [
+      'subtotal_satang',
+      'delivery_fee_satang',
+      'service_fee_satang',
+      'discount_satang',
+      'grand_total_satang',
+    ]) {
+      expect(updateCall?.payload).not.toHaveProperty(money);
+    }
+    // Not a cancellation: `cancelled_at` stays untouched, and `orders` has no
+    // failed_at column to invent.
+    expect(updateCall?.payload).not.toHaveProperty('cancelled_at');
+  });
+
+  it.each(['PICKED_UP', 'DELIVERED', 'CANCELLED', 'PAID'])(
+    'refuses an order in %s — the guarded WHERE matches nothing and no history is written',
+    async (state) => {
+      const { subject, calls } = buildTransitionService([
+        { data: null, error: null },
+        { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state, customer_id: CUSTOMER_ID }, error: null },
+      ]);
+
+      await expect(
+        subject.failDelivery(operatorUser(), ORDER_ID, 'INDETERMINATE', 'reason'),
+      ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+
+      expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+    },
+  );
+
+  it('is NOT_FOUND for an order that does not exist', async () => {
+    const { subject } = buildTransitionService([
+      { data: null, error: null },
+      { data: null, error: null },
+    ]);
+
+    await expect(
+      subject.failDelivery(operatorUser(), ORDER_ID, 'INDETERMINATE', 'reason'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
 describe('OrdersService.cancelOrder — operator', () => {
   it('cancels a PREPARING order regardless of ownership, with a cause reason', async () => {
     const { subject, calls } = buildTransitionService([updatedRow('CANCELLED'), { data: null, error: null }]);
@@ -806,6 +928,10 @@ describe('OrdersService.cancelOrder — operator', () => {
     const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
     expect(updateCall?.eq).toMatchObject({ id: ORDER_ID });
     expect(updateCall?.eq).not.toHaveProperty('customer_id');
+    // BQ-017 Slice #2 removed PICKED_UP and DELIVERING. Post-pickup is now
+    // resolved by DEC-053's operator failure command, which closes the
+    // assignment, releases the rider's slot and records a cause — none of
+    // which a generic cancellation did.
     expect(updateCall?.in.state).toEqual([
       'CREATED',
       'PENDING_PAYMENT',
@@ -813,13 +939,53 @@ describe('OrdersService.cancelOrder — operator', () => {
       'MERCHANT_ACCEPTED',
       'PREPARING',
       'READY_FOR_PICKUP',
-      'PICKED_UP',
-      'DELIVERING',
     ]);
+    expect(updateCall?.in.state).not.toContain('PICKED_UP');
+    expect(updateCall?.in.state).not.toContain('DELIVERING');
 
     const historyCall = calls.find((c) => c.table === 'order_status_history');
     expect(historyCall?.payload).toMatchObject({ actor_type: 'OPERATOR', reason: 'no rider available' });
   });
+
+  /**
+   * BQ-017 Slice #2's cancellation narrowing, and the hazard it closes.
+   *
+   * Before this slice an operator could cancel at PICKED_UP or DELIVERING.
+   * That moved `orders.state` and nothing else: the delivery kept its state,
+   * `rider_assignments` stayed ACCEPTED, and the rider's
+   * `active_delivery_count` stayed at 1 — stranding the delivery *and*
+   * blocking the rider from all further work. DEC-053 clause 12 records the
+   * stranding; the rider half was found by this slice's reconnaissance.
+   *
+   * The refusal is deliberate and is NOT redirected into a failure: DEC-053's
+   * failure path carries preconditions cancellation knows nothing about (two
+   * contact attempts, five minutes since customer arrival, a required cause),
+   * so turning one into the other would bypass every one of them.
+   */
+  it.each(['PICKED_UP', 'DELIVERING'])(
+    'refuses to cancel a %s order — post-pickup belongs to the DEC-053 failure command',
+    async (state) => {
+      const { subject, calls } = buildTransitionService([
+        // The guarded UPDATE matches nothing: the state is no longer in
+        // OPERATOR_CANCELLABLE_STATES.
+        { data: null, error: null },
+        // The diagnostic read that picks the catalogue code.
+        { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state, customer_id: CUSTOMER_ID }, error: null },
+      ]);
+
+      await expect(
+        subject.cancelOrder(operatorUser(), ORDER_ID, 'customer called'),
+      ).rejects.toMatchObject({ code: 'INVALID_TRANSITION' });
+
+      // Nothing was written: no state change, no history row, and in
+      // particular no delivery, assignment or availability row touched.
+      expect(calls.filter((c) => c.op === 'update')).toHaveLength(1);
+      expect(calls.find((c) => c.table === 'order_status_history')).toBeUndefined();
+      expect(calls.find((c) => c.table === 'deliveries')).toBeUndefined();
+      expect(calls.find((c) => c.table === 'rider_assignments')).toBeUndefined();
+      expect(calls.find((c) => c.table === 'rider_availability')).toBeUndefined();
+    },
+  );
 
   it('rejects cancelling an already-DELIVERED order — terminal', async () => {
     const { subject } = buildTransitionService([

@@ -17,6 +17,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { RiderController } from './rider.controller';
 import { DeliveryArrivalService } from './delivery-arrival.service';
+import { DeliveryContactAttemptService } from './delivery-contact-attempt.service';
 import { DeliveryCustomerArrivalService } from './delivery-customer-arrival.service';
 import { DeliveryCompletionService } from './delivery-completion.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
@@ -70,6 +71,7 @@ type ServiceStubs = {
   releases: { cancelDelivery: jest.Mock };
   arrivals: { arrive: jest.Mock };
   customerArrivals: { arriveAtCustomer: jest.Mock };
+  contactAttempts: { recordContactAttempt: jest.Mock };
   pickups: { pickup: jest.Mock };
   departures: { startDelivery: jest.Mock };
   completions: { complete: jest.Mock };
@@ -83,6 +85,7 @@ function makeStubs(): ServiceStubs {
     releases: { cancelDelivery: jest.fn() },
     arrivals: { arrive: jest.fn() },
     customerArrivals: { arriveAtCustomer: jest.fn() },
+    contactAttempts: { recordContactAttempt: jest.fn() },
     pickups: { pickup: jest.fn() },
     departures: { startDelivery: jest.fn() },
     completions: { complete: jest.fn() },
@@ -122,6 +125,7 @@ async function buildApp(
       { provide: DeliveryReleaseService, useValue: stubs.releases },
       { provide: DeliveryArrivalService, useValue: stubs.arrivals },
       { provide: DeliveryCustomerArrivalService, useValue: stubs.customerArrivals },
+      { provide: DeliveryContactAttemptService, useValue: stubs.contactAttempts },
       { provide: DeliveryPickupService, useValue: stubs.pickups },
       { provide: DeliveryEnRouteService, useValue: stubs.departures },
       { provide: DeliveryCompletionService, useValue: stubs.completions },
@@ -152,6 +156,10 @@ const ROUTES: ReadonlyArray<{ name: string; path: string; body?: unknown }> = [
   {
     name: 'arrived-at-customer',
     path: `/api/v1/rider/deliveries/${DELIVERY_ID}/arrived-at-customer`,
+  },
+  {
+    name: 'contact-attempt',
+    path: `/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`,
   },
   {
     name: 'proof upload-url',
@@ -493,6 +501,114 @@ describe('RiderController', () => {
     });
   });
 
+  /**
+   * DEC-053 § 3's evidence, and the line the endpoint must not cross: it
+   * records an attempt and declares nothing.
+   */
+  describe('contact attempts (DEC-053 § 3)', () => {
+    it('routes to the contact-attempt service and returns the running count', async () => {
+      const result = {
+        deliveryId: DELIVERY_ID,
+        attemptNo: 2,
+        attemptedAt: '2026-09-07T10:00:00.000Z',
+        attemptsRecorded: 2,
+        attemptsRequired: 2,
+        riderId: RIDER_ID,
+      };
+      stubs.contactAttempts.recordContactAttempt.mockResolvedValue(result);
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`)
+        .expect(200);
+
+      expect(response.body).toEqual({ success: true, data: result });
+      expect(stubs.contactAttempts.recordContactAttempt).toHaveBeenCalledWith(
+        APPROVED_RIDER,
+        DELIVERY_ID,
+      );
+    });
+
+    it('takes no body — a client-supplied timestamp would let evidence be backdated', async () => {
+      stubs.contactAttempts.recordContactAttempt.mockResolvedValue({
+        deliveryId: DELIVERY_ID,
+        attemptNo: 1,
+        attemptedAt: '2026-09-07T10:00:00.000Z',
+        attemptsRecorded: 1,
+        attemptsRequired: 2,
+        riderId: RIDER_ID,
+      });
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`)
+        .send({ attemptedAt: '1999-01-01T00:00:00.000Z', riderId: 'someone-else', attemptNo: 5 })
+        .expect(200);
+
+      // Nothing from the body reaches the service.
+      expect(stubs.contactAttempts.recordContactAttempt).toHaveBeenCalledWith(
+        APPROVED_RIDER,
+        DELIVERY_ID,
+      );
+    });
+
+    it('renders CONFLICT at 409 when the delivery already has two attempts', async () => {
+      stubs.contactAttempts.recordContactAttempt.mockRejectedValue(new DomainError('CONFLICT'));
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer()).post(
+        `/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`,
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({ success: false, error: { code: 'CONFLICT' } });
+    });
+
+    it('renders INVALID_TRANSITION at 409 when the delivery is not ARRIVED', async () => {
+      stubs.contactAttempts.recordContactAttempt.mockRejectedValue(
+        new DomainError('INVALID_TRANSITION'),
+      );
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer()).post(
+        `/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`,
+      );
+
+      expect(response.status).toBe(409);
+    });
+
+    it('renders NOT_ASSIGNED_RIDER at 403 for another rider’s delivery', async () => {
+      stubs.contactAttempts.recordContactAttempt.mockRejectedValue(
+        new DomainError('NOT_ASSIGNED_RIDER'),
+      );
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer()).post(
+        `/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`,
+      );
+
+      expect(response.status).toBe(403);
+    });
+
+    it('never reaches a failure or arrival service — recording an attempt declares nothing', async () => {
+      stubs.contactAttempts.recordContactAttempt.mockResolvedValue({
+        deliveryId: DELIVERY_ID,
+        attemptNo: 2,
+        attemptedAt: '2026-09-07T10:00:00.000Z',
+        attemptsRecorded: 2,
+        attemptsRequired: 2,
+        riderId: RIDER_ID,
+      });
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`)
+        .expect(200);
+
+      expect(calledServiceMethods()).toEqual(['recordContactAttempt']);
+    });
+  });
+
   describe('surface', () => {
     it('exposes no route to read offers — DEC-APP-008 has the driver app read them under RLS', async () => {
       app = await buildApp(APPROVED_RIDER, stubs);
@@ -507,8 +623,9 @@ describe('RiderController', () => {
      */
     it.each([
       `/api/v1/rider/deliveries/${DELIVERY_ID}/fail`,
-      `/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`,
       `/api/v1/rider/deliveries/${DELIVERY_ID}/customer-unreachable`,
+      `/api/v1/rider/deliveries/${DELIVERY_ID}/safe-drop-off`,
+      `/api/v1/rider/deliveries/${DELIVERY_ID}/cause`,
     ])('exposes no %s route — the rider never declares a failure (DEC-053 § 2)', async (path) => {
       app = await buildApp(APPROVED_RIDER, stubs);
 

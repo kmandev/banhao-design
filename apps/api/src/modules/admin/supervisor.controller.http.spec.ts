@@ -17,6 +17,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { SupervisorController } from './supervisor.controller';
 import { SupervisorCaseService } from './supervisor-case.service';
+import { DeliveryFailureService } from './delivery-failure.service';
 
 /**
  * The HTTP boundary of the Human Supervisor console — Phase I.
@@ -35,6 +36,7 @@ import { SupervisorCaseService } from './supervisor-case.service';
  */
 
 const CASE_ID = 'aa100000-0000-4000-8000-000000000001';
+const DELIVERY_ID = 'aa200000-0000-4000-8000-000000000001';
 
 const OPERATOR: AuthenticatedUser = {
   id: 'user-operator-1',
@@ -65,7 +67,22 @@ function makeStub() {
   };
 }
 
+/** The DEC-053 failure command's service, stubbed at the boundary. */
+function makeFailureStub() {
+  return {
+    failDelivery: jest.fn().mockResolvedValue({
+      deliveryId: DELIVERY_ID,
+      orderId: 'order-1',
+      state: 'FAILED',
+      orderState: 'DELIVERY_FAILED',
+      causeCode: 'CUSTOMER_UNREACHABLE',
+      failedAt: '2026-09-07T10:00:00.000Z',
+    }),
+  };
+}
+
 type Stub = ReturnType<typeof makeStub>;
+type FailureStub = ReturnType<typeof makeFailureStub>;
 
 function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
   @Injectable()
@@ -79,7 +96,11 @@ function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
   return new FakeAuthGuard();
 }
 
-async function buildApp(user: AuthenticatedUser | null, stub: Stub): Promise<INestApplication> {
+async function buildApp(
+  user: AuthenticatedUser | null,
+  stub: Stub,
+  failures: FailureStub = makeFailureStub(),
+): Promise<INestApplication> {
   const guards: Provider[] = [
     { provide: APP_GUARD, useValue: fakeAuthGuard(user) },
     { provide: APP_GUARD, useClass: RolesGuard },
@@ -90,6 +111,7 @@ async function buildApp(user: AuthenticatedUser | null, stub: Stub): Promise<INe
     controllers: [SupervisorController],
     providers: [
       { provide: SupervisorCaseService, useValue: stub },
+      { provide: DeliveryFailureService, useValue: failures },
       ...guards,
       { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
       Reflector,
@@ -113,14 +135,22 @@ const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post'; path: string
     path: `/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`,
     body: { outcome: 'RESOLVED', reason: 'ปิดเคส' },
   },
+  {
+    name: 'fail delivery',
+    method: 'post',
+    path: `/api/v1/admin/supervisor/deliveries/${DELIVERY_ID}/fail`,
+    body: { causeCode: 'CUSTOMER_UNREACHABLE', reason: 'ลูกค้าไม่รับสาย 2 ครั้ง' },
+  },
 ];
 
 describe('SupervisorController — HTTP boundary', () => {
   let app: INestApplication;
   let stub: Stub;
+  let failures: FailureStub;
 
   beforeEach(() => {
     stub = makeStub();
+    failures = makeFailureStub();
   });
 
   afterEach(async () => {
@@ -128,11 +158,13 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   function serviceWasCalled(): boolean {
-    return [stub.listCases, stub.getCase, stub.resolveCase].some((fn) => fn.mock.calls.length > 0);
+    return [stub.listCases, stub.getCase, stub.resolveCase, failures.failDelivery].some(
+      (fn) => fn.mock.calls.length > 0,
+    );
   }
 
   it.each(ROUTES)('refuses an anonymous caller on $name with 401', async (route) => {
-    app = await buildApp(null, stub);
+    app = await buildApp(null, stub, failures);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(401);
 
@@ -140,7 +172,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it.each(ROUTES)('refuses a signed-in non-staff caller on $name with 403', async (route) => {
-    app = await buildApp(NON_STAFF, stub);
+    app = await buildApp(NON_STAFF, stub, failures);
 
     // A revoked grant is indistinguishable from never having had one, which is
     // the point: the guard re-reads `platform_staff` per request, so a grant
@@ -151,13 +183,13 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it.each(ROUTES)('admits a staff caller on $name', async (route) => {
-    app = await buildApp(OPERATOR, stub);
+    app = await buildApp(OPERATOR, stub, failures);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(200);
   });
 
   it('passes the server-verified identity to the service, never a body field', async () => {
-    app = await buildApp(OPERATOR, stub);
+    app = await buildApp(OPERATOR, stub, failures);
 
     await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -172,7 +204,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('rejects a blank reason before the service runs', async () => {
-    app = await buildApp(OPERATOR, stub);
+    app = await buildApp(OPERATOR, stub, failures);
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -184,7 +216,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('rejects a body carrying an unknown field', async () => {
-    app = await buildApp(OPERATOR, stub);
+    app = await buildApp(OPERATOR, stub, failures);
 
     await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -198,7 +230,7 @@ describe('SupervisorController — HTTP boundary', () => {
     stub.resolveCase.mockRejectedValue(
       new DomainError('CONFLICT', { message: 'already resolved', details: { caseId: CASE_ID } }),
     );
-    app = await buildApp(OPERATOR, stub);
+    app = await buildApp(OPERATOR, stub, failures);
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -210,7 +242,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('exposes no route outside the four above', async () => {
-    app = await buildApp(OPERATOR, stub);
+    app = await buildApp(OPERATOR, stub, failures);
     const server = app.getHttpServer();
 
     // A generic mutation path would be the one thing that voids this whole
