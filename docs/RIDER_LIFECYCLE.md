@@ -284,6 +284,16 @@ Rules that hold across the ladder:
 - **Cancellation is a decision, never a timeout** — DEC-022.
 - **`NO_RIDER` is the platform's failure.** Whether the merchant is still paid
   for food they cooked is **`OPEN` — BQ-015**, and it is P0.
+- **The t=5m "keep waiting or cancel" option is consistent with DEC-050**
+  (2026-09-07), which puts the customer's free cancellation window through
+  `MERCHANT_ACCEPTED`. Rider search begins at `MERCHANT_ACCEPTED`, so a
+  customer taking the cancel option before the order reaches `PREPARING` is
+  exercising that approved window; once cooking has started it becomes a
+  merchant-confirmed cancellation (full refund if confirmed), with the
+  cooked-food cost still `OPEN` under BQ-015. ⚠️ **Not yet implemented** —
+  the running system allows customer cancellation only through `PAID`, so
+  this option cannot currently be served by the API. DEC-050 changes no
+  timing in this ladder.
 
 ---
 

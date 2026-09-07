@@ -291,15 +291,19 @@ back — the rider did the work), and the **platform fee reversal**.
 
 | Trigger | Amount | Status |
 |---|---|---|
-| Customer cancels before `PREPARING` | Full | `ACCEPTED` |
-| Customer cancels during `PREPARING` (merchant confirms) | Full | `ACCEPTED` |
+| Customer cancels through `MERCHANT_ACCEPTED` | Full | **`ACCEPTED` — DEC-050** (the free window ends when `PREPARING` begins) |
+| Customer cancels during `PREPARING` (merchant confirms) | Full | **`ACCEPTED` — DEC-050**; explicitly **not** partial |
 | Merchant rejects or times out | Full | `ACCEPTED` |
 | Operator cancels for no rider (DEC-022) | Full to the customer | `ACCEPTED`; **who absorbs the food cost is `OPEN` — BQ-015** |
 | Payment failed / expired | Nothing was taken | `ACCEPTED` |
 | Duplicate transfer | The duplicate | `ACCEPTED` (DEC-030); mechanism `OPEN` |
 | Missing or wrong item | Partial | `OPEN` — BQ-031 |
-| Delivery failed | — | `OPEN` — BQ-015, BQ-017 |
-| Quality complaint after delivery | — | `OPEN` — Q-003, BQ-016 |
+| Delivery failed, incl. customer refusal after `PICKED_UP` | — | `OPEN` — BQ-015, BQ-017 (**DEC-050 assigns this case to BQ-017**) |
+| Quality complaint after delivery | — | `OPEN` — Q-003, BQ-031 |
+
+**No cancellation fee is deducted from any of the above** — DEC-050 sets none
+for Phase 1. **None of these refunds can execute yet:** the mechanism is
+`OPEN` (Q-020) and no refund code exists.
 
 ### 🚨 The refund mechanism is still open — Q-020
 
@@ -389,8 +393,12 @@ refund/order separation (DEC-027) · Phase 1 payment scope (DEC-016).
 `LEGAL_REVIEW_REQUIRED`) · Q-020 (PromptPay refund mechanism) · BQ-027 (service
 fee refundability).
 **Still `OPEN` — P1:** Q-011 (chargebacks) · BQ-031 (partial refund
-composition) · Q-003 / BQ-016 (refund policy) · the late-payment business
-handling under DEC-029.
+composition) · Q-003 (the refund edge cases DEC-050 did not cover) · BQ-017
+(delivery failure, and customer refusal after `PICKED_UP`) · the late-payment
+business handling under DEC-029.
+**Resolved 2026-09-07:** BQ-016 — cancellation window, cancellation fee and
+the merchant-confirmed `PREPARING` outcome (**DEC-050**; runtime not
+implemented).
 
 **Design question closed by this document:** DQ-02 — screen 12f's trigger is the
 documented duplicate-payment case, now formalised by DEC-030.

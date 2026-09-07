@@ -146,16 +146,32 @@ where a past order went.
 
 ### 2.4 Cancellation and refunds — the customer's view
 
-`ACCEPTED` — `docs/05-architecture` § 03
+`ACCEPTED` — `docs/05-architecture` § 03, **locked by DEC-050 (2026-09-07)**
 
-| When | Rule |
-|---|---|
-| Before `PREPARING` | Full refund, automatic |
-| During `PREPARING` | Requires merchant confirmation |
-| After `PICKED_UP` | Cannot cancel; must go through the support centre |
+| When | Rule | Status |
+|---|---|---|
+| `CREATED` · `PENDING_PAYMENT` · `PAID` · **`MERCHANT_ACCEPTED`** | Free cancellation. Full refund where money was taken, automatic | **`ACCEPTED` — DEC-050** |
+| During `PREPARING` | Requires merchant confirmation. Where the merchant confirms: **full refund** — never a partial one | **`ACCEPTED` — DEC-050** |
+| `READY_FOR_PICKUP` | Merchant confirmation as above; **who bears the cooked-food cost is `OPEN`** | `OPEN` — BQ-015 |
+| After `PICKED_UP` | Cannot cancel; must go through the support centre. Customer refusal past pickup is **delivery failure**, not cancellation | `OPEN` — BQ-017 owns the outcome |
+| After `DELIVERED` | Not ordinary cancellation — dispute/quality territory | `OPEN` — Q-003, BQ-031 |
 
-Everything beyond these three sentences is `OPEN` — Q-003, extended by BQ-016
-(fees, post-pickup outcomes) and BQ-031 (what a partial refund contains).
+**No cancellation fee exists in Phase 1** (DEC-050) — no fixed amount, no
+percentage, no penalty, no repeat-cancellation charge. A second cancellation
+attempt is an error / invalid transition; there is no counter and no
+repeat-canceller penalty.
+
+⚠️ **Approved policy, not yet built.** DEC-050 extends free cancellation
+through `MERCHANT_ACCEPTED`; the running system
+(`apps/api/src/modules/orders/orders.service.ts`) still stops at `PAID`, has
+no merchant-confirmation flow for a `PREPARING` cancellation, has no customer
+cancellation UI, and can execute no refund at all. **The code is narrower
+than approved policy and requires a later implementation change.**
+
+What DEC-050 deliberately did **not** decide, and remains `OPEN`: the
+cooked-food cost (BQ-015), post-pickup refusal and delivery failure (BQ-017),
+what a partial refund contains (BQ-031), the refund mechanism (Q-020), and
+Q-003's remaining refund edge cases.
 
 **⚠️ The refund promise the app currently makes may not be deliverable.** The
 Customer App tells customers *"เงินจะเข้าบัญชีเดิมที่ใช้จ่าย ภายใน 1–3 วันทำการ"*
@@ -655,9 +671,13 @@ regulatory reasons, so the wallet-credit workaround is harder than it first
 appears — and disabling COD has now removed one of the four candidates
 altogether.
 
-The refund **policy** — full versus partial, what each component contributes,
-and post-pickup outcomes — remains `OPEN` (Q-003, BQ-016, BQ-031). §29 of the
-decision lock keeps final refund policy explicitly out of scope.
+The refund **policy** is now partly decided: **DEC-050** (2026-09-07) fixes the
+cancellation window, the absence of a Phase 1 cancellation fee, and a **full**
+refund on a merchant-confirmed `PREPARING` cancellation (§ 2.4). What each
+component contributes to a **partial** refund (**BQ-031**), post-pickup
+outcomes (**BQ-017**), the cooked-food cost (**BQ-015**) and Q-003's remaining
+edge cases all remain `OPEN`. §29 of the decision lock keeps the rest of
+refund policy explicitly out of scope.
 
 ---
 

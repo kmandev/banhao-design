@@ -713,10 +713,14 @@ groups, one per reversed component: a `CUSTOMER_PAYMENT` reversal (negative
 requirement**, identity anchored on `refunds.id`/`refund_reference` rather
 than any provider identifier, posted **only at verified refund finality**
 (`REFUNDED`) — never at request, approval, or in-flight processing. DEC-049
-decides representation only: **which** causes are refundable (BQ-016, BQ-015,
-BQ-017), partial-refund composition (BQ-031), whether `CUSTOMER_PAYMENT` is
-reversed in any given case, and the mechanism that establishes finality
-(Q-020) all remain `OPEN`. Nothing is implemented.
+decides representation only. **Eligibility was separately decided the next
+day by DEC-050** (BQ-016): free customer cancellation through
+`MERCHANT_ACCEPTED`, no Phase 1 cancellation fee, and a **full** refund on a
+merchant-confirmed `PREPARING` cancellation. Still `OPEN` after both:
+cooked-food cost (BQ-015), post-pickup refusal and delivery failure (BQ-017),
+partial-refund composition (BQ-031), whether `CUSTOMER_PAYMENT` is reversed in
+any given case, and the mechanism that establishes finality (Q-020). Nothing
+is implemented.
 
 ---
 

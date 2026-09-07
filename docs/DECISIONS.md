@@ -59,6 +59,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-047** | **Phase 1 service fee revenue recognition: `PLATFORM_REVENUE` at the successful-payment economic-finality point** | **ACCEPTED — RECOGNITION TIMING · IMPLEMENTED 2026-09-06** | **2026-09-06** | `docs/SETTLEMENT_MODEL.md` § 3.2, `apps/api/src/modules/payments/payment-event-processing.service.ts`, BQ-027 (timing half) |
 | **DEC-048** | **Service fee refundability: included in an eligible full order refund (Option A)** | **ACCEPTED — REFUNDABILITY · NOT IMPLEMENTED** | **2026-09-06** | `docs/SETTLEMENT_MODEL.md` § 9, `docs/OPEN_BUSINESS_QUESTIONS.md` BQ-027 (resolved) |
 | **DEC-049** | **Refund ledger architecture: independent reversal groups over a mutable refund domain record; no `REFUND_PAYABLE` bridge, no zero-sum requirement, posting only at verified refund finality** | **ACCEPTED — ARCHITECTURE · NOT IMPLEMENTED** | **2026-09-07** | `docs/SETTLEMENT_MODEL.md` § 3.1, § 3.2, § 9, § 11.1, `supabase/migrations/20260811000007_ledger_domain.sql` |
+| **DEC-050** | **Phase 1 cancellation window and refund eligibility: free through `MERCHANT_ACCEPTED`, no cancellation fee, merchant-confirmed `PREPARING` cancellation is a full refund** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/BUSINESS_RULES.md` § 2.4, `docs/ORDER_LIFECYCLE.md` § 5, `docs/PAYMENT_LIFECYCLE.md` § 8, BQ-016 (resolved) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -4454,4 +4455,187 @@ DEC-034, DEC-036, DEC-045, DEC-047 or DEC-048, each of which stands
 unchanged. Supersedes, for the refund-reversal architecture only, the
 `PROPOSED`-grade design prose in `docs/SETTLEMENT_MODEL.md` § 3.1/§ 11.1 that
 anticipated a `REFUND_PAYABLE` reversing entry — without deciding that
-account's eventual semantics.
+account's eventual semantics. **BQ-016, which this entry's non-decision list
+recorded as `OPEN`, was resolved later the same day by DEC-050** (cancellation
+window and refund eligibility); DEC-049's own architecture is unchanged by it,
+and BQ-015, BQ-017, BQ-031 and Q-020 all remain open as recorded here.
+
+---
+
+## DEC-050 — Phase 1 cancellation window and refund eligibility: free through `MERCHANT_ACCEPTED`, no cancellation fee
+
+**Status:** ACCEPTED — POLICY · **RUNTIME NOT IMPLEMENTED** · **Date:** 2026-09-07 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Resolves **BQ-016** (cancellation windows, fees, and post-pickup policy). It
+decides *when a customer may cancel and what refund follows*. It does not
+decide how a refund is represented in the ledger (DEC-049), how money
+physically returns (Q-020), or any of the cost-allocation questions listed
+under *Explicit non-decisions*.
+
+**1. Free customer cancellation window — through `MERCHANT_ACCEPTED`.**
+A customer may cancel freely while the order is in `CREATED`,
+`PENDING_PAYMENT`, `PAID`, or **`MERCHANT_ACCEPTED`**. Once the order enters
+`PREPARING`, unconditional free cancellation ends.
+
+**2. No cancellation fee in Phase 1.**
+There is **no** cancellation fee of any kind: no fixed amount, no percentage,
+no penalty, no repeat-cancellation charge. No such amount exists anywhere in
+the repository and none may be invented. This adopts BQ-016's Option A on the
+fee question.
+
+**3. Cancellation during `PREPARING` requires merchant confirmation, and a
+confirmed cancellation is a FULL refund.**
+Customer cancellation during `PREPARING` is conditional: the merchant must
+confirm it. Where the merchant confirms, the approved refund outcome is a
+**full refund** — preserving the already-`ACCEPTED` product truth in
+`docs/BUSINESS_RULES.md` § 2.4 and `docs/PAYMENT_LIFECYCLE.md` § 8. It is
+**not** a partial refund.
+
+**4. Repeat cancellation is an error.**
+A second cancellation attempt on an already-cancelled order is an
+error / invalid transition — the behaviour the running system already has. No
+idempotency key, cancellation counter, abuse detection, or repeat-canceller
+penalty is introduced.
+
+**5. Service fee follows DEC-048, unchanged.**
+Where a full order refund is eligible under this decision, the ฿5 / 500 satang
+service fee is included, sourced from `orders.service_fee_satang`. DEC-048 is
+authoritative and unaltered.
+
+**6. Ledger representation follows DEC-049, unchanged.**
+This decision supplies the *eligibility* half DEC-049 deliberately left open;
+DEC-049 remains authoritative for *representation*. This decision introduces
+no `REFUND_PAYABLE` usage, no zero-sum requirement, no
+`payment_transactions.direction = 'OUT'` semantics, no refund mechanism, and
+no ledger posting.
+
+### Boundaries with adjacent open questions
+
+- **`READY_FOR_PICKUP` and cooked food.** This decision does **not** allocate
+  the merchant's preparation/wasted-food cost. That remains **BQ-015**,
+  `OPEN`. No compensation or deduction amount is created here.
+- **After `PICKED_UP`.** Customer-initiated refusal and cancellation
+  scenarios past pickup belong to **BQ-017** (delivery failure), `OPEN`. This
+  decision creates no post-pickup refund rule, so BQ-016 and BQ-017 do not
+  overlap.
+- **After `DELIVERED`.** Not ordinary customer cancellation. No new rule is
+  created; post-delivery refund/dispute treatment stays with the existing
+  open policy, including **BQ-031** where a partial refund would be involved.
+- **Partial refunds.** Composition remains **BQ-031**, `OPEN`. "Partial
+  refund" is not an outcome of any cancellation stage under this decision.
+- **Refund mechanism.** Remains **Q-020**, `OPEN`. Policy eligibility is
+  decidable and recorded here; no money can actually move until Q-020 is
+  answered.
+
+### Explicit non-decisions
+
+Untouched and still `OPEN`: **BQ-015** (wasted-food cost), **BQ-017**
+(delivery failure and post-pickup refusal), **BQ-031** (partial refund
+composition), **Q-020** (refund mechanism), **BQ-013** (merchant accept
+timeout behaviour), **BQ-024** (rider cancellation/waiting compensation), and
+every component question DEC-049 already listed as undecided —
+delivery-fee reversal, merchant commission reversal, rider earning /
+compensation treatment, the `CUSTOMER_PAYMENT` reversal business obligation,
+`payment_transactions.direction = 'OUT'` semantics, and the eventual
+semantics of `REFUND_PAYABLE`. None is closed, narrowed, or acted on here.
+
+### Why
+
+Product Owner decision, 2026-09-07, following the read-only BQ-016
+reconnaissance performed in the same session. The recon established that the
+documented policy (`docs/ORDER_LIFECYCLE.md` § 5, `docs/BUSINESS_RULES.md`
+§ 2.4) already granted free cancellation through `MERCHANT_ACCEPTED` while
+the implementation stopped at `PAID`; that no cancellation-fee value exists
+anywhere in the repository; and that BQ-016's own Option B ("partial refund
+during `PREPARING`") would have overturned an already-`ACCEPTED` full-refund
+rule while depending on the still-open BQ-031. This decision ratifies the
+documented window, keeps the accepted full-refund rule, and declines the fee.
+
+### Alternatives
+
+- **Ratify the narrower implemented window (stop at `PAID`)** — rejected. It
+  would contradict two documents that already grant cancellation through
+  `MERCHANT_ACCEPTED`, and it would contradict the `ACCEPTED` no-rider flow
+  (`docs/RIDER_LIFECYCLE.md` § 8) that offers the customer a cancel option
+  five minutes after the merchant accepts.
+- **BQ-016 Option B — partial refund during `PREPARING`** — **rejected, and
+  now closed.** It would supersede accepted product truth (full refund on a
+  merchant-confirmed cancellation) and is undecidable while BQ-031 is open.
+- **BQ-016 Option C — repeat-canceller penalty** — rejected for Phase 1. No
+  counter, flag, or rate limit exists in schema or code, and at launch volume
+  abuse is visible to a human operator.
+
+### Consequences
+
+- **This creates a known runtime gap, deliberately.** The approved window
+  extends through `MERCHANT_ACCEPTED`; the implementation
+  (`apps/api/src/modules/orders/orders.service.ts`,
+  `CUSTOMER_CANCELLABLE_STATES`) stops at `PAID`. **The current code is
+  narrower than approved policy and requires a later implementation change.**
+  That change is not authorized by this decision and is not made here.
+- The `ACCEPTED` no-rider flow's t=5m "keep waiting or cancel" option is now
+  consistent with policy — and remains unreachable in the running system
+  until the window above is implemented.
+- Merchant confirmation of a `PREPARING` cancellation has **no endpoint and
+  no UI**. The mechanism is approved as policy only; building it is separate
+  work, and merchant-initiated cancellation timing remains BQ-013.
+- No refund of any kind can execute: refund initiation, provider mechanism,
+  refund state transitions, ledger reversal, reconciliation and cancellation
+  notifications are all unimplemented (see *Implementation status*).
+- BQ-016 leaves the P1 open list. BQ-015, BQ-017, BQ-031 and Q-020 stay
+  exactly where they were.
+- `DEC-APP-006`'s gate on exception-path implementation is **not** lifted: it
+  depends on BQ-013, BQ-015 and BQ-017 as well, and three of those four
+  remain open.
+
+### Implementation status
+
+**DECISION LOCKED — RUNTIME NOT IMPLEMENTED.** Known gaps, none addressed
+here:
+
+- customer cancellation UI (no call site exists in `apps/customer`)
+- customer cancellation through `MERCHANT_ACCEPTED` (code stops at `PAID`)
+- merchant confirmation flow during `PREPARING` (no endpoint, no UI)
+- refund initiation (no endpoint anywhere in the API contract)
+- refund provider mechanism (`NullPaymentProvider.refund()` refuses)
+- refund state transitions (nothing writes `refunds`)
+- refund ledger reversal (nothing writes a reversal group)
+- cancellation notifications (neither cancel path writes an outbox event)
+
+### Evidence
+
+Product Owner instruction, 2026-09-07 ("BANHAO — LOCK BQ-016 CANCELLATION &
+REFUND ELIGIBILITY"), following this session's BQ-016 reconnaissance:
+`docs/ORDER_LIFECYCLE.md` § 5's cancellation matrix (customer "✅ free" at
+`MERCHANT_ACCEPTED`), `docs/BUSINESS_RULES.md` § 2.4 and
+`docs/PAYMENT_LIFECYCLE.md` § 8 (full refund before/during `PREPARING` with
+merchant confirmation, both `ACCEPTED`), `apps/api/src/modules/orders/orders.service.ts`
+(`CUSTOMER_CANCELLABLE_STATES` = `CREATED`/`PENDING_PAYMENT`/`PAID`, and
+neither cancel path touching payments, refunds, ledger or outbox), and a
+repository-wide search finding no cancellation-fee value of any kind.
+
+### Related Requirements
+
+BQ-016 (**resolved by this decision**) · BQ-015, BQ-017, BQ-031, BQ-013,
+BQ-024, Q-003, Q-020 — **all remain `OPEN` and untouched** · DEC-048 (service
+fee in an eligible full refund; unchanged) · DEC-049 (ledger representation;
+unchanged) · DEC-027 (refund is a payment-domain event) · DEC-021 (a rider
+never cancels an order) · DEC-022 (operator cancellation authority) ·
+DEC-APP-006 (exception-path gate, not lifted)
+
+### Related Architecture
+
+`docs/BUSINESS_RULES.md` § 2.4 · `docs/ORDER_LIFECYCLE.md` § 3, § 5 ·
+`docs/PAYMENT_LIFECYCLE.md` § 8 · `docs/RIDER_LIFECYCLE.md` § 8 ·
+`docs/SETTLEMENT_MODEL.md` § 9 ·
+`apps/api/src/modules/orders/orders.service.ts` (**unchanged by this
+decision**)
+
+### Supersedes / Superseded By
+
+None / None. Resolves **BQ-016** and closes its Option B (partial refund
+during `PREPARING`) and Option C (repeat-canceller penalty) as rejected. Does
+not supersede or modify DEC-021, DEC-022, DEC-027, DEC-048 or DEC-049, each
+of which stands unchanged.

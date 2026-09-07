@@ -176,7 +176,7 @@ stateDiagram-v2
 | **Payment expiration** | QR expires after 10 minutes; **the order survives**; a new QR is a new attempt | `ACCEPTED` — design canvas |
 | **Late payment** | Must be resolvable to an order and attempt; accept / refund / manual review | `ACCEPTED` technically — DEC-029; **`OPEN`** for the policy |
 | **Merchant rejection** | 3-minute accept window; on rejection notify the customer, refund, suggest nearby shops | Window and flow `ACCEPTED` (design canvas); auto-reject-vs-escalate `OPEN` — BQ-013 |
-| **Customer cancellation** | Free before `PREPARING`; merchant confirmation during `PREPARING`; support-only after `PICKED_UP` | `ACCEPTED` — design canvas. Fees and post-pickup outcomes `OPEN` — Q-003, BQ-016 |
+| **Customer cancellation** | Free through **`MERCHANT_ACCEPTED`**; merchant confirmation during `PREPARING` (confirmed = **full refund**); support-only after `PICKED_UP` | **`ACCEPTED` — DEC-050** (resolves BQ-016). **No Phase 1 cancellation fee.** Post-pickup outcome `OPEN` — BQ-017; cooked-food cost `OPEN` — BQ-015. **Runtime stops at `PAID`** — not yet implemented |
 | **Rider cancellation** | Delivery reassigns; **the order is not cancelled** | `ACCEPTED` — **DEC-021** |
 | **No rider** | Retry → manual dispatch → operator decision. **Never auto-cancel** | `ACCEPTED` — **DEC-022** |
 | **Delivery failure** | Rider escalates; order does not silently complete | `PROPOSED` — BQ-017 |
@@ -214,19 +214,31 @@ All timers must be **configuration**, not constants (DEC-031).
 
 ## 5. Cancellation matrix
 
-`PROPOSED` except where a DEC is cited.
+**The customer column and the fee question are `ACCEPTED` — DEC-050**
+(2026-09-07, resolving BQ-016). The rest is `PROPOSED` except where a DEC is
+cited.
 
 | Order state | Customer | Merchant | Rider | Operator | Payment outcome |
 |---|---|---|---|---|---|
-| `CREATED`, `PENDING_PAYMENT` | ✅ free | — | — | ✅ | Nothing charged |
-| `PAID` | ✅ free | ✅ (rejection) | — | ✅ | Full refund |
-| `MERCHANT_ACCEPTED` | ✅ free | ⚠️ merchant fault | — | ✅ | Full refund |
-| `PREPARING` | ⚠️ merchant confirms | ⚠️ merchant fault | ❌ **DEC-021** | ✅ | Full if confirmed; otherwise `OPEN` |
+| `CREATED`, `PENDING_PAYMENT` | ✅ free — **DEC-050** | — | — | ✅ | Nothing charged |
+| `PAID` | ✅ free — **DEC-050** | ✅ (rejection) | — | ✅ | Full refund |
+| `MERCHANT_ACCEPTED` | ✅ free — **DEC-050** (last free state) | ⚠️ merchant fault | — | ✅ | Full refund |
+| `PREPARING` | ⚠️ merchant confirms — **DEC-050** | ⚠️ merchant fault | ❌ **DEC-021** | ✅ | **Full if confirmed — DEC-050**; unconfirmed outcome `OPEN` |
 | `READY_FOR_PICKUP` | ⚠️ merchant confirms | ❌ | ❌ **DEC-021** | ✅ **DEC-022** | Food cooked — cost allocation **`OPEN`, BQ-015** |
-| `PICKED_UP` onward | ❌ support only | ❌ | ❌ | ✅ | `OPEN` — BQ-016 |
-| `DELIVERED` | ❌ | ❌ | ❌ | ✅ refund only | Partial refund — BQ-031 |
+| `PICKED_UP` onward | ❌ support only — **DEC-050** | ❌ | ❌ | ✅ | `OPEN` — **BQ-017 owns this**, not BQ-016 |
+| `DELIVERED` | ❌ | ❌ | ❌ | ✅ refund only | Not ordinary cancellation — partial refund `OPEN`, BQ-031 |
 
 ✅ allowed · ⚠️ conditional · ❌ not allowed
+
+**No cancellation fee exists in Phase 1** (DEC-050). A repeat cancellation is
+an error / invalid transition — no counter, no penalty.
+
+⚠️ **Runtime gap.** The customer column above is approved policy;
+`apps/api/src/modules/orders/orders.service.ts` still allows customer
+cancellation only through `PAID` (`CUSTOMER_CANCELLABLE_STATES`), and no
+merchant-confirmation flow exists for a `PREPARING` cancellation. **The code
+is narrower than approved policy and requires a later implementation
+change.**
 
 **A rider can never cancel the order** — DEC-021. A rider abandoning a job
 returns the *delivery* to `RIDER_SEARCHING`.
@@ -293,9 +305,14 @@ is `OPEN`.
 (`NO_DRIVER` contradiction — DEC-019, DEC-022) · BQ-010 (one cart, one
 restaurant — DEC-017).
 
+**Also resolved since:** BQ-016 (cancellation windows, fees and post-pickup
+policy — **DEC-050**, 2026-09-07; runtime not implemented).
+
 **Still `OPEN`:** BQ-013 (merchant accept timeout behaviour) · BQ-015 (**who
-bears the cost of wasted food** — P0) · BQ-016 / Q-003 (full cancellation and
-refund policy) · BQ-017 (delivery failure) · BQ-018 (proof of delivery) ·
-BQ-011 (cart revalidation) · exception **state names**.
+bears the cost of wasted food** — P0) · Q-003 (the refund edge cases DEC-050
+did not cover) · BQ-017 (delivery failure, and post-pickup customer refusal) ·
+BQ-031 (partial refund composition) · Q-020 (refund mechanism) ·
+BQ-018 (proof of delivery) · BQ-011 (cart revalidation) · exception **state
+names**.
 
 No exception-path code may be written while the policy governing it is `OPEN`.

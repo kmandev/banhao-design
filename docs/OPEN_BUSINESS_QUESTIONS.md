@@ -48,6 +48,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-010 — one merchant per cart? | **ACCEPTED** — yes, one cart = one restaurant | DEC-017 |
 | BQ-012 — the missing `PENDING_PAYMENT` state | **ACCEPTED** — it exists in the approved lifecycle | DEC-019 |
 | BQ-014 — `NO_DRIVER` / "food not cooked" contradiction | **ACCEPTED** — search starts at `MERCHANT_ACCEPTED`; no-rider is not an order state | DEC-019, DEC-022 |
+| BQ-016 — cancellation windows, fees, post-pickup policy | **RESOLVED** — free cancellation through `MERCHANT_ACCEPTED`; **no Phase 1 cancellation fee**; merchant-confirmed `PREPARING` cancellation is a **full** refund; repeat cancellation is an error. **Runtime not implemented** (code stops at `PAID`). Cooked-food cost (BQ-015), post-pickup refusal (BQ-017), partial refunds (BQ-031) and the mechanism (Q-020) stay `OPEN` | DEC-050 |
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
 | BQ-026 — delivery fee | **RESOLVED** — model funds rider compensation; Phase 1 fee is **flat ฿10 (1000 satang)** | DEC-023, DEC-035 |
@@ -100,13 +101,17 @@ question is still carried above, and is not an order-creation blocker.
 
 Q-003, Q-009, Q-011, Q-012, Q-015, Q-016, Q-018, Q-019 ·
 BQ-001, BQ-002, BQ-003, BQ-005, BQ-006, BQ-007, BQ-008, BQ-011, BQ-013,
-BQ-016, BQ-017, BQ-022 (**onboarding, approval and contractor status
+BQ-017, BQ-022 (**onboarding, approval and contractor status
 only** — the working-area half is resolved by DEC-037), BQ-024, BQ-031,
 BQ-032, BQ-034, BQ-035
 
 **BQ-020 and BQ-021 left this list on 2026-08-24 — DEC-037. BQ-029 left this
 list on 2026-09-05 — DEC-044** (flat ฿12 / 1200 satang per completed
-delivery). BQ-024 (cancellation/waiting compensation) is unaffected and
+delivery). **BQ-016 left this list on 2026-09-07 — DEC-050** (free
+cancellation through `MERCHANT_ACCEPTED`, no Phase 1 cancellation fee,
+merchant-confirmed `PREPARING` cancellation is a full refund; runtime not
+implemented). BQ-015, BQ-017, BQ-031 and Q-020 were deliberately left open by
+DEC-050. BQ-024 (cancellation/waiting compensation) is unaffected and
 remains on this list. The rider accept
 window is 60 s, dispatch rounds are 60 s, and a rider holds one active delivery
 at a time.
@@ -696,10 +701,48 @@ have to be renegotiated after launch.
 ```yaml
 priority: P1
 owner: PRODUCT_OWNER
-status: OPEN
-blocks: Order module, refund rules
-related: Q-003 (extends it), BQ-015
+status: RESOLVED
+decision: DEC-050
+blocks: nothing further — runtime implementation is a separate gate
+related: Q-003 (extends it), BQ-015, BQ-017, BQ-031
 ```
+
+> **RESOLVED 2026-09-07 — DEC-050.**
+>
+> - **Free customer cancellation runs through `MERCHANT_ACCEPTED`** —
+>   `CREATED` → `PENDING_PAYMENT` → `PAID` → `MERCHANT_ACCEPTED`.
+>   Unconditional free cancellation ends when the order enters `PREPARING`.
+> - **No cancellation fee in Phase 1** — no fixed amount, no percentage, no
+>   penalty, no repeat-cancellation charge. Option A on the fee question.
+> - **Cancellation during `PREPARING` requires merchant confirmation, and a
+>   confirmed cancellation is a FULL refund** — preserving the already
+>   `ACCEPTED` rule in `docs/BUSINESS_RULES.md` § 2.4 and
+>   `docs/PAYMENT_LIFECYCLE.md` § 8. Not a partial refund.
+> - **A repeat cancellation is an error / invalid transition** — the running
+>   system's existing behaviour. No idempotency key, counter, or abuse
+>   detection is introduced.
+> - **Service fee follows DEC-048; ledger representation follows DEC-049.**
+>   Both are unchanged.
+>
+> ⚠️ **RUNTIME NOT IMPLEMENTED.** The approved window extends through
+> `MERCHANT_ACCEPTED`; the implementation
+> (`apps/api/src/modules/orders/orders.service.ts`,
+> `CUSTOMER_CANCELLABLE_STATES`) stops at `PAID`. The current code is
+> **narrower than approved policy and requires a later implementation
+> change**. Merchant confirmation during `PREPARING` has no endpoint and no
+> UI, no customer cancellation UI exists, and no refund of any kind can
+> execute.
+>
+> **Deliberately still open, and not touched by DEC-050:** cooked-food cost
+> allocation (**BQ-015**), post-`PICKED_UP` customer refusal and delivery
+> failure (**BQ-017**), partial refund composition (**BQ-031**), and the
+> refund mechanism (**Q-020**). Post-`DELIVERED` treatment is not ordinary
+> cancellation and gains no new rule here.
+>
+> The discussion and options below are retained as the record of how DEC-050
+> was reached — read them as history. **Option B (partial refund during
+> `PREPARING`) and Option C (repeat-canceller penalty) are rejected and
+> closed**, and the recommendation beneath them is superseded.
 
 **Question:** Beyond the three documented rules, what is the full cancellation
 policy — is there ever a cancellation fee, and what can the support centre
@@ -712,14 +755,21 @@ are written in terms of Order state, but a customer perceives *time*, and
 (b) "support-center-only" describes a channel, not an outcome — nothing says
 whether a post-pickup cancellation is ever refunded.
 
-**Options:**
-- **A. No cancellation fee ever**, refund decided by cause code.
+**Options** *(historical — superseded by DEC-050; see the banner above)*:
+- **A. No cancellation fee ever**, refund decided by cause code. — **the fee
+  half was adopted: DEC-050 sets no Phase 1 cancellation fee.**
 - **B. Free before `PREPARING`, partial refund during, none after `PICKED_UP`.**
-- **C. B plus a repeat-canceller penalty** (rate-limit or account flag).
+  — **REJECTED AND CLOSED.** Its partial refund during `PREPARING` would have
+  overturned the `ACCEPTED` full-refund rule and depends on BQ-031, still open.
+- **C. B plus a repeat-canceller penalty** (rate-limit or account flag). —
+  **REJECTED for Phase 1**; no counter, flag or rate limit exists.
 
-**Recommendation:** **B for Phase 1**, with the partial-refund split defined by
-BQ-031, and C's abuse handling deferred — at launch volume, abuse is visible to
-a human operator without automation.
+**Recommendation** *(historical — superseded by DEC-050)*: **B for Phase 1**,
+with the partial-refund split defined by BQ-031, and C's abuse handling
+deferred — at launch volume, abuse is visible to a human operator without
+automation. **This is no longer the active recommendation:** DEC-050 adopted
+the free window through `MERCHANT_ACCEPTED`, no cancellation fee, and a
+**full** refund on a merchant-confirmed `PREPARING` cancellation.
 
 **Impact if wrong:** Refund disputes with no written policy to point at.
 
@@ -1777,7 +1827,7 @@ No `Q-NNN` was resolved by this pass. Cross-references added:
 |---|---|---|
 | Q-001 | Payment provider | `docs/PAYMENT_LIFECYCLE.md` |
 | Q-002 | Legal / settlement model | BQ-005, BQ-022, BQ-032 |
-| Q-003 | Full refund policy | **BQ-016** (extends), BQ-031 |
+| Q-003 | Full refund policy | **BQ-016** (extends — **resolved 2026-09-07, DEC-050**; Q-003's remaining edge cases stay open), BQ-031 |
 | Q-004 | Cash-remittance limit | **BQ-034** (extends), BQ-023 |
 | Q-010 | Platform fee | **BQ-028** (extends) |
 | Q-011 | Chargebacks | `docs/PAYMENT_LIFECYCLE.md` § Chargebacks |

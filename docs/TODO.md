@@ -168,6 +168,7 @@ Every item cites where it comes from in the repository. Items with no in-repo so
 
 - [ ] What is the full refund policy, beyond the three rules already documented (auto-refund before `PREPARING`, shop-confirmed refund during `PREPARING`, support-center-only after `PICKED_UP`)?
   - Source: `docs/05-architecture`, section "03 — ORDER STATE MACHINE"
+  - **Partly answered 2026-09-07 — DEC-050** (resolving BQ-016): the free cancellation window runs through `MERCHANT_ACCEPTED`, there is **no Phase 1 cancellation fee**, and a merchant-confirmed `PREPARING` cancellation is a **full** refund. Runtime not implemented. Q-003's remaining edge cases — partial refunds (BQ-031), post-pickup refusal (BQ-017), cooked-food cost (BQ-015) and the mechanism (Q-020) — are still open.
 
 - [ ] What exact cash-remittance limit triggers "stop assigning new jobs" for a driver? — **DEFERRED with COD (DEC-016), not answered.** Not a Phase 1 blocker; returns when COD does.
   - Source: `docs/04-payment`, section "05 — DRIVER" (states a limit exists — "ถ้ายังมีเงินสดค้างนำส่งเกินวงเงินที่กำหนด" — but does not give the number)
