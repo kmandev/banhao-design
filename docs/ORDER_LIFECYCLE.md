@@ -180,7 +180,7 @@ stateDiagram-v2
 | **Rider cancellation** | Delivery reassigns; **the order is not cancelled** | `ACCEPTED` — **DEC-021** |
 | **No rider** | Retry → manual dispatch → operator decision. **Never auto-cancel** | `ACCEPTED` — **DEC-022** |
 | **Delivery failure** | Rider escalates; order does not silently complete | `PROPOSED` — BQ-017 |
-| **Cost of wasted food** | Allocated **by cause** — platform-caused to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant; prepared from `PREPARING`, valued at `orders.subtotal_satang` | **`ACCEPTED` — DEC-051**; runtime not implemented |
+| **Cost of wasted food** | Allocated **by cause** — platform-caused **and customer-caused pre-pickup** to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant; prepared from `PREPARING`, valued at `orders.subtotal_satang` | **`ACCEPTED` — DEC-051, DEC-052**; runtime not implemented |
 
 ### No-rider, in the order domain
 
@@ -224,7 +224,7 @@ cited.
 | `PAID` | ✅ free — **DEC-050** | ✅ (rejection) | — | ✅ | Full refund |
 | `MERCHANT_ACCEPTED` | ✅ free — **DEC-050** (last free state) | ⚠️ merchant fault | — | ✅ | Full refund |
 | `PREPARING` | ⚠️ merchant confirms — **DEC-050** | ⚠️ merchant fault | ❌ **DEC-021** | ✅ | **Full if confirmed — DEC-050**; unconfirmed outcome `OPEN` |
-| `READY_FOR_PICKUP` | ⚠️ merchant confirms | ❌ | ❌ **DEC-021** | ✅ **DEC-022** | Food cooked — cost allocated **by cause, DEC-051** (platform-caused to BANHAO, merchant-caused to the merchant) |
+| `READY_FOR_PICKUP` | ⚠️ merchant confirms | ❌ | ❌ **DEC-021** | ✅ **DEC-022** | Food cooked — cost allocated **by cause, DEC-051** (platform-caused to BANHAO, merchant-caused to the merchant) and **DEC-052** (customer-caused, pre-pickup → BANHAO) |
 | `PICKED_UP` onward | ❌ support only — **DEC-050** | ❌ | ❌ | ✅ | `OPEN` — **BQ-017 owns this**, not BQ-016 |
 | `DELIVERED` | ❌ | ❌ | ❌ | ✅ refund only | Not ordinary cancellation — partial refund `OPEN`, BQ-031 |
 

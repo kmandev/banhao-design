@@ -48,7 +48,7 @@ so no question has two homes. Where a `BQ` extends a `Q`, it says so.
 | BQ-010 — one merchant per cart? | **ACCEPTED** — yes, one cart = one restaurant | DEC-017 |
 | BQ-012 — the missing `PENDING_PAYMENT` state | **ACCEPTED** — it exists in the approved lifecycle | DEC-019 |
 | BQ-014 — `NO_DRIVER` / "food not cooked" contradiction | **ACCEPTED** — search starts at `MERCHANT_ACCEPTED`; no-rider is not an order state | DEC-019, DEC-022 |
-| BQ-015 — cooked-but-undelivered food | **RESOLVED** — allocated **by cause**: platform-caused loss to **BANHAO** (`PLATFORM_WRITE_OFF`), merchant-caused to the **merchant**; prepared from **`PREPARING`**; valuation basis `orders.subtotal_satang` (not net of commission, not a payable). **No merchant penalty, no customer charge, no partial refund.** Post-`PICKED_UP` cases belong to BQ-017. **Runtime not implemented**; one customer-caused pre-pickup branch recorded as an explicit residual | DEC-051 |
+| BQ-015 — cooked-but-undelivered food | **RESOLVED** — allocated **by cause**: platform-caused loss to **BANHAO** (`PLATFORM_WRITE_OFF`), merchant-caused to the **merchant**; prepared from **`PREPARING`**; valuation basis `orders.subtotal_satang` (not net of commission, not a payable). **No merchant penalty, no customer charge, no partial refund.** Post-`PICKED_UP` cases belong to BQ-017. The customer-caused pre-pickup branch is absorbed by **BANHAO** (**DEC-052**, closing DEC-051's residual). **Runtime not implemented** | DEC-051, DEC-052 |
 | BQ-016 — cancellation windows, fees, post-pickup policy | **RESOLVED** — free cancellation through `MERCHANT_ACCEPTED`; **no Phase 1 cancellation fee**; merchant-confirmed `PREPARING` cancellation is a **full** refund; repeat cancellation is an error. **Runtime not implemented** (code stops at `PAID`). Cooked-food cost (BQ-015), post-pickup refusal (BQ-017), partial refunds (BQ-031) and the mechanism (Q-020) stay `OPEN` | DEC-050 |
 | BQ-019 — dispatch model | **ACCEPTED** — broadcast → first accept | DEC-020 |
 | BQ-025 — no-rider fallback | **ACCEPTED (shape)** — retry → manual dispatch → operator decision; never auto-cancel. Timings still `OPEN` | DEC-022 |
@@ -98,8 +98,9 @@ resolved in full** — recognition timing by **DEC-047** and refundability by
 BQ-015 is resolved too — DEC-051** (cooked-food loss allocated by cause:
 platform-caused to BANHAO as `PLATFORM_WRITE_OFF`, merchant-caused to the
 merchant, from `PREPARING` onward, valued at `orders.subtotal_satang`; runtime
-not implemented, and one customer-caused pre-pickup branch recorded as an
-explicit residual). BQ-030's stacking question is still carried above, and is
+not implemented). Its one recorded residual — the **customer-caused
+pre-pickup** branch — was closed the same day by **DEC-052**: BANHAO absorbs
+that loss as `PLATFORM_WRITE_OFF`. BQ-030's stacking question is still carried above, and is
 not an order-creation blocker.
 
 ### P1 — blocks a feature or launch readiness
@@ -701,11 +702,25 @@ related: BQ-014, BQ-017 (owns every post-`PICKED_UP` case), BQ-024, Q-003
 > posting for food loss, no refund initiation, and no cancellation
 > notification.
 >
-> ⚠️ **Known residual, recorded not decided:** a **customer-caused
-> cancellation of already-prepared food *before* pickup** — permitted by
-> DEC-050 with a full refund and no fee — has **no bearer assigned**. It sits
-> between the platform-caused and merchant-caused branches and outside
-> BQ-017's post-pickup scope. It must not be closed by inference; see DEC-051.
+> **Residual closed 2026-09-07 — DEC-052.** DEC-051 recorded one unassigned
+> branch: a **customer-caused cancellation of already-prepared food *before*
+> pickup**, permitted by DEC-050 with a full refund and no fee. **BANHAO
+> absorbs that loss** as `PLATFORM_WRITE_OFF` — a Phase 1 residual allocation
+> rule, not a fault determination, and not a customer fee or merchant
+> penalty. The customer is excluded because DEC-050 requires a full refund and
+> locks that no cancellation fee exists; BQ-017 is excluded because the event
+> is **before** `PICKED_UP`; the merchant is excluded because charging them
+> would be the penalty DEC-051 refuses to create. **The complete allocation:**
+>
+> | Cause | Timing | Bearer |
+> |---|---|---|
+> | Platform-caused | prepared, pre-pickup | **BANHAO** (DEC-051) |
+> | Merchant-caused | prepared, pre-pickup | **Merchant** (DEC-051) |
+> | Customer-caused | prepared, pre-pickup | **BANHAO** — residual rule (DEC-052) |
+> | Customer-caused | after `PICKED_UP` | **`OPEN` — BQ-017** |
+> | Delivery failure / unreachable | after `PICKED_UP` | **`OPEN` — BQ-017** |
+>
+> **BQ-015 does not resolve BQ-017**; the last two rows stay open.
 >
 > **Scope correction (P0, made by DEC-051):** the original question below
 > claimed "customer not reachable, customer refuses delivery" — both are

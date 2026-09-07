@@ -152,7 +152,7 @@ where a past order went.
 |---|---|---|
 | `CREATED` · `PENDING_PAYMENT` · `PAID` · **`MERCHANT_ACCEPTED`** | Free cancellation. Full refund where money was taken, automatic | **`ACCEPTED` — DEC-050** |
 | During `PREPARING` | Requires merchant confirmation. Where the merchant confirms: **full refund** — never a partial one | **`ACCEPTED` — DEC-050** |
-| `READY_FOR_PICKUP` | Merchant confirmation as above; the cooked-food loss is allocated **by cause** — platform-caused to BANHAO, merchant-caused to the merchant | **`ACCEPTED` — DEC-051** (food is prepared from `PREPARING`; runtime not implemented) |
+| `READY_FOR_PICKUP` | Merchant confirmation as above; the cooked-food loss is allocated **by cause** — platform-caused to BANHAO, merchant-caused to the merchant, **customer-caused to BANHAO** | **`ACCEPTED` — DEC-051, DEC-052** (food is prepared from `PREPARING`; runtime not implemented) |
 | After `PICKED_UP` | Cannot cancel; must go through the support centre. Customer refusal past pickup is **delivery failure**, not cancellation | `OPEN` — BQ-017 owns the outcome |
 | After `DELIVERED` | Not ordinary cancellation — dispute/quality territory | `OPEN` — Q-003, BQ-031 |
 
@@ -461,8 +461,14 @@ Other load-bearing rules:
   `orders.subtotal_satang` — a valuation basis, **not** a merchant payable,
   and **not** net of the 8% commission. No merchant penalty, no customer
   charge, no partial refund. Post-`PICKED_UP` cases belong to BQ-017.
-  **Runtime not implemented**, and a customer-caused pre-pickup branch is
-  recorded as an explicit residual.
+  **Runtime not implemented.**
+- `ACCEPTED` **DEC-052** — a **customer-caused** cancellation of prepared food
+  **before `PICKED_UP`** is also absorbed by **BANHAO**
+  (`PLATFORM_WRITE_OFF`), closing DEC-051's recorded residual. An economic
+  allocation rule, not a fault determination: DEC-050 requires a full refund
+  and locks that no cancellation fee exists, and BQ-017 owns only
+  post-`PICKED_UP` cases. No customer charge and no merchant penalty is
+  created. **Runtime not implemented.**
 - `OPEN` — merchant accept-timeout behaviour (BQ-013), delivery failure
   (BQ-017), exception **state names**.
 
