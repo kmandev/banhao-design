@@ -1390,6 +1390,46 @@
         ]
       }
     },
+    "/api/v1/rider/deliveries/{id}/arrived-at-customer": {
+      "post": {
+        "operationId": "RiderController_markArrivedAtCustomer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The delivery, now ARRIVED at the customer"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "403": {
+            "description": "Not an approved rider, or not the rider currently assigned to this delivery"
+          },
+          "404": {
+            "description": "Delivery not found"
+          },
+          "409": {
+            "description": "INVALID_TRANSITION — the delivery is not currently EN_ROUTE"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "rider"
+        ]
+      }
+    },
     "/api/v1/rider/deliveries/{id}/proof/upload-url": {
       "post": {
         "operationId": "RiderController_requestProofUploadUrl",

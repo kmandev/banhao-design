@@ -1,6 +1,11 @@
 import { createRiderDeliveryRepository } from './riderDelivery';
 import { createRiderDeliveryActionsRepository } from './riderDeliveryActions';
-import { ACTIVE_DELIVERY_STATES, currentStep, DELIVERY_STEPS } from '../domain/riderDelivery';
+import {
+  ACTIVE_DELIVERY_STATES,
+  currentStep,
+  DELIVERY_STEPS,
+  isActiveDeliveryState,
+} from '../domain/riderDelivery';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ApiClient } from '@banhao/api-client';
 
@@ -209,7 +214,9 @@ describe('delivery step mapping', () => {
     ['RIDER_ASSIGNED', 'arrived', 1],
     ['AT_MERCHANT', 'pickedUp', 2],
     ['PICKED_UP', 'enRoute', 3],
-    ['EN_ROUTE', 'delivered', 4],
+    // DEC-054 inserted customer arrival between departure and completion.
+    ['EN_ROUTE', 'arrivedAtCustomer', 4],
+    ['ARRIVED', 'delivered', 5],
   ] as const)('maps %s to the %s action at step %i', (state, action, index) => {
     const step = currentStep(state);
     expect(step?.action).toBe(action);
@@ -224,7 +231,71 @@ describe('delivery step mapping', () => {
   );
 
   it('covers every step exactly once, in order', () => {
-    expect(DELIVERY_STEPS.map((step) => step.index)).toEqual([1, 2, 3, 4]);
+    expect(DELIVERY_STEPS.map((step) => step.index)).toEqual([1, 2, 3, 4, 5]);
     expect(new Set(DELIVERY_STEPS.map((step) => step.from)).size).toBe(DELIVERY_STEPS.length);
+  });
+
+  /**
+   * BQ-017 Slice #1's whole reason for shipping the client half in the same
+   * slice as the server half: `riderDeliveryQueries` filters the rider's own
+   * `deliveries` read by `ACTIVE_DELIVERY_STATES`, so a server that can
+   * produce `ARRIVED` while this list cannot name it would tell a rider
+   * standing at the customer's door that they have no active delivery.
+   */
+  it('counts ARRIVED as an active delivery, so the job never disappears at the door', () => {
+    expect(isActiveDeliveryState('ARRIVED')).toBe(true);
+    expect([...ACTIVE_DELIVERY_STATES]).toContain('ARRIVED');
+  });
+
+  it.each(['DELIVERED', 'FAILED', 'ABANDONED'])('still treats %s as inactive', (state) => {
+    expect(isActiveDeliveryState(state)).toBe(false);
+  });
+
+  /**
+   * DEC-053 § 2 makes the operator the failure authority. No rider-facing step
+   * may offer a failure, a contact attempt, or a safe drop-off.
+   */
+  it('offers no rider-declared failure action', () => {
+    const actions = DELIVERY_STEPS.map((step) => step.action);
+    for (const forbidden of ['fail', 'failed', 'customerUnreachable', 'contactAttempt', 'safeDropOff']) {
+      expect(actions).not.toContain(forbidden);
+    }
+  });
+});
+
+describe('customer arrival is a distinct command from merchant arrival (DEC-054)', () => {
+  /** Same shape as the transition suite's own stub — see its note on typing. */
+  function apiStub() {
+    const request = jest.fn(async (_path: string, _init?: unknown) => ({}));
+    return { client: { request } as unknown as ApiClient, request };
+  }
+
+  it('POSTs to …/arrived-at-customer, with no body', async () => {
+    const { client, request } = apiStub();
+    const repo = createRiderDeliveryActionsRepository(client, async () => 'token');
+
+    await repo.markArrivedAtCustomer('delivery-1');
+
+    expect(request.mock.calls[0]?.[0]).toBe(
+      '/api/v1/rider/deliveries/delivery-1/arrived-at-customer',
+    );
+    expect(request.mock.calls[0]?.[1]).toEqual({ method: 'POST' });
+  });
+
+  it('markArrived still POSTs to …/arrived — the merchant path is unchanged', async () => {
+    const { client, request } = apiStub();
+    const repo = createRiderDeliveryActionsRepository(client, async () => 'token');
+
+    await repo.markArrived('delivery-1');
+
+    expect(request.mock.calls[0]?.[0]).toBe('/api/v1/rider/deliveries/delivery-1/arrived');
+  });
+
+  it('refuses to transmit without a session, like every other command', async () => {
+    const { client, request } = apiStub();
+    const repo = createRiderDeliveryActionsRepository(client, async () => null);
+
+    await expect(repo.markArrivedAtCustomer('delivery-1')).rejects.toThrow();
+    expect(request).not.toHaveBeenCalled();
   });
 });

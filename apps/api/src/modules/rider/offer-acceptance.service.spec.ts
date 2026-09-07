@@ -389,7 +389,16 @@ describe('OfferAcceptanceService — one active delivery per rider (DEC-037 / BQ
     const activeRead = calls.find((c) => c.table === 'deliveries' && c.op === 'select');
     expect(activeRead?.eq).toMatchObject({ rider_id: RIDER_ID });
     expect(activeRead?.in).toMatchObject({
-      state: ['RIDER_ASSIGNED', 'RIDER_REASSIGNING', 'AT_MERCHANT', 'PICKED_UP', 'EN_ROUTE'],
+      state: [
+        'RIDER_ASSIGNED',
+        'RIDER_REASSIGNING',
+        'AT_MERCHANT',
+        'PICKED_UP',
+        'EN_ROUTE',
+        // DEC-054 — see `dispatch-policy.ts`'s own note on why arrival counts
+        // as holding a delivery.
+        'ARRIVED',
+      ],
     });
   });
 });

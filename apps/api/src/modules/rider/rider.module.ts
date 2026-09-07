@@ -6,6 +6,7 @@ import { RiderLocationService } from './rider-location.service';
 import { OfferAcceptanceService } from './offer-acceptance.service';
 import { DeliveryReleaseService } from './delivery-release.service';
 import { DeliveryArrivalService } from './delivery-arrival.service';
+import { DeliveryCustomerArrivalService } from './delivery-customer-arrival.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
 import { DeliveryCompletionService } from './delivery-completion.service';
 import { DeliveryProofService } from './delivery-proof.service';
@@ -53,6 +54,7 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
     OfferAcceptanceService,
     DeliveryReleaseService,
     DeliveryArrivalService,
+    DeliveryCustomerArrivalService,
     DeliveryPickupService,
     DeliveryEnRouteService,
     DeliveryCompletionService,

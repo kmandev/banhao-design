@@ -168,6 +168,41 @@ export const riderProofUploadUrlRequestSchema = z
 
 export type RiderProofUploadUrlRequest = z.infer<typeof riderProofUploadUrlRequestSchema>;
 
+/**
+ * `POST /api/v1/rider/deliveries/:id/arrived-at-customer` — BQ-017 Slice #1,
+ * `EN_ROUTE -> ARRIVED` (DEC-054). No request body, same reasoning as
+ * `RiderArrivedResponse`. Carries no money field, same reasoning as
+ * `RiderOfferAcceptResponse`.
+ *
+ * **This is customer arrival, not merchant arrival.** DEC-054 makes the two
+ * textually distinct precisely because they were confusable:
+ * `RiderArrivedResponse` above is the *merchant* arrival
+ * (`RIDER_ASSIGNED -> AT_MERCHANT`, `POST …/arrived`), which fires before
+ * pickup at the other end of the journey and is unchanged. The two responses
+ * are separate types rather than one shared shape so that neither endpoint can
+ * be wired to the other's contract by accident.
+ *
+ * **One `state`, not two.** The order does not move here — it stays
+ * `DELIVERING` (DEC-018: arrival at the customer is a delivery fact). There is
+ * no order-side name for this step to disambiguate, so unlike
+ * `RiderEnRouteResponse` this response states one.
+ *
+ * `arrivedAt` is `deliveries.arrived_at`, the timestamp DEC-054 makes the
+ * authoritative anchor for DEC-053's five-minute wait. It is returned so the
+ * driver app can show the rider what the server actually recorded rather than
+ * its own local clock. **The timer itself does not exist yet** — it is a later
+ * slice — and nothing about this field implies one is running.
+ */
+export interface RiderArrivedAtCustomerResponse {
+  deliveryId: string;
+  orderId: string;
+  /** Always `ARRIVED` on success — the **delivery** domain's own state (DEC-018). */
+  state: string;
+  /** `deliveries.arrived_at`. Write-once: a repeat call never moves it. */
+  arrivedAt: string | null;
+  riderId: string;
+}
+
 export interface RiderProofUploadUrlResponse {
   /** A presigned PUT, scoped to one object, one operation, one content type, 5 minutes. */
   uploadUrl: string;

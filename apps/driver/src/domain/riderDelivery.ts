@@ -46,12 +46,20 @@
  * a delivery in any of them is finished, and the rider's active-delivery
  * screen must show "no active delivery", not a completed one it can no longer
  * act on.
+ *
+ * **`ARRIVED` (DEC-054) must stay in this list.** `riderDeliveryQueries.ts`
+ * filters the rider's own `deliveries` read by exactly these values, so a
+ * server that can produce `ARRIVED` while this array cannot name it would tell
+ * a rider standing at the customer's door that they have no active delivery.
+ * That is why the client half of DEC-054 shipped in the same slice as the
+ * server half.
  */
 export const ACTIVE_DELIVERY_STATES = [
   'RIDER_ASSIGNED',
   'AT_MERCHANT',
   'PICKED_UP',
   'EN_ROUTE',
+  'ARRIVED',
   'RIDER_REASSIGNING',
 ] as const;
 
@@ -79,19 +87,43 @@ export function isActiveDeliveryState(state: string): state is ActiveDeliverySta
 }
 
 /**
- * The rider-facing steps of a delivery, in order — the four-step progression
- * the approved Driver App redesign draws as R-06+ (`ไปที่ร้าน · รับอาหารแล้ว ·
- * ออกไปส่ง · ส่งสำเร็จ`).
+ * The rider-facing steps of a delivery, in order — the progression the
+ * approved Driver App redesign draws as R-06+ (`ไปที่ร้าน · รับอาหารแล้ว ·
+ * ออกไปส่ง · ส่งสำเร็จ`), with the customer-arrival step DEC-054 added between
+ * the last two.
  *
  * Each step names the **command** that leaves the state before it, so the
- * screen never has to map states to buttons inline. Every one of the four
- * endpoints exists (`RiderController`); `delivered` is the one this phase
- * added.
+ * screen never has to map states to buttons inline. Every one of the five
+ * endpoints exists (`RiderController`).
+ *
+ * ## Step 4's copy is transcribed, not authored
+ *
+ * `ถึงจุดส่งแล้ว` (button) and `ถึงจุดส่ง` (step title) are the POD UX
+ * design's own words for exactly this action — `docs/design/BANHAO POD UX
+ * Design.dc.html` renders `ถึงจุดส่งแล้ว` as the primary button of the arrival
+ * frame, and `docs/RIDER_LIFECYCLE.md` §4 records the same four-word rider
+ * flow (`ถึงร้านแล้ว → รับอาหารแล้ว → ถึงจุดส่ง → ส่งสำเร็จ`). Nothing here is
+ * invented, and in particular **no DEC-053 failure copy is invented**: there
+ * is no "customer unreachable", no "cannot deliver", no contact control and no
+ * failure button on this screen. The rider records arrival; the *operator*
+ * declares a failure (DEC-053 § 2), and that surface is a later slice.
+ *
+ * The POD design also states, at PD-04, that arrival is "a screen state, not a
+ * server state" — true when it was written, and superseded on that one point
+ * by DEC-054, which makes `ARRIVED` a real delivery state. A `DEC-` outranks a
+ * design artifact (`CLAUDE.md` § 10). Every other POD rule is unchanged.
+ *
+ * ## Step 5 is still reachable without step 4
+ *
+ * The server accepts a completion from `EN_ROUTE` as well as `ARRIVED`, so a
+ * rider on an older build — or one who simply never taps arrival — is not
+ * blocked. This list is the *recommended* path, never a precondition; neither
+ * DEC-053 nor DEC-054 makes arrival mandatory before delivering.
  */
-export type DeliveryAction = 'arrived' | 'pickedUp' | 'enRoute' | 'delivered';
+export type DeliveryAction = 'arrived' | 'pickedUp' | 'enRoute' | 'arrivedAtCustomer' | 'delivered';
 
 export interface DeliveryStep {
-  /** 1-based, as shown to the rider (`ขั้นที่ N จาก 4`). */
+  /** 1-based, as shown to the rider (`ขั้นที่ N จาก DELIVERY_STEPS.length`). */
   readonly index: number;
   /** The delivery state a rider must be in for this step's action to be available. */
   readonly from: ActiveDeliveryState;
@@ -106,7 +138,14 @@ export const DELIVERY_STEPS: readonly DeliveryStep[] = [
   { index: 1, from: 'RIDER_ASSIGNED', action: 'arrived', label: 'ถึงร้านแล้ว', title: 'ไปที่ร้าน' },
   { index: 2, from: 'AT_MERCHANT', action: 'pickedUp', label: 'รับอาหารแล้ว', title: 'รับอาหารที่ร้าน' },
   { index: 3, from: 'PICKED_UP', action: 'enRoute', label: 'ออกไปส่ง', title: 'ออกเดินทางไปส่ง' },
-  { index: 4, from: 'EN_ROUTE', action: 'delivered', label: 'ส่งสำเร็จ', title: 'ส่งถึงลูกค้า' },
+  {
+    index: 4,
+    from: 'EN_ROUTE',
+    action: 'arrivedAtCustomer',
+    label: 'ถึงจุดส่งแล้ว',
+    title: 'ถึงจุดส่ง',
+  },
+  { index: 5, from: 'ARRIVED', action: 'delivered', label: 'ส่งสำเร็จ', title: 'ส่งถึงลูกค้า' },
 ] as const;
 
 /**

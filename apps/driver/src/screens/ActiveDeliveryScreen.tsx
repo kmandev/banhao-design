@@ -22,24 +22,36 @@ type Nav = NativeStackNavigationProp<RiderStackParamList>;
  * `deliveries_select_rider` policy rather than from `rider_order_view`, which
  * projects neither.
  *
- * ## The four steps
+ * ## The steps
  *
  * `DELIVERY_STEPS` is the single source of both the progression list and the
  * primary action, so a state can never render a step number that disagrees
  * with the button beneath it. The button calls the API command for the step
  * the **server's** state says the rider is on — `currentStep(delivery.state)`,
- * never a locally advanced counter.
+ * never a locally advanced counter. The list length is read from
+ * `DELIVERY_STEPS` rather than written out, so DEC-054's customer-arrival step
+ * changed the count without touching this screen's copy.
  *
- * ## The fourth step goes through POD
+ * ## The last step goes through POD
  *
- * Steps 1–3 call their API command directly. Step 4 does **not**: a completion
- * requires a proof photo (DEC-038, resolving BQ-018 as mandatory), so
- * `ส่งสำเร็จ` navigates into `ProofCamera` and the POD leg owns capture,
+ * Every step but the last calls its API command directly. `ส่งสำเร็จ` does
+ * **not**: a completion requires a proof photo (DEC-038, resolving BQ-018 as
+ * mandatory), so it navigates into `ProofCamera` and the POD leg owns capture,
  * upload and confirmation from there. This screen never calls
  * `markDelivered` — `useActiveDelivery.runStep` cannot even express it.
  *
  * A rider who abandons the POD leg comes back to this screen with the delivery
- * exactly as it was: still `EN_ROUTE`, still theirs, still open.
+ * exactly as it was — still theirs, still open, in whichever of `EN_ROUTE` or
+ * `ARRIVED` it was already in.
+ *
+ * ## No failure control, deliberately
+ *
+ * `ถึงจุดส่งแล้ว` records that the rider reached the customer (DEC-054) and
+ * nothing more. There is no "customer unreachable", no contact-attempt
+ * control, and no way for a rider to declare a delivery failed: DEC-053 § 2
+ * makes the **operator** the failure authority precisely so that a rider never
+ * determines a financial outcome. Those surfaces belong to a later slice and
+ * to the supervisor console, not here.
  *
  * ## What is deliberately not here
  *
@@ -96,8 +108,8 @@ export function ActiveDeliveryScreen() {
           order={view.order}
           busy={busy}
           onStep={(action) => {
-            // Step 4 needs a photo, so it opens the POD leg rather than
-            // calling the API — see this file's header.
+            // The last step needs a photo, so it opens the POD leg rather
+            // than calling the API — see this file's header.
             if (action === 'delivered') {
               navigation.navigate('ProofCamera', { deliveryId: view.delivery.deliveryId });
               return;

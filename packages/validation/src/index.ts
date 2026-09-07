@@ -5,6 +5,7 @@ export * from './cart';
 export * from './order';
 export * from './payment';
 export * from './rider';
+export * from './delivery-failure';
 export * from './restaurant-cover';
 export * from './menu-item-image';
 export * from './menu';

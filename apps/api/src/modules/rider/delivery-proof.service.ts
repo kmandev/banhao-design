@@ -14,15 +14,29 @@ interface DeliveryRow {
 }
 
 /**
- * The one state a proof photo may be uploaded for.
+ * The states a proof photo may be uploaded for.
  *
- * POD is a precondition of the existing `EN_ROUTE -> DELIVERED` transition,
- * not a state of its own (the POD UX design §B, and the deployed
- * `deliveries.state` CHECK, which has no `ARRIVED` or `POD_CAPTURED`). So a
- * presign is issued only while the rider is genuinely out delivering — never
- * for a delivery they have not picked up, and never for one already closed.
+ * POD is a precondition of the `-> DELIVERED` transition, not a state of its
+ * own (the POD UX design §B). A presign is issued only while the rider is
+ * genuinely out delivering — never for a delivery they have not picked up, and
+ * never for one already closed.
+ *
+ * **`ARRIVED` was added by BQ-017 Slice #1, purely for compatibility.**
+ * DEC-054 introduced `ARRIVED` between `EN_ROUTE` and the terminal states, and
+ * a rider who taps arrival must still be able to complete. Leaving this at
+ * `EN_ROUTE` alone would have made tapping arrival silently un-completable —
+ * the presign would refuse, so the photo could never be uploaded, so
+ * `…/delivered` could never be called. That is a stricter rule than any
+ * decision states: neither DEC-053 nor DEC-054 makes arrival a precondition of
+ * delivery, and this list must therefore keep accepting `EN_ROUTE` too.
+ *
+ * The POD UX design's PD-04 ("arrival is a screen state, not a server state")
+ * was accurate when written and is superseded on that one point by DEC-054,
+ * which is a `DEC-` and outranks a design artifact. Everything else about POD
+ * — the mandatory photo (DEC-038), the capture flow, the private bucket — is
+ * unchanged.
  */
-const PROOF_UPLOADABLE_STATE = 'EN_ROUTE';
+const PROOF_UPLOADABLE_STATES = ['EN_ROUTE', 'ARRIVED'] as const;
 
 /**
  * `POST /api/v1/rider/deliveries/:id/proof/upload-url` — POD, Phase G-7.2
@@ -110,7 +124,7 @@ export class DeliveryProofService {
 
   /**
    * Proves the caller is the rider currently assigned to this delivery **and**
-   * that the delivery is in the one state a proof photo belongs to.
+   * that the delivery is in a state a proof photo belongs to.
    *
    * A read rather than a guarded UPDATE, because nothing is being transitioned
    * — this is the one place in the rider module where a `SELECT` legitimately
@@ -141,7 +155,7 @@ export class DeliveryProofService {
       throw new DomainError('NOT_ASSIGNED_RIDER', { details: { deliveryId } });
     }
 
-    if (data.state !== PROOF_UPLOADABLE_STATE) {
+    if (!(PROOF_UPLOADABLE_STATES as readonly string[]).includes(data.state)) {
       throw new DomainError('INVALID_TRANSITION', {
         details: { deliveryId, from: data.state, to: 'DELIVERED' },
       });

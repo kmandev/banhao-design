@@ -54,6 +54,12 @@ export const DISPATCHABLE_DELIVERY_STATES = ['RIDER_SEARCHING', 'RIDER_REASSIGNI
  * `RIDER_REASSIGNING` is counted as active deliberately — `deliveries.rider_id`
  * may still be set until `release_rider_assignment()` nulls it, and counting a
  * possibly-still-held delivery as active fails closed.
+ *
+ * `ARRIVED` (DEC-054, BQ-017 Slice #1) is active for the plainest reason of
+ * all: a rider standing at the customer's door is holding a delivery. Omitting
+ * it would let that rider be offered a second job the moment they tapped
+ * arrival, which is precisely the one-at-a-time rule this list exists to
+ * enforce — the same fail-closed direction `RIDER_REASSIGNING` is here for.
  */
 export const ACTIVE_DELIVERY_STATES = [
   'RIDER_ASSIGNED',
@@ -61,6 +67,7 @@ export const ACTIVE_DELIVERY_STATES = [
   'AT_MERCHANT',
   'PICKED_UP',
   'EN_ROUTE',
+  'ARRIVED',
 ] as const;
 
 /** How many searching deliveries one round dispatches at most. Matches the payment tick's batch. */

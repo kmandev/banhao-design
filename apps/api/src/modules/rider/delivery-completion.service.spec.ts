@@ -28,6 +28,8 @@ interface Recorded {
   table: string;
   op: 'select' | 'insert' | 'update';
   eq: Record<string, unknown>;
+  /** `.in(column, values)` filters, recorded separately from `.eq` so a widened guard is visible. */
+  inFilters: Record<string, readonly unknown[]>;
   payload?: Record<string, unknown>;
 }
 
@@ -38,7 +40,7 @@ function supabaseStub(results: Result[]) {
 
   const admin = {
     from(table: string) {
-      const call: Recorded = { table, op: 'select', eq: {} };
+      const call: Recorded = { table, op: 'select', eq: {}, inFilters: {} };
       calls.push(call);
 
       const builder: Record<string, unknown> = {
@@ -55,6 +57,10 @@ function supabaseStub(results: Result[]) {
         },
         eq(column: string, value: unknown) {
           call.eq[column] = value;
+          return builder;
+        },
+        in(column: string, values: readonly unknown[]) {
+          call.inFilters[column] = values;
           return builder;
         },
         maybeSingle: () => Promise.resolve(nextResult()),
@@ -109,6 +115,18 @@ const CLAIM_OK: Result = {
     order_id: ORDER_ID,
     delivered_at: DELIVERED_AT,
     rider_earning_satang: RIDER_EARNING_SATANG,
+    // The delivery went straight from EN_ROUTE, without the rider tapping
+    // customer arrival — still fully supported after DEC-054.
+    arrived_at: null,
+  },
+  error: null,
+};
+
+/** The same win, but for a delivery the rider had marked ARRIVED first (DEC-054). */
+const CLAIM_OK_FROM_ARRIVED: Result = {
+  data: {
+    ...(CLAIM_OK.data as Record<string, unknown>),
+    arrived_at: '2026-08-26T10:55:00.000Z',
   },
   error: null,
 };
@@ -227,7 +245,11 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
     const claim = calls[0];
     expect(claim?.table).toBe('deliveries');
     expect(claim?.op).toBe('update');
-    expect(claim?.eq).toEqual({ id: DELIVERY_ID, state: 'EN_ROUTE', rider_id: RIDER_ID });
+    expect(claim?.eq).toEqual({ id: DELIVERY_ID, rider_id: RIDER_ID });
+    // The pre-state guard is still in the WHERE clause — widened by BQ-017
+    // Slice #1 to the two states a completion may legitimately be claimed
+    // from, never removed. Ownership and terminality are unaffected.
+    expect(claim?.inFilters).toEqual({ state: ['EN_ROUTE', 'ARRIVED'] });
     expect(claim?.payload).toMatchObject({ state: 'DELIVERED' });
     expect(typeof claim?.payload?.delivered_at).toBe('string');
   });
@@ -245,6 +267,51 @@ describe('DeliveryCompletionService — successful completion (EN_ROUTE -> DELIV
     expect(history[0]?.payload).toMatchObject({
       delivery_id: DELIVERY_ID,
       from_state: 'EN_ROUTE',
+      to_state: 'DELIVERED',
+      actor_type: 'RIDER',
+      actor_id: RIDER_ID,
+    });
+  });
+
+  /**
+   * BQ-017 Slice #1 / DEC-054 compatibility. Both paths must work: neither
+   * decision makes tapping customer arrival a precondition of delivering, so
+   * narrowing completion to `ARRIVED` would have invented a policy and broken
+   * every rider on an older client. These two tests are the guarantee.
+   */
+  it('still completes a delivery that never reached ARRIVED — arrival is not a precondition', async () => {
+    const { supabase, calls } = supabaseStub(HAPPY_PATH);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    const result = await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    expect(result.state).toBe('DELIVERED');
+    expect(completeDelivery).toHaveBeenCalledWith(expect.anything(), ORDER_ID);
+
+    // The history row names the state actually left.
+    const history = calls.filter((call) => call.table === 'delivery_status_history');
+    expect(history[0]?.payload).toMatchObject({ from_state: 'EN_ROUTE', to_state: 'DELIVERED' });
+  });
+
+  it('completes a delivery claimed from ARRIVED, and records ARRIVED -> DELIVERED in its history', async () => {
+    const { supabase, calls } = supabaseStub([CLAIM_OK_FROM_ARRIVED, ...HAPPY_PATH.slice(1)]);
+    const completeDelivery = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' });
+    const service = buildService(supabase, ordersStub(completeDelivery));
+
+    const result = await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    expect(result.state).toBe('DELIVERED');
+    expect(completeDelivery).toHaveBeenCalledWith(expect.anything(), ORDER_ID);
+
+    const history = calls.filter((call) => call.table === 'delivery_status_history');
+    expect(history).toHaveLength(1);
+    expect(history[0]?.payload).toMatchObject({
+      delivery_id: DELIVERY_ID,
+      // Derived from the winning row's own arrived_at, never hard-coded — a
+      // fixed 'EN_ROUTE' here would make the audit trail state a transition
+      // that did not happen.
+      from_state: 'ARRIVED',
       to_state: 'DELIVERED',
       actor_type: 'RIDER',
       actor_id: RIDER_ID,
@@ -764,18 +831,15 @@ describe('DeliveryCompletionService — the proof photo (POD, mandatory)', () =>
 
     // Evidence that can be replaced is not evidence. Exactly one write is
     // ATTEMPTED — the guarded UPDATE, which is the authority — and its
-    // `state = 'EN_ROUTE'` guard is what makes it match nothing on a delivery
-    // that is already DELIVERED. The repair path adds no second, unguarded
+    // `state in ('EN_ROUTE','ARRIVED')` guard is what makes it match nothing
+    // on a delivery that is already DELIVERED. The repair path adds no second, unguarded
     // write of its own, which is the property this asserts.
     const deliveryWrites = calls.filter(
       (call) => call.table === 'deliveries' && call.op === 'update',
     );
     expect(deliveryWrites).toHaveLength(1);
-    expect(deliveryWrites[0]?.eq).toEqual({
-      id: DELIVERY_ID,
-      state: 'EN_ROUTE',
-      rider_id: RIDER_ID,
-    });
+    expect(deliveryWrites[0]?.eq).toEqual({ id: DELIVERY_ID, rider_id: RIDER_ID });
+    expect(deliveryWrites[0]?.inFilters).toEqual({ state: ['EN_ROUTE', 'ARRIVED'] });
   });
 
   it('cannot attach a photo to another rider’s delivery even with a valid key', async () => {

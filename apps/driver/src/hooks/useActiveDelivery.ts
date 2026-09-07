@@ -35,15 +35,20 @@ import { ApiClientError } from '../lib/apiClient';
  *
  * ## Completion is NOT run from here
  *
- * `runStep` drives the first three transitions only. The fourth — `delivered`
- * — requires a proof photo (DEC-038, resolving BQ-018 as mandatory), so the
- * screen navigates into the POD leg (`ProofCamera` → `ProofReview` →
+ * `runStep` drives every transition except the last. `delivered` requires a
+ * proof photo (DEC-038, resolving BQ-018 as mandatory), so the screen
+ * navigates into the POD leg (`ProofCamera` → `ProofReview` →
  * `DeliveryConfirm`) instead, and `useProofSubmission` owns the presign,
  * upload and confirm sequence.
  *
  * That split is why `runStep`'s type excludes `'delivered'`: a completion
  * issued from here would have no photo and the API would refuse it. Making it
  * unrepresentable is better than a runtime guard.
+ *
+ * `arrivedAtCustomer` (DEC-054) *is* run from here: it is an ordinary
+ * delivery-domain transition with no body and no evidence, exactly like the
+ * three before it. It is also optional — the server still completes a delivery
+ * from `EN_ROUTE`, so a rider who never taps it is never stuck.
  *
  * After a successful completion the delivery leaves `ACTIVE_DELIVERY_STATES`
  * (`DELIVERED` is terminal), so this hook's next focused read returns `null`
@@ -183,8 +188,12 @@ export function useActiveDelivery(): ActiveDeliveryController {
           await actions.markArrived(deliveryId);
         } else if (action === 'pickedUp') {
           await actions.markPickedUp(deliveryId);
-        } else {
+        } else if (action === 'enRoute') {
           await actions.markEnRoute(deliveryId);
+        } else {
+          // Customer arrival (DEC-054) — never `markArrived`, which is the
+          // merchant's door. See `riderDeliveryActions.ts`.
+          await actions.markArrivedAtCustomer(deliveryId);
         }
       } catch (error) {
         setActionError(actionErrorMessage(error));

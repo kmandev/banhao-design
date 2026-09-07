@@ -17,6 +17,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { RiderController } from './rider.controller';
 import { DeliveryArrivalService } from './delivery-arrival.service';
+import { DeliveryCustomerArrivalService } from './delivery-customer-arrival.service';
 import { DeliveryCompletionService } from './delivery-completion.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
@@ -68,6 +69,7 @@ type ServiceStubs = {
   offers: { acceptOffer: jest.Mock; declineOffer: jest.Mock };
   releases: { cancelDelivery: jest.Mock };
   arrivals: { arrive: jest.Mock };
+  customerArrivals: { arriveAtCustomer: jest.Mock };
   pickups: { pickup: jest.Mock };
   departures: { startDelivery: jest.Mock };
   completions: { complete: jest.Mock };
@@ -80,6 +82,7 @@ function makeStubs(): ServiceStubs {
     offers: { acceptOffer: jest.fn(), declineOffer: jest.fn() },
     releases: { cancelDelivery: jest.fn() },
     arrivals: { arrive: jest.fn() },
+    customerArrivals: { arriveAtCustomer: jest.fn() },
     pickups: { pickup: jest.fn() },
     departures: { startDelivery: jest.fn() },
     completions: { complete: jest.fn() },
@@ -118,6 +121,7 @@ async function buildApp(
       { provide: OfferAcceptanceService, useValue: stubs.offers },
       { provide: DeliveryReleaseService, useValue: stubs.releases },
       { provide: DeliveryArrivalService, useValue: stubs.arrivals },
+      { provide: DeliveryCustomerArrivalService, useValue: stubs.customerArrivals },
       { provide: DeliveryPickupService, useValue: stubs.pickups },
       { provide: DeliveryEnRouteService, useValue: stubs.departures },
       { provide: DeliveryCompletionService, useValue: stubs.completions },
@@ -145,6 +149,10 @@ const ROUTES: ReadonlyArray<{ name: string; path: string; body?: unknown }> = [
   { name: 'arrived', path: `/api/v1/rider/deliveries/${DELIVERY_ID}/arrived` },
   { name: 'picked-up', path: `/api/v1/rider/deliveries/${DELIVERY_ID}/picked-up` },
   { name: 'en-route', path: `/api/v1/rider/deliveries/${DELIVERY_ID}/en-route` },
+  {
+    name: 'arrived-at-customer',
+    path: `/api/v1/rider/deliveries/${DELIVERY_ID}/arrived-at-customer`,
+  },
   {
     name: 'proof upload-url',
     path: `/api/v1/rider/deliveries/${DELIVERY_ID}/proof/upload-url`,
@@ -383,11 +391,128 @@ describe('RiderController', () => {
     });
   });
 
+  /**
+   * DEC-054's central hazard, at the HTTP boundary: the two arrivals must not
+   * be reachable through one another's path.
+   */
+  describe('customer arrival is a separate route from merchant arrival (DEC-054)', () => {
+    it('routes …/arrived-at-customer to the customer-arrival service alone', async () => {
+      const result = {
+        deliveryId: DELIVERY_ID,
+        orderId: 'order-1',
+        state: 'ARRIVED',
+        arrivedAt: '2026-09-07T04:05:06.000Z',
+        riderId: RIDER_ID,
+      };
+      stubs.customerArrivals.arriveAtCustomer.mockResolvedValue(result);
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/rider/deliveries/${DELIVERY_ID}/arrived-at-customer`)
+        .expect(200);
+
+      expect(response.body).toEqual({ success: true, data: result });
+      expect(stubs.customerArrivals.arriveAtCustomer).toHaveBeenCalledWith(
+        APPROVED_RIDER,
+        DELIVERY_ID,
+      );
+      expect(stubs.arrivals.arrive).not.toHaveBeenCalled();
+    });
+
+    it('routes …/arrived to the merchant-arrival service alone — its semantics are unchanged', async () => {
+      stubs.arrivals.arrive.mockResolvedValue({
+        deliveryId: DELIVERY_ID,
+        state: 'AT_MERCHANT',
+        riderId: RIDER_ID,
+      });
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/rider/deliveries/${DELIVERY_ID}/arrived`)
+        .expect(200);
+
+      expect(response.body.data.state).toBe('AT_MERCHANT');
+      expect(stubs.customerArrivals.arriveAtCustomer).not.toHaveBeenCalled();
+    });
+
+    it('renders INVALID_TRANSITION at 409 with its code intact', async () => {
+      stubs.customerArrivals.arriveAtCustomer.mockRejectedValue(
+        new DomainError('INVALID_TRANSITION'),
+      );
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer()).post(
+        `/api/v1/rider/deliveries/${DELIVERY_ID}/arrived-at-customer`,
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({
+        success: false,
+        error: { code: 'INVALID_TRANSITION' },
+      });
+    });
+
+    it('renders NOT_ASSIGNED_RIDER at 403 for a delivery belonging to another rider', async () => {
+      stubs.customerArrivals.arriveAtCustomer.mockRejectedValue(
+        new DomainError('NOT_ASSIGNED_RIDER'),
+      );
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      const response = await request(app.getHttpServer()).post(
+        `/api/v1/rider/deliveries/${DELIVERY_ID}/arrived-at-customer`,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body).toMatchObject({
+        success: false,
+        error: { code: 'NOT_ASSIGNED_RIDER' },
+      });
+    });
+
+    it('takes no request body — identity is the JWT and the delivery is the route', async () => {
+      stubs.customerArrivals.arriveAtCustomer.mockResolvedValue({
+        deliveryId: DELIVERY_ID,
+        orderId: 'order-1',
+        state: 'ARRIVED',
+        arrivedAt: null,
+        riderId: RIDER_ID,
+      });
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/rider/deliveries/${DELIVERY_ID}/arrived-at-customer`)
+        .send({ riderId: 'someone-else', arrivedAt: '1999-01-01T00:00:00.000Z' })
+        .expect(200);
+
+      // Nothing from the body reaches the service: it is called with the
+      // authenticated user and the route id, exactly as every other command is.
+      expect(stubs.customerArrivals.arriveAtCustomer).toHaveBeenCalledWith(
+        APPROVED_RIDER,
+        DELIVERY_ID,
+      );
+    });
+  });
+
   describe('surface', () => {
     it('exposes no route to read offers — DEC-APP-008 has the driver app read them under RLS', async () => {
       app = await buildApp(APPROVED_RIDER, stubs);
 
       await request(app.getHttpServer()).get('/api/v1/rider/offers').expect(404);
+    });
+
+    /**
+     * BQ-017 Slice #1 adds arrival only. The operator failure command, the
+     * contact-attempt endpoint and everything financial are later slices, and
+     * a route appearing here early would be a scope breach worth failing on.
+     */
+    it.each([
+      `/api/v1/rider/deliveries/${DELIVERY_ID}/fail`,
+      `/api/v1/rider/deliveries/${DELIVERY_ID}/contact-attempt`,
+      `/api/v1/rider/deliveries/${DELIVERY_ID}/customer-unreachable`,
+    ])('exposes no %s route — the rider never declares a failure (DEC-053 § 2)', async (path) => {
+      app = await buildApp(APPROVED_RIDER, stubs);
+
+      await request(app.getHttpServer()).post(path).send({}).expect(404);
     });
   });
 });

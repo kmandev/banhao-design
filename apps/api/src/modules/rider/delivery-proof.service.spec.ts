@@ -217,7 +217,7 @@ describe('DeliveryProofService — refusals', () => {
   });
 
   it.each(['RIDER_ASSIGNED', 'AT_MERCHANT', 'PICKED_UP', 'DELIVERED', 'FAILED'])(
-    'refuses a delivery in %s — a proof photo belongs only to an EN_ROUTE delivery',
+    'refuses a delivery in %s — a proof photo belongs only to a delivery genuinely out for delivery',
     async (state) => {
       const { supabase } = supabaseStub([deliveryRow(state)]);
       const { storage, getSignedUploadUrl } = storageStub();
@@ -235,6 +235,27 @@ describe('DeliveryProofService — refusals', () => {
       expect(getSignedUploadUrl).not.toHaveBeenCalled();
     },
   );
+
+  /**
+   * BQ-017 Slice #1 / DEC-054. Leaving the presign at `EN_ROUTE` alone would
+   * have made tapping customer arrival silently un-completable: no presign, so
+   * no photo, so no `…/delivered` (DEC-038 makes the photo mandatory). Both
+   * pre-terminal states must therefore presign, and `EN_ROUTE` must keep
+   * working for a rider who never taps arrival.
+   */
+  it.each(['EN_ROUTE', 'ARRIVED'])('presigns for a delivery in %s', async (state) => {
+    const { supabase } = supabaseStub([deliveryRow(state)]);
+    const { storage, getSignedUploadUrl } = storageStub();
+
+    const result = await new DeliveryProofService(supabase, storage).requestUploadUrl(
+      riderUser(),
+      DELIVERY_ID,
+      'image/jpeg',
+    );
+
+    expect(result.uploadUrl).toEqual(expect.any(String));
+    expect(getSignedUploadUrl).toHaveBeenCalled();
+  });
 
   it.each(['image/gif', 'application/pdf', 'text/html', 'image/svg+xml'])(
     'refuses the disallowed content type %s',

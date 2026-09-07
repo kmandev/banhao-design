@@ -45,6 +45,12 @@ const ASSIGNED_DELIVERY: RiderActiveDelivery = {
   pickedUpAt: null,
 };
 
+/** DEC-054 — the rider has reached the customer's door. The completion step. */
+const ARRIVED_DELIVERY: RiderActiveDelivery = {
+  ...EN_ROUTE_DELIVERY,
+  state: 'ARRIVED',
+};
+
 const ORDER: RiderOrderDetail = {
   orderId: 'order-1',
   orderNumber: 'BH-0241',
@@ -76,6 +82,7 @@ function bind(overrides: {
   markArrived?: jest.Mock;
   markPickedUp?: jest.Mock;
   markEnRoute?: jest.Mock;
+  markArrivedAtCustomer?: jest.Mock;
   markDelivered?: jest.Mock;
 }) {
   const getActiveDelivery = overrides.getActiveDelivery ?? jest.fn(async () => EN_ROUTE_DELIVERY);
@@ -83,6 +90,7 @@ function bind(overrides: {
   const markArrived = overrides.markArrived ?? jest.fn(async () => ({}));
   const markPickedUp = overrides.markPickedUp ?? jest.fn(async () => ({}));
   const markEnRoute = overrides.markEnRoute ?? jest.fn(async () => ({}));
+  const markArrivedAtCustomer = overrides.markArrivedAtCustomer ?? jest.fn(async () => ({}));
   const markDelivered =
     overrides.markDelivered ??
     jest.fn(async () => ({
@@ -100,10 +108,24 @@ function bind(overrides: {
   Object.assign(repositories, {
     delivery: { getActiveDelivery },
     riderOrderView: { getAssignedOrder },
-    deliveryActions: { markArrived, markPickedUp, markEnRoute, markDelivered },
+    deliveryActions: {
+      markArrived,
+      markPickedUp,
+      markEnRoute,
+      markArrivedAtCustomer,
+      markDelivered,
+    },
   });
 
-  return { getActiveDelivery, getAssignedOrder, markArrived, markPickedUp, markEnRoute, markDelivered };
+  return {
+    getActiveDelivery,
+    getAssignedOrder,
+    markArrived,
+    markPickedUp,
+    markEnRoute,
+    markArrivedAtCustomer,
+    markDelivered,
+  };
 }
 
 afterEach(() => {
@@ -119,7 +141,9 @@ describe('ActiveDeliveryScreen — rendering the active delivery', () => {
     await screen.findByTestId('active-delivery-body');
 
     expect(screen.getByText(/EN_ROUTE/)).toBeTruthy();
-    expect(screen.getByText(/ขั้นที่ 4 จาก 4/)).toBeTruthy();
+    // DEC-054 inserted customer arrival, so EN_ROUTE is step 4 of 5 and its
+    // action is the arrival tap, not the completion.
+    expect(screen.getByText(/ขั้นที่ 4 จาก 5/)).toBeTruthy();
     expect(screen.getByText(/BH-0241/)).toBeTruthy();
     expect(screen.getByTestId('delivery-dropoff')).toBeTruthy();
     expect(screen.getByText('62 ม.4 ต.บุณฑริก')).toBeTruthy();
@@ -131,9 +155,10 @@ describe('ActiveDeliveryScreen — rendering the active delivery', () => {
 
     await screen.findByTestId('active-delivery-body');
 
-    expect(screen.getByText(/ขั้นที่ 1 จาก 4/)).toBeTruthy();
+    expect(screen.getByText(/ขั้นที่ 1 จาก 5/)).toBeTruthy();
     expect(screen.getByTestId('button-delivery-arrived')).toBeTruthy();
     expect(screen.queryByTestId('button-delivery-delivered')).toBeNull();
+    expect(screen.queryByTestId('button-delivery-arrivedAtCustomer')).toBeNull();
   });
 
   it('shows a loading state before the first read settles', () => {
@@ -184,7 +209,7 @@ describe('ActiveDeliveryScreen — rendering the active delivery', () => {
     await screen.findByTestId('active-delivery-body');
     expect(screen.getByTestId('delivery-order-unavailable')).toBeTruthy();
     // The action is still available: every command needs only deliveryId.
-    expect(screen.getByTestId('button-delivery-delivered')).toBeTruthy();
+    expect(screen.getByTestId('button-delivery-arrivedAtCustomer')).toBeTruthy();
   });
 
   it('offers no action for a delivery being reassigned', async () => {
@@ -197,6 +222,7 @@ describe('ActiveDeliveryScreen — rendering the active delivery', () => {
     // A button here would produce a guaranteed 409 — no endpoint accepts this state.
     expect(screen.getByTestId('delivery-no-action')).toBeTruthy();
     expect(screen.queryByTestId('button-delivery-delivered')).toBeNull();
+    expect(screen.queryByTestId('button-delivery-arrivedAtCustomer')).toBeNull();
   });
 
   it('renders no money field anywhere — BQ-029 is OPEN', async () => {
@@ -208,9 +234,88 @@ describe('ActiveDeliveryScreen — rendering the active delivery', () => {
   });
 });
 
-describe('ActiveDeliveryScreen — the fourth step opens the POD leg', () => {
+/**
+ * BQ-017 Slice #1 / DEC-054. The client half shipped with the server half for
+ * one reason: `ACTIVE_DELIVERY_STATES` filters the rider's own delivery read,
+ * so a server producing `ARRIVED` against a client that cannot name it would
+ * show "no active delivery" to a rider standing at the customer's door.
+ */
+describe('ActiveDeliveryScreen — customer arrival (DEC-054)', () => {
+  it('keeps an ARRIVED delivery visible and actionable, never "no active delivery"', async () => {
+    bind({ getActiveDelivery: jest.fn(async () => ARRIVED_DELIVERY) });
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('active-delivery-body');
+
+    expect(screen.queryByTestId('active-delivery-empty')).toBeNull();
+    expect(screen.getByText(/ARRIVED/)).toBeTruthy();
+    expect(screen.getByText(/ขั้นที่ 5 จาก 5/)).toBeTruthy();
+    expect(screen.getByTestId('button-delivery-delivered')).toBeTruthy();
+  });
+
+  it('calls the customer-arrival command from EN_ROUTE — never the merchant-arrival one', async () => {
+    const { markArrivedAtCustomer, markArrived } = bind({});
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('button-delivery-arrivedAtCustomer');
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('button-delivery-arrivedAtCustomer'));
+    });
+
+    expect(markArrivedAtCustomer).toHaveBeenCalledWith('delivery-1');
+    expect(markArrived).not.toHaveBeenCalled();
+    // An ordinary transition, not the POD leg.
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the delivery after the arrival tap, so the step follows the server', async () => {
+    const { getActiveDelivery } = bind({});
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('button-delivery-arrivedAtCustomer');
+    expect(getActiveDelivery).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('button-delivery-arrivedAtCustomer'));
+    });
+
+    await waitFor(() => expect(getActiveDelivery).toHaveBeenCalledTimes(2));
+  });
+
+  it('renders the arrival button with the design’s own copy', async () => {
+    bind({});
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('button-delivery-arrivedAtCustomer');
+    expect(screen.getByText('ถึงจุดส่งแล้ว')).toBeTruthy();
+  });
+
+  /** DEC-053 § 2 — the operator declares a failure. The rider never does. */
+  it.each([
+    'button-delivery-fail',
+    'button-delivery-customerUnreachable',
+    'button-delivery-contactAttempt',
+    'button-delivery-safeDropOff',
+  ])('offers no %s control', async (testID) => {
+    bind({ getActiveDelivery: jest.fn(async () => ARRIVED_DELIVERY) });
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('active-delivery-body');
+    expect(screen.queryByTestId(testID)).toBeNull();
+  });
+
+  it('renders no money field on the arrival step either — BQ-024 is OPEN', async () => {
+    bind({ getActiveDelivery: jest.fn(async () => ARRIVED_DELIVERY) });
+    render(<ActiveDeliveryScreen />);
+
+    await screen.findByTestId('active-delivery-body');
+    expect(screen.queryByText(/฿|บาท|ค่ารอบ|รายได้|ค่าชดเชย/)).toBeNull();
+  });
+});
+
+describe('ActiveDeliveryScreen — the final step opens the POD leg', () => {
   it('navigates to ProofCamera instead of completing the delivery', async () => {
-    const { markDelivered } = bind({});
+    const { markDelivered } = bind({ getActiveDelivery: jest.fn(async () => ARRIVED_DELIVERY) });
     render(<ActiveDeliveryScreen />);
 
     await screen.findByTestId('button-delivery-delivered');
@@ -225,7 +330,9 @@ describe('ActiveDeliveryScreen — the fourth step opens the POD leg', () => {
   });
 
   it('does not re-read the delivery when opening the POD leg', async () => {
-    const { getActiveDelivery } = bind({});
+    const { getActiveDelivery } = bind({
+      getActiveDelivery: jest.fn(async () => ARRIVED_DELIVERY),
+    });
     render(<ActiveDeliveryScreen />);
 
     await screen.findByTestId('button-delivery-delivered');

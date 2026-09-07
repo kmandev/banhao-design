@@ -47,7 +47,12 @@ describe('dispatch policy — DEC-037', () => {
       'AT_MERCHANT',
       'PICKED_UP',
       'EN_ROUTE',
+      // DEC-054: a rider standing at the customer's door is holding a
+      // delivery. Omitting it would offer them a second job the moment they
+      // tapped arrival.
+      'ARRIVED',
     ]);
+    expect(active).toContain('ARRIVED');
     // Terminal states never hold a rider's slot, or a rider could never work again.
     expect(active).not.toContain('DELIVERED');
     expect(active).not.toContain('FAILED');

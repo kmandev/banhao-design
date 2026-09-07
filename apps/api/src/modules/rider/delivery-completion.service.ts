@@ -18,6 +18,12 @@ interface DeliveryRow {
   delivered_at: string | null;
   proof_photo_path: string | null;
   rider_earning_satang: number | null;
+  /**
+   * DEC-054's customer-arrival anchor. Read here for one reason only — see
+   * {@link DeliveryCompletionService.writeHistory} on why the history row's
+   * `from_state` is derived from it rather than assumed.
+   */
+  arrived_at: string | null;
 }
 
 /** `orders`, the single column the order-side diagnostic read needs. */
@@ -51,6 +57,41 @@ interface RiderAvailabilityRow {
  * protects nobody who skips it, per that file's own comment.
  */
 const PROOF_PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+
+/**
+ * The delivery states a completion may be claimed from — BQ-017 Slice #1.
+ *
+ * `EN_ROUTE` is the original and is **kept**: DEC-054 introduced `ARRIVED` as
+ * a progression state, and neither it nor DEC-053 makes tapping arrival a
+ * precondition of delivering. Narrowing this to `ARRIVED` alone would invent
+ * that policy and would break every rider mid-delivery on an older client.
+ * `ARRIVED` is added so a rider who *does* tap arrival can still complete.
+ *
+ * Both are pre-`DELIVERED` states owned by the same assigned rider, so
+ * accepting either widens no authorization: ownership and terminality are
+ * enforced by the same `WHERE` clause regardless of which one matched.
+ */
+const COMPLETABLE_DELIVERY_STATES = ['EN_ROUTE', 'ARRIVED'] as const;
+
+/**
+ * Which state the winning completion actually left, for the history row.
+ *
+ * The guarded UPDATE returns the row as it is *after* the write (`DELIVERED`),
+ * so the pre-state cannot simply be read back from it, and PostgREST offers no
+ * `RETURNING` of old values. It is derived instead from `arrived_at`, which is
+ * both sufficient and exact: `arrived_at` is written by one statement only —
+ * the `EN_ROUTE -> ARRIVED` transition — and no transition anywhere returns a
+ * delivery to `EN_ROUTE`, so a non-null `arrived_at` means the delivery was
+ * `ARRIVED` immediately before this completion, and a null one means it was
+ * `EN_ROUTE`.
+ *
+ * This is derivation from the winning row itself, not a second read: it adds
+ * no round trip and cannot race, because the value it reads was returned by
+ * the same statement that decided the transition.
+ */
+function fromStateOf(delivery: DeliveryRow): string {
+  return delivery.arrived_at ? 'ARRIVED' : 'EN_ROUTE';
+}
 
 /**
  * `POST /api/v1/rider/deliveries/:id/delivered` — Phase G-7.2, the **terminal**
@@ -243,7 +284,7 @@ export class DeliveryCompletionService {
     // The delivery has genuinely moved to DELIVERED, and this request is the
     // one that moved it. Record that fact before anything else can fail —
     // see this file's header on why the history row leads the rest.
-    await this.writeHistory(deliveryId, riderId);
+    await this.writeHistory(delivery, riderId);
 
     // Everything from here is "finish the tail", never "decide whether the
     // delivery transition happened".
@@ -455,9 +496,9 @@ export class DeliveryCompletionService {
         rider_earning_satang: resolveRiderEarningSatang(),
       })
       .eq('id', deliveryId)
-      .eq('state', 'EN_ROUTE')
+      .in('state', [...COMPLETABLE_DELIVERY_STATES])
       .eq('rider_id', riderId)
-      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path, rider_earning_satang')
+      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path, rider_earning_satang, arrived_at')
       .maybeSingle<DeliveryRow>();
 
     if (error) {
@@ -478,7 +519,7 @@ export class DeliveryCompletionService {
   private async readDelivery(deliveryId: string): Promise<DeliveryRow | null> {
     const { data, error } = await this.supabase.admin
       .from('deliveries')
-      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path, rider_earning_satang')
+      .select('id, state, rider_id, order_id, delivered_at, proof_photo_path, rider_earning_satang, arrived_at')
       .eq('id', deliveryId)
       .maybeSingle<DeliveryRow>();
 
@@ -864,14 +905,21 @@ export class DeliveryCompletionService {
    * whose guarded UPDATE actually moved the delivery, which is what makes
    * "exactly one row" a structural property rather than a checked one. Never
    * called from {@link repairCompletion}.
+   *
+   * `from_state` is derived by {@link fromStateOf} rather than hard-coded,
+   * because since DEC-054 a completion can genuinely be claimed from either
+   * `EN_ROUTE` or `ARRIVED` — see {@link COMPLETABLE_DELIVERY_STATES}. Writing
+   * a fixed `'EN_ROUTE'` would make the delivery's own audit trail state a
+   * transition that did not happen.
    */
-  private async writeHistory(deliveryId: string, riderId: string): Promise<void> {
+  private async writeHistory(delivery: DeliveryRow, riderId: string): Promise<void> {
+    const deliveryId = delivery.id;
     const correlationId = getCorrelationId();
     const parsedCorrelationId = uuidSchema.safeParse(correlationId);
 
     const { error } = await this.supabase.admin.from('delivery_status_history').insert({
       delivery_id: deliveryId,
-      from_state: 'EN_ROUTE',
+      from_state: fromStateOf(delivery),
       to_state: 'DELIVERED',
       actor_type: 'RIDER',
       actor_id: riderId,

@@ -1,11 +1,15 @@
 /**
- * API-backed delivery transition repository — Phase G-7.2, giving the four
- * rider delivery commands their first client.
+ * API-backed delivery transition repository — Phase G-7.2, giving the rider
+ * delivery commands their client.
  *
- *   `POST /api/v1/rider/deliveries/:id/arrived`     (G-4)
- *   `POST /api/v1/rider/deliveries/:id/picked-up`   (G-5)
- *   `POST /api/v1/rider/deliveries/:id/en-route`    (G-6)
- *   `POST /api/v1/rider/deliveries/:id/delivered`   (G-7.2 — added this phase)
+ *   `POST /api/v1/rider/deliveries/:id/arrived`              (G-4, merchant arrival)
+ *   `POST /api/v1/rider/deliveries/:id/picked-up`            (G-5)
+ *   `POST /api/v1/rider/deliveries/:id/en-route`             (G-6)
+ *   `POST /api/v1/rider/deliveries/:id/arrived-at-customer`  (BQ-017 Slice #1, DEC-054)
+ *   `POST /api/v1/rider/deliveries/:id/delivered`            (G-7.2)
+ *
+ * The first and fourth are **different journeys' arrivals** and are never
+ * interchangeable — see `markArrivedAtCustomer` below.
  *
  * Distinct from `riderDelivery.ts` on purpose: that repository is a direct
  * Supabase **read** under RLS (DEC-APP-008); these are **writes**, and
@@ -22,7 +26,7 @@
  * stale button gets the server's `INVALID_TRANSITION`, which is the correct
  * outcome.
  *
- * All four endpoints already exist and are unmodified by this file. This
+ * Every endpoint above already exists and is unmodified by this file. This
  * module only translates: it re-implements none of the server's ownership,
  * state, or idempotency rules, and it never writes `deliveries`,
  * `rider_assignments` or `rider_availability` directly — it could not, since
@@ -37,6 +41,7 @@
 
 import type { ApiClient } from '@banhao/api-client';
 import type {
+  RiderArrivedAtCustomerResponse,
   RiderArrivedResponse,
   RiderDeliveredResponse,
   RiderEnRouteResponse,
@@ -53,6 +58,24 @@ export interface RiderDeliveryActionsRepository {
   markPickedUp(deliveryId: string): Promise<RiderPickedUpResponse>;
   /** `PICKED_UP -> EN_ROUTE`, and the order `PICKED_UP -> DELIVERING`. */
   markEnRoute(deliveryId: string): Promise<RiderEnRouteResponse>;
+  /**
+   * `EN_ROUTE -> ARRIVED` — the rider reached the **customer's** delivery
+   * location (DEC-054). Delivery domain only: the order stays `DELIVERING`.
+   *
+   * **Not `markArrived`.** That one is merchant arrival
+   * (`RIDER_ASSIGNED -> AT_MERCHANT`, `…/arrived`), at the shop, before
+   * pickup. DEC-054 keeps the two permanently distinct — different endpoint,
+   * different state, different meaning — so neither may be wired to the
+   * other's path.
+   *
+   * Stamps `deliveries.arrived_at`, the anchor DEC-053's five-minute wait will
+   * be measured from. That timer does not exist yet, and calling this starts
+   * nothing: it records an operational fact.
+   *
+   * Optional, not a precondition — `markDelivered` still accepts a delivery
+   * that is `EN_ROUTE`.
+   */
+  markArrivedAtCustomer(deliveryId: string): Promise<RiderArrivedAtCustomerResponse>;
   /**
    * `EN_ROUTE -> DELIVERED`, and the order `DELIVERING -> DELIVERED`.
    *
@@ -74,8 +97,8 @@ export function createRiderDeliveryActionsRepository(
   getAccessToken: () => Promise<string | null> = defaultGetAccessToken,
 ): RiderDeliveryActionsRepository {
   /**
-   * One shape for all four: refuse to transmit without a session, then POST to
-   * the command path. A signed-out app must not issue a delivery transition at
+   * One shape for all of them: refuse to transmit without a session, then POST
+   * to the command path. A signed-out app must not issue a delivery transition at
    * all rather than send one and collect a 401 — the same precondition
    * `riderOfferActions.ts` applies.
    */
@@ -93,6 +116,8 @@ export function createRiderDeliveryActionsRepository(
     markArrived: (deliveryId) => command<RiderArrivedResponse>(deliveryId, 'arrived'),
     markPickedUp: (deliveryId) => command<RiderPickedUpResponse>(deliveryId, 'picked-up'),
     markEnRoute: (deliveryId) => command<RiderEnRouteResponse>(deliveryId, 'en-route'),
+    markArrivedAtCustomer: (deliveryId) =>
+      command<RiderArrivedAtCustomerResponse>(deliveryId, 'arrived-at-customer'),
     markDelivered: (deliveryId, objectKey) =>
       command<RiderDeliveredResponse>(deliveryId, 'delivered', { objectKey }),
   };

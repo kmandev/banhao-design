@@ -13,6 +13,7 @@ import {
   riderDeliveredRequestSchema,
   riderLocationRequestSchema,
   riderProofUploadUrlRequestSchema,
+  type RiderArrivedAtCustomerResponse,
   type RiderArrivedResponse,
   type RiderCancelDeliveryResponse,
   type RiderDeliveredResponse,
@@ -30,6 +31,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { DeliveryArrivalService } from './delivery-arrival.service';
 import { DeliveryCompletionService } from './delivery-completion.service';
+import { DeliveryCustomerArrivalService } from './delivery-customer-arrival.service';
 import { DeliveryEnRouteService } from './delivery-en-route.service';
 import { DeliveryProofService } from './delivery-proof.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
@@ -63,6 +65,7 @@ export class RiderController {
     private readonly offers: OfferAcceptanceService,
     private readonly releases: DeliveryReleaseService,
     private readonly arrivals: DeliveryArrivalService,
+    private readonly customerArrivals: DeliveryCustomerArrivalService,
     private readonly pickups: DeliveryPickupService,
     private readonly departures: DeliveryEnRouteService,
     private readonly completions: DeliveryCompletionService,
@@ -198,6 +201,44 @@ export class RiderController {
     @Param('id') id: string,
   ): Promise<RiderEnRouteResponse> {
     return this.departures.startDelivery(requireUser(user), id);
+  }
+
+  /**
+   * The rider reaches the **customer's** delivery location — BQ-017 Slice #1,
+   * DEC-054. `EN_ROUTE -> ARRIVED` on the delivery. The order is not touched
+   * and stays `DELIVERING` (DEC-018).
+   *
+   * **Distinct from `deliveries/:id/arrived` above, permanently.** That route
+   * is *merchant* arrival (`RIDER_ASSIGNED -> AT_MERCHANT`) and keeps exactly
+   * its current semantics; DEC-054 forbids reusing it as the customer-arrival
+   * anchor, because it fires before pickup, at the wrong end of the journey.
+   * The path segment says `arrived-at-customer` rather than `arrived` for the
+   * same reason the two are separate services: neither may be mistaken for,
+   * or aliased to, the other.
+   *
+   * The transition stamps `deliveries.arrived_at`, which DEC-054 makes the
+   * authoritative anchor for DEC-053's five-minute wait. **That timer is not
+   * implemented**, and neither is the failure path it leads to — this route
+   * records an operational fact and nothing else.
+   *
+   * Tapping arrival is **not** a precondition of completing a delivery:
+   * `deliveries/:id/delivered` still accepts `EN_ROUTE`, so a rider who never
+   * taps it is not blocked. Making arrival mandatory would be a policy neither
+   * DEC-053 nor DEC-054 states.
+   */
+  @Post('deliveries/:id/arrived-at-customer')
+  @HttpCode(200)
+  @Roles('RIDER')
+  @ApiOkResponse({ description: 'The delivery, now ARRIVED at the customer' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiForbiddenResponse({ description: 'Not an approved rider, or not the rider currently assigned to this delivery' })
+  @ApiNotFoundResponse({ description: 'Delivery not found' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION — the delivery is not currently EN_ROUTE' })
+  async markArrivedAtCustomer(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<RiderArrivedAtCustomerResponse> {
+    return this.customerArrivals.arriveAtCustomer(requireUser(user), id);
   }
 
   /**
