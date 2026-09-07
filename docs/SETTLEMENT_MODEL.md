@@ -279,12 +279,22 @@ charged) and `PROMOTION_FUNDING` (who is out the discount) stay distinct
 facts. This design neither builds nor blocks that; DEC-046's funder model and
 BQ-030's open stacking question are both untouched.
 
-**Refunds:** not designed here. No contradiction: a future `REFUND_PAYABLE`
-entry is a **reversing** entry in a **new** group (per this document's own
-append-only rule), never a mutation of the `CUSTOMER_PAYMENT` row it offsets —
-consistent with how every other account here is already treated. BQ-027
-(service-fee refundability) and BQ-031 (partial refund composition) remain
-exactly as open as before this design.
+**Refunds:** not designed here. No contradiction: a refund is a **reversing**
+entry in a **new** group (per this document's own append-only rule), never a
+mutation of the `CUSTOMER_PAYMENT` row it offsets — consistent with how every
+other account here is already treated. BQ-031 (partial refund composition)
+remains exactly as open as before this design. (BQ-027, service-fee
+refundability, was still open when this design was written and was separately
+resolved on 2026-09-06 by DEC-047/DEC-048.)
+
+> ⚠️ **Superseded in one detail by DEC-049 (2026-09-07).** As originally
+> written, this paragraph named `REFUND_PAYABLE` as that reversing entry.
+> **DEC-049 does not use `REFUND_PAYABLE` for the refund-reversal
+> architecture** — a `CUSTOMER_PAYMENT` reversal, where a future business
+> rule requires one, is its own independent group with a negative
+> `CUSTOMER_PAYMENT` entry. `REFUND_PAYABLE` remains a reserved account whose
+> semantics DEC-049 deliberately does not decide. The append-only point above
+> is unchanged and still correct.
 
 **Settlement:** this design is a **prerequisite** for future reconciliation
 — it gives "money actually received" a ledger row for the first time — but
@@ -399,7 +409,10 @@ other. Refundability was separately resolved 2026-09-06 by **DEC-048**
 (service fee included in an eligible full order refund; not implemented — see
 § 9). A reversal, when implemented, is a **new** group — historical
 `CUSTOMER_PAYMENT` and historical revenue entries are never mutated
-(`reject_mutation`).
+(`reject_mutation`). **DEC-049 (2026-09-07) fixes that group's shape**: an
+independent `PLATFORM_REVENUE` reversal group, negative, amount from
+`orders.service_fee_satang`, anchored on the local refund identity and posted
+only at verified refund finality. Still **not implemented**.
 
 **Reconciliation:** not implemented and not designed here. A future
 service-fee reconciliation must be able to tell apart missing, duplicate,
@@ -692,6 +705,19 @@ unaffected), and it says nothing about the **commission** half of "fee
 reversed," which remains undecided and unimplemented for reversal. No
 reversal code exists for either.
 
+**How a reversal is represented — DEC-049 (2026-09-07).** Independent ledger
+groups, one per reversed component: a `CUSTOMER_PAYMENT` reversal (negative
+`CUSTOMER_PAYMENT`) where a future business rule requires one, and a
+`SERVICE_FEE_REVENUE` reversal (negative `PLATFORM_REVENUE`, amount from
+`orders.service_fee_satang`). **No `REFUND_PAYABLE` bridge group, no zero-sum
+requirement**, identity anchored on `refunds.id`/`refund_reference` rather
+than any provider identifier, posted **only at verified refund finality**
+(`REFUNDED`) — never at request, approval, or in-flight processing. DEC-049
+decides representation only: **which** causes are refundable (BQ-016, BQ-015,
+BQ-017), partial-refund composition (BQ-031), whether `CUSTOMER_PAYMENT` is
+reversed in any given case, and the mechanism that establishes finality
+(Q-020) all remain `OPEN`. Nothing is implemented.
+
 ---
 
 ## 10. Promotion funding
@@ -938,15 +964,24 @@ will eventually be paid correctly (no settlement engine exists); refund
 correctness (no `REFUND_PAYABLE` posting exists); or promotion-funding
 correctness (`PROMOTION_FUNDING` remains unposted, DEC-046).
 
-**Future refunds:** a `REFUND_PAYABLE` entry, when it eventually exists, is a
+**Future refunds:** a refund reversal, when it eventually exists, is a
 **new, separate** ledger entry in a **new** group — never a mutation of the
 `CUSTOMER_PAYMENT` row it offsets (consistent with this document's own
 append-only rule). This design's per-payment 1:1 `CUSTOMER_PAYMENT`
 invariant is therefore unaffected by a later refund: the original
 `CUSTOMER_PAYMENT` entry still reconciles exactly as it did the day it
-posted. Reconciling `REFUND_PAYABLE` against `refunds` is a distinct, future,
-unimplemented concern this design does not build, and BQ-027/BQ-031 remain
-exactly as open as before.
+posted. Refund reconciliation is a distinct, future, unimplemented concern
+this design does not build, and BQ-031 remains exactly as open as before.
+
+> ⚠️ **Superseded in one detail by DEC-049 (2026-09-07),** which fixed the
+> reversal's shape: independent groups per reversed component, anchored on
+> the local refund identity, posted only at verified refund finality.
+> As originally written, this paragraph named `REFUND_PAYABLE` as the
+> reversing entry and as the thing to reconcile against `refunds`; **DEC-049
+> does not use `REFUND_PAYABLE`** and does not decide its eventual semantics.
+> Everything else above — new group, never a mutation, the 1:1
+> `CUSTOMER_PAYMENT` invariant surviving a later refund — is unchanged.
+> (BQ-027 was separately resolved in full on 2026-09-06 by DEC-047/DEC-048.)
 
 **Future settlement:** this design is an **upstream control**, not a
 replacement — a settlement engine should never trust an order's

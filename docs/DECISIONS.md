@@ -58,6 +58,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-046** | **Promotion/discount funder model: platform or merchant, per promotion, no split (Option C)** | **ACCEPTED** | **2026-09-05** | `docs/SETTLEMENT_MODEL.md` § 3, § 10, `docs/BUSINESS_RULES.md` § 11, BQ-030 (funder half) |
 | **DEC-047** | **Phase 1 service fee revenue recognition: `PLATFORM_REVENUE` at the successful-payment economic-finality point** | **ACCEPTED — RECOGNITION TIMING · IMPLEMENTED 2026-09-06** | **2026-09-06** | `docs/SETTLEMENT_MODEL.md` § 3.2, `apps/api/src/modules/payments/payment-event-processing.service.ts`, BQ-027 (timing half) |
 | **DEC-048** | **Service fee refundability: included in an eligible full order refund (Option A)** | **ACCEPTED — REFUNDABILITY · NOT IMPLEMENTED** | **2026-09-06** | `docs/SETTLEMENT_MODEL.md` § 9, `docs/OPEN_BUSINESS_QUESTIONS.md` BQ-027 (resolved) |
+| **DEC-049** | **Refund ledger architecture: independent reversal groups over a mutable refund domain record; no `REFUND_PAYABLE` bridge, no zero-sum requirement, posting only at verified refund finality** | **ACCEPTED — ARCHITECTURE · NOT IMPLEMENTED** | **2026-09-07** | `docs/SETTLEMENT_MODEL.md` § 3.1, § 3.2, § 9, § 11.1, `supabase/migrations/20260811000007_ledger_domain.sql` |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -4214,4 +4215,243 @@ DEC-034 (zero-sum asserted in the application, per group — unaffected)
 None / None. Resolves the **refundability** half of BQ-027 that DEC-036 and
 DEC-047 both explicitly left open. Does not supersede or modify DEC-024,
 DEC-036, DEC-043, DEC-044, DEC-045, DEC-046 or DEC-047, each of which stands
-unchanged.
+unchanged. The **refund ledger posting shape** this decision explicitly left
+undecided is separately fixed by **DEC-049** (2026-09-07); this decision's own
+refundability rule is unchanged by it.
+
+---
+
+## DEC-049 — Refund ledger architecture: independent reversal groups over a mutable refund domain record
+
+**Status:** ACCEPTED — ARCHITECTURE · **NOT IMPLEMENTED** · **Date:** 2026-09-07 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+DEC-048 made the service fee refundable within an eligible full order refund
+and deliberately left the **posting shape** undecided. This decision fixes
+that shape — and only that shape. It is an architecture lock: it decides how
+a refund reversal is *represented* in the ledger, never when a refund is
+owed, what causes qualify, or how money physically returns to a customer.
+
+**1. Two layers, permanently distinct.**
+`refunds` is the **mutable refund process/domain record** — intent, approval,
+and provider/execution progress. `ledger_entry_groups` and `ledger_entries`
+are **append-only, immutable accounting facts**. A refund's process may
+advance, fail, and be retried without ever rewriting a financial fact.
+**A refund is never represented by mutating a historical ledger entry.**
+
+**2. Independent reversal groups, one per reversed component.**
+A refund reversal posts **separate ledger groups** — one per component the
+refund actually reverses. **No single bridge group** may combine
+`CUSTOMER_PAYMENT`, `SERVICE_FEE_REVENUE` and `REFUND_PAYABLE` into one
+group. For a component a future approved business rule actually requires to
+be reversed:
+
+| Component | Account | Signed amount | Amount source |
+|---|---|---|---|
+| `CUSTOMER_PAYMENT` reversal | `CUSTOMER_PAYMENT` | **negative** | the authoritative recorded payment amount associated with the payment/refund being reversed |
+| `SERVICE_FEE_REVENUE` reversal | `PLATFORM_REVENUE` | **negative** | **`orders.service_fee_satang`** |
+
+Each is its own independent group. This preserves DEC-048's own requirement
+that the service-fee reversal stays "conceptually separate from
+`CUSTOMER_PAYMENT`," and mirrors how the originals were posted: the live
+`CUSTOMER_PAYMENT` and `SERVICE_FEE_REVENUE` groups are already independent,
+single-entry groups (DEC-047, `SETTLEMENT_MODEL.md` § 3.1/§ 3.2).
+
+**3. No zero-sum requirement.**
+Refund reversal groups are **not** required to sum to zero, and **no
+balancing entry may be introduced merely to force zero-sum**. This follows
+the established precedent: `CUSTOMER_PAYMENT` nets `+grand_total`,
+`SERVICE_FEE_REVENUE` nets `+fee`, and `RIDER_EARNING` nets `−1000` — a
+residual DEC-045 explicitly accepted. DEC-034 rejected a database zero-sum
+trigger and names order-level answerability, verified by reconciliation, as
+the goal. A reversal mirrors the fact it reverses; it does not manufacture a
+counterpart.
+
+**4. `REFUND_PAYABLE` is not used by this architecture.**
+It remains a **reserved account with unresolved semantics**. This decision
+does not repurpose it, does not give it a new meaning, and does not decide
+what it will eventually mean in any other flow — including the
+surplus/duplicate-payment obligation sketched in
+`docs/TECHNICAL_ARCHITECTURE.md` § on surplus payment. Older `PROPOSED`-grade
+design prose that anticipated a `REFUND_PAYABLE` entry as the refund-side
+reversing entry is superseded **for the refund-reversal architecture only**;
+nothing else about that account is decided here.
+
+**5. Posting trigger: verified refund finality, represented by `REFUNDED`.**
+A reversal group is posted **only** once the refund has reached `REFUNDED` —
+the state that represents verified refund finality. It is **never** posted at
+`REFUND_REQUESTED`, `REFUND_PENDING`, or `REFUND_PROCESSING`, which are
+intent, approval, and in-flight execution respectively. This mirrors the
+payment path, where all three ledger groups post only after economic finality
+(`payments → SUCCESS` together with the guarded `orders → PAID`), never at
+intent.
+
+**The mechanism that establishes that finality is deliberately not fixed
+here.** Whether `REFUNDED` is reached by a signature-verified provider
+webhook (CON-002's existing rule for provider-mediated payments), by an
+operator-confirmed manual mechanism, or by something else, is **OPEN under
+Q-020** and belongs to whichever decision resolves it. This decision binds
+the *trigger point*, not the *mechanism*.
+
+**6. Identity is local.**
+A reversal group is anchored to the **local refund identity** — `refunds.id`
+and/or the local `refund_reference`. **Provider refund IDs and provider
+transaction IDs must not be the architectural identity of a ledger group**:
+`refunds.provider_refund_id` is nullable, is populated only if and when a
+provider accepts, and may never exist at all under a manual mechanism. Where
+the existing schema supports it, a reversal group populates
+`ledger_entry_groups.refund_id` and `ledger_entry_groups.order_id` as its
+structural links.
+
+**7. Idempotency reuses the established pattern, unchanged.**
+Insert the group first; on a `ledger_entry_groups.group_key` unique
+violation, re-read the group and self-heal any missing entries. **No new
+idempotency architecture is introduced.** `group_key` uniqueness remains the
+sole concurrency authority, exactly as it is for the four live groups.
+
+**8. Amount sources are authoritative recorded facts.**
+The service-fee reversal reads **`orders.service_fee_satang`** — never a
+hardcoded `500`, never derived from the grand total or the subtotal, and
+never read from a mutable pricing constant. A `CUSTOMER_PAYMENT` reversal
+reads the authoritative recorded payment amount associated with the
+payment/refund being reversed.
+
+**9. No schema change and no migration.**
+The existing schema is sufficient: `refunds`, `payment_transactions`
+(including its `direction` column, whose `OUT` value this decision does not
+define — see below), `ledger_entry_groups.refund_id`, the existing
+`ledger_entries.account` values, the existing `group_key` unique constraint,
+and the existing append-only protections.
+
+### Explicit non-decisions
+
+This decision establishes the financial architecture needed to *represent* a
+reversal. It does **not** decide, and must not be read as deciding:
+
+- **Refund and cancellation eligibility** — which situations are refundable,
+  cancellation windows, or cancellation fees (**BQ-016** remains `OPEN`).
+- **Whether every cancellation receives a full refund**, and **whether
+  `CUSTOMER_PAYMENT` is reversed at all in any given case.** DEC-049 says
+  only that *if* a future approved refund policy requires that reversal, it
+  is represented as its own independent append-only group.
+- Who bears the cost of cooked-but-undelivered food (**BQ-015**, `OPEN`).
+- Delivery-failure responsibility (**BQ-017**, `OPEN`).
+- **Partial refund policy or composition** (**BQ-031**, `OPEN`).
+- The **refund execution mechanism** (**Q-020**, `OPEN`) or any
+  provider-specific refund implementation.
+- Refund **webhook routing**, refund **reconciliation**, or refund
+  **simulator/dev tooling**.
+- Settlement or payout behaviour.
+- **Merchant commission reversal**, **delivery-fee reversal**,
+  **rider-earning or compensation reversal**, or **promotion reversal** —
+  each remains its own undecided component.
+- **`payment_transactions.direction = 'OUT'`** semantics — undefined here and
+  left to whichever decision resolves Q-020.
+- The **eventual semantics of `REFUND_PAYABLE`**, in this or any other flow.
+- Any zero-sum policy for a future refund/payable model beyond the reversal
+  groups this decision covers.
+
+### Why
+
+Product Owner decision, 2026-09-07, following this session's read-only refund
+ledger architecture recon. Independent reversal groups were chosen because
+they are the only shape consistent with DEC-048's own separation requirement,
+because they mirror the live posting shape of the two facts being reversed
+rather than introducing a new one, because they reuse an idempotency and
+self-heal pattern already proven four times in production code, and because
+they extend naturally to a future partial-refund policy (BQ-031) without
+touching any historical fact.
+
+### Alternatives
+
+- **A refund-payable bridge group** (`REFUND_PAYABLE` + `CUSTOMER_PAYMENT`
+  reversal + `SERVICE_FEE_REVENUE` reversal in one zero-summing group) —
+  **rejected.** It contradicts DEC-048's requirement that the service-fee
+  reversal be conceptually separate from `CUSTOMER_PAYMENT`, requires
+  inventing a semantic for `REFUND_PAYABLE` that no decision has ever fixed,
+  and presumes one refund reverses every component at once, which a future
+  partial-refund policy would immediately break.
+- **Posting at refund request or approval** — rejected. It would record a
+  financial fact for money that demonstrably has not moved, in an append-only
+  ledger that cannot withdraw it, only compensate.
+- **Anchoring group identity on provider refund/transaction IDs** — rejected.
+  Those identifiers are nullable, arrive late, and may never exist under a
+  manual mechanism; the local refund record already supplies a per-event
+  identity.
+
+### Consequences
+
+- DEC-048's service-fee reversal becomes buildable as a self-contained unit,
+  independent of any future `CUSTOMER_PAYMENT`-reversal business decision.
+- **The architecture is inert until a refund can actually reach `REFUNDED`.**
+  With Q-020 unresolved there is no mechanism that establishes refund
+  finality, so no reversal will post. This is accepted deliberately: the
+  alternative is recording unverified facts in an append-only ledger.
+- `PLATFORM_REVENUE` will eventually be written by a third group kind (the
+  service-fee reversal) alongside `MERCHANT_COMMISSION` and
+  `SERVICE_FEE_REVENUE`. Any query aggregating `PLATFORM_REVENUE` without
+  filtering `ledger_entry_groups.kind` will conflate them.
+- Older `PROPOSED` design prose in `docs/SETTLEMENT_MODEL.md` § 3.1 and
+  § 11.1 anticipated a `REFUND_PAYABLE` entry as the refund-side reversing
+  entry. Those passages are reconciled to point here; their append-only
+  point — a refund never mutates the entry it offsets — is unchanged and
+  remains correct.
+- `PaymentReconciliationService` needs no change: it scans
+  `payments.state = 'SUCCESS'` and `payment_transactions.direction = 'IN'`
+  only, so no reversal group can enter or disturb its current output. Refund
+  reconciliation remains unbuilt and undesigned.
+- Order-level zero-sum (CON-003) is neither achieved nor worsened by this
+  decision; it remains blocked on gross merchant payable and delivery-fee
+  revenue recognition, both unposted and both outside this scope.
+
+### Implementation status
+
+**Not implemented.** No refund code, no reversal posting method, no refund
+endpoint, no webhook branch, no reconciliation change, no migration, and no
+schema change exist as of this decision. Nothing in `apps/` writes `refunds`,
+`ledger_entry_groups.refund_id`, or `payment_transactions.direction = 'OUT'`.
+A future implementation task is gated on this decision **plus** the business
+rules that determine a refund is owed (BQ-015/BQ-016/BQ-017) **plus** the
+mechanism that establishes refund finality (Q-020).
+
+### Evidence
+
+Product Owner instruction, 2026-09-07 ("BANHAO — LOCK DEC-049 REFUND LEDGER
+ARCHITECTURE"), following the read-only refund ledger architecture decision
+recon performed in the same session: `refunds`' immutability trigger protects
+only `payment_id`/`refund_reference`/`amount_satang` (the rest is designed to
+change); `ledger_entries`/`ledger_entry_groups` carry `reject_mutation` for
+every role; `ledger_entry_groups.refund_id` exists as a live FK with zero code
+references; `REFUND_PAYABLE` has zero postings and no defining decision;
+`payment_transactions.direction = 'OUT'` has zero writes and no documented
+semantics; and the four live ledger groups establish both the single-entry
+non-zero-sum precedent and the insert-first/self-heal idempotency pattern.
+
+### Related Requirements
+
+DEC-048 (the service-fee reversal this architecture represents; unchanged) ·
+DEC-047 (recognition, unchanged) · DEC-027 (refund is a payment-domain event) ·
+DEC-028 (idempotency) · DEC-030 (money-movement identity; the surplus
+obligation is untouched) · DEC-034 (financial integrity without a zero-sum
+trigger) · DEC-045 (accepted non-zero residual precedent) · CON-002 · CON-003 ·
+Q-020, BQ-015, BQ-016, BQ-017, BQ-031 — **all remain `OPEN` and untouched**
+
+### Related Architecture
+
+`docs/SETTLEMENT_MODEL.md` § 3.1, § 3.2, § 9, § 11.1 ·
+`docs/PAYMENT_LIFECYCLE.md` § 8 ·
+`supabase/migrations/20260811000006_payment_domain.sql` (`refunds`,
+`payment_transactions`) ·
+`supabase/migrations/20260811000007_ledger_domain.sql` (`ledger_entry_groups`,
+`ledger_entries`) · ADR-001, ADR-003
+
+### Supersedes / Superseded By
+
+None / None. Fixes the refund ledger **posting shape** that DEC-048
+explicitly deferred. Does not supersede or modify DEC-024, DEC-027, DEC-030,
+DEC-034, DEC-036, DEC-045, DEC-047 or DEC-048, each of which stands
+unchanged. Supersedes, for the refund-reversal architecture only, the
+`PROPOSED`-grade design prose in `docs/SETTLEMENT_MODEL.md` § 3.1/§ 11.1 that
+anticipated a `REFUND_PAYABLE` reversing entry — without deciding that
+account's eventual semantics.
