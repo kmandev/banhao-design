@@ -119,11 +119,13 @@ stateDiagram-v2
     RIDER_SEARCHING --> RIDER_ASSIGNED : first rider accepts (DEC-020)
     RIDER_ASSIGNED --> RIDER_REASSIGNING : rider cancels / operator force-unassigns (DEC-021)
     RIDER_REASSIGNING --> RIDER_SEARCHING : back to broadcast (DEC-021)
-    RIDER_ASSIGNED --> AT_MERCHANT : rider arrives at the shop
+    RIDER_ASSIGNED --> AT_MERCHANT : rider arrives at the SHOP (merchant arrival)
     AT_MERCHANT --> PICKED_UP : food collected
     PICKED_UP --> EN_ROUTE : rider departs
+    EN_ROUTE --> ARRIVED : rider arrives at the CUSTOMER (DEC-054) ⬦
+    ARRIVED --> DELIVERED : handover confirmed
+    ARRIVED --> FAILED : operator resolves after 2 contacts + 5 min (DEC-053) ⬦
     EN_ROUTE --> DELIVERED : handover confirmed
-    EN_ROUTE --> FAILED : customer unreachable or refuses
     RIDER_SEARCHING --> ABANDONED : operator cancels the order (DEC-022)
     DELIVERED --> [*]
     FAILED --> [*]
@@ -132,6 +134,17 @@ stateDiagram-v2
 
 **`RIDER_SEARCHING` has no timeout that cancels anything.** It loops until a
 rider accepts or an operator decides otherwise — DEC-022.
+
+⬦ **`ARRIVED` is `ACCEPTED` policy (DEC-054) and not implemented.** Two
+arrivals exist and must never be conflated: **`AT_MERCHANT` is arrival at the
+shop** — the existing `POST /api/v1/rider/deliveries/:id/arrived`, unchanged —
+while **`ARRIVED` is arrival at the customer's delivery location**, a new
+transition whose timestamp is the authoritative anchor for DEC-053's
+five-minute wait. The timer must never start at merchant arrival. `ARRIVED` is
+not yet in `deliveries.state`'s CHECK constraint and there is no
+customer-arrival timestamp column, so implementing it needs an additive
+migration under its own explicit instruction. The direct `EN_ROUTE → DELIVERED`
+edge is what the runtime does **today**, before `ARRIVED` exists.
 
 Mapping to Order state (the customer-facing single source of truth, REQ-002):
 
@@ -142,8 +155,9 @@ Mapping to Order state (the customer-facing single source of truth, REQ-002):
 | `RIDER_REASSIGNING` | **unchanged** — DEC-021 | Searching again; the order is untouched |
 | `PICKED_UP` | `PICKED_UP` | — |
 | `EN_ROUTE` | `DELIVERING` | — |
+| `ARRIVED` ⬦ | `DELIVERING` | Rider at the customer's door — **DEC-054**, not implemented. Timer anchor for DEC-053 |
 | `DELIVERED` | `DELIVERED` | — |
-| `FAILED` | `DELIVERY_FAILED` | **`ACCEPTED` — DEC-053** (operator-declared after 2 contact attempts and a 5-minute wait from `ARRIVED`). **Not implemented** — nothing writes either state, and `DELIVERY_FAILED` is still gated by DEC-APP-006 (BQ-013 `OPEN`) |
+| `FAILED` | `DELIVERY_FAILED` | **`ACCEPTED` — DEC-053** (operator-declared after 2 contact attempts and a 5-minute wait from **customer arrival**, `ARRIVED` — never merchant arrival). **Not implemented** — nothing writes either state. **DEC-054 grants a narrow DEC-APP-006 carve-out** allowing `DELIVERY_FAILED` on this path only, with **BQ-013 still `OPEN`** |
 
 Operator **force-unassign** (`ปุ่มบังคับปลดงาน`) is `ACCEPTED` (DEC-032) and
 routes through `RIDER_REASSIGNING` with an audit record.

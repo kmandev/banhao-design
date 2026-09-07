@@ -113,7 +113,7 @@ policy does not exist is **not** shipped as a hopeful button:
 | L4 approval of `pause_merchant` | **BQ-013** — no auto-pause threshold exists | Not built. The console states the dependency; no approve control exists to press |
 | No-rider terminal outcome (cancel / fail) | **UX-Q-006** | No control. The case can be resolved with a reason; the delivery is untouched |
 | Safe drop-off, customer-unavailable resolution | **OD-04**, UX-Q-006 | Not built |
-| Failed delivery, cost of wasted food | **BQ-015**, DEC-APP-006 | Not built. `DELIVERY_FAILED` stays unimplemented |
+| Failed delivery, cost of wasted food | Policy now locked — **DEC-051/052** (food cost) and **DEC-053** (post-pickup failure); **DEC-054** carves `DELIVERY_FAILED` out of DEC-APP-006 for that path | **Still not built.** The operator failure-resolution command does not exist, and refund/ledger consequences stay blocked on **Q-020** |
 | Repeated rider cancellation consequences | **Q-032** | Not built |
 | Refund, settlement, earnings, ledger writes | Q-001, Q-002, Q-010, Q-020 · CON-002 · DEC-034 | Not built, and absent from the command surface entirely — not merely disabled |
 

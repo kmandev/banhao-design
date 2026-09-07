@@ -904,7 +904,9 @@ related: BQ-015 (pre-pickup only), BQ-018, BQ-024, BQ-031, Q-020, UX-Q-006
 > `release_rider_assignment()` refuses post-pickup states; nothing monitors
 > post-pickup deliveries so the 5-minute timer has no runner; `FAILED`,
 > `failed_at` and `failure_cause` are never written; `DELIVERY_FAILED` is
-> still gated by **DEC-APP-006**, which also depends on **BQ-013** (`OPEN`);
+> now unblocked for this path alone by **DEC-054**'s narrow DEC-APP-006
+> carve-out, with **BQ-013 still `OPEN`** — and the customer-arrival anchor
+> `ARRIVED` that DEC-054 locks does not exist in the schema either;
 > **four of the six cause classes do not exist** (only `CUSTOMER_UNREACHABLE`
 > and `CUSTOMER_REFUSED` appear, as `PROPOSED`, in `ORDER_LIFECYCLE.md` § 6)
 > and the cancel API rejects `causeCode`; no refund can execute (**Q-020**);

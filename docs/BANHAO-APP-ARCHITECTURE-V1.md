@@ -524,6 +524,16 @@ customer `CANCELLED` path. `PAYMENT_FAILED`, `PAYMENT_EXPIRED`,
 `MERCHANT_REJECTED` and `DELIVERY_FAILED` are **not** implemented until their
 names and policies are approved.
 
+> **Narrowed 2026-09-07 by DEC-054.** `DELIVERY_FAILED` may now be implemented
+> **specifically for DEC-053's operator-resolved post-pickup delivery-failure
+> path**, whose name and policy are approved. This is a carve-out for that one
+> state on that one path: `PAYMENT_FAILED`, `PAYMENT_EXPIRED` and
+> `MERCHANT_REJECTED` remain blocked, **BQ-013 remains `OPEN`** and is neither
+> resolved nor implied, no generic `DELIVERY_FAILED` write is authorized, and
+> safe drop-off stays deferred to UX-Q-006 / OD-04. Precedence is
+> `DEC-` > `DEC-APP-` (`CLAUDE.md` § 10); the rest of this decision stands
+> unchanged.
+
 **Reason.** `docs/ORDER_LIFECYCLE.md` states plainly that no exception-path code
 may be written while its policy is `OPEN`, and BQ-013/BQ-015/BQ-016/BQ-017 are
 open. Building against a `PROPOSED` name means a rename later touches the

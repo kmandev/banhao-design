@@ -63,6 +63,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-051** | **Cooked-food loss is allocated by cause — platform-caused to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant — from `PREPARING` onward, valued at `orders.subtotal_satang`** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/SETTLEMENT_MODEL.md` § 3, § 9, `docs/ORDER_LIFECYCLE.md` § 5, § 6, BQ-015 (resolved) |
 | **DEC-052** | **Customer-caused pre-pickup cooked-food loss is absorbed by BANHAO (`PLATFORM_WRITE_OFF`) — a narrow clarification closing DEC-051's recorded residual** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/DECISIONS.md` DEC-051, `docs/SETTLEMENT_MODEL.md` § 9, BQ-015 (remains resolved) |
 | **DEC-053** | **Post-pickup delivery failure: operator-resolved `DELIVERY_FAILED` / delivery `FAILED`, 2 contact attempts + 5-minute wait from `ARRIVED`, cause-dependent economics** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/ORDER_LIFECYCLE.md` § 4, § 5, § 6, `docs/SETTLEMENT_MODEL.md` § 9, BQ-017 (resolved) |
+| **DEC-054** | **Customer-arrival anchor `EN_ROUTE → ARRIVED` (distinct from `AT_MERCHANT`), and a narrow DEC-APP-006 carve-out letting DEC-053 use `DELIVERY_FAILED` while BQ-013 stays `OPEN`** | **ACCEPTED — POLICY / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/RIDER_LIFECYCLE.md` § 4, `docs/BANHAO-APP-ARCHITECTURE-V1.md` (DEC-APP-006), DEC-053 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -5338,4 +5339,215 @@ DEC-032 (operator authority and mandatory reason) · CON-003
 None / None. Resolves **BQ-017** and owns the post-`PICKED_UP` failure
 boundary that DEC-050 and DEC-051 each explicitly assigned to it. Does not
 supersede or modify DEC-022, DEC-038, DEC-043, DEC-044, DEC-045, DEC-048,
-DEC-049, DEC-050, DEC-051 or DEC-052, each of which stands unchanged.
+DEC-049, DEC-050, DEC-051 or DEC-052, each of which stands unchanged. **The two runtime-policy blockers this decision's
+own implementation status recorded — the missing customer-arrival anchor and
+DEC-APP-006's gate on `DELIVERY_FAILED` — were closed the same day by
+DEC-054**; this decision's operational and economic policy is unchanged by
+it, and Q-020 still blocks every refund and ledger consequence.
+
+---
+
+## DEC-054 — Customer-arrival anchor `EN_ROUTE → ARRIVED`, and a narrow DEC-APP-006 carve-out for DEC-053's failure path
+
+**Status:** ACCEPTED — POLICY / ARCHITECTURE · **RUNTIME NOT IMPLEMENTED** · **Date:** 2026-09-07 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Two narrow locks that unblock **DEC-053**'s runtime path. **DEC-053 remains
+the authoritative operational and economic policy and is not restated,
+amended or duplicated here.**
+
+---
+
+**1. Customer arrival is a distinct lifecycle concept from merchant arrival.**
+
+The runtime already has a rider-arrival transition, and it means **arrival at
+the merchant**:
+
+| Concept | Transition | Meaning | Status |
+|---|---|---|---|
+| **Merchant arrival** | `RIDER_ASSIGNED → AT_MERCHANT` | The rider has reached the **shop**, to collect the food | **Existing, unchanged.** `POST /api/v1/rider/deliveries/:id/arrived` keeps exactly its current semantics |
+| **Customer arrival** | **`EN_ROUTE → ARRIVED`** | The rider has reached the **customer's delivery location** | **New lifecycle concept**, not yet implemented |
+
+**`AT_MERCHANT` = merchant arrival. `ARRIVED` = customer arrival.** Wherever
+either word appears without qualification, documentation must say which it
+means. The existing `/arrived` endpoint **must not** be reused as the
+customer-arrival anchor — it fires before pickup, at the wrong end of the
+journey.
+
+**The customer-arrival timestamp is the authoritative anchor for DEC-053's
+five-minute wait timer.** The timer **must not** start at merchant arrival.
+
+DEC-053's rule is unchanged and restated here only as the anchor's
+consequence: **2 customer contact attempts**, a **5-minute** wait measured
+from customer arrival, and **operator-controlled** failure resolution. The
+five-minute value is unchanged; the 10-minute figure remains what it always
+was — an illustration inside BQ-017's historical text, never active policy.
+
+**DEC-038 is untouched:** the mandatory completion photo and the absence of a
+no-photo completion path are unchanged by this decision.
+
+---
+
+**2. A narrow DEC-APP-006 carve-out for `DELIVERY_FAILED`.**
+
+`DEC-APP-006` (V1.1 § "Implement the nine ACCEPTED states plus `CANCELLED`;
+nothing else") blocks `PAYMENT_FAILED`, `PAYMENT_EXPIRED`,
+`MERCHANT_REJECTED` and `DELIVERY_FAILED` until "their names and policies are
+approved", citing BQ-013, BQ-015, BQ-016 and BQ-017 as the open questions.
+Three of those four are now closed — BQ-015 (DEC-051/052), BQ-016 (DEC-050)
+and BQ-017 (DEC-053). **BQ-013 remains `OPEN`, and the Product Owner declines
+to close it merely to unblock DEC-053.**
+
+Therefore: **`DELIVERY_FAILED` may be implemented specifically for DEC-053's
+post-pickup delivery-failure path, while BQ-013 stays `OPEN`.**
+
+Per `CLAUDE.md`'s precedence rule (`DEC-` > `DEC-APP-` > `ADR-`), this
+decision narrows DEC-APP-006's gate for exactly one state on exactly one
+path. Everything else about DEC-APP-006 stands.
+
+**This carve-out does NOT:**
+
+- resolve **BQ-013**, imply its approval, or change merchant auto-pause policy
+  in any way;
+- unlock `PAYMENT_FAILED`, `PAYMENT_EXPIRED`, `MERCHANT_REJECTED`, or any
+  other exception state;
+- authorize a generic `DELIVERY_FAILED` write from arbitrary code — the state
+  is reachable **only** through DEC-053's controlled, operator-resolved path;
+- authorize a rider-, customer- or merchant-declared failure. **Operator
+  authority is preserved**: the rider performs the operational steps and
+  produces evidence; the operator declares the failure;
+- authorize **safe drop-off**, which remains deferred to **UX-Q-006 / OD-04**;
+- authorize any cancellation outside DEC-053;
+- authorize any new terminal state beyond `DELIVERY_FAILED` on this path.
+
+---
+
+**3. Q-020 is untouched.** This decision lifts an **operational** gate only.
+It authorizes **no** provider refund call, refund route, refund webhook
+handling, refund transaction or ledger reversal posting. Refund execution
+stays blocked on **Q-020**, and DEC-049 remains authoritative for how a
+reversal is represented when one eventually exists.
+
+### Future implementation contract
+
+Recorded as the contract a later implementation task must satisfy — **not
+code authorized by this decision**:
+
+```
+merchant arrival   RIDER_ASSIGNED → AT_MERCHANT          (existing, unchanged)
+customer arrival   EN_ROUTE       → ARRIVED              (new; timestamp recorded)
+DEC-053 failure    ARRIVED → contact ×2 → 5-minute wait
+                           → operator resolution → FAILED
+order              →  DELIVERY_FAILED
+```
+
+The customer-arrival timestamp is the timer anchor. Failure cannot be
+resolved before both the two-contact requirement and the five-minute wait are
+satisfied, and operator resolution is required regardless.
+
+⚠️ **`ARRIVED` is not yet a permitted delivery state.**
+`deliveries.state`'s CHECK constraint
+(`supabase/migrations/20260811000009_delivery_domain.sql`) lists
+`UNASSIGNED`, `RIDER_SEARCHING`, `RIDER_ASSIGNED`, `RIDER_REASSIGNING`,
+`AT_MERCHANT`, `PICKED_UP`, `EN_ROUTE`, `DELIVERED`, `FAILED`, `ABANDONED` —
+**no `ARRIVED`** — and there is no customer-arrival timestamp column. A future
+implementation therefore needs an **additive migration**, which under
+`CLAUDE.md` § 10 requires its own explicit instruction and is **not
+authorized here**. No schema change is made by this decision.
+
+### Why
+
+Product Owner decision, 2026-09-07, resolving the two blockers the DEC-053
+runtime reconnaissance identified.
+
+The arrival anchor was a genuine naming hazard rather than a preference:
+`POST /api/v1/rider/deliveries/:id/arrived` transitions
+`RIDER_ASSIGNED → AT_MERCHANT`, so an implementer wiring DEC-053's timer to
+the endpoint whose name matches the policy word would have started the
+five-minute clock at the shop, before the food was even collected. OD-04's
+"Arrived → contact customer → timer → resolution" plainly means the customer's
+door, and the driver flow's own `PROPOSED` button sequence already anticipates
+a `ถึงจุดส่ง` ("arrived at drop-off") step. Making the two concepts textually
+distinct removes the ambiguity before any code is written.
+
+The carve-out was preferred to closing BQ-013 because DEC-APP-006's gate is a
+*conjunction* of four unrelated questions, and BQ-013 (merchant acceptance
+timeout and auto-pause thresholds) has nothing to do with post-pickup
+delivery failure. Closing a live business question as a side effect of
+unblocking an unrelated path would be exactly the "supply the missing value
+to unblock" pattern DEC-040 § 5 forbids elsewhere in this repository.
+
+### Alternatives
+
+- **Reuse `/arrived` as the customer anchor** — rejected. It would silently
+  redefine an existing shipped endpoint and start the timer before pickup.
+- **Close BQ-013 to lift the gate wholesale** — rejected. It would resolve an
+  unrelated open question by convenience and would additionally unlock
+  `PAYMENT_FAILED`, `PAYMENT_EXPIRED` and `MERCHANT_REJECTED`, none of which
+  has an approved policy.
+- **Implement DEC-053's failure path on `CANCELLED` to avoid the gate** —
+  rejected. DEC-053 §1 already refused `CANCELLED` as the post-pickup failure
+  outcome, and the `PROPOSED` cause taxonomy already maps
+  `CUSTOMER_UNREACHABLE`/`CUSTOMER_REFUSED` to `DELIVERY_FAILED`.
+
+### Consequences
+
+- DEC-053's operational path is unblocked; its **economic** half stays blocked
+  on **Q-020**, unchanged.
+- The delivery state machine gains a documented tenth progression state,
+  `ARRIVED`, between `EN_ROUTE` and its terminal outcomes. Implementing it
+  needs an additive migration under its own instruction.
+- `DEC-APP-006` now has exactly one carve-out. Its other three excluded
+  states, and its underlying reason, are unchanged; **BQ-013 continues to gate
+  them**.
+- Operator authority becomes load-bearing: with `DELIVERY_FAILED` reachable,
+  the guard that keeps it operator-only is what prevents a rider from
+  declaring a financial outcome (OD-04, OD-06).
+- Nothing changes in the running system. No customer-arrival transition, no
+  timer, no failure route and no refund exists today.
+
+### Implementation status
+
+**POLICY / ARCHITECTURE LOCKED — RUNTIME NOT IMPLEMENTED.** No source, schema,
+migration, API route, DTO, UI, test or dependency change is made or authorized
+by this decision. The gaps DEC-053 recorded are unchanged, plus the two this
+decision names: no `ARRIVED` state or timestamp, and no operator failure
+command.
+
+### Evidence
+
+Product Owner instruction, 2026-09-07 ("BANHAO — LOCK CUSTOMER ARRIVAL +
+DEC-APP-006 EXCEPTION"), following the DEC-053 runtime reconnaissance:
+`apps/api/src/modules/rider/delivery-arrival.service.ts` (`/arrived` performs
+`RIDER_ASSIGNED → AT_MERCHANT`); `supabase/migrations/20260811000009_delivery_domain.sql`
+(no `ARRIVED` in the CHECK, no customer-arrival timestamp);
+`docs/BANHAO-APP-ARCHITECTURE-V1.md` DEC-APP-006 (the four-question gate);
+`docs/RIDER_LIFECYCLE.md` § 4 (the delivery state diagram, which currently
+goes `EN_ROUTE → FAILED` with no arrival step).
+
+### Related Requirements
+
+DEC-053 (**authoritative; unchanged and not restated here**) · DEC-APP-006
+(**narrowed for this one state on this one path only**) · **BQ-013 — remains
+`OPEN` and is not resolved, narrowed or implied by this decision** · **Q-020 —
+remains `OPEN`**; refund execution stays blocked · UX-Q-006, OD-04 (safe
+drop-off — **still deferred, not authorized**) · BQ-024, BQ-031 (unchanged,
+`OPEN`) · DEC-038 (mandatory completion photo — unchanged) · DEC-044,
+DEC-048, DEC-049, DEC-050, DEC-051, DEC-052 (all unchanged) · OD-04, OD-06
+(operator authority preserved) · DEC-019, DEC-021, DEC-022
+
+### Related Architecture
+
+`docs/RIDER_LIFECYCLE.md` § 4 · `docs/ORDER_LIFECYCLE.md` § 3, § 4, § 5 ·
+`docs/BANHAO-APP-ARCHITECTURE-V1.md` (DEC-APP-006) ·
+`supabase/migrations/20260811000009_delivery_domain.sql` (**unchanged by this
+decision**)
+
+### Supersedes / Superseded By
+
+None / None. **Narrows DEC-APP-006** for `DELIVERY_FAILED` on DEC-053's
+post-pickup failure path only, and adds the customer-arrival anchor DEC-053
+depends on. Does not supersede or modify DEC-019, DEC-021, DEC-022, DEC-038,
+DEC-044, DEC-048, DEC-049, DEC-050, DEC-051, DEC-052 or DEC-053, each of which
+stands unchanged.
