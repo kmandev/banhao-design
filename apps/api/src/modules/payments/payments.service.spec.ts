@@ -658,6 +658,14 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
 
     expect(regeneratedCreatePayment).toHaveBeenCalledTimes(1);
 
+    // CRITICAL (DEC-055 clause 8): the regenerated attempt must never reuse
+    // the initial attempt's `orderId`-only idempotency key — a real provider
+    // would treat that as a replay and hand back the *first* attempt's stale
+    // PaymentIntent instead of minting a new one for the new QR.
+    expect(regeneratedCreatePayment).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: `${ORDER_ID}:2` }),
+    );
+
     const attemptInsert = calls.find((c) => c.table === 'payment_attempts' && c.op === 'insert');
     expect(attemptInsert?.payload).toMatchObject({
       payment_id: INSERTED_PAYMENT.id,
@@ -762,6 +770,109 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
     expect(result.qr).toEqual({ type: 'QR_CODE', imageUrl: 'q', expiresAt: 'e' });
     const attemptInserts = calls.filter((c) => c.table === 'payment_attempts' && c.op === 'insert');
     expect(attemptInserts).toHaveLength(1); // never retried, never discarded
+  });
+});
+
+/**
+ * DEC-055 clause 8 — CRITICAL, explicitly called out by name. The initial
+ * attempt's idempotency key must be `orderId` alone; a regenerated attempt's
+ * must be `${orderId}:${attemptNo}` and must NEVER collapse back to
+ * `orderId`. Getting this wrong means a real provider (Stripe) treats
+ * "regenerate the QR" as a replay of the *first* attempt and hands back its
+ * now-stale PaymentIntent instead of minting a new one — silently breaking
+ * the entire regeneration feature while looking like it worked.
+ */
+describe('PaymentsService.createPayment — idempotency key strategy (DEC-055 clause 8, CRITICAL)', () => {
+  it('the initial attempt uses orderId alone', async () => {
+    const createPayment = jest.fn().mockResolvedValue(PROVIDER_RESULT);
+    const { subject } = buildService(
+      [
+        { data: TRANSITIONED_ORDER, error: null },
+        { data: null, error: null },
+        { data: INSERTED_PAYMENT, error: null },
+        { data: null, error: null },
+      ],
+      { provider: { createPayment } },
+    );
+
+    await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(createPayment).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: ORDER_ID }));
+  });
+
+  it('a regenerated attempt (attempt 2) uses orderId:2 — never orderId alone', async () => {
+    const createPayment = jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT);
+    const { subject } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('EXPIRED'), error: null },
+        { data: attemptRow({ attempt_no: 1, state: 'EXPIRED' }), error: null },
+        { data: { id: 'attempt-2', attempt_no: 2, state: 'PENDING', qr_payload: 'q', expires_at: 'e' }, error: null },
+        { data: paymentRowWithState('PENDING'), error: null },
+      ],
+      { provider: { createPayment } },
+    );
+
+    await subject.createPayment(customerUser(), ORDER_ID);
+
+    const [call] = createPayment.mock.calls;
+    expect(call[0].idempotencyKey).toBe(`${ORDER_ID}:2`);
+    expect(call[0].idempotencyKey).not.toBe(ORDER_ID);
+  });
+
+  it('a second regeneration (attempt 3) uses orderId:3 — the pattern generalizes, not a one-off for attempt 2', async () => {
+    const createPayment = jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT);
+    const { subject } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('FAILED'), error: null },
+        { data: attemptRow({ attempt_no: 2, state: 'FAILED' }), error: null },
+        { data: { id: 'attempt-3', attempt_no: 3, state: 'PENDING', qr_payload: 'q', expires_at: 'e' }, error: null },
+        { data: paymentRowWithState('PENDING'), error: null },
+      ],
+      { provider: { createPayment } },
+    );
+
+    await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(createPayment).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: `${ORDER_ID}:3` }));
+  });
+
+  it('the initial and regenerated keys are provably different values for the same order', async () => {
+    const initialCreatePayment = jest.fn().mockResolvedValue(PROVIDER_RESULT);
+    const { subject: initialSubject } = buildService(
+      [
+        { data: TRANSITIONED_ORDER, error: null },
+        { data: null, error: null },
+        { data: INSERTED_PAYMENT, error: null },
+        { data: null, error: null },
+      ],
+      { provider: { createPayment: initialCreatePayment } },
+    );
+    await initialSubject.createPayment(customerUser(), ORDER_ID);
+
+    const regeneratedCreatePayment = jest.fn().mockResolvedValue(REGENERATED_PROVIDER_RESULT);
+    const { subject: regenSubject } = buildService(
+      [
+        { data: null, error: null },
+        { data: PENDING_PAYMENT_ORDER, error: null },
+        { data: paymentRowWithState('EXPIRED'), error: null },
+        { data: attemptRow({ attempt_no: 1, state: 'EXPIRED' }), error: null },
+        { data: { id: 'attempt-2', attempt_no: 2, state: 'PENDING', qr_payload: 'q', expires_at: 'e' }, error: null },
+        { data: paymentRowWithState('PENDING'), error: null },
+      ],
+      { provider: { createPayment: regeneratedCreatePayment } },
+    );
+    await regenSubject.createPayment(customerUser(), ORDER_ID);
+
+    const initialKey = initialCreatePayment.mock.calls[0][0].idempotencyKey;
+    const regeneratedKey = regeneratedCreatePayment.mock.calls[0][0].idempotencyKey;
+
+    expect(initialKey).toBe('order-1');
+    expect(regeneratedKey).toBe('order-1:2');
+    expect(initialKey).not.toBe(regeneratedKey);
   });
 });
 

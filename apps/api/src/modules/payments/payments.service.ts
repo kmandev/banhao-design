@@ -346,20 +346,27 @@ export class PaymentsService {
    * in `docs/BANHAO-APP-ARCHITECTURE-V1.md` § 8's idempotency map, keyed by
    * `(payment_id, attempt_no)`.
    *
-   * ## Ordering — the provider call is NOT idempotent here
+   * ## Ordering — the provider call may not be idempotent for every binding
    *
-   * `NullPaymentProvider.createPayment` ignores `idempotencyKey` entirely and
-   * mints a fresh `providerPaymentId` (and QR) on every call — unlike a real
-   * provider might, it cannot be relied on to return the same result for two
-   * concurrent calls with the same key. Two regenerations racing each other
-   * therefore both successfully call the provider and both obtain a
+   * `idempotencyKey` here is `${orderId}:${nextAttemptNo}` (DEC-055 clause 8)
+   * — a deterministic, attempt-specific key, never a repeat of the initial
+   * attempt's `orderId` alone. `StripePaymentProvider` honours this properly
+   * (verified: the same key replays the same PaymentIntent; a different key
+   * mints a new one — `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` § 6), so two
+   * regenerations racing each other with the *same* `nextAttemptNo` converge
+   * on the *same* Stripe PaymentIntent rather than minting two.
+   *
+   * `NullPaymentProvider.createPayment` still ignores `idempotencyKey`
+   * entirely and mints a fresh `providerPaymentId` (and QR) on every call —
+   * it cannot be relied on to return the same result for two concurrent calls
+   * with the same key. Two regenerations racing each other against the null
+   * provider therefore both successfully call it and both obtain a
    * *distinct*, individually valid QR before either writes anything; only one
-   * write wins below. **This is a known, accepted limitation**: the loser's
-   * provider call is wasted work, never a wasted write, and — because
-   * `NullPaymentProvider` makes no real network call and moves no real money
-   * (DEC-APP-007) — it costs nothing today. A real provider (Phase F′) may
-   * need its own idempotency handling at this exact call site; that is
-   * explicitly not decided here.
+   * write wins below. **This is a known, accepted limitation of the null
+   * provider specifically**: the loser's provider call is wasted work, never
+   * a wasted write, and — because `NullPaymentProvider` makes no real network
+   * call and moves no real money (DEC-APP-007) — it costs nothing. This is
+   * dev/test-only behaviour, not a gap in the production Stripe path.
    *
    * ## Concurrency — the unique constraint is the sole authority
    *
@@ -407,8 +414,16 @@ export class PaymentsService {
     let result;
     try {
       result = await this.provider.createPayment({
-        idempotencyKey: orderId,
+        // CRITICAL — never `orderId` alone here. A regenerated attempt must
+        // get its own deterministic key, or a real provider (Stripe) would
+        // treat this as a replay of the *first* attempt and hand back its
+        // now-stale payment intent instead of issuing a new one — defeating
+        // the entire point of regeneration. See this method's own class doc
+        // comment ("Ordering — the provider call is NOT idempotent here") and
+        // DEC-055 clause 8.
+        idempotencyKey: `${orderId}:${nextAttemptNo}`,
         orderId,
+        paymentReference: payment.payment_reference,
         amount: { amount: payment.amount_satang, currency: 'THB' },
         method: 'PROMPTPAY_QR',
         webhookUrl: `/webhooks/payments/${this.provider.name}`,
@@ -508,20 +523,24 @@ export class PaymentsService {
     grandTotalSatang: number,
     email: string,
   ): Promise<PaymentInitiationResponse> {
+    // Computed before the provider call (not after, as originally written) so
+    // it can be attached to the provider's own request metadata — Stripe's
+    // adapter cross-references it onto the PaymentIntent for a human reading
+    // the Stripe Dashboard, exactly as a BANHAO log or support ticket would.
+    const paymentReference = `PAY-${orderNumber}`;
+
     let result;
     try {
       result = await this.provider.createPayment({
         idempotencyKey: orderId,
         orderId,
+        paymentReference,
         amount: { amount: grandTotalSatang, currency: 'THB' },
         // The provider's own PaymentMethod vocabulary ('PROMPTPAY_QR' | 'CASH')
         // is finer than payments.method ('ONLINE' | 'CASH') — Phase 1 is
         // online-only (DEC-016) and the only online rail is PromptPay QR, so
         // this is a fixed value, not a client choice.
         method: 'PROMPTPAY_QR',
-        // No webhook route exists yet (Phase F session 2) and the null
-        // provider makes no network call, so this is a placeholder path, not
-        // live configuration.
         webhookUrl: `/webhooks/payments/${this.provider.name}`,
         // DEC-056: resolved and validated by `resolveAuthoritativeEmail`
         // before this method was ever called — never re-derived here.
@@ -533,8 +552,6 @@ export class PaymentsService {
       );
       throw new DomainError('PROVIDER_UNAVAILABLE', { message: 'Payment provider unavailable' });
     }
-
-    const paymentReference = `PAY-${orderNumber}`;
 
     const { data: payment, error } = await this.supabase.admin
       .from('payments')

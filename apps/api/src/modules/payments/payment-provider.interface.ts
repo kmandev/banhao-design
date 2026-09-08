@@ -26,9 +26,24 @@ import type { Money } from '@banhao/types';
 export type PaymentMethod = 'PROMPTPAY_QR' | 'CASH';
 
 export interface CreatePaymentInput {
-  /** BANHAO's own payment reference — the idempotency key for this operation. */
+  /**
+   * The idempotency key for this operation — never reused across a
+   * regenerated attempt. The initial attempt uses `orderId` alone; a
+   * regenerated attempt (DEC-029) must use an attempt-specific deterministic
+   * key (`PaymentsService` supplies `${orderId}:${attemptNo}`), so a real
+   * provider issues a genuinely new payment intent for the new QR rather than
+   * replaying the first attempt's now-stale one.
+   */
   idempotencyKey: string;
   orderId: string;
+  /**
+   * BANHAO's own human-readable payment reference (`payments.payment_reference`,
+   * e.g. `PAY-BH000125`) — distinct from `idempotencyKey`, which changes per
+   * attempt. Provider-neutral: any provider that supports request metadata
+   * may attach it for cross-referencing a provider-side record back to
+   * BANHAO's own, without this contract naming a provider-specific field.
+   */
+  paymentReference: string;
   amount: Money;
   method: PaymentMethod;
   /** Absolute URL the provider should call on state change. */

@@ -122,6 +122,15 @@ describe('POST /internal/tick (integration)', () => {
       R2_SECRET_ACCESS_KEY: 'e2e-secret',
       R2_BUCKET: 'e2e-bucket',
       R2_PUBLIC_URL: 'https://example.invalid',
+      // `TickModule` also imports `PaymentsModule` directly (for
+      // `PaymentEventProcessingService`/`PaymentAttemptExpiryService`, both
+      // overridden below) — but `PaymentsService` and `PAYMENT_PROVIDER`
+      // (`StripePaymentProvider` since DEC-055) are not overridden, so Nest
+      // still constructs the real provider, whose constructor throws
+      // `StripeConfigError` without a key. Same shape as the R2 values above:
+      // an obviously-fake value, never a real credential, never used to call
+      // Stripe since nothing in this file exercises payment initiation.
+      STRIPE_SECRET_KEY: 'sk_test_e2e-fake-key',
     };
 
     const moduleRef = await Test.createTestingModule({

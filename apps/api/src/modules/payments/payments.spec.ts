@@ -38,6 +38,7 @@ describe('NullPaymentProvider', () => {
   const INPUT: CreatePaymentInput = {
     idempotencyKey: 'order-1',
     orderId: 'order-1',
+    paymentReference: 'PAY-BH000125',
     amount: { amount: 7500, currency: 'THB' as const },
     method: 'PROMPTPAY_QR' as const,
     webhookUrl: '/webhooks/payments/null',
@@ -51,11 +52,25 @@ describe('NullPaymentProvider', () => {
       const withoutEmail: CreatePaymentInput = {
         idempotencyKey: 'order-1',
         orderId: 'order-1',
+        paymentReference: 'PAY-BH000125',
         amount: { amount: 7500, currency: 'THB' },
         method: 'PROMPTPAY_QR',
         webhookUrl: '/webhooks/payments/null',
       };
       void withoutEmail;
+    });
+
+    it('requires paymentReference at the type level — omitting it must not compile', () => {
+      // @ts-expect-error — `paymentReference` is a required field on CreatePaymentInput.
+      const withoutPaymentReference: CreatePaymentInput = {
+        idempotencyKey: 'order-1',
+        orderId: 'order-1',
+        amount: { amount: 7500, currency: 'THB' },
+        method: 'PROMPTPAY_QR',
+        webhookUrl: '/webhooks/payments/null',
+        email: 'customer@example.com',
+      };
+      void withoutPaymentReference;
     });
   });
 

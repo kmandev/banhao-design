@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PAYMENT_PROVIDER } from './payment-provider.interface';
-import { NullPaymentProvider } from './providers/null-payment.provider';
+import { StripePaymentProvider } from './providers/stripe-payment.provider';
 import { CUSTOMER_EMAIL_SOURCE, ProfileCustomerEmailSource } from './customer-email-source';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
@@ -15,20 +15,28 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
  * (`PaymentAttemptExpiryService`) — the latter two both consumed by
  * `TickModule`.
  *
- * When Q-001 is resolved, add the real provider here and swap the binding —
- * no business logic outside this module should need to change. That is the
- * entire point of the abstraction.
+ * `PAYMENT_PROVIDER` → `StripePaymentProvider` (Q-001 resolved, DEC-055) — the
+ * single clear swap point this abstraction existed to make sufficient.
+ * `NullPaymentProvider` is retained (DEC-APP-007) as the dev/test provider,
+ * used directly by unit tests that construct `PaymentsService` themselves —
+ * none of them go through this module's DI wiring, so this swap changes no
+ * existing test's behaviour. Any environment without `STRIPE_SECRET_KEY`
+ * configured (a fresh checkout, CI, OpenAPI generation) supplies a
+ * placeholder value at the one or two call sites that build the full DI
+ * graph — see `openapi.generate.ts`'s `GENERATION_ENV` and
+ * `test/tick.e2e-spec.ts`'s own env block, both already doing the same for
+ * R2/`StorageService`.
  *
  * `CUSTOMER_EMAIL_SOURCE` is the same shape of swap point: `ProfileCustomerEmailSource`
  * (the DEC-056 collection slice) reads `profiles.email` server-side —
  * replacing the earlier placeholder binding, `NoPersistedCustomerEmailSource`,
  * which always returned `null` because no persisted column existed yet.
- * `PaymentsService` itself did not change to make this swap.
+ * `PaymentsService` itself did not change to make either swap.
  */
 @Module({
   controllers: [PaymentsController],
   providers: [
-    { provide: PAYMENT_PROVIDER, useClass: NullPaymentProvider },
+    { provide: PAYMENT_PROVIDER, useClass: StripePaymentProvider },
     { provide: CUSTOMER_EMAIL_SOURCE, useClass: ProfileCustomerEmailSource },
     PaymentsService,
     PaymentEventProcessingService,

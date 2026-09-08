@@ -23,14 +23,20 @@ import { buildOpenApiDocument } from './openapi';
  * Placeholder environment for document generation.
  *
  * The DI graph cannot be built without these: `SupabaseService`'s constructor
- * calls `loadServerEnv()`, and the storage module's constructor throws
- * `StorageConfigError` when the five R2 values are absent. Nothing here reaches
- * the document — no environment value appears anywhere in an OpenAPI
+ * calls `loadServerEnv()`, the storage module's constructor throws
+ * `StorageConfigError` when the five R2 values are absent, and — since
+ * DEC-055 — `PaymentsModule` binds `StripePaymentProvider`, whose constructor
+ * throws `StripeConfigError` without `STRIPE_SECRET_KEY`. Nothing here
+ * reaches the document — no environment value appears anywhere in an OpenAPI
  * description, and no request is ever made, since the application is created
  * and closed without being initialised or listened on.
  *
  * Every value is obviously non-functional, and `.invalid` is the reserved TLD
- * (RFC 2606) precisely so a stray connection attempt cannot resolve.
+ * (RFC 2606) precisely so a stray connection attempt cannot resolve. The
+ * Stripe placeholder uses the real `sk_test_` prefix shape only so it reads
+ * unambiguously as "obviously not a real key" alongside the others, not
+ * because anything parses or validates that prefix — no Stripe call is ever
+ * made during generation.
  *
  * Existing values are never overwritten, matching `dotenv`'s rule, so running
  * this in a configured shell uses the real configuration and still produces an
@@ -47,6 +53,7 @@ const GENERATION_ENV: Readonly<Record<string, string>> = {
   R2_SECRET_ACCESS_KEY: 'openapi-generation',
   R2_BUCKET: 'openapi-generation',
   R2_PUBLIC_URL: 'https://openapi-generation.invalid',
+  STRIPE_SECRET_KEY: 'sk_test_openapi-generation-placeholder',
 };
 
 export const OPENAPI_DOCUMENT_PATH = resolve(__dirname, '../../../docs/06-api/openapi.json');

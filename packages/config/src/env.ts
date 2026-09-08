@@ -32,6 +32,19 @@ const serverEnvSchema = z.object({
   // bundle; only apps/api reads it, and only in development.
   PAYMENT_WEBHOOK_DEV_SECRET: z.string().min(1).optional(),
 
+  // Stripe — DEC-055 / DEC-055 Addendum A. Optional at this schema's level,
+  // following the exact `StorageService`/R2 precedent (DEC-055 clause 13):
+  // `StripePaymentProvider`'s own constructor validates `STRIPE_SECRET_KEY`
+  // presence and refuses to construct without it, so a missing key never
+  // fails startup for unrelated routes — it fails only when the Stripe
+  // capability is actually reached. `STRIPE_WEBHOOK_SECRET` is checked lazily
+  // inside `verifyWebhookSignature` itself (same shape as
+  // `PAYMENT_WEBHOOK_DEV_SECRET` above), not at construction, since it is
+  // needed only for that one operation. Neither may ever reach a client
+  // bundle — server-only, same rule as `SUPABASE_SERVICE_ROLE_KEY`.
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+
   // Cloudflare R2 (object storage) — optional at this schema's level
   // deliberately. Nothing in the API calls StorageService yet (no
   // merchant/restaurant upload endpoint exists to authorize a caller before
@@ -84,6 +97,8 @@ export type ServerEnv = {
   supabaseJwtSecret: string;
   internalTickSecret: string;
   paymentWebhookDevSecret: string | undefined;
+  stripeSecretKey: string | undefined;
+  stripeWebhookSecret: string | undefined;
   r2AccountId: string | undefined;
   r2AccessKeyId: string | undefined;
   r2SecretAccessKey: string | undefined;
@@ -125,6 +140,8 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEn
     supabaseJwtSecret: env.SUPABASE_JWT_SECRET,
     internalTickSecret: env.INTERNAL_TICK_SECRET,
     paymentWebhookDevSecret: env.PAYMENT_WEBHOOK_DEV_SECRET,
+    stripeSecretKey: env.STRIPE_SECRET_KEY,
+    stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET,
     r2AccountId: env.R2_ACCOUNT_ID,
     r2AccessKeyId: env.R2_ACCESS_KEY_ID,
     r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY,
