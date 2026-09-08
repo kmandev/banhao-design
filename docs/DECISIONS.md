@@ -6542,3 +6542,777 @@ customer-data field**, a **future schema migration**, a **payment-input
 policy** and a **PDPA-related collection purpose** — subject matter DEC-055 has
 no authority over. Addendum A was correct precisely because it closed a
 question DEC-055 opened about its *own* presentation contract; this is not that.
+
+---
+
+## DEC-057 — Q-020 Phase 1 refund mechanism: full-refund-only scope, hybrid finality, PromptPay state mapping, reconciliation as a production prerequisite
+
+**Status:** ACCEPTED — ARCHITECTURE / POLICY · **NOT IMPLEMENTED** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Resolves the *mechanism* half of **Q-020** — how a refund is executed, when
+it is considered final, and what a future implementation must build against.
+It does not decide which cancellation/failure causes qualify for a refund
+(that is DEC-050/051/052/053, unchanged), and it does not decide which ledger
+components a full refund reverses (that is **DEC-059**, locked alongside
+this entry). This decision follows directly from the read-only **Q-020 Refund
+RECON** and the **Q-020 Stripe Refund Sandbox Spike** — both performed
+read-only, against real Stripe Test Mode, in prior sessions — and from the
+**Q-020 Refund Decision Lock Preparation** report those two produced.
+
+**1. Scope — full refund only for Phase 1.**
+
+Phase 1 implements **full refund only**. No partial refund of any kind —
+item-level, amount-level, fee-only, or component-level — is authorized by
+this decision. **Partial refund composition remains `BQ-031`, unresolved and
+deferred.** No new open-question identifier is created; `BQ-031` already
+exists in `docs/OPEN_BUSINESS_QUESTIONS.md` and is the one this decision
+defers to.
+
+**2. Finality — hybrid, never the synchronous API response alone.**
+
+BANHAO holds a refund `REFUNDED` only once **verified provider state**
+confirms it — never merely because the Stripe API call that created it
+returned `200`. The canonical flow:
+
+```
+Local refund request
+        ↓
+Local refunds row (state = REFUND_REQUESTED)
+        ↓
+Stripe Refund API call
+        ↓
+Local pending state (REFUND_REQUESTED / REFUND_PENDING — see § 4)
+        ↓
+Stripe webhook
+        ↓
+Provider object/status verification (event.data.object.status, never event.type alone)
+        ↓
+Stripe refund status = succeeded
+        ↓
+Local REFUNDED
+        ↓
+DEC-049 ledger reversal (per DEC-059)
+```
+
+With reconciliation as the documented fallback when the webhook path does not
+complete on its own:
+
+```
+Webhook missing / delayed
+        ↓
+Reconciliation
+        ↓
+Stripe provider state verification (a live read of the refund/charge object)
+        ↓
+Local recovery, or a reconciliation case if provider and local state disagree
+```
+
+**This decision explicitly locks that a bare `HTTP 200` from
+`POST /v1/refunds` must never be treated as universal finality.** The
+Sandbox Spike proved this is not a hypothetical caution: a card-rail refund's
+API response was genuinely terminal in every live test performed, but
+Stripe's own documentation — fetched and cited in the Spike, not inferred —
+states that a fresh **PromptPay** refund's `status` is `requires_action` at
+creation, by design, pending the customer's own response to a Stripe-sent
+email. PromptPay is BANHAO's only Phase 1 rail (DEC-055). Treating the
+synchronous response as final would record a ledger fact for money that has
+not moved.
+
+**3. PromptPay — customer-action-gated, no new BANHAO data collection.**
+
+- Stripe, not BANHAO, collects the customer's bank-account information
+  needed to complete a PromptPay refund. **BANHAO does not collect, request,
+  or store any bank-account detail of any kind.**
+- The channel Stripe uses is the customer's own email address — the same
+  authoritative, BANHAO-owned email **DEC-056** already collects and
+  validates at payment time. No new communication channel or customer-data
+  field is introduced by this decision.
+- `requires_action` and `pending` are **not** successful-refund states.
+  `succeeded` is the **only** Stripe status that may advance a local refund
+  to `REFUNDED`.
+- `failed` and `canceled` **never** produce a DEC-049 ledger reversal — a
+  reversal represents money that moved; neither of these outcomes moved any.
+
+**4. State mapping — using the existing `refunds.state` values only, no
+schema change.**
+
+| Stripe `refund.status` | BANHAO `refunds.state` |
+|---|---|
+| `requires_action` | `REFUND_REQUESTED` |
+| `pending` | `REFUND_PENDING` |
+| `succeeded` | `REFUNDED` |
+| `failed` | `REFUND_FAILED` |
+| `canceled` | `REFUND_REJECTED` |
+
+The first four map cleanly: `requires_action` is "requested, awaiting the
+customer" and `REFUND_REQUESTED` already means exactly that; `pending` and
+`REFUND_PENDING` share a name and a meaning; `succeeded` reaching `REFUNDED`
+is this decision's own central point (§ 2); `failed` reaching `REFUND_FAILED`
+needs no argument.
+
+**`canceled` is locked to `REFUND_REJECTED`, with a named limitation, not a
+hidden one.** Stripe's `canceled` occurs only while a refund sits in
+`requires_action` — before any bank information was collected and before any
+money moved — which is closer in kind to a refund being withdrawn than to one
+that was attempted and failed. `REFUND_REJECTED` is the existing schema value
+closest to "no money will move for this refund," and is reused rather than
+overloading `REFUND_FAILED`, which this decision reserves for an attempted-
+but-unsuccessful transfer. **Named limitation:** `REFUND_REJECTED` was
+designed with an operator's own refusal of a request in mind (`refunds`'
+`approved_by` column implies a human rejection path), and this mapping now
+gives a **provider-driven cancellation** the identical state value. The two
+are not distinguishable from `refunds.state` alone. **This is an open
+implementation follow-up, not resolved here**: a future implementation may
+need `refunds.reason` (already a free-text column, no schema change) to
+record which of the two actually occurred, or may find the ambiguity
+acceptable. No enum value is added by this decision.
+
+**5. Webhook semantics — the object's status is the evidence, never the
+event type alone.**
+
+- `event.type` (`refund.created`, `refund.updated`, `refund.failed`,
+  `charge.refunded`) **must never by itself** determine a state transition.
+  A future adapter must read `event.data.object.status` (or, for
+  `charge.refunded`, the charge's own `refunded`/`amount_refunded` fields)
+  as the actual evidence, exactly as `StripePaymentProvider.normalizeEvent`
+  already does for the three subscribed payment events.
+- `refund.created` and `refund.updated` **can carry the same status** — the
+  Sandbox Spike observed this live: a synchronously-completed refund emitted
+  both events, one second apart, with an identical `status: "succeeded"` on
+  both. **`refund.updated` must never be assumed to mean a status changed.**
+- `charge.refunded` is a **derived aggregate signal** describing the
+  underlying charge (has *some* refund made it fully refunded?), not the
+  identity of any individual refund. It is not the authoritative identity
+  for a specific refund event and must not be treated as one.
+
+**6. Reconciliation — a required production prerequisite, design deferred.**
+
+Refund reconciliation visibility **must exist before a refund can move real
+money in production.** This decision locks the requirement, not the
+implementation:
+
+- At minimum, a production-ready reconciliation capability must be able to
+  detect: Stripe reports a refund `succeeded` while the local record is not
+  `REFUNDED`; the local record is `REFUNDED` while Stripe does not report
+  `succeeded`; a local recorded amount that disagrees with Stripe's; a local
+  refund missing its `provider_refund_id` entirely; and a webhook that never
+  arrived within whatever staleness window a future implementation defines.
+- **Automatic retry** is the correct response to a transient delivery/
+  processing gap (a webhook that is merely late, a tick that has not yet run)
+  — this mirrors `PaymentAttemptExpiryService`/`PaymentEventProcessingService`'s
+  existing self-heal discipline exactly.
+- **Manual (operator) intervention** is required whenever provider state and
+  local financial state genuinely disagree after a fair chance to
+  self-resolve. **No financial contradiction between Stripe and BANHAO may
+  ever be auto-resolved.** This is a direct consequence of DEC-049's own
+  append-only, no-invented-facts discipline.
+- No API shape, table, or UI is specified here. That is implementation work,
+  gated on this decision, not part of it.
+
+**7. Refund identity and idempotency — architectural principle only.**
+
+- **Local refund identity** — `refunds.id` / `refunds.refund_reference` — is
+  the durable anchor. It exists before any Stripe call is made.
+- **Provider refund identity** — `refund.id` (`re_...`) — is Stripe's
+  external identity, retained in `refunds.provider_refund_id` (already a
+  uniquely-indexed column with `provider`, no schema change needed).
+- **Webhook idempotency identity** — Stripe's `event.id` (`evt_...`) — is the
+  anchor for detecting a duplicate webhook delivery, mirroring
+  `payment_events.provider_event_id`'s existing role exactly.
+- **The Stripe API idempotency key for a refund-creation call is a
+  deterministic value derived from the local refund identity** —
+  never a value invented or randomized per attempt. **A retry of the same
+  logical refund request must reuse the same idempotency key; it must never
+  generate a new one.** This is the same principle DEC-055 clause 8 already
+  locks for payment creation, extended to refunds because the Sandbox Spike
+  confirmed live that Stripe's idempotency mechanics behave identically for
+  `/v1/refunds`: the same key with the same parameters replays the original
+  `Refund` object (`idempotent-replayed: true`, observed live); the same key
+  reused with *different* parameters is rejected outright
+  (`idempotency_error`, observed live, identical error class to the one
+  DEC-055 clause 8 already documents for `/v1/payment_intents`).
+- **The exact key format (what string is actually hashed or concatenated) is
+  an implementation detail**, left to the implementation phase to choose
+  following this repository's existing naming conventions — this decision
+  locks the principle (deterministic, local-identity-derived, stable across
+  retries), not the format.
+
+**8. Data/schema boundary.**
+
+The current `refunds` table is **considered sufficient for the full-refund-
+only domain this decision scopes**, subject to normal implementation-time
+verification — no migration is authorized or anticipated by this decision.
+Partial refund's schema needs (a cumulative-refunded tracking mechanism, at
+minimum) are explicitly **out of scope**, deferred with `BQ-031` itself, and
+no migration is created now.
+
+### Explicit non-decisions
+
+This decision does **not** decide, and must not be read as deciding:
+
+- **Which causes qualify for a refund at all** — that is DEC-050 (pre-pickup
+  cancellation window and eligibility) and DEC-053 (post-pickup failure
+  economics), both unchanged and unmodified by this entry.
+- **Which ledger components a full refund reverses** — that is **DEC-059**,
+  locked alongside this entry as its own decision.
+- **Partial refund composition** — `BQ-031`, unresolved.
+- **Rider compensation amount** — `BQ-024`, unresolved.
+- **Refund authority / who may request, approve, execute, cancel, or
+  override a refund** — that is **DEC-058**, locked alongside this entry.
+- The exact reconciliation staleness threshold (how long before a missing
+  webhook is treated as a problem) — a parameter for implementation to set,
+  not fixed here.
+- The exact resolution of the `REFUND_REJECTED` overlap named in § 4 between
+  an operator's own rejection and a Stripe-originated cancellation.
+- Any endpoint path, controller, service class name, database query,
+  migration, webhook table schema, or reconciliation API/UI shape — all of
+  this is implementation work explicitly deferred past this decision.
+- Q-020's provider-selection question — already resolved by **DEC-055**; this
+  decision governs refund mechanism only, and changes nothing about which
+  provider BANHAO uses.
+
+### Why
+
+Product Owner decision, 2026-09-08, following the read-only Q-020 Refund
+RECON and the read-only Stripe Refund Sandbox Spike performed in prior
+sessions against real Stripe Test Mode. The RECON established that every
+refund-related schema element (`refunds`, `ledger_entry_groups.refund_id`,
+the reserved `REFUND_PAYABLE`/`RIDER_COMPENSATION` ledger accounts) already
+exists and is unused, and that `PaymentProvider.refund()` refuses
+unconditionally in both bound providers, citing this exact question. The
+Sandbox Spike then closed the specific unknowns a mechanism decision needs:
+it live-proved full refund, partial refund, multiple/exhausting refunds, and
+Stripe's own over-refund rejection; it live-proved Stripe's idempotency-key
+semantics apply identically to `/v1/refunds` as to `/v1/payment_intents`; it
+live-observed that every refund emits `refund.created`, `refund.updated` and
+`charge.refunded`, and that `refund.updated` can fire with no status change;
+and it retrieved Stripe's own authoritative documentation establishing that a
+PromptPay refund begins at `requires_action`, not `succeeded`, and depends on
+an unbounded-timing customer action Stripe itself manages end to end. Hybrid
+finality with mandatory reconciliation was chosen because it is the only
+option consistent with that evidence: API-response-authoritative finality is
+**provably incorrect** for BANHAO's actual rail, not merely unproven.
+
+### Alternatives
+
+- **API-response authoritative** — **rejected, disproven by evidence.** The
+  Sandbox Spike's own citation of Stripe's documented PromptPay refund state
+  table shows a fresh refund's status is `requires_action`, never
+  `succeeded`, at the moment the API call returns. Locking this option would
+  require BANHAO to either misrepresent that state as final or special-case
+  PromptPay out of a supposedly provider-neutral rule — both rejected.
+- **Webhook authoritative, no reconciliation fallback** — rejected. The same
+  Spike found `refund.updated` can fire without a status change, meaning
+  webhook delivery quality/interpretation is not perfectly reliable even when
+  received; a design with no fallback for a webhook that never arrives at
+  all was judged an unnecessary and avoidable risk to a ledger that is
+  otherwise architected (DEC-049) to never record an unverified fact.
+- **Full + partial refund in Phase 1** — rejected for Phase 1. The Decision
+  Lock Preparation report's own schema-fit analysis found the current
+  `refunds` table `PARTIAL` for this scope (no cumulative-refunded tracking,
+  no refund-attempt sub-entity), and `BQ-031` (partial refund composition)
+  remains genuinely unresolved. Building a mechanism for a policy that does
+  not yet exist was rejected as premature.
+
+### Consequences
+
+- Implementation of the refund-creation call, the webhook normalization
+  branch, and the reconciliation extension may proceed once this decision and
+  **DEC-058**/**DEC-059** are locked — see those entries' own consequences.
+- **The architecture remains inert until implemented.** No code, endpoint,
+  migration, or webhook subscription is created by this decision. Stripe's
+  refund-related events (`refund.created`, `refund.updated`, `refund.failed`,
+  `charge.refunded`) are not yet subscribed anywhere in this codebase.
+- `PaymentReconciliationService` needs no change to accommodate this
+  decision — it is documented (DEC-049) as structurally unable to see a
+  refund, and this decision's own reconciliation requirement (§ 6) is
+  explicitly a **separate, future capability**, not an extension of the
+  existing payment-reconciliation scan.
+- The `REFUND_REJECTED` overlap named in § 4 is a recorded, accepted
+  imprecision, not a blocker — a future implementation may resolve it using
+  the existing `reason` column without requiring a further decision, or may
+  raise a new question if that proves insufficient.
+
+### Implementation status
+
+**Not implemented.** No refund-creation code, no webhook branch, no
+reconciliation extension, no migration, and no schema change exist as of
+this decision. This decision is a mechanism/architecture lock only, following
+exactly DEC-049's own precedent for how an architecture decision precedes and
+gates its implementation.
+
+### Evidence
+
+Product Owner instruction, 2026-09-08 ("BANHAO — Q-020 REFUND DECISION
+LOCK"), following: the read-only **Q-020 Refund RECON** (mapping every
+existing refund-related schema element and confirming none is written by any
+code); the read-only **Q-020 Stripe Refund Sandbox Spike** (live Stripe Test
+Mode evidence — full/partial/multiple refunds, real over-refund rejection,
+real idempotency-key replay and mismatch-rejection, real
+`refund.created`/`refund.updated`/`charge.refunded` event capture, and
+Stripe's own fetched documentation on PromptPay's `requires_action`-first
+refund lifecycle); and the **Q-020 Refund Decision Lock Preparation** report
+that synthesized both into this decision's candidate shape, reviewed and
+approved before this lock.
+
+### Related Requirements
+
+Q-020 (**mechanism half resolved by this decision**; provider-selection
+half already resolved by DEC-055) · BQ-031 (partial refund — **remains
+`OPEN`, deferred**) · BQ-024 (rider compensation amount — **remains `OPEN`**,
+unaffected) · DEC-048 (service-fee refundability — **unchanged**, applied by
+DEC-059) · DEC-049 (ledger reversal architecture — **unchanged, authoritative
+for the posting shape this decision's flow ends in**) · DEC-050 (cancellation
+window and refund eligibility — **unchanged**, this decision's own trigger
+condition) · DEC-053 (post-pickup failure economics — **unchanged**, this
+decision's mechanism applies to its "full eligible refund" outcomes without
+modifying them) · DEC-055 (Stripe selection and idempotency-key precedent —
+**unchanged**, clause 8 extended to refunds by this decision's § 7) ·
+DEC-056 (customer email — **unchanged**, the channel Stripe uses for
+PromptPay refund bank-information collection) · DEC-058 (refund authority —
+locked alongside this entry) · DEC-059 (full refund accounting — locked
+alongside this entry, this decision's ledger-reversal trigger point)
+
+### Related Architecture
+
+`docs/Q-020 Refund RECON` and `docs/Q-020 Stripe Refund Sandbox Spike`
+(session reports, this decision's primary evidence) ·
+`supabase/migrations/20260811000006_payment_domain.sql` (`refunds`,
+unchanged) · `supabase/migrations/20260811000007_ledger_domain.sql`
+(`ledger_entry_groups.refund_id`, unchanged) ·
+`apps/api/src/modules/payments/payment-provider.interface.ts`
+(`RefundInput`/`RefundResult`, unchanged) ·
+`apps/api/src/modules/payments/providers/stripe-payment.provider.ts`
+(`refund()`, unchanged — still refuses) ·
+`apps/api/src/modules/payments/payment-event-processing.service.ts`
+(the normalize-once-in-adapter pattern this decision's § 5 extends
+conceptually to refunds) · `docs/PAYMENT_LIFECYCLE.md`, `docs/SETTLEMENT_MODEL.md`
+
+### Supersedes / Superseded By
+
+None / None. Does not supersede or modify DEC-043, DEC-048, DEC-049, DEC-050,
+DEC-051, DEC-052, DEC-053, DEC-055 or DEC-056, each of which stands unchanged
+and is applied, not altered, by this decision.
+
+---
+
+## DEC-058 — Refund authority: actor boundaries for request, approval, execution, cancellation and override
+
+**Status:** ACCEPTED — POLICY · **NOT IMPLEMENTED** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Locks the actor-authorization boundary for every refund action a future
+implementation of **DEC-057** will need to guard. It decides **who may do
+what**, never **how** a guard is implemented in code.
+
+| Actor | Request | Approve | Execute | Cancel | Override |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Customer | **YES** | No | No | **Limited — only while the refund is still `REFUND_REQUESTED` (Stripe `requires_action`), before any bank information has been collected** | No |
+| Operator/Admin | **YES** (on the customer's behalf, or self-initiated per an operator-declared scenario such as DEC-053's failure path) | **YES** | **YES** — the only human-facing role that may cause BANHAO to call Stripe | **YES** | **YES, with a mandatory reason** |
+| System/Worker | No | No | **YES, but only executing an already-approved request per locked policy** — never deciding on its own that a refund should happen | **YES, only per a locked automated policy** (e.g., a future timeout rule — none exists yet) | No |
+| AI | **No** | **No** | **No** | **No** | **No** |
+
+**1. Customer.** May request a refund. May never approve, execute, or
+override one. May cancel their own **still-pending** refund request only for
+the narrow window Stripe itself allows cancellation — while it sits in
+`requires_action`, before the customer has supplied bank information and
+before any money has moved (per **DEC-057** § 4/§ 3, and Stripe's own
+documented cancellation window). A refund already `REFUND_PENDING` or later
+may not be customer-cancelled.
+
+**2. Operator/Admin.** The only actor authorized to **execute** a refund —
+i.e., the only actor whose action may result in BANHAO's system calling the
+Stripe Refund API. This mirrors `ADR-001`'s existing "NestJS writes, clients
+read" spine and the established precedent that every financial write in this
+codebase already flows through a service-role client, never a client-supplied
+mutation. An operator may also request a refund directly (for an
+operator-declared scenario, such as the post-pickup failure path DEC-053
+already locks), approve a customer-initiated request, cancel a pending one,
+or override normal handling — **every override must carry a mandatory
+reason**, following the exact precedent **DEC-032** already locks for
+operator actions generally.
+
+**3. System/Worker.** May execute a refund **only** as the mechanical
+consequence of an already-approved request and a locked policy — it never
+independently decides that a refund is warranted. It may cancel only under a
+policy this decision does not itself create (no automated cancellation
+policy is authorized here). It has no approval or override authority of any
+kind — those remain human (operator) decisions.
+
+**4. AI has no financial authority of any kind, in any refund action, under
+any circumstance.** This is not a new principle — it is **DEC-040**'s
+existing, already-locked constraint, restated here specifically for refunds
+because Q-020 is exactly the kind of financial domain DEC-040 anticipated.
+No exception, carve-out, or future-amendment path for AI refund authority is
+created or implied by this decision. This session's own code recon (part of
+the Q-020 Refund RECON) confirmed the running system already reflects this:
+every mention of "refund" in `apps/api/src/modules/ai-ops/command-catalog.ts`
+and `apps/api/src/modules/admin/supervisor.controller.ts` is a negative
+statement — there is no refund command in the AI command catalog and none is
+authorized by this decision either.
+
+**5. Auditability.** Every operator action under this decision — request,
+approve, execute, cancel, override — must be attributable to the acting
+operator and, for an override, must carry a reason, following exactly the
+pattern `refunds.requested_by`/`refunds.approved_by` (already present in
+schema, DEC-049's own evidence trail) and DEC-032's mandatory-reason
+precedent already establish elsewhere in this codebase. This decision does
+not itself create an audit-trail table or column; it locks the **requirement**
+that one govern refund actions, which a future implementation must satisfy
+using the existing pattern or an equivalent.
+
+### Explicit non-decisions
+
+This decision does **not** decide, and must not be read as deciding:
+
+- **Which scenarios qualify for a refund** — DEC-050/053, unchanged.
+- **Whether the customer-facing refund-request feature exists yet, or its
+  UI** — no endpoint, screen, or API contract is authorized by this
+  decision.
+- **The refund mechanism itself** — that is **DEC-057**, locked alongside
+  this entry.
+- **What ledger components a refund reverses** — that is **DEC-059**, locked
+  alongside this entry.
+- Any specific role/permission implementation detail (a guard class, a
+  decorator, a database role) — implementation work, deferred.
+- Whether a *merchant* or a *rider* ever gains any refund-adjacent authority
+  in a future phase — no such authority is granted, and none is anticipated
+  or foreclosed by this decision; the actor list here is exhaustive for
+  Phase 1 only.
+
+### Why
+
+Product Owner decision, 2026-09-08, following the Q-020 Refund RECON's
+authorization-boundary findings: the codebase already has exactly one
+locked, unconditional financial-authority constraint (DEC-040, AI) and one
+locked, unconditional mandatory-reason precedent for operator actions
+(DEC-032); every other actor boundary for refunds was genuinely undecided.
+This decision extends both existing principles into the refund domain rather
+than inventing new ones, and grants execution authority to the operator role
+alone because that is the only role this codebase's own architecture
+(`ADR-001`) already trusts with any financial-state-changing call.
+
+### Alternatives
+
+- **Customer self-service execution** (customer's own request directly
+  triggers the Stripe call) — rejected. Every financial mutation in this
+  codebase today flows through a service-role client behind an
+  operator-or-system actor; granting a client-facing role direct execution
+  authority would be a first-of-its-kind exception with no evidence
+  supporting it, and would remove the human review step DEC-053's own
+  operator-controlled-resolution precedent already establishes as the
+  correct shape for consequential post-pickup decisions.
+- **Automatic system execution for every eligible cancellation** (no operator
+  approval step for a plainly-eligible case, e.g. DEC-050's free-cancellation
+  window) — considered, not adopted for Phase 1. Nothing in the RECON or the
+  Spike supplies evidence that this is safe absent the reconciliation
+  capability DEC-057 § 6 requires as a prerequisite; requiring operator
+  approval for every Phase 1 refund is the conservative default until that
+  capability exists.
+
+### Consequences
+
+- A future refund-request endpoint must enforce this matrix — customer
+  requests only, operator approves/executes/cancels/overrides, system
+  executes mechanically, AI excluded entirely — as its authorization
+  boundary.
+- No refund of any kind can be fully automatic in Phase 1: every execution
+  requires an operator's approval, even for a DEC-050-eligible free
+  cancellation. This is a deliberate, conservative starting point, not an
+  oversight.
+- DEC-040 is not modified, amended, or reinterpreted by this decision — it is
+  applied, unchanged, to one more domain.
+
+### Implementation status
+
+**Not implemented.** No refund-request endpoint, no role/permission guard for
+refunds, and no audit-trail extension exist as of this decision.
+
+### Evidence
+
+Product Owner instruction, 2026-09-08 ("BANHAO — Q-020 REFUND DECISION
+LOCK"), following the Q-020 Refund RECON's authorization-boundary findings
+(§17 of that report) and this codebase's own existing DEC-040/DEC-032
+precedents, confirmed unchanged by direct inspection of `docs/DECISIONS.md`
+during this decision's own pre-lock recon.
+
+### Related Requirements
+
+DEC-040 (**AI financial-authority exclusion, applied unchanged**) · DEC-032
+(**mandatory operator reason, applied unchanged**) · DEC-057 (refund
+mechanism — locked alongside this entry, this decision governs who may
+trigger each of its steps) · DEC-059 (full refund accounting — locked
+alongside this entry, unaffected by this decision) · ADR-001 (NestJS writes,
+clients read — the architectural spine this decision's operator-execution
+rule extends)
+
+### Related Architecture
+
+`apps/api/src/modules/ai-ops/command-catalog.ts`,
+`apps/api/src/modules/admin/supervisor.controller.ts` (existing negative-only
+refund mentions, confirming DEC-040's constraint already holds in the running
+system) · `supabase/migrations/20260811000006_payment_domain.sql`
+(`refunds.requested_by`/`approved_by`, the existing actor columns this
+decision's auditability clause relies on)
+
+### Supersedes / Superseded By
+
+None / None. Applies DEC-032 and DEC-040 unchanged to the refund domain;
+supersedes or modifies neither.
+
+---
+
+## DEC-059 — Full refund accounting: which ledger components reverse, and which do not
+
+**Status:** ACCEPTED — POLICY · **NOT IMPLEMENTED** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Locks, for a **full refund only** (per **DEC-057** § 1 — partial refund
+accounting is explicitly out of scope, deferred to `BQ-031`), which of the
+financial components a BANHAO order can carry are reversed, and which are
+not. **A refund is not an automatic reversal of every financial component
+that touched an order** — each component is decided on its own economic
+merits below, exactly as DEC-049 already insists ("whether `CUSTOMER_PAYMENT`
+is reversed at all in any given case" was left to a future decision; this is
+that decision, for the full-refund case).
+
+**A. `CUSTOMER_PAYMENT` → REVERSE.**
+Whenever an order/payment is eligible for a full refund under DEC-050 or
+DEC-053, the `CUSTOMER_PAYMENT` ledger fact is reversed. Amount = the
+**original recorded customer payment amount** (the same value
+`postCustomerPaymentLedger` used to post the original entry), in integer
+satang, never recomputed from current order data. Posted as an **independent,
+negative reversal group**, per **DEC-049** clause 2/clause 8 — this decision
+does not alter DEC-049's posting shape in any way.
+
+**B. `SERVICE_FEE_REVENUE` → REVERSE.**
+Restates and applies **DEC-048** and **DEC-049** unchanged — the service fee
+is included in every eligible full refund, amount = the original
+`orders.service_fee_satang` snapshot, never recomputed from a current pricing
+constant. DEC-048 and DEC-049 remain the authoritative source for this
+component; this entry adds no new rule to it.
+
+**C. `MERCHANT_COMMISSION` → REVERSE.**
+
+**This is the one genuinely new lock in this decision.** Every prior decision
+that touched refund accounting (DEC-048, DEC-049, DEC-050, DEC-051, DEC-052,
+DEC-053) explicitly and repeatedly left merchant commission reversal as its
+own undecided component. This decision closes it:
+
+**Whenever `CUSTOMER_PAYMENT` is reversed under clause A of this decision,
+`MERCHANT_COMMISSION` is also reversed**, for the same order. The reversal
+amount is the **original recognized commission** — the value
+`calculateFoodSubtotalCommissionSatang` actually computed and posted at the
+time of the original `MERCHANT_COMMISSION` group (8% of the food subtotal,
+rounded to whole baht, per **DEC-043**, unchanged and unaltered by this
+decision) — **never recomputed from current order data, and never
+recalculated at the current commission rate should that rate ever change.**
+Posted as its own **independent, negative reversal group**, following the
+exact same DEC-049 posting shape as the `CUSTOMER_PAYMENT` and
+`SERVICE_FEE_REVENUE` reversals — never combined with either into one group.
+
+This decision does not touch, question, or reopen **DEC-043**'s 8%
+food-subtotal rate itself. Only the whole-baht amount **DEC-043** already
+produced for that specific order's original posting is reversed.
+
+**D. `DELIVERY_FEE` → CAUSE-DEPENDENT, exactly as DEC-050/DEC-053 already
+lock it.**
+
+This decision does not override, narrow, or reinterpret either. It restates,
+as a boundary a future implementation must preserve:
+
+| Scenario | Delivery fee |
+|---|---|
+| Eligible cancellation before pickup (DEC-050 window) | Refunded |
+| Customer-caused failure after pickup (DEC-053) | **Not** refunded |
+| Merchant-caused failure after pickup (DEC-053) | Refunded |
+| Rider-caused failure after pickup (DEC-053) | Refunded |
+| Platform-caused / indeterminate failure after pickup (DEC-053) | Refunded |
+
+**Stripe's refund mechanics decide nothing about delivery economics.** The
+cause-dependent table above is determined entirely by DEC-050/DEC-053; the
+Stripe refund mechanism (DEC-057) only ever executes the customer-facing
+money movement once BANHAO's own economics have already decided the amount.
+
+**E. `RIDER_COMPENSATION` → eligibility per DEC-053, amount per BQ-024
+(unresolved).**
+
+This decision locks nothing new here. **DEC-053** already locks that a rider
+who carried out a post-pickup failed-delivery attempt is eligible for
+compensation in every cause row of its table, including where the rider
+caused the failure. **`BQ-024` (the amount, and any waiting compensation) is
+not resolved by this decision** and is not touched by it.
+
+**F. `PLATFORM_WRITE_OFF` → existing cause-based rules only, no new rule.**
+
+This decision creates no new `PLATFORM_WRITE_OFF` trigger and no new
+posting mechanism. **DEC-045** (the ฿2 delivery-funding gap), **DEC-051**/
+**DEC-052** (pre-pickup cooked-food loss, platform-caused and the
+customer-caused residual) and **DEC-053** (post-pickup cooked-food loss for
+`RIDER_CAUSED`/`PLATFORM_CAUSED`/`INDETERMINATE`) remain the complete,
+unmodified set of rules governing when BANHAO absorbs a cost under this
+account. This decision's own commission reversal (clause C) is a **separate
+economic fact** from any `PLATFORM_WRITE_OFF` posting — a full refund can
+trigger both a `MERCHANT_COMMISSION` reversal (this decision) and a
+`PLATFORM_WRITE_OFF` posting for food loss (DEC-051/052/053) on the very same
+order, and the two are never combined into one group, matching DEC-049's
+one-group-per-component discipline throughout.
+
+**G. Boundary, stated explicitly.**
+
+```
+CUSTOMER_PAYMENT      → REVERSE       (this decision, clause A)
+SERVICE_FEE_REVENUE   → REVERSE       (DEC-048/049, restated clause B)
+MERCHANT_COMMISSION   → REVERSE       (this decision, clause C — new)
+DELIVERY_FEE          → CAUSE-DEPENDENT (DEC-050/053, restated clause D)
+RIDER_COMPENSATION    → DEC-053 eligibility / BQ-024 amount (unresolved)
+PLATFORM_WRITE_OFF    → existing cause-based rules only (unchanged)
+```
+
+**Partial refund's proration of any of the above — including whether a
+partial refund reverses commission proportionally, fully, or not at all — is
+explicitly out of scope and remains `BQ-031`.** This decision's clause C
+answer applies **only** to a full refund; it decides nothing about a partial
+one, and must not be read as implying an answer for that case.
+
+### Explicit non-decisions
+
+This decision does **not** decide, and must not be read as deciding:
+
+- **Partial refund composition or accounting of any kind** — `BQ-031`,
+  untouched.
+- **Rider compensation amount** — `BQ-024`, untouched.
+- **DEC-043's commission rate or rounding rule** — unchanged, unquestioned;
+  this decision only reverses whatever DEC-043 already produced for the
+  specific order being refunded.
+- **The refund execution mechanism, finality signal, or state mapping** —
+  `DEC-057`, locked alongside this entry.
+- **Who may request, approve, execute, cancel, or override a refund** —
+  `DEC-058`, locked alongside this entry.
+- **Gross merchant payable, settlement, or payout architecture** — all
+  remain unbuilt and outside every refund-related decision to date,
+  including this one.
+- **Any ledger posting code, table, migration, or query shape** —
+  implementation work, deferred entirely.
+- Whether `REFUND_PAYABLE`'s reserved semantics are ever used for any of
+  this — **DEC-049** already declined to repurpose that account, and this
+  decision does not revisit that.
+
+### Why
+
+Product Owner decision, 2026-09-08, following the Q-020 Refund Decision Lock
+Preparation report's own D7 analysis. That analysis found the merchant-
+commission question was the single component every prior refund-adjacent
+decision (DEC-048 through DEC-053) explicitly deferred, and that the
+strongest reasoning available — drawn directly from DEC-053's own settlement
+consequence ("a future settlement engine must... exclude a customer-caused
+`DELIVERY_FAILED` order from merchant payout... otherwise the merchant would
+be paid from a payment that was retained precisely because they were not made
+whole") — applies with its logic reversed here: once `CUSTOMER_PAYMENT` is
+reversed, the money that would have funded a merchant payout no longer
+settled, so a commission calculated against it would be a claim against
+value that never completed the trip through the platform. Reversing it keeps
+the ledger's own facts internally consistent (no commission survives a
+reversed payment) and requires no new schema, migration, or zero-sum
+mechanism — it reuses DEC-049's own independent-reversal-group shape exactly.
+
+### Alternatives
+
+- **Keep commission recognized (Option B in the Decision Lock Preparation
+  report)** — rejected. It would leave BANHAO holding a commission fact
+  against a payment that no longer exists in the customer's world, with no
+  gross-merchant-payable mechanism (confirmed absent from the codebase) ever
+  able to reconcile the two — an accounting orphan by construction, exactly
+  the outcome DEC-053's own settlement-exclusion reasoning was written to
+  avoid in the mirror-image case.
+- **Defer the commission question to a later decision, alongside `BQ-031`**
+  — rejected for full refund specifically. Unlike partial refund's genuinely
+  unresolved proration question, full refund's commission answer does not
+  depend on any open number or unresolved proration formula — it is a binary
+  reverse-or-keep question fully answerable from decisions and schema already
+  in place, and leaving it open was assessed as an unforced delay rather than
+  a genuine dependency.
+
+### Consequences
+
+- A future ledger-reversal implementation (gated on **DEC-057**) must post
+  **three** independent reversal groups for a fully-eligible full refund —
+  `CUSTOMER_PAYMENT`, `SERVICE_FEE_REVENUE`, `MERCHANT_COMMISSION` — never
+  one combined group, following DEC-049's existing discipline.
+- `PLATFORM_REVENUE` will eventually carry postings from **four** distinct
+  `ledger_entry_groups.kind` values once this and DEC-049/DEC-048 are
+  implemented (`SERVICE_FEE_REVENUE`'s original recognition, `MERCHANT_
+  COMMISSION`'s original recognition, and now this decision's own
+  `SERVICE_FEE_REVENUE`-reversal and `MERCHANT_COMMISSION`-reversal groups) —
+  any future query aggregating `PLATFORM_REVENUE` without filtering `kind`
+  conflates all four, a risk DEC-049 already flagged for the first two and
+  which this decision extends the same warning to.
+- `MERCHANT_PAYABLE` gains a second intended use alongside DEC-043's original
+  commission-owed posting: a negative reversal entry representing commission
+  no longer owed. No gross-merchant-payable settlement mechanism exists to
+  consume either fact yet — both remain ledger-only until settlement is
+  built, unchanged from today's status quo for the original commission
+  posting itself.
+- This decision does not by itself make any refund executable — it defines
+  the accounting outcome **once** DEC-057's mechanism and DEC-058's
+  authorization are also satisfied and implemented.
+
+### Implementation status
+
+**Not implemented.** No commission-reversal posting code, no reversal-group
+insertion for any of the three components this decision governs, and no
+migration exist as of this decision.
+
+### Evidence
+
+Product Owner instruction, 2026-09-08 ("BANHAO — Q-020 REFUND DECISION
+LOCK"), following the Q-020 Refund Decision Lock Preparation report's D5–D10
+analysis, itself built on the read-only Q-020 Refund RECON (which confirmed
+`MERCHANT_COMMISSION` reversal was the one component left open by every prior
+decision) and the read-only Stripe Refund Sandbox Spike (which confirmed
+Stripe supplies every number — amount, currency, cumulative refunded total —
+needed to eventually implement this decision's arithmetic, without deciding
+whether to for BANHAO).
+
+### Related Requirements
+
+DEC-043 (**commission rate/rounding — unchanged, this decision reverses only
+what it already produced**) · DEC-045 (`PLATFORM_WRITE_OFF` precedent —
+unchanged) · DEC-048 (**service-fee refundability — unchanged, restated in
+clause B**) · DEC-049 (**ledger reversal architecture — unchanged,
+authoritative for every posting shape this decision uses**) · DEC-050
+(**cancellation window and refund eligibility — unchanged, this decision's
+trigger condition alongside DEC-053**) · DEC-051, DEC-052 (**pre-pickup
+cooked-food loss allocation — unchanged**) · DEC-053 (**post-pickup failure
+economics, including the delivery-fee table restated in clause D — unchanged,
+and this decision's own reasoning in § "Why" is drawn directly from its
+settlement-exclusion consequence**) · BQ-031 (**partial refund — remains
+`OPEN`, explicitly excluded from this decision's clause C**) · BQ-024
+(**rider compensation amount — remains `OPEN`**) · DEC-057 (refund mechanism
+— locked alongside this entry, the trigger point this decision's reversals
+fire from) · DEC-058 (refund authority — locked alongside this entry,
+unaffected by this decision)
+
+### Related Architecture
+
+`apps/api/src/modules/payments/commission-pricing.ts`
+(`calculateFoodSubtotalCommissionSatang`, **unchanged** — this decision
+reverses its historical output, never recomputes it) ·
+`apps/api/src/modules/payments/payment-event-processing.service.ts`
+(`postCommissionLedger`, `postCustomerPaymentLedger`, `postServiceFeeLedger`
+— the existing posting methods this decision's future reversal counterparts
+must mirror) · `supabase/migrations/20260811000007_ledger_domain.sql`
+(`ledger_entry_groups`, `ledger_entries`, unchanged) ·
+`docs/SETTLEMENT_MODEL.md` § 3.1, § 3.2, § 9
+
+### Supersedes / Superseded By
+
+None / None. Does not supersede or modify DEC-043, DEC-045, DEC-048, DEC-049,
+DEC-050, DEC-051, DEC-052 or DEC-053, each of which stands unchanged and is
+applied, not altered, by this decision. Resolves the one component every one
+of those decisions explicitly left open: whether `MERCHANT_COMMISSION` is
+reversed on a full refund.
