@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PAYMENT_PROVIDER } from './payment-provider.interface';
 import { NullPaymentProvider } from './providers/null-payment.provider';
-import { CUSTOMER_EMAIL_SOURCE, NoPersistedCustomerEmailSource } from './customer-email-source';
+import { CUSTOMER_EMAIL_SOURCE, ProfileCustomerEmailSource } from './customer-email-source';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { PaymentEventProcessingService } from './payment-event-processing.service';
@@ -19,15 +19,17 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
  * no business logic outside this module should need to change. That is the
  * entire point of the abstraction.
  *
- * `CUSTOMER_EMAIL_SOURCE` is the same shape of swap point: the DEC-056
- * collection slice replaces `NoPersistedCustomerEmailSource` with a real
- * `profiles.email` read here, and nowhere else needs to change.
+ * `CUSTOMER_EMAIL_SOURCE` is the same shape of swap point: `ProfileCustomerEmailSource`
+ * (the DEC-056 collection slice) reads `profiles.email` server-side —
+ * replacing the earlier placeholder binding, `NoPersistedCustomerEmailSource`,
+ * which always returned `null` because no persisted column existed yet.
+ * `PaymentsService` itself did not change to make this swap.
  */
 @Module({
   controllers: [PaymentsController],
   providers: [
     { provide: PAYMENT_PROVIDER, useClass: NullPaymentProvider },
-    { provide: CUSTOMER_EMAIL_SOURCE, useClass: NoPersistedCustomerEmailSource },
+    { provide: CUSTOMER_EMAIL_SOURCE, useClass: ProfileCustomerEmailSource },
     PaymentsService,
     PaymentEventProcessingService,
     PaymentAttemptExpiryService,

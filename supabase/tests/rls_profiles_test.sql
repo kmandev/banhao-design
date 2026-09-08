@@ -262,6 +262,39 @@ begin
     '13. set_user_role is not callable by authenticated (got ' || result || ')');
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- 14. UPDATE own email (DEC-056) — must be ALLOWED
+--     Mirrors test 3 (display_name) for the new column
+--     20260908000001_profiles_customer_email.sql adds.
+-- ---------------------------------------------------------------------------
+do $$
+declare result text; stored text;
+begin
+  result := test_as_user('11111111-1111-1111-1111-111111111111',
+    $stmt$update public.profiles set email = 'somchai@example.com'
+          where id = '11111111-1111-1111-1111-111111111111'$stmt$);
+  select email into stored from public.profiles
+    where id = '11111111-1111-1111-1111-111111111111';
+  perform test_assert(result = 'ALLOWED' and stored = 'somchai@example.com',
+    '14. UPDATE own email is allowed (got ' || result || ')');
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 15. UPDATE another user's email (DEC-056) — must be BLOCKED
+--     Mirrors test 7 (display_name) for the new column.
+-- ---------------------------------------------------------------------------
+do $$
+declare result text; stored text;
+begin
+  result := test_as_user('11111111-1111-1111-1111-111111111111',
+    $stmt$update public.profiles set email = 'hijacked@example.com'
+          where id = '22222222-2222-2222-2222-222222222222'$stmt$);
+  select email into stored from public.profiles
+    where id = '22222222-2222-2222-2222-222222222222';
+  perform test_assert(stored is distinct from 'hijacked@example.com',
+    '15. UPDATE another user email has no effect');
+end $$;
+
 \echo ''
 \echo 'All assertions passed.'
 \echo ''

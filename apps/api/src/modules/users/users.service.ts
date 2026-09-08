@@ -9,6 +9,8 @@ interface ProfileRow {
   role: string;
   phone: string | null;
   display_name: string | null;
+  /** Customer payment email (DEC-056) — see `UsersService.updateEmail`'s own comment. */
+  email: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,7 +37,7 @@ export class UsersService {
   async findById(id: string): Promise<UserProfile | null> {
     const { data, error } = await this.supabase.admin
       .from('profiles')
-      .select('id, role, phone, display_name, created_at, updated_at')
+      .select('id, role, phone, display_name, email, created_at, updated_at')
       .eq('id', id)
       .maybeSingle<ProfileRow>();
 
@@ -69,11 +71,41 @@ export class UsersService {
       .from('profiles')
       .update({ display_name: displayName })
       .eq('id', userId)
-      .select('id, role, phone, display_name, created_at, updated_at')
+      .select('id, role, phone, display_name, email, created_at, updated_at')
       .maybeSingle<ProfileRow>();
 
     if (error) {
       this.logger.error(`Failed to update profile ${userId}: ${error.message}`);
+      throw new DomainError('INTERNAL_ERROR', { message: 'Could not update profile' });
+    }
+
+    return data ? this.toProfile(data) : null;
+  }
+
+  /**
+   * Updates the caller's own payment email — DEC-056.
+   *
+   * `email` here is already validated by `updateProfileSchema` at the
+   * controller boundary (a real, non-empty, well-formed address — never an
+   * empty string silently written as `NULL`). This is the write half of
+   * DEC-056's data model: the read half, used authoritatively by
+   * `PaymentsService` at payment time, is `ProfileCustomerEmailSource`
+   * (`apps/api/src/modules/payments/customer-email-source.ts`), which reads
+   * this exact column independently of how it was set.
+   *
+   * Scoped by `id = userId`, the verified JWT subject — never a body field,
+   * matching `updateDisplayName`'s own precedent exactly.
+   */
+  async updateEmail(userId: string, email: string): Promise<UserProfile | null> {
+    const { data, error } = await this.supabase.admin
+      .from('profiles')
+      .update({ email })
+      .eq('id', userId)
+      .select('id, role, phone, display_name, email, created_at, updated_at')
+      .maybeSingle<ProfileRow>();
+
+    if (error) {
+      this.logger.error(`Failed to update email for profile ${userId}: ${error.message}`);
       throw new DomainError('INTERNAL_ERROR', { message: 'Could not update profile' });
     }
 
@@ -86,6 +118,7 @@ export class UsersService {
       role: this.parseRole(row.role, row.id),
       phone: row.phone,
       displayName: row.display_name,
+      email: row.email,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

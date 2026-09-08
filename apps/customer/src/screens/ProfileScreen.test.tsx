@@ -42,3 +42,25 @@ it('the ที่อยู่จัดส่ง row navigates to Address (DQ-04-
 
   expect(mockNavigate).toHaveBeenCalledWith('Address');
 });
+
+/**
+ * DEC-056 — the payment-email row is additive: it opens its own edit card
+ * without touching the existing display-name or address rows. No save is
+ * exercised here (that reaches `apiClient`, not `AuthController`'s own unit
+ * tests' concern); this only proves the entry point renders and opens.
+ */
+it('the payment-email row opens its edit card, with the save button disabled until a valid address is typed (DEC-056)', async () => {
+  renderScreen();
+  await waitFor(() => expect(screen.getByTestId('screen-profile')).toBeTruthy());
+
+  fireEvent.press(screen.getByTestId('row-edit-payment-email'));
+
+  expect(screen.getByTestId('card-edit-email')).toBeTruthy();
+  expect(screen.getByTestId('button-save-email').props.accessibilityState.disabled).toBe(true);
+
+  fireEvent.changeText(screen.getByTestId('input-payment-email'), 'customer@example.com');
+
+  await waitFor(() =>
+    expect(screen.getByTestId('button-save-email').props.accessibilityState.disabled).toBe(false),
+  );
+});

@@ -41,22 +41,31 @@ export class AuthController {
       role: profile.role,
       phone: profile.phone,
       displayName: profile.displayName,
+      email: profile.email,
     };
   }
 
   /**
    * Updates the caller's own profile.
    *
-   * The schema accepts exactly one field, `displayName`, and nothing else is
-   * writable here — not role, not phone, not capability, not membership. That
-   * is enforced three times over: `updateProfileSchema` has no other field,
-   * `UsersService.updateDisplayName` writes only `display_name`, and the
-   * database grants `authenticated` update on that column alone. A caller who
-   * sends `{ role: 'ADMIN' }` changes nothing and is told the request was
-   * invalid.
+   * The schema accepts exactly two fields, `displayName` and `email`
+   * (DEC-056), and nothing else is writable here — not role, not phone, not
+   * capability, not membership. That is enforced three times over:
+   * `updateProfileSchema` has no other field, `UsersService` writes only the
+   * one column each method names, and the database grants `authenticated`
+   * update on `display_name`/`email` alone. A caller who sends
+   * `{ role: 'ADMIN' }` changes nothing and is told the request was invalid.
    *
    * The row is chosen by the verified JWT subject, never by a body field, so
    * there is no cross-user write to defend against.
+   *
+   * Each field is written independently when present — a request naming only
+   * `email` never touches `display_name`, and vice versa. When both are
+   * present this is two sequential guarded writes rather than one, which is
+   * an accepted trade-off for a low-frequency profile edit (see DEC-056:
+   * `PaymentsService` is the actual authoritative *read* path for payment
+   * purposes, so nothing about payment correctness depends on this being a
+   * single statement).
    */
   @Patch('me')
   @ApiOkResponse({ description: 'The updated profile' })
@@ -72,15 +81,26 @@ export class AuthController {
 
     const input = parseOrThrow(updateProfileSchema, body);
 
-    // Nothing to write. Return current state rather than issuing an empty
-    // UPDATE, which would bump `updated_at` for no reason.
-    if (input.displayName === undefined) {
-      return this.me(user);
+    let profile: UserProfileResult = null;
+
+    if (input.displayName !== undefined) {
+      profile = await this.users.updateDisplayName(user.id, input.displayName);
+      if (!profile) {
+        throw new UnauthorizedException('User profile not found');
+      }
     }
 
-    const profile = await this.users.updateDisplayName(user.id, input.displayName);
+    if (input.email !== undefined) {
+      profile = await this.users.updateEmail(user.id, input.email);
+      if (!profile) {
+        throw new UnauthorizedException('User profile not found');
+      }
+    }
+
+    // Nothing to write. Return current state rather than issuing an empty
+    // UPDATE, which would bump `updated_at` for no reason.
     if (!profile) {
-      throw new UnauthorizedException('User profile not found');
+      return this.me(user);
     }
 
     return {
@@ -88,6 +108,9 @@ export class AuthController {
       role: profile.role,
       phone: profile.phone,
       displayName: profile.displayName,
+      email: profile.email,
     };
   }
 }
+
+type UserProfileResult = Awaited<ReturnType<UsersService['findById']>>;

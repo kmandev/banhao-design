@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { thaiPhoneSchema, displayNameSchema, roleSchema } from './common';
+import { thaiPhoneSchema, displayNameSchema, emailSchema, roleSchema } from './common';
 
 /**
  * Phase 1 authentication is Phone OTP via Supabase Auth.
@@ -19,9 +19,16 @@ export const verifyOtpSchema = z.object({
 export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 
 /**
- * The only self-service profile edit. `displayName` is the sole field, matching
- * the deployed grant (`grant update (display_name) on public.profiles`) — role,
- * phone and id are not writable by their owner at any layer.
+ * The self-service profile edit. `displayName` and `email` are the only
+ * fields, matching the deployed grants (`grant update (display_name)`,
+ * `grant update (email)` — DEC-056 — on `public.profiles`) — role, phone and
+ * id are not writable by their owner at any layer.
+ *
+ * `email` is `emailSchema.optional()`, never `.nullable()`: the key may be
+ * omitted (no change), but a present value must be a real, non-empty,
+ * validly-formatted address — DEC-056 clause 3 forbids silently converting
+ * an empty or invalid submission into `NULL`. There is deliberately no way
+ * to *clear* an email through this schema; that is not a Phase 1 need.
  *
  * `.strict()` is load-bearing rather than tidy. Zod's default is to *strip*
  * unknown keys, so `{ role: 'ADMIN' }` would parse to `{}` and return 200: safe,
@@ -32,6 +39,7 @@ export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
 export const updateProfileSchema = z
   .object({
     displayName: displayNameSchema.optional(),
+    email: emailSchema.optional(),
   })
   .strict();
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

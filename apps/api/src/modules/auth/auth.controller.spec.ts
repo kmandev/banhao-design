@@ -11,6 +11,7 @@ const PROFILE: UserProfile = {
   role: 'CUSTOMER',
   phone: '+66812345678',
   displayName: 'นก',
+  email: null,
   createdAt: '2026-08-01T00:00:00Z',
   updatedAt: '2026-08-01T00:00:00Z',
 };
@@ -24,9 +25,10 @@ const user: AuthenticatedUser = {
 function controllerWith(overrides: Partial<UsersService> = {}) {
   const findById = jest.fn().mockResolvedValue(PROFILE);
   const updateDisplayName = jest.fn().mockResolvedValue({ ...PROFILE, displayName: 'นกใหม่' });
+  const updateEmail = jest.fn().mockResolvedValue({ ...PROFILE, email: 'customer@example.com' });
 
-  const users = { findById, updateDisplayName, ...overrides } as unknown as UsersService;
-  return { controller: new AuthController(users), findById, updateDisplayName };
+  const users = { findById, updateDisplayName, updateEmail, ...overrides } as unknown as UsersService;
+  return { controller: new AuthController(users), findById, updateDisplayName, updateEmail };
 }
 
 describe('AuthController — GET /me', () => {
@@ -37,7 +39,16 @@ describe('AuthController — GET /me', () => {
       role: 'CUSTOMER',
       phone: '+66812345678',
       displayName: 'นก',
+      email: null,
     });
+  });
+
+  it('returns a persisted email when one is set (DEC-056)', async () => {
+    const { controller } = controllerWith({
+      findById: jest.fn().mockResolvedValue({ ...PROFILE, email: 'customer@example.com' }),
+    } as Partial<UsersService>);
+
+    await expect(controller.me(user)).resolves.toMatchObject({ email: 'customer@example.com' });
   });
 
   it('reads the profile by the authenticated id, not by anything in the request', async () => {
@@ -173,6 +184,84 @@ describe('AuthController — PATCH /me', () => {
     } as Partial<UsersService>);
 
     await expect(controller.updateMe(user, { displayName: 'x' })).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+});
+
+describe('AuthController — PATCH /me email (DEC-056)', () => {
+  it('updates the customer payment email', async () => {
+    const { controller, updateEmail } = controllerWith();
+    await expect(controller.updateMe(user, { email: 'customer@example.com' })).resolves.toMatchObject({
+      email: 'customer@example.com',
+    });
+    expect(updateEmail).toHaveBeenCalledWith('u1', 'customer@example.com');
+  });
+
+  it('targets the authenticated id, never one supplied in the body', async () => {
+    const { controller, updateEmail } = controllerWith();
+    await controller.updateMe({ ...user, id: 'u-verified' }, { email: 'a@example.com' });
+    expect(updateEmail).toHaveBeenCalledWith('u-verified', 'a@example.com');
+  });
+
+  it('trims surrounding whitespace before persisting', async () => {
+    const { controller, updateEmail } = controllerWith();
+    await controller.updateMe(user, { email: '  spaced@example.com  ' });
+    expect(updateEmail).toHaveBeenCalledWith('u1', 'spaced@example.com');
+  });
+
+  it.each([
+    ['empty string', { email: '' }],
+    ['malformed — no @', { email: 'not-an-email' }],
+    ['malformed — no domain', { email: 'missing@' }],
+    ['non-string', { email: 42 }],
+  ])('rejects invalid input rather than silently writing NULL — %s', async (_label, body) => {
+    const { controller, updateEmail } = controllerWith();
+    await expect(controller.updateMe(user, body)).rejects.toBeInstanceOf(DomainError);
+    // The decisive assertion for DEC-056 clause 3: no write of any kind, so
+    // an invalid submission can never collapse to a NULL/empty column.
+    expect(updateEmail).not.toHaveBeenCalled();
+  });
+
+  it('reports an invalid email as VALIDATION_FAILED', async () => {
+    const { controller } = controllerWith();
+    try {
+      await controller.updateMe(user, { email: 'not-an-email' });
+      fail('expected DomainError');
+    } catch (error) {
+      expect((error as DomainError).code).toBe('VALIDATION_FAILED');
+    }
+  });
+
+  it('updates displayName and email independently when both are present', async () => {
+    const { controller, updateDisplayName, updateEmail } = controllerWith();
+    await controller.updateMe(user, { displayName: 'นกใหม่', email: 'customer@example.com' });
+    expect(updateDisplayName).toHaveBeenCalledWith('u1', 'นกใหม่');
+    expect(updateEmail).toHaveBeenCalledWith('u1', 'customer@example.com');
+  });
+
+  it('makes no email write when the body omits it, even while updating displayName', async () => {
+    const { controller, updateEmail } = controllerWith();
+    await controller.updateMe(user, { displayName: 'นกใหม่' });
+    expect(updateEmail).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a persistence failure instead of reporting success', async () => {
+    const { controller } = controllerWith({
+      updateEmail: jest.fn().mockRejectedValue(new DomainError('INTERNAL_ERROR', { message: 'db down' })),
+    } as Partial<UsersService>);
+
+    await expect(controller.updateMe(user, { email: 'customer@example.com' })).rejects.toBeInstanceOf(
+      DomainError,
+    );
+  });
+
+  it('rejects when the row to update no longer exists', async () => {
+    const { controller } = controllerWith({
+      updateEmail: jest.fn().mockResolvedValue(null),
+    } as Partial<UsersService>);
+
+    await expect(controller.updateMe(user, { email: 'customer@example.com' })).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
   });

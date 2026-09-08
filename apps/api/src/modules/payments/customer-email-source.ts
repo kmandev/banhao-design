@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { SupabaseService } from '../../supabase/supabase.service';
 
 /**
  * The seam for BANHAO's authoritative customer-payment-email lookup
@@ -22,26 +23,50 @@ export interface CustomerEmailSource {
 /** DI token for the active customer-email source. */
 export const CUSTOMER_EMAIL_SOURCE = Symbol('CUSTOMER_EMAIL_SOURCE');
 
+/** `profiles`, the one column this source needs. */
+interface ProfileEmailRow {
+  email: string | null;
+}
+
 /**
- * The bound implementation until the DEC-056 collection slice lands — an
- * explicit, documented architectural boundary, not a bug.
+ * Reads `public.profiles.email` — DEC-056's collection slice, replacing the
+ * previous placeholder binding (`NoPersistedCustomerEmailSource`, which
+ * always returned `null` because no persisted source existed yet).
  *
- * No `profiles.email` column exists yet: DEC-056 clause 5 authorizes a
- * future, separately-instructed migration, and none has landed. This is what
- * `PaymentsModule` binds until that migration and its own collection slice
- * exist. It always returns `null`, which is the correct, honest answer
- * today — never a placeholder address, per DEC-056 clause 9 — so every
- * payment initiation fails closed (`CUSTOMER_EMAIL_REQUIRED`) rather than
- * silently proceeding with something invented.
+ * Server-side and authoritative regardless of how the value was written:
+ * the customer sets it through `PATCH /api/v1/me`
+ * (`AuthController.updateMe` → `UsersService.updateEmail`), validated there
+ * by `emailSchema`; this class only reads the column back, using the
+ * service-role client (bypasses RLS, matching every other server-side read
+ * in this codebase — `UsersService.findById` reads the same table the same
+ * way). Never touches Supabase Auth, never reads a JWT claim (DEC-056
+ * clauses 4, 10) — `userId` is the only input, supplied by
+ * `PaymentsService` from the already-verified `AuthenticatedUser`.
  *
- * Replacing this binding is the entire next collection-slice task: a real
- * implementation reads `profiles.email` (once it exists) exactly as
- * `UsersService.findById` already reads `profiles.phone` today, server-side,
- * never from Supabase Auth or a JWT claim (DEC-056 clauses 4, 10).
+ * Returns `null` on a missing profile, a `NULL` column, or a query error —
+ * every case collapses to the same "no authoritative email available"
+ * outcome, and `PaymentsService.resolveAuthoritativeEmail` is what turns
+ * that into a fail-closed `CUSTOMER_EMAIL_REQUIRED`. This method never
+ * throws and never substitutes anything.
  */
 @Injectable()
-export class NoPersistedCustomerEmailSource implements CustomerEmailSource {
-  async resolve(_userId: string): Promise<string | null> {
-    return null;
+export class ProfileCustomerEmailSource implements CustomerEmailSource {
+  private readonly logger = new Logger(ProfileCustomerEmailSource.name);
+
+  constructor(private readonly supabase: SupabaseService) {}
+
+  async resolve(userId: string): Promise<string | null> {
+    const { data, error } = await this.supabase.admin
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .maybeSingle<ProfileEmailRow>();
+
+    if (error) {
+      this.logger.error(`Failed to resolve customer email for ${userId}: ${error.message}`);
+      return null;
+    }
+
+    return data?.email ?? null;
   }
 }

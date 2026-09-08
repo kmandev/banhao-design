@@ -1,13 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import type { Role } from '@banhao/types';
+import type { MeResponse, Role } from '@banhao/types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { apiClient } from '../lib/apiClient';
 
 export interface CustomerProfile {
   id: string;
   role: Role;
   phone: string | null;
   displayName: string | null;
+  /** Customer payment email (DEC-056) — `null` until set via `updateEmail`. */
+  email: string | null;
 }
 
 interface AuthState {
@@ -19,6 +22,15 @@ interface AuthState {
   requestOtp: (phone: string) => Promise<void>;
   verifyOtp: (phone: string, token: string) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
+  /**
+   * Sets or replaces the customer's payment email (DEC-056). Unlike
+   * `updateDisplayName`, this writes through the NestJS API
+   * (`PATCH /api/v1/me`, server-side `emailSchema` validation) rather than
+   * directly to Supabase — profile *writes* other than `display_name` go
+   * through the API (DEC-APP-008); this is the one other field. Throws with
+   * the server's own message on an invalid address so the screen can show it.
+   */
+  updateEmail: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -30,6 +42,7 @@ interface ProfileRow {
   role: Role;
   phone: string | null;
   display_name: string | null;
+  email: string | null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -43,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // another user's profile even if the filter were wrong.
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, role, phone, display_name')
+      .select('id, role, phone, display_name, email')
       .eq('id', userId)
       .maybeSingle<ProfileRow>();
 
@@ -61,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             role: data.role,
             phone: data.phone,
             displayName: data.display_name,
+            email: data.email,
           }
         : null,
     );
@@ -127,6 +141,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [session, loadProfile],
   );
 
+  /**
+   * Sets or replaces the customer's payment email — DEC-056. Routed through
+   * the API (`PATCH /api/v1/me`), not a direct Supabase write like
+   * `updateDisplayName` above: profile writes other than `display_name` go
+   * through the NestJS API under DEC-APP-008, and this is where
+   * `emailSchema`'s server-side validation actually runs. Re-reads via
+   * Supabase afterward, matching `updateDisplayName`'s own refresh
+   * convention — reads stay direct-to-Supabase either way.
+   */
+  const updateEmail = useCallback(
+    async (email: string) => {
+      const userId = session?.user.id;
+      if (!userId) throw new Error('ยังไม่ได้เข้าสู่ระบบ');
+
+      await apiClient.request<MeResponse>('/api/v1/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ email }),
+      });
+
+      await loadProfile(userId);
+    },
+    [session, loadProfile],
+  );
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -146,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestOtp,
       verifyOtp,
       updateDisplayName,
+      updateEmail,
       signOut,
       refreshProfile,
     }),
@@ -157,6 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       requestOtp,
       verifyOtp,
       updateDisplayName,
+      updateEmail,
       signOut,
       refreshProfile,
     ],

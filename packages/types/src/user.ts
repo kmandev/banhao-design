@@ -13,6 +13,13 @@ export interface UserProfile {
   role: Role;
   phone: string | null;
   displayName: string | null;
+  /**
+   * Customer payment email (DEC-056) — `null` until the customer supplies
+   * one through `PATCH /api/v1/me`. Never Supabase Auth, never a JWT claim,
+   * never synthetic; the authoritative source `PaymentsService` reads via
+   * `CustomerEmailSource`.
+   */
+  email: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,4 +36,6 @@ export interface MeResponse {
   role: Role;
   phone: string | null;
   displayName: string | null;
+  /** Customer payment email (DEC-056) — see {@link UserProfile.email}. */
+  email: string | null;
 }
