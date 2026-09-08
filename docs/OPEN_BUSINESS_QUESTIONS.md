@@ -92,6 +92,19 @@ is **Stripe** (PromptPay, THB), integrated behind the existing
 **Q-002 stays unprejudiced**. Runtime is **not** implemented, and DEC-055
 resolves **nothing** about refunds — **Q-020 still blocks every refund path**.
 
+**DEC-055 Addendum A** (2026-09-08) then locked the PromptPay *presentation*
+contract — a provider-neutral QR image URL, with expiry owned by BANHAO's
+payment-attempt lifecycle rather than by Stripe. It closed no business question
+and **must not be read as closing one**. It did surface one item that stays
+firmly open: Stripe requires a customer email to confirm a PromptPay
+PaymentIntent, **BANHAO has no customer email anywhere in its runtime today**
+(phone-OTP authentication, no `profiles.email`), and Stripe uses that same
+confirmation-time address to contact the customer for refund bank details. So
+the email source is an **open implementation dependency**, and its refund half
+belongs to **Q-020**, which remains `OPEN`. No email architecture, profile
+column, authentication change or refund-contact decision was made — and none
+may be inferred.
+
 **Three remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
 BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
 the **numeric** halves of BQ-026 (DEC-035) and BQ-027 (DEC-036) as of
@@ -1980,7 +1993,7 @@ No `Q-NNN` was resolved by this pass. Cross-references added:
 | Q-014 | Authorization granularity | **BQ-038** (extends) |
 | Q-018 | Map/address accuracy | BQ-001, BQ-026 |
 | Q-019 | SMS sender ID | BQ-035 |
-| Q-020 | PromptPay refund mechanism | BQ-031, DQ-03 |
+| Q-020 | PromptPay refund mechanism | BQ-031, DQ-03 · **still `OPEN`** — and note **DEC-055 Addendum A-9**: Stripe requests refund bank details by emailing the address given at PaymentIntent confirmation, which BANHAO does not have today |
 
 ## Items requiring legal review
 

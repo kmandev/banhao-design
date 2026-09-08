@@ -15,6 +15,12 @@ implemented**: `NullPaymentProvider` is still the bound provider, and no Stripe
 adapter, credential or SDK exists in the repository. Nothing here is an
 integration design.
 
+**The PromptPay presentation contract is locked** — **DEC-055 Addendum A**
+(2026-09-08): a provider-neutral `QR_CODE` presentation carrying a QR **image
+URL** (from Stripe's `image_url_png`) and an optional hosted-instructions URL.
+There is no raw QR string, and **no provider-supplied expiry** — expiry is
+BANHAO's own, see § 2 and § 3. Still not implemented.
+
 ## Status legend
 
 `ACCEPTED` — approved by the Product Owner (`DEC-NNN`) or accepted product truth
@@ -100,6 +106,25 @@ either the reference changes — breaking DEC-028 — or expiry history is lost.
 Attempts are also what make **DEC-029** (late payment) answerable: a late
 transfer must resolve to *which attempt*, not just which order.
 
+**What an attempt actually carries, and who owns its clock** — `ACCEPTED`,
+**DEC-055 Addendum A**. The QR an attempt presents is a **provider-hosted image
+URL**, not a raw payload BANHAO renders: Stripe PromptPay returns
+`image_url_png` / `image_url_svg`, a hosted-instructions page URL, and a
+provider-internal `data` field — and **no expiry timestamp of any kind**.
+
+So the attempt's `expires_at` is, and must remain, **BANHAO's own**:
+
+```
+Provider presentation  ≠  BANHAO payment-attempt lifecycle
+```
+
+The provider says what the customer scans. **BANHAO decides how long it may be
+scanned**, and it must — Stripe explicitly does not invalidate a PromptPay QR
+after payment, so nothing but BANHAO's own window stops a customer re-scanning
+a stale code. Stripe documents no lifetime for the image URL either; it is
+treated as a short-lived presentation, valid for the active attempt only, which
+is why no image copying, proxying or storage is introduced.
+
 ---
 
 ## 3. Payment state machine
@@ -148,6 +173,37 @@ stateDiagram-v2
 **`SUCCESS` and `REFUNDED` have exactly one inbound edge each, and both come
 from a verified webhook.** A code path reaching either state any other way is a
 bug (CON-002).
+
+### `EXPIRED` is BANHAO's, not the provider's
+
+`ACCEPTED` — **DEC-055 Addendum A**. The `Changed by` column above already says
+`System (10 min)` for `EXPIRED`, and that is exact: **no provider reports it.**
+Verified against Stripe: **PromptPay has no distinct `EXPIRED` PaymentIntent
+state**, and nothing in BANHAO may pretend it does.
+
+The three Stripe events Phase 1 subscribes (DEC-055 clause 7) map as:
+
+| Stripe event | Real Stripe status | Maps to | Terminal? |
+|---|---|---|---|
+| `payment_intent.succeeded` | `succeeded` | `SUCCESS` | Yes |
+| `payment_intent.payment_failed` | `requires_payment_method` | `FAILED` | **No** — the same PaymentIntent is retryable |
+| `payment_intent.canceled` | `canceled` | BANHAO's cancellation path | Yes |
+
+Two distinctions that must not be collapsed:
+
+1. **Provider failure ≠ BANHAO expiry.** A failed attempt is an event the
+   provider reports; expiry is a deadline BANHAO enforces itself, on its own
+   clock, with no provider involvement at all. Both land on
+   `PENDING_PAYMENT`-paired states and both allow a new attempt
+   (`FAILED --> PENDING`, `EXPIRED --> PENDING` above), but they arrive by
+   entirely different routes.
+2. **Provider failure ≠ provider cancellation.** `payment_intent.payment_failed`
+   leaves the PaymentIntent alive and retryable; only an explicit cancel is
+   terminal. Treating a failed attempt as a dead order would be a bug.
+
+Nothing in this section changes the generic event processor, which stays
+provider-agnostic — Stripe's event names are normalized inside the Stripe
+adapter, never matched by generic code (DEC-055 clause 5, Addendum A-10).
 
 ---
 

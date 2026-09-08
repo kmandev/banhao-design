@@ -64,7 +64,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-052** | **Customer-caused pre-pickup cooked-food loss is absorbed by BANHAO (`PLATFORM_WRITE_OFF`) — a narrow clarification closing DEC-051's recorded residual** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/DECISIONS.md` DEC-051, `docs/SETTLEMENT_MODEL.md` § 9, BQ-015 (remains resolved) |
 | **DEC-053** | **Post-pickup delivery failure: operator-resolved `DELIVERY_FAILED` / delivery `FAILED`, 2 contact attempts + 5-minute wait from `ARRIVED`, cause-dependent economics** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/ORDER_LIFECYCLE.md` § 4, § 5, § 6, `docs/SETTLEMENT_MODEL.md` § 9, BQ-017 (resolved) |
 | **DEC-054** | **Customer-arrival anchor `EN_ROUTE → ARRIVED` (distinct from `AT_MERCHANT`), and a narrow DEC-APP-006 carve-out letting DEC-053 use `DELIVERY_FAILED` while BQ-013 stays `OPEN`** | **ACCEPTED — POLICY / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/RIDER_LIFECYCLE.md` § 4, `docs/BANHAO-APP-ARCHITECTURE-V1.md` (DEC-APP-006), DEC-053 |
-| **DEC-055** | **Q-001 resolved: Stripe is the Phase 1 payment provider (PromptPay / THB), behind the existing `PaymentProvider` abstraction, with no Stripe Connect in Phase 1** | **ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md` § 0, § 2, DEC-015, Q-001 (resolved) |
+| **DEC-055** | **Q-001 resolved: Stripe is the Phase 1 payment provider (PromptPay / THB), behind the existing `PaymentProvider` abstraction, with no Stripe Connect in Phase 1** · **Addendum A (same day): the PromptPay presentation contract is locked — provider-neutral `QR_CODE`, `imageUrl` from `image_url_png`, no `expiresAt` on provider presentation** | **ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 3, DEC-015, Q-001 (resolved), `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -5756,18 +5756,26 @@ occupy the head of the queue, valid events must not be starved, genuinely
 transient failures must remain retryable, and every event must remain
 auditable. It ships as **its own isolated slice with its own tests**.
 
-**12. PromptPay QR presentation — NOT LOCKED.**
+**12. PromptPay QR presentation — RESOLVED the same day by Addendum A.**
 
 ```
-PromptPay QR presentation mapping = OPEN / SANDBOX SPIKE REQUIRED
+PromptPay QR presentation mapping = LOCKED — see Addendum A
 ```
 
+As originally written this clause read `OPEN / SANDBOX SPIKE REQUIRED`, because
 Stripe's Direct API guide documents the Stripe.js client path
-(`stripe.confirmPromptPayPayment`) and only alludes to a non-Stripe.js path.
-The exact server-side `next_action` shape for PromptPay is **not confirmed**.
-Until a sandbox spike settles it, do **not** add the Stripe React Native SDK,
-add a publishable key, change customer UI, or assume either a QR image URL or a
-QR payload field.
+(`stripe.confirmPromptPayPayment`) and only alludes to a non-Stripe.js path, so
+the server-side `next_action` shape for PromptPay was **not confirmed**. The
+spike this clause demanded was then run the same day
+(`docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md`), followed by two contract recons, and
+**Addendum A below now locks the mapping**.
+
+The prohibitions this clause carried are **not** lifted by that: still do **not**
+add the Stripe React Native SDK, add a publishable key, or change customer UI.
+Addendum A settles the *contract*, not its implementation — and clause 12's own
+original conclusion that a publishable key is unnecessary is now confirmed
+rather than merely assumed, because BANHAO's flow never reaches a client-side
+Stripe.js confirm step.
 
 **13. Environment variables.** Server secrets only:
 
@@ -5784,7 +5792,224 @@ the same rule as `SUPABASE_SERVICE_ROLE_KEY`. `STRIPE_WEBHOOK_SECRET` is
 distinct from `PAYMENT_WEBHOOK_DEV_SECRET`, which remains the null provider's
 dev-only key.
 
-**A publishable key is not locked**, and remains conditional on clause 12.
+**A publishable key is not locked.** Addendum A confirms none is required for
+the locked presentation path, because BANHAO's server confirms the PaymentIntent
+itself and renders a Stripe-hosted image; a publishable key would only be needed
+by a client-side Stripe.js/Elements flow, which this architecture does not use.
+
+### Addendum A — the Stripe PromptPay presentation contract
+
+**Status:** ACCEPTED — ARCHITECTURE / CONTRACT · **RUNTIME NOT IMPLEMENTED** ·
+**Date:** 2026-09-08 (same day as the parent decision) · **Owner:** PRODUCT_OWNER
+
+Recorded as an addendum, not a new decision number, because it settles a
+question this decision itself opened (clause 12) and changes nothing else about
+DEC-055. **No runtime code is authorized by this addendum.**
+
+Evidence base, in order of authority: `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md`
+(live Stripe **test-mode** calls, 2026-09-08),
+`docs/STRIPE_PRESENTATION_CONTRACT_RECON.md` (repository trace of the current
+contract and its consumers), and
+`docs/STRIPE_PRESENTATION_CONTRACT_FOLLOWUP_RECON.md` (Stripe's official API
+reference cross-checked against the spike, plus the customer-email trace).
+
+**A-1. What Stripe actually returns.** Verified twice, independently — captured
+live in the spike, and confirmed against Stripe's published `next_action`
+schema:
+
+```
+next_action.promptpay_display_qr_code = {
+  data,
+  hosted_instructions_url,
+  image_url_png,
+  image_url_svg
+}
+```
+
+**PromptPay presentation is QR-image / hosted-instructions based. There is no
+raw scannable QR string BANHAO renders itself**, and there is **no `expires_at`
+field** — the same schema documents `expires_at` for `pix_display_qr_code`,
+`cashapp_…qr_code` and `upi_…qr_code`, so its absence for PromptPay is a
+deliberate feature of Stripe's API, not a gap in the evidence.
+
+This **supersedes the assumption baked into the current interface**, which
+models presentation as `{ type: 'QR_STRING'; value: string; expiresAt: string }`
+— a raw payload plus a provider-supplied expiry, neither of which Stripe
+PromptPay provides.
+
+**A-2. The locked contract.** BANHAO's generic payment presentation becomes,
+in the repository's own existing idiom (`CreatePaymentResult.presentation`,
+`apps/api/src/modules/payments/payment-provider.interface.ts`):
+
+```ts
+presentation?: {
+  type: 'QR_CODE';
+  imageUrl: string;
+  hostedInstructionsUrl?: string;
+};
+```
+
+`type` remains the discriminator the current shape already uses; a second
+variant is added only when a provider that needs one is actually selected —
+none is today (Phase 1 is PromptPay-only, DEC-016).
+
+**A-3. `imageUrl` ← `image_url_png` — the primary representation.** PNG, not
+SVG, and **SVG is deliberately not part of the generic contract**: the customer
+app has no SVG renderer, and no `react-native-svg` (or equivalent) dependency
+exists anywhere in the repository, so an `imageUrlSvg` field would be one the
+app could not render. React Native's built-in `Image` renders a remote PNG URL
+with no new dependency, and the app already does exactly this for
+proof-of-delivery photos (`apps/customer/src/screens/OrderDetailScreen.tsx`).
+The customer app may render the provider-hosted image directly for the **active
+payment attempt**.
+
+**A-4. `hostedInstructionsUrl` ← `hosted_instructions_url` — optional
+fallback.** Supplementary, never the primary QR representation. It is a
+Stripe-hosted **page**, not an image source, and the customer app today has
+**no WebView and no deep-link/browser abstraction** — so the field may be
+carried on the contract, but **no WebView or browser-opening infrastructure is
+introduced by this addendum**. Making it a working fallback is a separate,
+later decision.
+
+**A-5. Stripe's `data` stays adapter-internal.** It must **not** be exposed as
+the generic BANHAO QR presentation merely because the superseded shape had a
+`value` field to fill. It is provider-specific; the spike did **not** establish
+that it is equivalent to the old raw-QR-string contract (in test mode it
+returned a `payments.stripe.com` URL, while Stripe's schema describes the field
+generically as raw data for a QR library — a discrepancy **left unresolved**,
+because settling it would need a live-mode call this work was not authorized to
+make). A future Stripe adapter may retain and use it internally.
+
+**A-6. Expiry ownership — the distinction this addendum exists to make
+explicit.**
+
+```
+Provider presentation  ≠  BANHAO payment-attempt lifecycle
+```
+
+The provider presentation **must not carry `expiresAt`**. Expiry is
+BANHAO-owned state on `payment_attempts.expires_at`, and the customer-facing
+`qr.expiresAt` continues to derive from it. This is not a change of ownership,
+only an honest naming of what is already true: that value is computed today by
+BANHAO's own code from `NullPaymentProvider`'s own constant, never read from any
+provider field.
+
+Stripe's own documentation reinforces why BANHAO must keep enforcing this
+window itself: it warns that after a successful PromptPay payment, *"any attempt
+to use the same QR code again can result in having the funds deducted from
+their bank account"* — Stripe does not invalidate the QR, so the protection
+against a customer re-scanning a stale code is BANHAO's display policy, not a
+provider guarantee.
+
+**A-7. Stripe lifecycle mapping.** Verified, and locked as vocabulary only —
+the generic processor is **not** changed by this addendum:
+
+```
+payment_intent.succeeded       → successful payment
+payment_intent.payment_failed  → failed PromptPay attempt (retryable, same PaymentIntent)
+payment_intent.canceled        → explicitly canceled PaymentIntent (terminal)
+```
+
+**Stripe PromptPay has no distinct `EXPIRED` state, and BANHAO must not pretend
+it has one.** BANHAO's `EXPIRED` is domain/policy-owned (`PAYMENT_LIFECYCLE.md`
+§ 3 — "System (10 min)"), reached by BANHAO's own attempt-expiry tick, and maps
+to no Stripe status at all. A failed attempt is **not** terminal and must never
+be treated as a dead order; only an explicit cancel or a genuine success is.
+
+**A-8. URL durability — what is known, and what is not.** Stripe documents **no
+TTL and no durability guarantee** for the PromptPay image or hosted-instructions
+URLs. **No expiration period is invented here.** The URL is treated as a
+**short-lived payment-attempt presentation**, valid for the window BANHAO itself
+controls: an attempt is displayed only until BANHAO's own expiry moves it to
+`EXPIRED`, after which regeneration issues a new attempt with a fresh URL and
+the old one is never read again.
+
+Therefore the architecture may use the Stripe-hosted image URL **directly**, and
+**no R2 storage, image proxying, CDN persistence, QR image copying or
+server-side image storage is introduced** — unless a later implementation or
+reliability test demonstrates the need. Recorded as an explicit assumption: this
+is safe *because* the display window is short. Materially lengthening that
+window (a "resume this payment tomorrow" feature, say) would require
+re-verifying it, not merely re-asserting it.
+
+**A-9. Customer email — an implementation dependency, deliberately left open.**
+
+```
+Customer email source for Stripe PromptPay confirmation
+  = implementation dependency / OPEN
+```
+
+Stripe requires `billing_details[email]` to confirm a PromptPay PaymentIntent
+in the tested flow. BANHAO has **no customer email anywhere in its runtime
+today**: authentication is phone-OTP, `profiles` has no `email` column,
+`AuthenticatedUser` carries none, and the `email` claim parsed at the
+token-verification layer is discarded before reaching any service.
+
+**This addendum invents no email architecture.** It does not add email to the
+customer profile, change authentication, change the order schema, or decide the
+refund-contact architecture.
+
+Recorded because it is load-bearing and non-obvious: Stripe's own documentation
+states it *"automatically contacts the customer at the email address provided at
+time of PaymentIntent confirmation"* to request refund bank details — so
+whatever value satisfies confirmation is also the address Stripe would later use
+to reach the customer for a refund. A platform-owned placeholder would satisfy
+confirmation while silently misdirecting that correspondence. **This does not
+resolve Q-020 and must not be read as doing so** — it sharpens what Q-020 will
+have to decide.
+
+**A-10. Architecture invariant — restated, not weakened.**
+
+```
+BANHAO generic payment processing remains provider-agnostic.
+Stripe-specific response normalization occurs inside the Stripe adapter.
+```
+
+Generic payment-event processing must **not** become Stripe-aware, and the
+generic payment lifecycle must **not** depend on Stripe-specific fields. This
+is clause 5 of the parent decision, unchanged; A-5 is its concrete application
+to the presentation surface.
+
+**A-11. Implementation consequences — recorded, not authorized.** None of the
+following is performed by this addendum; each belongs to the Stripe adapter
+implementation task:
+
+- `CreatePaymentResult.presentation` changes shape (A-2). Its three current call
+  sites in `payments.service.ts` (`initializePayment`, `regenerateAttempt`,
+  `toResponse`) change with it, and `expiresAt` must be computed by
+  `PaymentsService` from a BANHAO policy value rather than read off the provider
+  result (A-6).
+- `NullPaymentProvider` currently emits the superseded `QR_STRING` shape and
+  invents its own expiry. **Its dev/test convenience is not a reason to preserve
+  an incorrect generic abstraction**: the two are distinct, and the null provider
+  is adapted to the new contract as an implementation task.
+- `PaymentInitiationResponse.qr.value` (`packages/validation/src/payment.ts`)
+  must stop carrying a name that implies a raw scannable payload. The exact
+  replacement field name is an implementation choice, constrained only by that.
+  `qr.expiresAt` stays, still derived from `payment_attempts.expires_at`.
+- **Preferred path is clean replacement, not a compatibility shim.** The recon
+  established that `apps/customer/src/screens/payment.tsx` never calls the
+  payment endpoint — it renders a placeholder and runs a local hardcoded timer —
+  so **no live consumer depends on `QR_STRING` / `value` / `expiresAt` today**,
+  and no compatibility layer is warranted for a consumer that does not exist.
+  This is an implementation note, **not** a licence to skip proper API contract
+  design: the real payment flow must be wired deliberately when it is wired.
+- Existing tests and the generated API contract encode the superseded shape
+  (`payments.service.spec.ts` most heavily, plus `docs/06-api/openapi.json` and
+  its drift guard). They are updated **during implementation**, not now.
+- **No database migration is required.** `payment_attempts.qr_payload` (text)
+  and `expires_at` (timestamptz) already hold a URL and a BANHAO-computed
+  timestamp respectively.
+
+**A-12. What this addendum does not change.** **No Stripe Connect decision
+changes** (clause 4 stands — no connected accounts, no transfers, no application
+fees; Q-002 stays unprejudiced). **No refund decision changes** — Q-020, DEC-049
+and BQ-031 are untouched, and refund events remain unsubscribed (clause 7).
+**No economics change** — commission (DEC-043), service fee (DEC-036/047/048),
+delivery fee (DEC-035), rider earning (DEC-044) and the funding gap (DEC-045)
+are untouched. Clause 11's starvation prerequisite, clause 8's idempotency-key
+strategy, clause 6's ingest-only webhook architecture and DEC-015's substance
+all stand exactly as written.
 
 ### Explicit non-decisions
 
@@ -5801,7 +6026,12 @@ This decision selects a provider and locks how it is integrated. It does
   delivery margin, promotion funding, or refund economics.
 - Partial refunds (**BQ-031**), or the customer-facing refund copy.
 - Settlement, payout, or the six deferred settlement tables.
-- The exact `next_action` field mapping (clause 12).
+- ~~The exact `next_action` field mapping (clause 12).~~ **Decided the same day
+  by Addendum A** — this is no longer a non-decision.
+- **The source of the customer email Stripe requires to confirm a PromptPay
+  PaymentIntent** (Addendum A-9). BANHAO has none today; supplying one is an
+  implementation dependency that this decision deliberately leaves open, and it
+  is entangled with Q-020's refund-contact question.
 - Whether `getPaymentStatus` is added (clause 9).
 
 ### Why
@@ -5877,7 +6107,17 @@ unexplained contradiction.
 - The payment-event starvation defect becomes **blocking** for Stripe
   enablement (clause 11).
 - A sandbox spike is required before the customer-facing QR path can be built
-  (clause 12).
+  (clause 12). **Run the same day — `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` —
+  and the resulting presentation contract is locked in Addendum A.** The QR path
+  itself is still not built.
+- **The generic presentation contract must change before a Stripe adapter can
+  be written** (Addendum A-2, A-11): the shipped
+  `{ type: 'QR_STRING'; value; expiresAt }` shape cannot represent what Stripe
+  PromptPay returns. `NullPaymentProvider` is adapted with it; no live consumer
+  depends on the superseded shape.
+- **The customer email required for PromptPay confirmation has no source in
+  BANHAO today** (Addendum A-9) — a known implementation dependency, not a
+  resolved one.
 - **The customer-facing refund copy becomes a known exposure.** The Customer
   App promises *"เงินจะเข้าบัญชีเดิมที่ใช้จ่าย ภายใน 1–3 วันทำการ"*, and
   Stripe's PromptPay refund requires the customer to supply their bank account
@@ -5904,6 +6144,23 @@ transition table, refund events, failure reasons),
 `supabase/migrations/20260811000006_payment_domain.sql`,
 `packages/config/src/env.ts`.
 
+**Addendum A** (same day): Product Owner instruction, 2026-09-08 ("BANHAO —
+DECISION LOCK, Stripe PromptPay Presentation Contract"), on the evidence of
+three read-only stages — `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` (live
+test-mode PaymentIntent create/confirm/retrieve/cancel and real webhook events;
+no live key, no refund call, no production call),
+`docs/STRIPE_PRESENTATION_CONTRACT_RECON.md` and
+`docs/STRIPE_PRESENTATION_CONTRACT_FOLLOWUP_RECON.md` (repository traces plus
+Stripe's published `next_action` schema at
+`docs.stripe.com/api/payment_intents/object` and the PromptPay refund and
+repeated-payment behaviour at `docs.stripe.com/payments/promptpay`). Repository
+basis additionally: `providers/null-payment.provider.ts`,
+`payment-attempt-expiry.service.ts`, `packages/validation/src/payment.ts`,
+`apps/customer/src/screens/payment.tsx`,
+`apps/customer/src/screens/OrderDetailScreen.tsx`,
+`apps/api/src/common/types.ts`, `apps/api/src/common/guards/supabase-auth.guard.ts`,
+`supabase/migrations/20260809000002_profiles_and_roles.sql`.
+
 ### Related Requirements
 
 Q-001 (**resolved by this decision**) · Q-002 (legal/settlement model —
@@ -5919,8 +6176,15 @@ Q-001 (**resolved by this decision**) · Q-002 (legal/settlement model —
 `payments.module.ts` (the binding swap point) · `providers/` ·
 `apps/api/src/modules/webhooks/webhooks.controller.ts` ·
 `payment-event-processing.service.ts` · `packages/config/src/env.ts` ·
-`docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 8 · `docs/SETTLEMENT_MODEL.md` § 3.1,
-§ 3.2 · `supabase/migrations/20260811000006_payment_domain.sql`
+`docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 3, § 8 · `docs/SETTLEMENT_MODEL.md`
+§ 3.1, § 3.2 · `supabase/migrations/20260811000006_payment_domain.sql`
+
+**Addendum A** additionally: `providers/null-payment.provider.ts` ·
+`payment-attempt-expiry.service.ts` · `packages/validation/src/payment.ts`
+(`PaymentInitiationResponse.qr`) · `docs/06-api/openapi.json` (drift-guarded,
+updated at implementation) · `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` ·
+`docs/STRIPE_PRESENTATION_CONTRACT_RECON.md` ·
+`docs/STRIPE_PRESENTATION_CONTRACT_FOLLOWUP_RECON.md`
 
 ### Supersedes / Superseded By
 
@@ -5929,3 +6193,11 @@ Q-001 is downstream of Q-002 (see "Relationship to DEC-015" above) while
 reaffirming DEC-015's substance in full. Does not modify DEC-003, DEC-014,
 DEC-016, DEC-035, DEC-036, DEC-043, DEC-044, DEC-045, DEC-046, DEC-047,
 DEC-048, DEC-049, DEC-APP-005 or DEC-APP-007, each of which stands unchanged.
+
+**Addendum A** (2026-09-08) closes this decision's own clause 12 and supersedes
+no other decision. What it supersedes is a **code assumption**, never a lock:
+`CreatePaymentResult.presentation`'s `{ type: 'QR_STRING'; value; expiresAt }`
+shape, which predates any provider and assumed a raw QR payload and a
+provider-supplied expiry that Stripe PromptPay does not provide. No new decision
+number was minted, because the addendum answers a question DEC-055 itself left
+open and alters nothing outside it.
