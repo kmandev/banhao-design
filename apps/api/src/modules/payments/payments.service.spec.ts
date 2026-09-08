@@ -2,6 +2,7 @@ import { PaymentsService, PAYMENT_ATTEMPT_TTL_MS } from './payments.service';
 import type { SupabaseService } from '../../supabase/supabase.service';
 import type { AuthenticatedUser } from '../../common/types';
 import type { PaymentProvider, CreatePaymentResult } from './payment-provider.interface';
+import type { CustomerEmailSource } from './customer-email-source';
 
 /**
  * Asserts `actualIso` is a real, freshly-computed BANHAO expiry — never a
@@ -98,9 +99,23 @@ const PROVIDER_RESULT: CreatePaymentResult = {
 const STORED_ATTEMPT_QR_PAYLOAD = 'https://null-provider.local/qr/order-1/NULL-fixed-id.png';
 const STORED_ATTEMPT_EXPIRES_AT = '2026-08-24T05:00:00.000Z';
 
+/**
+ * The authoritative email every test gets by default (DEC-056) — a clearly
+ * labelled test address, never `@banhao.local`/`@banhao.invalid`, which
+ * DEC-056 clause 9 reserves for dev/test *provider* fixtures, not for
+ * standing in as a real customer's address in tests that exercise the real
+ * payment-lifecycle behaviour these tests are about.
+ */
+const VALID_CUSTOMER_EMAIL = 'customer@example.com';
+
+function fakeEmailSource(email: string | null = VALID_CUSTOMER_EMAIL): { source: CustomerEmailSource; resolve: jest.Mock } {
+  const resolve = jest.fn().mockResolvedValue(email);
+  return { source: { resolve }, resolve };
+}
+
 function buildService(
   results: Result[],
-  options?: { provider?: Partial<PaymentProvider> },
+  options?: { provider?: Partial<PaymentProvider>; emailSource?: CustomerEmailSource },
 ) {
   const { supabase, calls } = supabaseStub(results);
   const createPayment = jest.fn().mockResolvedValue(PROVIDER_RESULT);
@@ -111,8 +126,9 @@ function buildService(
     verifyWebhookSignature: jest.fn(),
     ...options?.provider,
   };
-  const subject = new PaymentsService(supabase, provider);
-  return { subject, calls, createPayment, provider };
+  const emailSource = options?.emailSource ?? fakeEmailSource().source;
+  const subject = new PaymentsService(supabase, provider, emailSource);
+  return { subject, calls, createPayment, provider, emailSource };
 }
 
 const ORDER_ID = 'order-1';
@@ -308,6 +324,102 @@ describe('PaymentsService.createPayment — first initialization', () => {
     await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
       code: 'PROVIDER_UNAVAILABLE',
     });
+  });
+});
+
+/**
+ * DEC-056 — the customer-email fail-closed contract. `resolveAuthoritativeEmail`
+ * runs before anything else in `createPayment`, so every case below supplies
+ * only the guarded-UPDATE `Result` stub — no order/payment/attempt mutation
+ * is ever reached, and asserting `calls` is empty proves it.
+ */
+describe('PaymentsService.createPayment — customer email fail-closed (DEC-056)', () => {
+  it('rejects with CUSTOMER_EMAIL_REQUIRED when the authoritative source has no email at all', async () => {
+    const { source, resolve } = fakeEmailSource(null);
+    const { subject, calls, createPayment } = buildService([], { emailSource: source });
+
+    await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
+      code: 'CUSTOMER_EMAIL_REQUIRED',
+    });
+    expect(resolve).toHaveBeenCalledWith(CUSTOMER_ID);
+    expect(createPayment).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0); // not even the guarded orders UPDATE ran
+  });
+
+  it('rejects with CUSTOMER_EMAIL_REQUIRED when the authoritative source returns an empty string', async () => {
+    const { source } = fakeEmailSource('');
+    const { subject, calls, createPayment } = buildService([], { emailSource: source });
+
+    await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
+      code: 'CUSTOMER_EMAIL_REQUIRED',
+    });
+    expect(createPayment).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each(['not-an-email', 'missing-at-sign.example.com', '@no-local-part.com', 'trailing-dot@example.com.'])(
+    'rejects with CUSTOMER_EMAIL_REQUIRED for the malformed address %s',
+    async (malformed) => {
+      const { source } = fakeEmailSource(malformed);
+      const { subject, calls, createPayment } = buildService([], { emailSource: source });
+
+      await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
+        code: 'CUSTOMER_EMAIL_REQUIRED',
+      });
+      expect(createPayment).not.toHaveBeenCalled();
+      expect(calls).toHaveLength(0);
+    },
+  );
+
+  it('never substitutes the customer id, phone, or any synthetic value for a missing email', async () => {
+    const { source } = fakeEmailSource(null);
+    const { subject, createPayment } = buildService([], { emailSource: source });
+
+    await expect(subject.createPayment(customerUser(), ORDER_ID)).rejects.toMatchObject({
+      code: 'CUSTOMER_EMAIL_REQUIRED',
+    });
+    // The rejection itself is the proof there is no fallback path to assert
+    // against — createPayment (and therefore any email value) was never
+    // reached at all.
+    expect(createPayment).not.toHaveBeenCalled();
+  });
+
+  it('a valid email proceeds through the existing flow and reaches the provider unchanged', async () => {
+    const { source, resolve } = fakeEmailSource('real.customer@example.com');
+    const { subject, createPayment } = buildService(
+      [
+        { data: TRANSITIONED_ORDER, error: null },
+        { data: null, error: null },
+        { data: INSERTED_PAYMENT, error: null },
+        { data: null, error: null },
+      ],
+      { emailSource: source },
+    );
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(resolve).toHaveBeenCalledWith(CUSTOMER_ID);
+    expect(createPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'real.customer@example.com' }),
+    );
+    expect(result.paymentId).toBe(INSERTED_PAYMENT.id);
+  });
+
+  it('trims whitespace around an otherwise-valid email before it reaches the provider', async () => {
+    const { source } = fakeEmailSource('  spaced@example.com  ');
+    const { subject, createPayment } = buildService(
+      [
+        { data: TRANSITIONED_ORDER, error: null },
+        { data: null, error: null },
+        { data: INSERTED_PAYMENT, error: null },
+        { data: null, error: null },
+      ],
+      { emailSource: source },
+    );
+
+    await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(createPayment).toHaveBeenCalledWith(expect.objectContaining({ email: 'spaced@example.com' }));
   });
 });
 

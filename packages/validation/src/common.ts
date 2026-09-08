@@ -27,3 +27,13 @@ export const uuidSchema = z.string().uuid();
 export const satangSchema = z.number().int().nonnegative();
 
 export const displayNameSchema = z.string().trim().min(1).max(80);
+
+/**
+ * Practical Phase 1 email format check (DEC-056) — Stripe PromptPay requires
+ * `billing_details[email]` to confirm a payment, and BANHAO has no persisted
+ * customer email yet (the collection slice and its migration are separate,
+ * future work). Deliberately a pragmatic format check, not a full RFC 5322
+ * parser — format validity is not deliverability, and this schema makes no
+ * claim that a validated address can actually receive mail.
+ */
+export const emailSchema = z.string().trim().email();

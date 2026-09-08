@@ -94,6 +94,13 @@ export const ERROR_CODES = [
   'PAYMENT_ALREADY_SUCCEEDED',
   'PROVIDER_UNAVAILABLE',
   'MECHANISM_UNAVAILABLE',
+  // Payment creation (Phase F-1, DEC-056). BANHAO has no authoritative
+  // customer email yet — a real, valid one is required to confirm a Stripe
+  // PromptPay payment. Same category as `ORDER_NOT_PAYABLE`: the caller did
+  // nothing wrong on this request, but a precondition this specific customer
+  // hasn't met is blocking it. Never raised in place of a substituted value —
+  // DEC-056 forbids a synthetic or client-supplied fallback.
+  'CUSTOMER_EMAIL_REQUIRED',
 
   // --- Transport-level fallbacks --------------------------------------------
   // Used when an exception carries no semantic code of its own. A domain

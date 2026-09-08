@@ -1,12 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { PaymentInitiationResponse } from '@banhao/validation';
-import { uuidSchema } from '@banhao/validation';
+import { emailSchema, uuidSchema } from '@banhao/validation';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { DomainError } from '../../common/errors/domain-error';
 import { getCorrelationId } from '../../common/correlation/correlation';
 import type { AuthenticatedUser } from '../../common/types';
 import { PAYMENT_PROVIDER } from './payment-provider.interface';
 import type { PaymentProvider } from './payment-provider.interface';
+import { CUSTOMER_EMAIL_SOURCE } from './customer-email-source';
+import type { CustomerEmailSource } from './customer-email-source';
 
 /** `orders`, the columns this service reads/writes for payment initiation. */
 interface OrderPaymentRow {
@@ -146,9 +148,38 @@ export class PaymentsService {
   constructor(
     private readonly supabase: SupabaseService,
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
+    @Inject(CUSTOMER_EMAIL_SOURCE) private readonly emailSource: CustomerEmailSource,
   ) {}
 
+  /**
+   * Resolves and validates the customer's authoritative payment email
+   * (DEC-056) — server-side, from `CustomerEmailSource`, never Supabase Auth
+   * and never a JWT claim. Fails closed on anything short of a valid email:
+   * absent, empty, or malformed are all the same outcome, and none is ever
+   * substituted with a synthetic or client-supplied value.
+   *
+   * Called first, before any other step of `createPayment` — before the
+   * order even transitions — so a missing email never leaves an order
+   * stranded at `PENDING_PAYMENT` with nothing to show for it, and so this
+   * one check protects every provider `PaymentsService` will ever call, not
+   * only Stripe.
+   */
+  private async resolveAuthoritativeEmail(userId: string): Promise<string> {
+    const rawEmail = await this.emailSource.resolve(userId);
+    const parsed = emailSchema.safeParse(rawEmail ?? '');
+
+    if (!parsed.success) {
+      throw new DomainError('CUSTOMER_EMAIL_REQUIRED', {
+        message: 'No valid customer email available to initiate payment',
+      });
+    }
+
+    return parsed.data;
+  }
+
   async createPayment(user: AuthenticatedUser, orderId: string): Promise<PaymentInitiationResponse> {
+    const email = await this.resolveAuthoritativeEmail(user.id);
+
     const { data: transitioned, error } = await this.supabase.admin
       .from('orders')
       .update({ state: 'PENDING_PAYMENT' })
@@ -164,10 +195,15 @@ export class PaymentsService {
 
     if (transitioned) {
       await this.writeOrderHistory(orderId, user.id);
-      return this.initializePayment(transitioned.id, transitioned.order_number, transitioned.grand_total_satang);
+      return this.initializePayment(
+        transitioned.id,
+        transitioned.order_number,
+        transitioned.grand_total_satang,
+        email,
+      );
     }
 
-    return this.recoverOrRejectInitiation(user, orderId);
+    return this.recoverOrRejectInitiation(user, orderId, email);
   }
 
   /**
@@ -182,6 +218,7 @@ export class PaymentsService {
   private async recoverOrRejectInitiation(
     user: AuthenticatedUser,
     orderId: string,
+    email: string,
   ): Promise<PaymentInitiationResponse> {
     const { data: order } = await this.supabase.admin
       .from('orders')
@@ -201,10 +238,10 @@ export class PaymentsService {
     if (!found) {
       // Case 2 from the class doc comment: legitimately PENDING_PAYMENT, no
       // payment row yet. Complete initialization rather than error.
-      return this.initializePayment(order.id, order.order_number, order.grand_total_satang);
+      return this.initializePayment(order.id, order.order_number, order.grand_total_satang, email);
     }
 
-    return this.resumePayment(order.id, found.payment, found.attempt);
+    return this.resumePayment(order.id, found.payment, found.attempt, email);
   }
 
   /**
@@ -239,6 +276,7 @@ export class PaymentsService {
     orderId: string,
     payment: PaymentRow,
     attempt: PaymentAttemptRow | null,
+    email: string,
   ): Promise<PaymentInitiationResponse> {
     if (ALREADY_SUCCEEDED_PAYMENT_STATES.has(payment.state)) {
       throw new DomainError('PAYMENT_ALREADY_SUCCEEDED', { details: { currentState: payment.state } });
@@ -249,7 +287,7 @@ export class PaymentsService {
     }
 
     if (REGENERABLE_PAYMENT_STATES.has(payment.state)) {
-      return this.regenerateAttempt(orderId, payment, attempt);
+      return this.regenerateAttempt(orderId, payment, attempt, email);
     }
 
     this.logger.error(
@@ -362,6 +400,7 @@ export class PaymentsService {
     orderId: string,
     payment: PaymentRow,
     currentAttempt: PaymentAttemptRow | null,
+    email: string,
   ): Promise<PaymentInitiationResponse> {
     const nextAttemptNo = (currentAttempt?.attempt_no ?? 0) + 1;
 
@@ -373,6 +412,7 @@ export class PaymentsService {
         amount: { amount: payment.amount_satang, currency: 'THB' },
         method: 'PROMPTPAY_QR',
         webhookUrl: `/webhooks/payments/${this.provider.name}`,
+        email,
       });
     } catch (cause) {
       this.logger.error(
@@ -466,6 +506,7 @@ export class PaymentsService {
     orderId: string,
     orderNumber: string,
     grandTotalSatang: number,
+    email: string,
   ): Promise<PaymentInitiationResponse> {
     let result;
     try {
@@ -482,6 +523,9 @@ export class PaymentsService {
         // provider makes no network call, so this is a placeholder path, not
         // live configuration.
         webhookUrl: `/webhooks/payments/${this.provider.name}`,
+        // DEC-056: resolved and validated by `resolveAuthoritativeEmail`
+        // before this method was ever called — never re-derived here.
+        email,
       });
     } catch (cause) {
       this.logger.error(

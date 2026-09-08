@@ -7,6 +7,7 @@ jest.mock('@banhao/config', () => ({
 }));
 
 import { NullPaymentProvider, NULL_PROVIDER_SIGNATURE_HEADER } from './providers/null-payment.provider';
+import type { CreatePaymentInput } from './payment-provider.interface';
 
 /**
  * `createPayment` (F-1) and `verifyWebhookSignature` (F-2a) both return real
@@ -34,13 +35,29 @@ describe('NullPaymentProvider', () => {
     env();
   });
 
-  const INPUT = {
+  const INPUT: CreatePaymentInput = {
     idempotencyKey: 'order-1',
     orderId: 'order-1',
     amount: { amount: 7500, currency: 'THB' as const },
     method: 'PROMPTPAY_QR' as const,
     webhookUrl: '/webhooks/payments/null',
+    email: 'customer@example.com',
   };
+
+  describe('CreatePaymentInput — contract (DEC-056)', () => {
+    it('requires email at the type level — omitting it must not compile', () => {
+      // @ts-expect-error — `email` is a required field on CreatePaymentInput.
+      // If this stops erroring, the contract has silently become optional.
+      const withoutEmail: CreatePaymentInput = {
+        idempotencyKey: 'order-1',
+        orderId: 'order-1',
+        amount: { amount: 7500, currency: 'THB' },
+        method: 'PROMPTPAY_QR',
+        webhookUrl: '/webhooks/payments/null',
+      };
+      void withoutEmail;
+    });
+  });
 
   describe('createPayment — simulated, dev-only', () => {
     it('returns a result rather than throwing', async () => {
@@ -84,6 +101,19 @@ describe('NullPaymentProvider', () => {
       const provider = new NullPaymentProvider();
       const result = await provider.createPayment(INPUT);
       expect(result.presentation).not.toHaveProperty('hostedInstructionsUrl');
+    });
+
+    it('accepts CreatePaymentInput.email (DEC-056) but is provider-neutral about it — never validated, never reflected in the result', async () => {
+      const provider = new NullPaymentProvider();
+      const first = await provider.createPayment({ ...INPUT, email: 'a@example.com' });
+      const second = await provider.createPayment({ ...INPUT, orderId: 'order-2', idempotencyKey: 'order-2', email: 'b@example.com' });
+
+      // Same shape regardless of which email was supplied — the field is
+      // accepted, never inspected, never used to shape provider behaviour.
+      expect(first.presentation?.type).toBe('QR_CODE');
+      expect(second.presentation?.type).toBe('QR_CODE');
+      expect(first.presentation).not.toHaveProperty('email');
+      expect(second.presentation).not.toHaveProperty('email');
     });
 
     it('two calls for two different orders produce two different providerPaymentIds — never a fixed fixture value', async () => {

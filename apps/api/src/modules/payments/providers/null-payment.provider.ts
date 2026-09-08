@@ -102,6 +102,14 @@ export class NullPaymentProvider implements PaymentProvider {
     }
   }
 
+  /**
+   * `input.email` (DEC-056) is accepted only to satisfy the contract — never
+   * validated beyond what `PaymentsService` already guaranteed, never
+   * persisted, never used to shape this provider's behaviour, and never sent
+   * anywhere. A real provider adapter (Stripe, for one) is what reshapes it
+   * into a provider-specific confirm call; this provider makes no network
+   * call of any kind and has nothing to send it to.
+   */
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
     const providerPaymentId = `NULL-${randomUUID()}`;
 

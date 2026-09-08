@@ -33,6 +33,21 @@ export interface CreatePaymentInput {
   method: PaymentMethod;
   /** Absolute URL the provider should call on state change. */
   webhookUrl: string;
+  /**
+   * The customer's authoritative payment email — DEC-056. `PaymentsService`
+   * resolves and validates this from BANHAO's own customer data (never
+   * Supabase Auth, never a JWT claim, never a synthetic value) before this
+   * input is ever built, and fails closed before reaching any provider when
+   * one is not available. Required at the type level deliberately: a
+   * provider must never be handed an input that could omit it.
+   *
+   * Generic and provider-neutral on purpose — a plain email, not
+   * Stripe's `billing_details` shape. A provider that needs the value
+   * structured differently (Stripe's confirm call, for one) reshapes it
+   * inside its own adapter; this contract never grows a provider-specific
+   * field.
+   */
+  email: string;
 }
 
 export interface CreatePaymentResult {
