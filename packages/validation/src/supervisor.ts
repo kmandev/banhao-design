@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Satang } from '@banhao/types';
 import { deliveryFailureCauseSchema, type DeliveryFailureCause } from './delivery-failure';
 
 /**
@@ -6,17 +7,23 @@ import { deliveryFailureCauseSchema, type DeliveryFailureCause } from './deliver
  * design package § 09 (screens S-02, S-03, S-06).
  *
  * Read `docs/HUMAN_SUPERVISOR_CONTRACT.md` before changing anything here. Two
- * properties of these shapes are load-bearing rather than incidental:
+ * properties held for every shape in this file until Q-020 Slice 1:
  *
  * - **No financial field appears anywhere.** Not an amount, a fee, a total, a
- *   payment reference or a provider id. Phase I's money surfaces are blocked
- *   behind Q-001/Q-002/Q-010/Q-020, and a console that leaked a total would be
- *   presenting a number no decision authorises it to act on.
- * - **There is no command that changes domain state.** The only write in this
- *   file is a case resolution, which writes an audit row and nothing else.
- *   Every operational command — cancel, release, redispatch, pause a merchant —
- *   is gated on an open business decision and is deliberately absent, not
- *   disabled.
+ *   payment reference or a provider id. Phase I's money surfaces were blocked
+ *   behind Q-001/Q-002/Q-010/Q-020.
+ * - **There is no command that changes domain state** other than a case
+ *   resolution (an audit row) and the DEC-053 delivery-failure command.
+ *
+ * **This is no longer true without exception.** Q-020's mechanism, authority
+ * and full-refund accounting are now decision-locked (DEC-057/058/059), and
+ * {@link initiateRefundSchema}/{@link InitiateRefundResponse} are this
+ * console's first genuinely financial surface — `amountSatang` and
+ * `providerRefundId` are deliberately present. Every other route in this file
+ * keeps both properties above unchanged: refund initiation is additive, not a
+ * relaxation of the console's existing no-financial-field default elsewhere.
+ * Cancel, release, redispatch and pause-a-merchant remain absent, gated on
+ * their own still-open decisions.
  */
 
 /**
@@ -330,4 +337,49 @@ export interface AwaitingFailureListResponse {
     /** How many of the returned rows already satisfy every DEC-053 precondition. */
     resolvableInWindow: number;
   };
+}
+
+/**
+ * `POST /api/v1/admin/supervisor/orders/:id/refund` (Q-020 Slice 1,
+ * DEC-057/058/059).
+ *
+ * **`reason` only — deliberately no `amount` field.** DEC-057 §1 locks
+ * Phase 1 to full refund only: the refunded amount is always the order's
+ * settled payment amount, determined server-side by `RefundService`, never a
+ * caller-supplied number. A schema that accepted an `amount` would be the one
+ * place a partial refund could sneak in through the API surface even though
+ * nothing behind it could safely process one yet — so the field does not
+ * exist, rather than existing and being validated away.
+ *
+ * `reason` is required, matching `resolveSupervisorCaseSchema`'s and
+ * `failDeliverySchema`'s own precedent (DEC-032 — a mandatory operator
+ * reason) and `refunds.reason`'s own `not null` column.
+ */
+export const initiateRefundSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export type InitiateRefundRequest = z.infer<typeof initiateRefundSchema>;
+
+/**
+ * What the operator is left with after a successful refund *initiation* —
+ * never a completed refund. `state` is one of the two DEC-057 §4 intermediate
+ * values (`REFUND_REQUESTED`, `REFUND_PENDING`) — **it is never `REFUNDED`
+ * from this endpoint**: DEC-057 §2/§8 forbids treating a synchronous Stripe
+ * API response as finality, and Slice 1 implements no webhook or
+ * reconciliation path that could ever produce `REFUNDED` here. `providerRefundId`
+ * is present once Stripe has acknowledged the refund request; it is a
+ * provider-neutral string (DEC-057 §7) — nothing about its shape (a Stripe
+ * `re_...` id, in Phase 1) is exposed by this contract, only its presence.
+ */
+export interface InitiateRefundResponse {
+  refundId: string;
+  orderId: string;
+  paymentId: string;
+  /** `REFUND_REQUESTED` or `REFUND_PENDING` only — see this interface's own doc comment. */
+  state: string;
+  amountSatang: Satang;
+  providerRefundId?: string;
 }

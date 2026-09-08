@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from '../../common/types';
 import { SupervisorController } from './supervisor.controller';
 import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
+import { RefundService } from './refund.service';
 
 /**
  * The HTTP boundary of the Human Supervisor console — Phase I.
@@ -37,6 +38,7 @@ import { DeliveryFailureService } from './delivery-failure.service';
 
 const CASE_ID = 'aa100000-0000-4000-8000-000000000001';
 const DELIVERY_ID = 'aa200000-0000-4000-8000-000000000001';
+const ORDER_ID = 'aa300000-0000-4000-8000-000000000001';
 
 const OPERATOR: AuthenticatedUser = {
   id: 'user-operator-1',
@@ -85,8 +87,23 @@ function makeFailureStub() {
   };
 }
 
+/** Q-020 Slice 1's service, stubbed at the boundary — same shape as `makeFailureStub`. */
+function makeRefundStub() {
+  return {
+    initiateRefund: jest.fn().mockResolvedValue({
+      refundId: 'refund-1',
+      orderId: ORDER_ID,
+      paymentId: 'payment-1',
+      state: 'REFUND_PENDING',
+      amountSatang: 7500,
+      providerRefundId: 're_fixed',
+    }),
+  };
+}
+
 type Stub = ReturnType<typeof makeStub>;
 type FailureStub = ReturnType<typeof makeFailureStub>;
+type RefundStub = ReturnType<typeof makeRefundStub>;
 
 function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
   @Injectable()
@@ -104,6 +121,7 @@ async function buildApp(
   user: AuthenticatedUser | null,
   stub: Stub,
   failures: FailureStub = makeFailureStub(),
+  refunds: RefundStub = makeRefundStub(),
 ): Promise<INestApplication> {
   const guards: Provider[] = [
     { provide: APP_GUARD, useValue: fakeAuthGuard(user) },
@@ -116,6 +134,7 @@ async function buildApp(
     providers: [
       { provide: SupervisorCaseService, useValue: stub },
       { provide: DeliveryFailureService, useValue: failures },
+      { provide: RefundService, useValue: refunds },
       ...guards,
       { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
       Reflector,
@@ -150,16 +169,24 @@ const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post'; path: string
     path: `/api/v1/admin/supervisor/deliveries/${DELIVERY_ID}/fail`,
     body: { causeCode: 'CUSTOMER_UNREACHABLE', reason: 'ลูกค้าไม่รับสาย 2 ครั้ง' },
   },
+  {
+    name: 'initiate refund',
+    method: 'post',
+    path: `/api/v1/admin/supervisor/orders/${ORDER_ID}/refund`,
+    body: { reason: 'ยกเลิกก่อนร้านรับออเดอร์' },
+  },
 ];
 
 describe('SupervisorController — HTTP boundary', () => {
   let app: INestApplication;
   let stub: Stub;
   let failures: FailureStub;
+  let refunds: RefundStub;
 
   beforeEach(() => {
     stub = makeStub();
     failures = makeFailureStub();
+    refunds = makeRefundStub();
   });
 
   afterEach(async () => {
@@ -173,11 +200,12 @@ describe('SupervisorController — HTTP boundary', () => {
       stub.resolveCase,
       failures.failDelivery,
       failures.listAwaitingFailure,
+      refunds.initiateRefund,
     ].some((fn) => fn.mock.calls.length > 0);
   }
 
   it.each(ROUTES)('refuses an anonymous caller on $name with 401', async (route) => {
-    app = await buildApp(null, stub, failures);
+    app = await buildApp(null, stub, failures, refunds);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(401);
 
@@ -185,7 +213,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it.each(ROUTES)('refuses a signed-in non-staff caller on $name with 403', async (route) => {
-    app = await buildApp(NON_STAFF, stub, failures);
+    app = await buildApp(NON_STAFF, stub, failures, refunds);
 
     // A revoked grant is indistinguishable from never having had one, which is
     // the point: the guard re-reads `platform_staff` per request, so a grant
@@ -196,13 +224,13 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it.each(ROUTES)('admits a staff caller on $name', async (route) => {
-    app = await buildApp(OPERATOR, stub, failures);
+    app = await buildApp(OPERATOR, stub, failures, refunds);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(200);
   });
 
   it('passes the server-verified identity to the service, never a body field', async () => {
-    app = await buildApp(OPERATOR, stub, failures);
+    app = await buildApp(OPERATOR, stub, failures, refunds);
 
     await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -217,7 +245,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('rejects a blank reason before the service runs', async () => {
-    app = await buildApp(OPERATOR, stub, failures);
+    app = await buildApp(OPERATOR, stub, failures, refunds);
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -229,7 +257,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('rejects a body carrying an unknown field', async () => {
-    app = await buildApp(OPERATOR, stub, failures);
+    app = await buildApp(OPERATOR, stub, failures, refunds);
 
     await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -243,7 +271,7 @@ describe('SupervisorController — HTTP boundary', () => {
     stub.resolveCase.mockRejectedValue(
       new DomainError('CONFLICT', { message: 'already resolved', details: { caseId: CASE_ID } }),
     );
-    app = await buildApp(OPERATOR, stub, failures);
+    app = await buildApp(OPERATOR, stub, failures, refunds);
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -255,7 +283,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('exposes no route outside the four above', async () => {
-    app = await buildApp(OPERATOR, stub, failures);
+    app = await buildApp(OPERATOR, stub, failures, refunds);
     const server = app.getHttpServer();
 
     // A generic mutation path would be the one thing that voids this whole

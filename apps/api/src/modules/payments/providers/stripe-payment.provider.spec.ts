@@ -17,11 +17,13 @@ jest.mock('@banhao/config', () => ({
 const createMock = jest.fn();
 const confirmMock = jest.fn();
 const constructEventMock = jest.fn();
+const refundsCreateMock = jest.fn();
 
 jest.mock('stripe', () => {
   return jest.fn().mockImplementation(() => ({
     paymentIntents: { create: createMock, confirm: confirmMock },
     webhooks: { constructEvent: constructEventMock },
+    refunds: { create: refundsCreateMock },
   }));
 });
 
@@ -69,6 +71,7 @@ beforeEach(() => {
   createMock.mockReset();
   confirmMock.mockReset();
   constructEventMock.mockReset();
+  refundsCreateMock.mockReset();
   env();
 });
 
@@ -313,12 +316,103 @@ describe('StripePaymentProvider.createPayment — missing/unsupported next_actio
   });
 });
 
-describe('StripePaymentProvider.refund — Q-020 out of scope', () => {
-  it('refuses, matching NullPaymentProvider\'s own precedent', async () => {
+describe('StripePaymentProvider.refund — Q-020 Slice 1 (DEC-057)', () => {
+  const REFUND_INPUT = {
+    idempotencyKey: 'refund-1',
+    providerPaymentId: 'pi_fixed',
+    amount: { amount: 2500, currency: 'THB' as const },
+    reason: 'customer cancelled before merchant acceptance',
+  };
+
+  const STRIPE_REFUND = {
+    id: 're_fixed',
+    object: 'refund',
+    status: 'requires_action',
+    amount: 2500,
+    currency: 'thb',
+    payment_intent: 'pi_fixed',
+  };
+
+  it('calls stripe.refunds.create with the exact PaymentIntent id', async () => {
+    refundsCreateMock.mockResolvedValue(STRIPE_REFUND);
     const provider = new StripePaymentProvider();
-    await expect(
-      provider.refund({ idempotencyKey: 'k', providerPaymentId: 'pi_fixed', amount: { amount: 100, currency: 'THB' }, reason: 'x' }),
-    ).rejects.toThrow(/does not implement refund/);
+
+    await provider.refund(REFUND_INPUT);
+
+    expect(refundsCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ payment_intent: 'pi_fixed' }),
+      expect.anything(),
+    );
+  });
+
+  it('sends the amount as an integer satang value, never a float or a converted currency unit', async () => {
+    refundsCreateMock.mockResolvedValue(STRIPE_REFUND);
+    const provider = new StripePaymentProvider();
+
+    await provider.refund(REFUND_INPUT);
+
+    expect(refundsCreateMock).toHaveBeenCalledWith(expect.objectContaining({ amount: 2500 }), expect.anything());
+    const [[params]] = refundsCreateMock.mock.calls;
+    expect(Number.isInteger((params as { amount: number }).amount)).toBe(true);
+  });
+
+  it('uses input.idempotencyKey as-is — the local refund identity, never suffixed or regenerated', async () => {
+    refundsCreateMock.mockResolvedValue(STRIPE_REFUND);
+    const provider = new StripePaymentProvider();
+
+    await provider.refund(REFUND_INPUT);
+
+    expect(refundsCreateMock).toHaveBeenCalledWith(expect.anything(), { idempotencyKey: 'refund-1' });
+  });
+
+  it('a retry with the same input reuses the identical idempotency key — deterministic, not random', async () => {
+    refundsCreateMock.mockResolvedValue(STRIPE_REFUND);
+    const provider = new StripePaymentProvider();
+
+    await provider.refund(REFUND_INPUT);
+    await provider.refund(REFUND_INPUT);
+
+    const keys = refundsCreateMock.mock.calls.map((call: unknown[]) => (call[1] as { idempotencyKey: string }).idempotencyKey);
+    expect(keys).toEqual(['refund-1', 'refund-1']);
+  });
+
+  it('returns only providerRefundId — never a Stripe Refund object, a Stripe status literal, or any other Stripe-specific field (DEC-057 § 7)', async () => {
+    refundsCreateMock.mockResolvedValue(STRIPE_REFUND);
+    const provider = new StripePaymentProvider();
+
+    const result = await provider.refund(REFUND_INPUT);
+
+    expect(result).toEqual({ providerRefundId: 're_fixed' });
+    expect(Object.keys(result)).toEqual(['providerRefundId']);
+  });
+
+  it('never leaks Stripe\'s own refund status (requires_action/pending/succeeded/failed/canceled) to the caller', async () => {
+    refundsCreateMock.mockResolvedValue({ ...STRIPE_REFUND, status: 'succeeded' });
+    const provider = new StripePaymentProvider();
+
+    const result = await provider.refund(REFUND_INPUT);
+
+    expect(JSON.stringify(result)).not.toContain('succeeded');
+    expect(JSON.stringify(result)).not.toContain('status');
+  });
+
+  it('propagates a Stripe API failure rather than swallowing it — the caller (RefundService) decides recovery', async () => {
+    refundsCreateMock.mockRejectedValue(new Error('Refund has already been made for this charge'));
+    const provider = new StripePaymentProvider();
+
+    await expect(provider.refund(REFUND_INPUT)).rejects.toThrow('Refund has already been made for this charge');
+  });
+
+  it('propagates a malformed/empty provider response as a failure rather than fabricating a providerRefundId', async () => {
+    refundsCreateMock.mockResolvedValue({});
+    const provider = new StripePaymentProvider();
+
+    const result = await provider.refund(REFUND_INPUT);
+
+    // Stripe's own SDK never returns a Refund with no id in practice; if it
+    // somehow did, this adapter must surface that fact (undefined), not
+    // invent a placeholder string that would look like a real Stripe id.
+    expect(result.providerRefundId).toBeUndefined();
   });
 });
 

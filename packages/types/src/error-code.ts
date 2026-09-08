@@ -101,6 +101,23 @@ export const ERROR_CODES = [
   // hasn't met is blocking it. Never raised in place of a substituted value —
   // DEC-056 forbids a synthetic or client-supplied fallback.
   'CUSTOMER_EMAIL_REQUIRED',
+  // Refund initiation (Q-020 Slice 1, DEC-057/058/059). All three are 409:
+  // the caller (an operator) did nothing wrong, but the order/payment/refund
+  // is not in a state this endpoint can act on.
+  //
+  // `ORDER_NOT_REFUND_ELIGIBLE` — the order's current state is not one
+  // DEC-050 (cancellation) or DEC-053 (post-pickup failure, non-customer-
+  // caused) makes eligible for a full refund.
+  //
+  // `PAYMENT_NOT_REFUNDABLE` — the order's payment does not exist, or exists
+  // but is not `SUCCESS` — there is no settled money to refund.
+  //
+  // `REFUND_ALREADY_EXISTS` — this payment already has a `refunds` row whose
+  // state is `REFUNDED` (DEC-057 §1, full-refund-only: a second refund
+  // against an already-refunded payment is never legitimate in Phase 1).
+  'ORDER_NOT_REFUND_ELIGIBLE',
+  'PAYMENT_NOT_REFUNDABLE',
+  'REFUND_ALREADY_EXISTS',
 
   // --- Transport-level fallbacks --------------------------------------------
   // Used when an exception carries no semantic code of its own. A domain

@@ -1852,6 +1852,46 @@
           "admin"
         ]
       }
+    },
+    "/api/v1/admin/supervisor/orders/{id}/refund": {
+      "post": {
+        "operationId": "SupervisorController_initiateRefund",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Refund initiated (or an in-flight/retried one resumed) — never REFUNDED from this call"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          },
+          "404": {
+            "description": "Order or payment not found"
+          },
+          "409": {
+            "description": "ORDER_NOT_REFUND_ELIGIBLE — order state is not eligible under DEC-050/DEC-053. PAYMENT_NOT_REFUNDABLE — the order has no SUCCESS payment. REFUND_ALREADY_EXISTS — this payment was already REFUNDED."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
     }
   },
   "info": {

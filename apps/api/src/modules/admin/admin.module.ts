@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { SupabaseModule } from '../../supabase/supabase.module';
 import { OrdersModule } from '../orders/orders.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
+import { RefundService } from './refund.service';
 import { SupervisorController } from './supervisor.controller';
 
 /**
@@ -23,11 +25,19 @@ import { SupervisorController } from './supervisor.controller';
  * guarded service — never a second write path." BQ-017's operator failure
  * command (DEC-053) is that moment, and it calls `OrdersService.failDelivery`
  * for the order half rather than reimplementing the guarded UPDATE.
+ *
+ * `PaymentsModule` is imported for `RefundService` (Q-020 Slice 1,
+ * DEC-057/058/059) — specifically for `PAYMENT_PROVIDER`, the same injected
+ * Stripe adapter `PaymentsService` already uses. `RefundService` reads/writes
+ * `orders`/`payments`/`refunds` directly rather than calling `PaymentsService`
+ * or `OrdersService`, because refund initiation is not a payment-creation or
+ * order-transition operation — it neither touches `payments.state` nor
+ * `orders.state` (see `RefundService`'s own doc comment).
  */
 @Module({
-  imports: [SupabaseModule, OrdersModule],
+  imports: [SupabaseModule, OrdersModule, PaymentsModule],
   controllers: [SupervisorController],
-  providers: [SupervisorCaseService, DeliveryFailureService],
+  providers: [SupervisorCaseService, DeliveryFailureService, RefundService],
   exports: [SupervisorCaseService],
 })
 export class AdminModule {}

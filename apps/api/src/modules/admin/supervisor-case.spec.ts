@@ -1,6 +1,7 @@
 import { SupervisorCaseService } from './supervisor-case.service';
 import { SupervisorController } from './supervisor.controller';
 import type { DeliveryFailureService } from './delivery-failure.service';
+import type { RefundService } from './refund.service';
 import { blockedByFor, isEscalationRow, type AuditRowForProjection } from './supervisor-case.projection';
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
@@ -394,7 +395,7 @@ describe('Phase I — resolving a case (S-06)', () => {
 
 describe('Phase I — the controller boundary', () => {
   it('rejects a body with no reason, so a blank reason never reaches the database CHECK', async () => {
-    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService);
 
     await expect(
       controller.resolve(CASE_ID, { outcome: 'RESOLVED', reason: '   ' }, staffUser()),
@@ -406,7 +407,7 @@ describe('Phase I — the controller boundary', () => {
   });
 
   it('refuses a body smuggling an actor or a case id', async () => {
-    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService);
 
     await expect(
       controller.resolve(
@@ -417,22 +418,27 @@ describe('Phase I — the controller boundary', () => {
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 
-  it('exposes exactly one domain-mutating route — DEC-053’s operator failure command, and nothing else', () => {
+  it('exposes exactly one domain-mutating route and one financial-initiation route — nothing else', () => {
     const methods = Object.getOwnPropertyNames(SupervisorController.prototype).filter(
       (name) => name !== 'constructor',
     );
 
     // Four reads (`awaitingFailure` is BQ-017 Slice #3's operator working
-    // list, read-only), one audit-only write, and `failDelivery` — the single
-    // command DEC-054 carved out of DEC-APP-006 for DEC-053's post-pickup
-    // failure path. Every other operational command remains ABSENT rather
-    // than disabled: no cancel, release, redispatch, pause, refund, ledger or
-    // settlement route exists here, because each is still gated on an open
-    // decision (BQ-013, UX-Q-006, Q-001, Q-002, Q-020, Q-032).
+    // list, read-only), one audit-only write (`resolve`), `failDelivery` —
+    // the single command DEC-054 carved out of DEC-APP-006 for DEC-053's
+    // post-pickup failure path — and, since Q-020 Slice 1
+    // (DEC-057/058/059), `initiateRefund`. Every other operational command
+    // remains ABSENT rather than disabled: no cancel, release, redispatch,
+    // pause, ledger or settlement route exists here, because each is still
+    // gated on an open decision (BQ-013, UX-Q-006, Q-001, Q-002, Q-032).
+    // `initiateRefund` itself is intentionally narrow — see its own doc
+    // comment and `RefundService`'s for exactly what Slice 1 does and does
+    // not do.
     expect(methods.sort()).toEqual([
       'awaitingFailure',
       'detail',
       'failDelivery',
+      'initiateRefund',
       'list',
       'me',
       'resolve',
@@ -440,18 +446,30 @@ describe('Phase I — the controller boundary', () => {
   });
 
   /**
-   * BQ-017 Slice #3. The escalation surface must stay read-only: the timer
-   * raises attention, and only `failDelivery` moves state.
+   * BQ-017 Slice #3 / Q-020 Slice 1. The escalation surface must stay
+   * read-only: the timer raises attention, and only `failDelivery`,
+   * `initiateRefund` and `resolve` move any local state.
    */
-  it('exposes exactly one state-changing method, however many read surfaces exist', () => {
+  it('exposes exactly the three known state-changing methods, however many read surfaces exist', () => {
     const methods = Object.getOwnPropertyNames(SupervisorController.prototype).filter(
       (name) => name !== 'constructor',
     );
-    const mutating = methods.filter((name) => name === 'failDelivery' || name === 'resolve');
+    const KNOWN_MUTATING = new Set(['failDelivery', 'initiateRefund', 'resolve']);
+    const mutating = methods.filter((name) => KNOWN_MUTATING.has(name));
 
-    expect(mutating.sort()).toEqual(['failDelivery', 'resolve']);
+    expect(mutating.sort()).toEqual(['failDelivery', 'initiateRefund', 'resolve']);
+    // Every read-only method is accounted for elsewhere in this describe
+    // block; nothing outside `KNOWN_MUTATING` may exist unaccounted for.
+    expect(methods.filter((name) => !KNOWN_MUTATING.has(name)).sort()).toEqual([
+      'awaitingFailure',
+      'detail',
+      'list',
+      'me',
+    ]);
     // `resolve` writes an audit row only; `failDelivery` is the sole route
-    // that moves a delivery or an order.
+    // that moves a delivery or an order; `initiateRefund` writes only
+    // `refunds` — it moves neither `orders.state` nor `payments.state`
+    // (DEC-057 § 8, `RefundService`'s own doc comment).
     expect(methods).not.toContain('resolveEscalation');
     expect(methods).not.toContain('dismissEscalation');
     expect(methods).not.toContain('claimEscalation');
@@ -464,8 +482,6 @@ describe('Phase I — the controller boundary', () => {
     'releaseRider',
     'redispatch',
     'pauseMerchant',
-    'refund',
-    'issueRefund',
     'settle',
     'adjustLedger',
     'updateRow',
@@ -474,8 +490,21 @@ describe('Phase I — the controller boundary', () => {
     expect(Object.getOwnPropertyNames(SupervisorController.prototype)).not.toContain(method);
   });
 
+  /**
+   * Q-020 Slice 1 (DEC-057 § 2/§ 8): `initiateRefund` exists, but it must
+   * never be the route that finalizes a refund or moves domain money state —
+   * those remain absent until the slice that implements provider-status
+   * verification and the DEC-049 ledger reversal.
+   */
+  it.each(['finalizeRefund', 'confirmRefund', 'reverseRefund', 'postLedgerReversal'])(
+    'exposes no %s route — refund finality and ledger reversal are Slice 2, not Slice 1',
+    (method) => {
+      expect(Object.getOwnPropertyNames(SupervisorController.prototype)).not.toContain(method);
+    },
+  );
+
   it('reports the grant held without reading anything', () => {
-    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService);
 
     expect(controller.me(staffUser('ADMIN'))).toEqual({
       userId: STAFF_USER_ID,

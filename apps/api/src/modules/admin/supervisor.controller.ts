@@ -8,10 +8,11 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { failDeliverySchema, resolveSupervisorCaseSchema } from '@banhao/validation';
+import { failDeliverySchema, initiateRefundSchema, resolveSupervisorCaseSchema } from '@banhao/validation';
 import type {
   AwaitingFailureListResponse,
   FailDeliveryResponse,
+  InitiateRefundResponse,
   ResolveSupervisorCaseResponse,
   SupervisorIdentityResponse,
   SupervisorCaseDetailResponse,
@@ -23,6 +24,7 @@ import { parseOrThrow } from '../../common/validation/parse';
 import type { AuthenticatedUser } from '../../common/types';
 import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
+import { RefundService } from './refund.service';
 
 /**
  * Human Supervisor console — Phase I, screens S-02, S-03 and S-06 of the AI
@@ -40,16 +42,24 @@ import { DeliveryFailureService } from './delivery-failure.service';
  *
  * ## What is deliberately absent
  *
- * There is no cancel, release, redispatch, pause, refund, ledger or settlement
- * route here — not disabled, absent. Each is gated on an open business
- * decision (BQ-013, UX-Q-006, BQ-015, Q-032) or on the money questions Phase I
+ * There is no cancel, release, redispatch, pause, ledger or settlement route
+ * here — not disabled, absent. Each is gated on an open business decision
+ * (BQ-013, UX-Q-006, BQ-015, Q-032) or on the money questions Phase I
  * inherits, and the detail response's `blockedBy` names the decision so the
  * console can say why rather than look unfinished. There is likewise no
  * generic mutation route: no SQL, no table name and no column ever crosses
  * this boundary (DEC-APP-008).
  *
- * The one write is a case resolution, which appends an audit row and changes
- * no domain state at all.
+ * **Refund is no longer on that absent list.** Q-020's mechanism, authority
+ * and full-refund accounting are decision-locked (DEC-057/058/059), and
+ * `POST .../orders/:id/refund` (Q-020 Slice 1) is this console's first
+ * financial command. It only **initiates** a refund — it never reaches
+ * `REFUNDED`, posts no ledger reversal, and processes no provider webhook
+ * (see `RefundService`'s own doc comment for the exact Slice 1 boundary).
+ * Every other absence above is unchanged.
+ *
+ * The remaining state-changing writes are a case resolution (an audit row
+ * only) and the DEC-053 delivery-failure command.
  */
 @ApiTags('admin')
 @ApiBearerAuth('bearer')
@@ -61,6 +71,7 @@ export class SupervisorController {
   constructor(
     private readonly cases: SupervisorCaseService,
     private readonly failures: DeliveryFailureService,
+    private readonly refunds: RefundService,
   ) {}
 
   /**
@@ -193,5 +204,45 @@ export class SupervisorController {
   ): Promise<FailDeliveryResponse> {
     const request = parseOrThrow(failDeliverySchema, body);
     return this.failures.failDelivery(user, id, request);
+  }
+
+  /**
+   * Q-020 Slice 1 (DEC-057/058/059) — an operator initiates a full refund for
+   * an order already eligible under DEC-050 (cancellation) or DEC-053
+   * (post-pickup failure, non-customer-caused).
+   *
+   * **Initiation only.** This call makes one real Stripe refund request and
+   * records it locally; it never marks the refund `REFUNDED`, never posts a
+   * ledger reversal, and never touches `orders.state` or `payments.state`.
+   * Finality — reading Stripe's own verified refund status and, only then,
+   * posting DEC-049's reversal groups — is Slice 2's work, deliberately not
+   * done here (DEC-057 § 2/§ 8: a synchronous provider response is never
+   * treated as finality).
+   *
+   * No `amount` field exists on the request body — Phase 1 is full refund
+   * only (DEC-057 § 1), and the amount is always the order's own settled
+   * payment amount, determined here, never by the caller.
+   *
+   * `200`, not `201`: a retry of an in-flight or previously-failed refund
+   * reuses the same local `refunds` row rather than creating a new resource
+   * each time (see `RefundService`'s own idempotency doc comment).
+   */
+  @Post('orders/:id/refund')
+  @HttpCode(200)
+  @ApiOkResponse({ description: 'Refund initiated (or an in-flight/retried one resumed) — never REFUNDED from this call' })
+  @ApiNotFoundResponse({ description: 'Order or payment not found' })
+  @ApiConflictResponse({
+    description:
+      'ORDER_NOT_REFUND_ELIGIBLE — order state is not eligible under DEC-050/DEC-053. ' +
+      'PAYMENT_NOT_REFUNDABLE — the order has no SUCCESS payment. ' +
+      'REFUND_ALREADY_EXISTS — this payment was already REFUNDED.',
+  })
+  async initiateRefund(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<InitiateRefundResponse> {
+    const request = parseOrThrow(initiateRefundSchema, body);
+    return this.refunds.initiateRefund(user, id, request);
   }
 }

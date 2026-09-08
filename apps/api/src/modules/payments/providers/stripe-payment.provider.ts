@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import Stripe from 'stripe';
 import { loadServerEnv } from '@banhao/config';
 import type {
@@ -150,11 +150,28 @@ export class StripeConfigError extends Error {
  * building real BANHAO-side cancellation-state handling is separate,
  * not-yet-authorized work.
  *
- * ## Refunds — Q-020, out of scope
+ * ## Refunds — Q-020 Slice 1 (DEC-057/058/059)
  *
- * `refund()` refuses outright, exactly like `NullPaymentProvider`'s. Q-020
- * (the refund mechanism) is unresolved; nothing here wires a Stripe refund
- * call into BANHAO.
+ * `refund()` makes one real `POST /v1/refunds` call against the PaymentIntent
+ * this provider originally confirmed. It returns only `providerRefundId`
+ * (DEC-057 §7): the generic refund domain (`RefundService`) must never see a
+ * Stripe `Refund` object, a Stripe `status` literal
+ * (`requires_action`/`pending`/`succeeded`/`failed`/`canceled`), or any other
+ * Stripe-specific field. Reading that status, and everything downstream of it
+ * — provider-status verification, finality, and the DEC-049 ledger reversal —
+ * is Slice 2's work, not this method's: DEC-057 §2 forbids treating this
+ * call's synchronous response as refund finality, so nothing here is asked to
+ * decide whether the refund actually completed.
+ *
+ * `input.amount`/`input.reason`/`input.providerPaymentId` are `RefundService`'s
+ * own determination, sourced from the original payment's recorded amount
+ * (DEC-057 §1 — full refund only, never a caller-chosen amount) — this
+ * adapter neither derives nor validates any of them.
+ *
+ * `input.idempotencyKey` is the caller's already-deterministic local refund
+ * identity (`refunds.id`, DEC-057 §7), used as-is. Unlike `createPayment`'s
+ * create-then-confirm pair, a refund is exactly one Stripe call, so no
+ * per-endpoint suffix is needed or applied.
  *
  * ## No Stripe Connect
  *
@@ -246,8 +263,17 @@ export class StripePaymentProvider implements PaymentProvider {
     };
   }
 
-  async refund(_input: RefundInput): Promise<RefundResult> {
-    this.fail('refund');
+  async refund(input: RefundInput): Promise<RefundResult> {
+    const refund = await this.stripe.refunds.create(
+      {
+        payment_intent: input.providerPaymentId,
+        amount: input.amount.amount,
+        metadata: { reason: input.reason },
+      },
+      { idempotencyKey: input.idempotencyKey },
+    );
+
+    return { providerRefundId: refund.id };
   }
 
   /**
@@ -352,10 +378,4 @@ export class StripePaymentProvider implements PaymentProvider {
     }
   }
 
-  private fail(operation: string): never {
-    throw new NotImplementedException(
-      `The Stripe payment provider does not implement ${operation} — Q-020 is unresolved. ` +
-        'See docs/DECISIONS.md (Q-020) and docs/BANHAO-APP-ARCHITECTURE-V1.md § 8.',
-    );
-  }
 }
