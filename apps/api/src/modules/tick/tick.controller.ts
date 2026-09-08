@@ -3,6 +3,7 @@ import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { TickHmacGuard } from '../../common/guards/tick-hmac.guard';
 import { PaymentEventProcessingService } from '../payments/payment-event-processing.service';
+import { RefundEventProcessingService } from '../payments/refund-event-processing.service';
 import { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import { DispatchService, type DispatchRoundResult } from '../rider/dispatch.service';
 import {
@@ -29,6 +30,8 @@ export interface TickAcceptedResponse {
   accepted: true;
   /** F-2b — how many `payment_events` rows this tick claimed and processed. */
   paymentEvents: { processed: number; skipped: number };
+  /** Q-020 Slice 2 (DEC-057 §5) — how many refund-domain `payment_events` rows this tick claimed and processed. */
+  refundEvents: { processed: number; skipped: number };
   /** How many timed-out `payment_attempts` rows this tick expired. */
   paymentAttemptExpiry: { expired: number; skipped: number };
   /** G-2 — the broadcast dispatch round this tick ran (DEC-020, DEC-037). */
@@ -64,6 +67,17 @@ export interface TickAcceptedResponse {
  * checking only `.accepted === true` sees no change. Every other later
  * phase's tick work (`outbox`, `jobs`, ledger reconciliation) still does not
  * run here — those attach behind this same guard as their own domains land.
+ *
+ * `refundEvents` (Q-020 Slice 2, DEC-057 §5) runs right after `paymentEvents`
+ * — same table, same claim mechanism, same "no scheduler of its own"
+ * reasoning, and placed immediately alongside its sibling rather than at the
+ * end because both are Phase F payment-domain work.
+ * `RefundEventProcessingService` is a second, independent claim loop over
+ * `payment_events` (filtered to the refund-domain event names), not a change
+ * to `PaymentEventProcessingService` — see that service's own doc comment.
+ * It posts no ledger entry (DEC-059 is Slice 3) and follows the same
+ * never-throws-out-of-a-single-event contract every phase here already
+ * follows.
  *
  * `dispatch` is G-2's broadcast round (DEC-020), attached here rather than to a
  * scheduler of its own: DEC-APP-010 fixes the Cloudflare Worker cron at 60
@@ -125,6 +139,7 @@ export interface TickAcceptedResponse {
 export class TickController {
   constructor(
     private readonly paymentEvents: PaymentEventProcessingService,
+    private readonly refundEvents: RefundEventProcessingService,
     private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
     private readonly dispatch: DispatchService,
     private readonly noRiderEscalation: NoRiderEscalationService,
@@ -142,6 +157,7 @@ export class TickController {
   @ApiExcludeEndpoint() // Internal-only; not part of the public OpenAPI surface.
   async handle(): Promise<TickAcceptedResponse> {
     const paymentEvents = await this.paymentEvents.processPendingEvents();
+    const refundEvents = await this.refundEvents.processPendingEvents();
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
     const dispatch = await this.dispatch.runDispatchRound();
     const noRiderEscalation = await this.noRiderEscalation.run();
@@ -153,6 +169,7 @@ export class TickController {
     return {
       accepted: true,
       paymentEvents,
+      refundEvents,
       paymentAttemptExpiry,
       dispatch,
       noRiderEscalation,

@@ -584,3 +584,161 @@ describe('StripePaymentProvider.verifyWebhookSignature', () => {
     expect(first).toEqual(second);
   });
 });
+
+describe('StripePaymentProvider.verifyWebhookSignature — refund events (Q-020 Slice 2, DEC-057 §5)', () => {
+  const RAW_BODY = '{"id":"evt_fixed"}';
+  const headers = (signature = 'sig'): Record<string, string> => ({ 'stripe-signature': signature });
+
+  function refundEvent(overrides: {
+    id?: string;
+    type?: string;
+    status?: string | null;
+    refundId?: string;
+    paymentIntent?: string;
+    amount?: number;
+  } = {}) {
+    return {
+      id: overrides.id ?? 'evt_refund',
+      type: overrides.type ?? 'refund.created',
+      data: {
+        object: {
+          id: overrides.refundId ?? 're_fixed',
+          object: 'refund',
+          status: overrides.status === undefined ? 'requires_action' : overrides.status,
+          payment_intent: overrides.paymentIntent ?? 'pi_fixed',
+          amount: overrides.amount ?? 2500,
+          currency: 'thb',
+        },
+      },
+    };
+  }
+
+  it('normalizes refund.created to refund.status_reported, with flat providerRefundId/providerPaymentId/status/amountSatang and the embedded original event', () => {
+    const stripeEvent = refundEvent({ type: 'refund.created' });
+    constructEventMock.mockReturnValue(stripeEvent);
+    const provider = new StripePaymentProvider();
+
+    const result = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect(result).toMatchObject({
+      verified: true,
+      providerPaymentId: 'pi_fixed',
+      providerEventId: 'evt_refund',
+      providerEvent: 'refund.status_reported',
+    });
+    expect((result as { rawPayload: unknown }).rawPayload).toMatchObject({
+      providerRefundId: 're_fixed',
+      providerPaymentId: 'pi_fixed',
+      status: 'REQUIRES_ACTION',
+      amountSatang: 2500,
+      stripeEvent,
+    });
+  });
+
+  it('normalizes refund.updated to the identical refund.status_reported name — created and updated are never distinguished downstream', () => {
+    const stripeEvent = refundEvent({ type: 'refund.updated', status: 'pending' });
+    constructEventMock.mockReturnValue(stripeEvent);
+    const provider = new StripePaymentProvider();
+
+    const result = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect(result).toMatchObject({ verified: true, providerEvent: 'refund.status_reported' });
+    expect((result as { rawPayload: { status: string } }).rawPayload.status).toBe('PENDING');
+  });
+
+  it('refund.updated with the identical status as a prior refund.created still normalizes the same way — DEC-057 §5: updated must never be assumed to mean a status changed', () => {
+    const created = refundEvent({ id: 'evt_1', type: 'refund.created', status: 'succeeded' });
+    const updated = refundEvent({ id: 'evt_2', type: 'refund.updated', status: 'succeeded' });
+    const provider = new StripePaymentProvider();
+
+    constructEventMock.mockReturnValue(created);
+    const first = provider.verifyWebhookSignature(RAW_BODY, headers());
+    constructEventMock.mockReturnValue(updated);
+    const second = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect((first as { rawPayload: { status: string } }).rawPayload.status).toBe('SUCCEEDED');
+    expect((second as { rawPayload: { status: string } }).rawPayload.status).toBe('SUCCEEDED');
+    expect((first as { providerEvent: string }).providerEvent).toBe(
+      (second as { providerEvent: string }).providerEvent,
+    );
+  });
+
+  it.each([
+    ['pending', 'PENDING'],
+    ['requires_action', 'REQUIRES_ACTION'],
+    ['succeeded', 'SUCCEEDED'],
+    ['failed', 'FAILED'],
+    ['canceled', 'CANCELED'],
+  ])('maps Stripe refund status "%s" to the provider-neutral "%s" (DEC-057 §4)', (stripeStatus, neutral) => {
+    constructEventMock.mockReturnValue(refundEvent({ status: stripeStatus }));
+    const provider = new StripePaymentProvider();
+
+    const result = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect((result as { rawPayload: { status: string } }).rawPayload.status).toBe(neutral);
+  });
+
+  it('a null or unrecognized Stripe refund status normalizes to null rather than guessing a mapping', () => {
+    constructEventMock.mockReturnValue(refundEvent({ status: null }));
+    const provider = new StripePaymentProvider();
+
+    const result = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect((result as { rawPayload: { status: unknown } }).rawPayload.status).toBeNull();
+  });
+
+  it('reads payment_intent as a plain string id, never an expanded object, without crashing if one is somehow present', () => {
+    const stripeEvent = refundEvent({});
+    (stripeEvent.data.object as { payment_intent: unknown }).payment_intent = { id: 'pi_expanded' };
+    constructEventMock.mockReturnValue(stripeEvent);
+    const provider = new StripePaymentProvider();
+
+    const result = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect(result).toMatchObject({ verified: true, providerPaymentId: 'pi_expanded' });
+  });
+
+  it('normalizes charge.refunded to its own distinct refund.charge_aggregate name, never refund.status_reported', () => {
+    constructEventMock.mockReturnValue({
+      id: 'evt_charge',
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: 'ch_fixed',
+          object: 'charge',
+          refunded: true,
+          amount_refunded: 2500,
+          payment_intent: 'pi_fixed',
+        },
+      },
+    });
+    const provider = new StripePaymentProvider();
+
+    const result = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect(result).toMatchObject({
+      verified: true,
+      providerPaymentId: 'pi_fixed',
+      providerEventId: 'evt_charge',
+      providerEvent: 'refund.charge_aggregate',
+    });
+    expect((result as { providerEvent: string }).providerEvent).not.toBe('refund.status_reported');
+    expect((result as { rawPayload: unknown }).rawPayload).toMatchObject({
+      chargeId: 'ch_fixed',
+      refunded: true,
+      amountRefunded: 2500,
+    });
+  });
+
+  it('a refund event with no providerEventId collision is still deduplicated the same generic way every other verified event already is — no refund-specific idempotency mechanism exists or is needed', () => {
+    const stripeEvent = refundEvent({ id: 'evt_refund_dup' });
+    constructEventMock.mockReturnValue(stripeEvent);
+    const provider = new StripePaymentProvider();
+
+    const first = provider.verifyWebhookSignature(RAW_BODY, headers());
+    const second = provider.verifyWebhookSignature(RAW_BODY, headers());
+
+    expect(first).toEqual(second);
+    expect((first as { providerEventId: string }).providerEventId).toBe('evt_refund_dup');
+  });
+});

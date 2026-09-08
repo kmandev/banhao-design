@@ -5,6 +5,7 @@ import { CUSTOMER_EMAIL_SOURCE, ProfileCustomerEmailSource } from './customer-em
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { PaymentEventProcessingService } from './payment-event-processing.service';
+import { RefundEventProcessingService } from './refund-event-processing.service';
 import { PaymentAttemptExpiryService } from './payment-attempt-expiry.service';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 
@@ -32,6 +33,12 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
  * replacing the earlier placeholder binding, `NoPersistedCustomerEmailSource`,
  * which always returned `null` because no persisted column existed yet.
  * `PaymentsService` itself did not change to make either swap.
+ *
+ * `RefundEventProcessingService` (Q-020 Slice 2, DEC-057 §5) is its own tick
+ * phase, consumed by `TickModule` exactly like `PaymentEventProcessingService`
+ * — see that class's own doc comment for why it is a second, independent
+ * claim loop over `payment_events` rather than a change to
+ * `PaymentEventProcessingService` itself.
  */
 @Module({
   controllers: [PaymentsController],
@@ -40,9 +47,16 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     { provide: CUSTOMER_EMAIL_SOURCE, useClass: ProfileCustomerEmailSource },
     PaymentsService,
     PaymentEventProcessingService,
+    RefundEventProcessingService,
     PaymentAttemptExpiryService,
     PaymentReconciliationService,
   ],
-  exports: [PAYMENT_PROVIDER, PaymentEventProcessingService, PaymentAttemptExpiryService, PaymentReconciliationService],
+  exports: [
+    PAYMENT_PROVIDER,
+    PaymentEventProcessingService,
+    RefundEventProcessingService,
+    PaymentAttemptExpiryService,
+    PaymentReconciliationService,
+  ],
 })
 export class PaymentsModule {}

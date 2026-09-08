@@ -1,5 +1,6 @@
 import { TickController } from './tick.controller';
 import type { PaymentEventProcessingService } from '../payments/payment-event-processing.service';
+import type { RefundEventProcessingService } from '../payments/refund-event-processing.service';
 import type { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import type { DispatchService } from '../rider/dispatch.service';
 import type { NoRiderEscalationService } from '../rider/no-rider-escalation.service';
@@ -18,7 +19,10 @@ import type { NoRiderTriageService } from '../ai-ops/no-rider-triage.service';
  * `OutboxDispatchService` (H-2 outbox notification dispatch, ADR-005/ADR-011),
  * `MerchantAcceptanceTimeoutService` and `NoRiderTriageService` (Phase J AI
  * operations, DEC-040).
- * All eight services are plain stubs here — their own logic is each one's own
+ * Now also invokes `RefundEventProcessingService` (Q-020 Slice 2, DEC-057 §5)
+ * — its own independent claim loop over the same `payment_events` table,
+ * reported separately from `paymentEvents`.
+ * All these services are plain stubs here — their own logic is each one's own
  * `*.spec.ts` file's job. This file proves only the wiring: the tick handler
  * calls every processor and reports what each did, additively to the
  * original `{ accepted: true }` shape.
@@ -41,10 +45,13 @@ describe('TickController', () => {
     aiOpsResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
     aiOpsNoRiderResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
     arrivalTimeoutResult = { examined: 0, escalated: 0, skipped: 0, failed: 0 },
+    refundEventsResult = { processed: 0, skipped: 0 },
   ) {
     const processPendingEvents = jest.fn().mockResolvedValue(paymentEventsResult);
     const processExpiredAttempts = jest.fn().mockResolvedValue(expiryResult);
     const paymentEvents = { processPendingEvents } as unknown as PaymentEventProcessingService;
+    const processRefundEvents = jest.fn().mockResolvedValue(refundEventsResult);
+    const refundEvents = { processPendingEvents: processRefundEvents } as unknown as RefundEventProcessingService;
     const paymentAttemptExpiry = { processExpiredAttempts } as unknown as PaymentAttemptExpiryService;
     const runDispatchRound = jest.fn().mockResolvedValue(dispatchResult);
     const dispatch = { runDispatchRound } as unknown as DispatchService;
@@ -64,6 +71,7 @@ describe('TickController', () => {
     const aiOpsNoRider = { run: runAiOpsNoRider } as unknown as NoRiderTriageService;
     const controller = new TickController(
       paymentEvents,
+      refundEvents,
       paymentAttemptExpiry,
       dispatch,
       noRiderEscalation,
@@ -76,6 +84,7 @@ describe('TickController', () => {
     return {
       controller,
       processPendingEvents,
+      processRefundEvents,
       processExpiredAttempts,
       runDispatchRound,
       runNoRiderEscalation,
@@ -96,6 +105,7 @@ describe('TickController', () => {
     expect(result).toEqual({
       accepted: true,
       paymentEvents: { processed: 2, skipped: 1 },
+      refundEvents: { processed: 0, skipped: 0 },
       paymentAttemptExpiry: { expired: 1, skipped: 0 },
       dispatch: { deliveries: 3, offers: 7, expiredOffers: 2 },
       noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
@@ -129,6 +139,29 @@ describe('TickController', () => {
     expect(result.dispatch).toEqual({ deliveries: 0, offers: 0, expiredOffers: 0 });
   });
 
+  it('invokes refund-event processing exactly once per tick and reports the outcome separately from paymentEvents — Q-020 Slice 2', async () => {
+    const refundEventsResult = { processed: 1, skipped: 2 };
+    const { controller, processRefundEvents } = build(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      refundEventsResult,
+    );
+
+    const result = await controller.handle();
+
+    expect(processRefundEvents).toHaveBeenCalledTimes(1);
+    expect(processRefundEvents).toHaveBeenCalledWith();
+    expect(result.refundEvents).toEqual(refundEventsResult);
+    expect(result.accepted).toBe(true);
+  });
+
   it('invokes payment-attempt expiry and reports the outcome, additive to the original shape', async () => {
     const { controller, processExpiredAttempts } = build();
 
@@ -147,6 +180,7 @@ describe('TickController', () => {
     expect(Object.keys(result)).toEqual([
       'accepted',
       'paymentEvents',
+      'refundEvents',
       'paymentAttemptExpiry',
       'dispatch',
       'noRiderEscalation',

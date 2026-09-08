@@ -18,6 +18,17 @@ const STRIPE_SUCCEEDED_EVENT = 'payment_intent.succeeded';
 const STRIPE_FAILED_EVENT = 'payment_intent.payment_failed';
 const STRIPE_CANCELED_EVENT = 'payment_intent.canceled';
 
+/**
+ * Stripe's own refund-related event names — Q-020 Slice 2 (DEC-057 §5). Not
+ * yet subscribed in any Stripe Dashboard endpoint (that is deployment
+ * configuration, out of scope for this slice) — verification and
+ * normalization are provider-signature-driven, not subscription-driven, so
+ * handling them here is correct regardless of dashboard state.
+ */
+const STRIPE_REFUND_CREATED_EVENT = 'refund.created';
+const STRIPE_REFUND_UPDATED_EVENT = 'refund.updated';
+const STRIPE_CHARGE_REFUNDED_EVENT = 'charge.refunded';
+
 /** BANHAO's own normalized vocabulary — `PaymentEventProcessingService`'s existing, unmodified constants. */
 const BANHAO_SUCCEEDED_EVENT = 'payment.succeeded';
 const BANHAO_FAILED_EVENT = 'payment.failed';
@@ -27,6 +38,63 @@ const BANHAO_FAILED_EVENT = 'payment.failed';
  * state yet".
  */
 const BANHAO_CANCELED_EVENT = 'payment.canceled';
+
+/**
+ * BANHAO's own normalized name for a refund status report. `refund.created`
+ * and `refund.updated` collapse into this single name deliberately — DEC-057
+ * §5 established live that both can carry the identical `status`, and that
+ * `refund.updated` must never be assumed to mean the status changed.
+ * `RefundEventProcessingService` treats every delivery of this event
+ * identically regardless of which of the two Stripe event types produced it.
+ */
+const BANHAO_REFUND_STATUS_EVENT = 'refund.status_reported';
+
+/**
+ * BANHAO's own normalized name for `charge.refunded` — a derived aggregate
+ * signal about the underlying charge (DEC-057 §5), never the identity of any
+ * individual refund. Captured for audit only; `RefundEventProcessingService`
+ * recognizes this name specifically so it can mark it inert rather than
+ * folding it into "unsupported event type".
+ */
+const BANHAO_CHARGE_REFUNDED_EVENT = 'refund.charge_aggregate';
+
+/**
+ * Stripe's five refund-object status literals, mapped 1:1 to a
+ * provider-neutral vocabulary — DEC-057 §4. Nothing outside this file ever
+ * sees a Stripe status string; `RefundEventProcessingService` reads only
+ * this normalized value.
+ */
+type NormalizedRefundStatus = 'PENDING' | 'REQUIRES_ACTION' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
+
+function normalizeRefundStatus(status: string | null): NormalizedRefundStatus | null {
+  switch (status) {
+    case 'pending':
+      return 'PENDING';
+    case 'requires_action':
+      return 'REQUIRES_ACTION';
+    case 'succeeded':
+      return 'SUCCEEDED';
+    case 'failed':
+      return 'FAILED';
+    case 'canceled':
+      return 'CANCELED';
+    default:
+      // Unrecognized/null — never guessed. The generic processor fails
+      // closed on a null status rather than this adapter inventing one.
+      return null;
+  }
+}
+
+/** `refund.payment_intent`/`charge.payment_intent` are `string | PaymentIntent | null` — always a string on a real webhook delivery (never expanded), but read defensively rather than assumed. */
+function readPaymentIntentId(
+  paymentIntent: string | Stripe.PaymentIntent | null,
+  fallback: string,
+): string {
+  if (typeof paymentIntent === 'string') {
+    return paymentIntent;
+  }
+  return paymentIntent?.id ?? fallback;
+}
 
 /** Thrown when Stripe is used before `STRIPE_SECRET_KEY` is configured. */
 export class StripeConfigError extends Error {
@@ -172,6 +240,25 @@ export class StripeConfigError extends Error {
  * identity (`refunds.id`, DEC-057 §7), used as-is. Unlike `createPayment`'s
  * create-then-confirm pair, a refund is exactly one Stripe call, so no
  * per-endpoint suffix is needed or applied.
+ *
+ * ## Refund webhook normalization — Q-020 Slice 2 (DEC-057 §5)
+ *
+ * `refund.created`/`refund.updated`/`charge.refunded` are normalized in
+ * `normalizeEvent`, the same single place every other event's translation
+ * already happens. `event.type` alone never decides anything (DEC-057 §5):
+ * the refund object's own `status` is read and mapped through
+ * `normalizeRefundStatus` — a private, file-local, five-way switch — before
+ * it ever reaches `rawPayload`. `refund.created` and `refund.updated` are
+ * folded into one BANHAO event name (`BANHAO_REFUND_STATUS_EVENT`) because
+ * the two can carry an identical status and must be handled identically;
+ * `charge.refunded` gets its own distinct name
+ * (`BANHAO_CHARGE_REFUNDED_EVENT`) because it is a derived aggregate signal,
+ * never a specific refund's identity, and must never be matched or finalized
+ * against one. `RefundEventProcessingService` — the tick-side consumer,
+ * mirroring `PaymentEventProcessingService`'s existing split — never sees a
+ * Stripe status literal, a Stripe object shape, or a `re_...`/`ch_...` id
+ * outside the flat `providerRefundId`/`providerPaymentId` fields this method
+ * already produces for every other event.
  *
  * ## No Stripe Connect
  *
@@ -360,11 +447,57 @@ export class StripePaymentProvider implements PaymentProvider {
         };
       }
 
+      case STRIPE_REFUND_CREATED_EVENT:
+      case STRIPE_REFUND_UPDATED_EVENT: {
+        // Q-020 Slice 2 (DEC-057 §5) — the object's own status is the
+        // evidence, read here and nowhere else. `refund.created` and
+        // `refund.updated` are deliberately folded into the same BANHAO
+        // event name; see BANHAO_REFUND_STATUS_EVENT's own comment.
+        const refund = event.data.object as Stripe.Refund;
+        const providerPaymentId = readPaymentIntentId(refund.payment_intent, event.id);
+        return {
+          verified: true,
+          providerPaymentId,
+          providerEventId: event.id,
+          providerEvent: BANHAO_REFUND_STATUS_EVENT,
+          rawPayload: {
+            providerRefundId: refund.id,
+            providerPaymentId,
+            status: normalizeRefundStatus(refund.status),
+            amountSatang: refund.amount,
+            stripeEvent: event,
+          },
+        };
+      }
+
+      case STRIPE_CHARGE_REFUNDED_EVENT: {
+        // A derived aggregate signal about the charge, never a specific
+        // refund's identity (DEC-057 §5) — captured for forensics only.
+        // `RefundEventProcessingService` recognizes this name and marks it
+        // inert without attempting to match or finalize any refund from it.
+        const charge = event.data.object as Stripe.Charge;
+        const providerPaymentId = readPaymentIntentId(charge.payment_intent, event.id);
+        return {
+          verified: true,
+          providerPaymentId,
+          providerEventId: event.id,
+          providerEvent: BANHAO_CHARGE_REFUNDED_EVENT,
+          rawPayload: {
+            chargeId: charge.id,
+            providerPaymentId,
+            refunded: charge.refunded,
+            amountRefunded: charge.amount_refunded,
+            stripeEvent: event,
+          },
+        };
+      }
+
       default: {
-        // Any event type outside DEC-055 clause 7's subscribed three — the
-        // Stripe Dashboard endpoint should not be configured to send one,
-        // but this must never crash if it does. Most Stripe resources carry
-        // `id`; falls back to the event's own id rather than guessing one.
+        // Any event type outside DEC-055 clause 7's subscribed three (plus
+        // the refund-domain events handled above, DEC-057 §5) — the Stripe
+        // Dashboard endpoint should not be configured to send one, but this
+        // must never crash if it does. Most Stripe resources carry `id`;
+        // falls back to the event's own id rather than guessing one.
         this.logger.warn(`Received an unsubscribed Stripe event type: ${event.type}`);
         const objectWithId = event.data.object as { id?: string };
         return {

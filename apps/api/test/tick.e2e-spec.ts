@@ -20,6 +20,7 @@ import { TickModule } from '../src/modules/tick/tick.module';
 import { TICK_SIGNATURE_HEADER } from '../src/common/guards/tick-hmac.guard';
 import { IS_PUBLIC_KEY } from '../src/common/decorators/public.decorator';
 import { PaymentEventProcessingService } from '../src/modules/payments/payment-event-processing.service';
+import { RefundEventProcessingService } from '../src/modules/payments/refund-event-processing.service';
 import { PaymentAttemptExpiryService } from '../src/modules/payments/payment-attempt-expiry.service';
 import { DispatchService } from '../src/modules/rider/dispatch.service';
 import { NoRiderEscalationService } from '../src/modules/rider/no-rider-escalation.service';
@@ -34,7 +35,7 @@ import { UsersModule } from '../src/modules/users/users.module';
 const TICK_SECRET = 'e2e-test-tick-secret';
 
 /**
- * Fixed results for the six phases `TickController` runs, so this stays a
+ * Fixed results for the phases `TickController` runs, so this stays a
  * **transport** test.
  *
  * Every one of these services talks to Supabase (and, for POD retention, R2).
@@ -47,6 +48,7 @@ const TICK_SECRET = 'e2e-test-tick-secret';
  */
 const PHASE_RESULTS = {
   paymentEvents: { processed: 0, skipped: 0 },
+  refundEvents: { processed: 0, skipped: 0 },
   paymentAttemptExpiry: { expired: 0, skipped: 0 },
   dispatch: { deliveries: 0, offers: 0, expiredOffers: 0 },
   noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
@@ -123,8 +125,9 @@ describe('POST /internal/tick (integration)', () => {
       R2_BUCKET: 'e2e-bucket',
       R2_PUBLIC_URL: 'https://example.invalid',
       // `TickModule` also imports `PaymentsModule` directly (for
-      // `PaymentEventProcessingService`/`PaymentAttemptExpiryService`, both
-      // overridden below) — but `PaymentsService` and `PAYMENT_PROVIDER`
+      // `PaymentEventProcessingService`/`RefundEventProcessingService`/
+      // `PaymentAttemptExpiryService`, all three overridden below) — but
+      // `PaymentsService` and `PAYMENT_PROVIDER`
       // (`StripePaymentProvider` since DEC-055) are not overridden, so Nest
       // still constructs the real provider, whose constructor throws
       // `StripeConfigError` without a key. Same shape as the R2 values above:
@@ -148,6 +151,8 @@ describe('POST /internal/tick (integration)', () => {
     })
       .overrideProvider(PaymentEventProcessingService)
       .useValue({ processPendingEvents: async () => PHASE_RESULTS.paymentEvents })
+      .overrideProvider(RefundEventProcessingService)
+      .useValue({ processPendingEvents: async () => PHASE_RESULTS.refundEvents })
       .overrideProvider(PaymentAttemptExpiryService)
       .useValue({ processExpiredAttempts: async () => PHASE_RESULTS.paymentAttemptExpiry })
       .overrideProvider(DispatchService)
