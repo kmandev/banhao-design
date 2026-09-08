@@ -99,11 +99,24 @@ and **must not be read as closing one**. It did surface one item that stays
 firmly open: Stripe requires a customer email to confirm a PromptPay
 PaymentIntent, **BANHAO has no customer email anywhere in its runtime today**
 (phone-OTP authentication, no `profiles.email`), and Stripe uses that same
-confirmation-time address to contact the customer for refund bank details. So
-the email source is an **open implementation dependency**, and its refund half
-belongs to **Q-020**, which remains `OPEN`. No email architecture, profile
-column, authentication change or refund-contact decision was made — and none
-may be inferred.
+confirmation-time address to contact the customer for refund bank details.
+
+**That email dependency was itself locked the same day — DEC-056**, on the
+evidence of `docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md`: the customer payment
+email is BANHAO-owned customer data, collected **at payment time** (never at
+phone-OTP signup, so existing customers keep normal account usage), validated,
+persisted on `profiles` through a **future** migration, read **server-side**,
+and **failing closed** when absent — never synthetic, never the Supabase Auth
+email. **Nothing is implemented**: no migration, no validation, no collection
+UI, no Stripe adapter.
+
+**DEC-056 closes no business question.** Its refund half still belongs to
+**Q-020**, which remains `OPEN` — whether Stripe's refund API itself requires
+or accepts an email is `NOT VERIFIED` and is a Q-020 implementation question.
+It also introduces a **new category of personal data**, which is a dependency
+for **Q-012** (PDPA), likewise still `OPEN`: DEC-056 records the collection
+purpose narrowly (payment processing and payment/refund-related communication)
+and explicitly does not clear it legally.
 
 **Three remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
 BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
@@ -1988,12 +2001,12 @@ No `Q-NNN` was resolved by this pass. Cross-references added:
 | Q-004 | Cash-remittance limit | **BQ-034** (extends), BQ-023 |
 | Q-010 | Platform fee | **BQ-028** (extends) |
 | Q-011 | Chargebacks | `docs/PAYMENT_LIFECYCLE.md` § Chargebacks |
-| Q-012 | PDPA retention | BQ-004, BQ-018 |
+| Q-012 | PDPA retention | BQ-004, BQ-018 · **DEC-056** (2026-09-08) introduces a **new category of personal data** — a customer payment email, purpose recorded narrowly as payment processing and payment/refund-related communication. Retention, subject rights and deletion on account closure for it belong here. **Q-012 stays `OPEN`; DEC-056 does not clear it legally** |
 | Q-013 | Anti-fraud | BQ-018 |
 | Q-014 | Authorization granularity | **BQ-038** (extends) |
 | Q-018 | Map/address accuracy | BQ-001, BQ-026 |
 | Q-019 | SMS sender ID | BQ-035 |
-| Q-020 | PromptPay refund mechanism | BQ-031, DQ-03 · **still `OPEN`** — and note **DEC-055 Addendum A-9**: Stripe requests refund bank details by emailing the address given at PaymentIntent confirmation, which BANHAO does not have today |
+| Q-020 | PromptPay refund mechanism | BQ-031, DQ-03 · **still `OPEN`** — and note **DEC-055 Addendum A-9**: Stripe requests refund bank details by emailing the address given at PaymentIntent confirmation. **DEC-056** (2026-09-08) locks where that address comes from (BANHAO-owned, collected at payment, `profiles`, fail closed) but resolves nothing here: whether Stripe's refund API itself requires or accepts an email is **`NOT VERIFIED`** and belongs to this question |
 
 ## Items requiring legal review
 

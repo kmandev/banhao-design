@@ -65,6 +65,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-053** | **Post-pickup delivery failure: operator-resolved `DELIVERY_FAILED` / delivery `FAILED`, 2 contact attempts + 5-minute wait from `ARRIVED`, cause-dependent economics** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/ORDER_LIFECYCLE.md` § 4, § 5, § 6, `docs/SETTLEMENT_MODEL.md` § 9, BQ-017 (resolved) |
 | **DEC-054** | **Customer-arrival anchor `EN_ROUTE → ARRIVED` (distinct from `AT_MERCHANT`), and a narrow DEC-APP-006 carve-out letting DEC-053 use `DELIVERY_FAILED` while BQ-013 stays `OPEN`** | **ACCEPTED — POLICY / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/RIDER_LIFECYCLE.md` § 4, `docs/BANHAO-APP-ARCHITECTURE-V1.md` (DEC-APP-006), DEC-053 |
 | **DEC-055** | **Q-001 resolved: Stripe is the Phase 1 payment provider (PromptPay / THB), behind the existing `PaymentProvider` abstraction, with no Stripe Connect in Phase 1** · **Addendum A (same day): the PromptPay presentation contract is locked — provider-neutral `QR_CODE`, `imageUrl` from `image_url_png`, no `expiresAt` on provider presentation** | **ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 3, DEC-015, Q-001 (resolved), `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` |
+| **DEC-056** | **Customer payment email: BANHAO-owned customer data, collected at payment time (never at phone-OTP signup), validated, persisted on `profiles`, read server-side, and failing closed when absent — never synthetic, never the Supabase Auth email** | **ACCEPTED — POLICY / DATA MODEL · RUNTIME NOT IMPLEMENTED · NO MIGRATION YET** | **2026-09-08** | `docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md`, DEC-055 Addendum A-9, Q-012 (`OPEN`), Q-020 (`OPEN`) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -5958,6 +5959,14 @@ confirmation while silently misdirecting that correspondence. **This does not
 resolve Q-020 and must not be read as doing so** — it sharpens what Q-020 will
 have to decide.
 
+> **Resolved 2026-09-08 by DEC-056.** The dependency this clause records is
+> closed: the customer payment email is BANHAO-owned customer data, collected
+> at payment time (never at phone-OTP signup), validated, persisted on
+> `profiles`, read server-side, and failing closed when absent — never
+> synthetic, never the Supabase Auth email. **This clause's own text stands
+> unchanged**, and DEC-056 resolves neither Q-020 nor Q-012, both of which
+> remain `OPEN`.
+
 **A-10. Architecture invariant — restated, not weakened.**
 
 ```
@@ -6201,3 +6210,335 @@ shape, which predates any provider and assumed a raw QR payload and a
 provider-supplied expiry that Stripe PromptPay does not provide. No new decision
 number was minted, because the addendum answers a question DEC-055 itself left
 open and alters nothing outside it.
+
+---
+
+## DEC-056 — Customer payment email: BANHAO-owned, collected at payment time, validated, read server-side, failing closed
+
+**Status:** ACCEPTED — POLICY / DATA MODEL · **RUNTIME NOT IMPLEMENTED** ·
+**NO MIGRATION EXISTS** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+
+Resolves the implementation dependency **DEC-055 Addendum A-9** recorded and
+deliberately declined to settle: Stripe PromptPay confirmation requires
+`billing_details[email]`, and BANHAO has no customer email anywhere.
+
+**No runtime code, migration, API contract, UI or validation is authorized by
+this decision.** It settles policy, ownership and data-model placement so the
+Stripe adapter can be built against a decided input rather than an invented one.
+
+Evidence: `docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md` (2026-09-08), which
+proved the current state file-by-file and ranked five candidate architectures.
+That report is the investigation; this decision does not restate it.
+
+### Decision
+
+**1. Ownership — the payment email is BANHAO customer data.**
+
+```
+Customer payment email = BANHAO-owned customer-data field
+```
+
+It is **not** derived from, and must never be inferred from:
+
+- **Stripe** — the provider consumes this value, it does not supply it;
+- **a synthetic/generated address** — clause 9;
+- **the phone number** — no `@`-shaped transformation of a phone number is an
+  email, and Phase 1 identity being phone-first (clause 10) does not make one;
+- **the JWT `email` claim** — parsed at `SupabaseService.verifyAccessToken` and
+  discarded before any service sees it, and empty in any case;
+- **an assumed Supabase Auth email** — clause 10.
+
+**2. Collection timing — at payment, never at signup.**
+
+```
+Collected at payment time · NOT during phone-OTP signup
+```
+
+Phone-first onboarding is **unchanged**: `signInWithOtp({ phone })` /
+`verifyOtp` stay exactly as they are, and no new field is added to
+registration. **Existing customers are not retroactively blocked from normal
+account usage** for lacking an email — browsing, cart, addresses, order history
+and every non-payment surface continue to work untouched.
+
+The customer is asked at the moment the reason is visible to them, which is
+also the narrowest defensible PDPA framing (clause 7): collected for a stated,
+necessary purpose at the point of need, not speculatively at registration.
+
+**3. Required for payment — fail closed, never substitute.**
+
+A **real, valid** customer email is **required** to initiate a Stripe PromptPay
+payment. When it is absent or invalid:
+
+```
+payment initiation MUST fail closed
+```
+
+An explicit, surfaced failure — never a silent substitution, never a fallback
+value, never a best-effort guess. This is the same discipline the codebase
+already applies wherever a required input is missing: `NullPaymentProvider`
+refuses to verify a webhook with no secret configured, and AI Operations
+escalates a `MISSING` policy rather than inventing a threshold. A missing email
+must never be able to quietly become a synthetic one.
+
+**4. Server-side authority.**
+
+The payment service reads the authoritative email from **BANHAO's own persisted
+customer data**, server-side, exactly as it already reads
+`orders.grand_total_satang` rather than accepting a client-supplied amount.
+
+A client-supplied email is **not** the final payment identity unless it has
+been **persisted and validated** first. This preserves the boundary
+`packages/validation/src/payment.ts` already documents — `POST
+/api/v1/orders/:id/payment` has no request body because everything it needs is
+server-derived — and matches the pattern the repository already proved for
+contact data: `addresses.recipient_phone` is customer-supplied, validated,
+persisted, and only then read server-side and snapshotted by `create_order()`.
+
+**5. Data model — `public.profiles` owns the field.**
+
+```
+Location = public.profiles   (a future additive migration)
+```
+
+`profiles` is the existing application-owned customer record (`id`, `role`,
+`phone`, `display_name`, …) and is already the row every authenticated request
+resolves through. **No new customer table is created**, and no existing table
+is repurposed.
+
+The migration is **not written by this decision** and does not exist. When it
+is written it must be **additive and nullable** — every existing row starts
+`NULL`, which is correct and invalidates no data — and it carries no client
+write grant by default: `profiles` grants `update (display_name)` only, so any
+write path is an explicit, separate act.
+
+Whether the value BANHAO sent is **also** snapshotted per order or payment
+attempt (in the manner of `orders.recipient_phone_snapshot`) is **deliberately
+not decided here**. It is a real question for audit — see clause 8 — and is
+separable from this lock.
+
+**6. Validation — required before the value is payment-eligible.**
+
+An email must be **validated before it becomes eligible for Stripe payment
+use**. A **practical Phase 1 format check** is what is locked — not a
+full RFC 5322 implementation, which is a well-known source of false negatives
+and is not what this problem needs.
+
+No validation code, schema or library is written by this decision. Note for
+whoever implements it: no email schema exists in `packages/validation` today.
+
+Format validity is not deliverability. Nothing here claims a validated address
+can actually receive mail; that is the customer's own correctness to own, and
+clause 3's fail-closed rule applies only to absence and invalidity, not to
+bounce handling (which is not designed and is not in scope).
+
+**7. Privacy — purpose recorded narrowly, Q-012 untouched.**
+
+```
+Purpose = customer payment processing, and payment/refund-related communication
+```
+
+That is the whole purpose. This decision does **not** authorize marketing
+consent, promotional messaging, notification-architecture changes, profiling,
+or any secondary use, and it must not be cited as precedent for one.
+
+**Q-012 (PDPA) remains `OPEN`** and is **not resolved here**. The repository's
+own records confirm this — its retention half was narrowed by DEC-039 while
+Q-012 itself stayed open — and this decision only records that a new category
+of personal data is introduced, creating a dependency Q-012's eventual
+resolution must cover (retention, subject rights, deletion on account closure).
+**No agent or engineer may conclude from this decision that collecting this
+data is legally cleared.**
+
+**8. Refund boundary — Q-020 is untouched.**
+
+```
+DEC-056 does NOT resolve Q-020
+```
+
+This decision only ensures a **real customer email exists and is available**
+for payment and payment/refund-related communication. It decides nothing about
+the refund mechanism, refund finality, partial refunds, or refund UX.
+
+Recorded as fact, not as a Stripe requirement invented here: the address given
+at PaymentIntent confirmation is the address Stripe uses to request refund bank
+details from the customer (DEC-055 Addendum A-9). **Whether Stripe's refund API
+itself requires or accepts an email is `NOT VERIFIED`** — the sandbox spike
+never called `POST /v1/refunds` — and remains a **Q-020 implementation
+question**. No Stripe refund requirement is asserted, assumed, or invented by
+this decision.
+
+One consequence worth holding, from the recon: the confirmation email is
+effectively immutable per PaymentIntent, and a regenerated attempt is a new
+PaymentIntent (DEC-055 clause 8). A corrected email therefore applies to future
+attempts only, never to an already-confirmed one. That is the audit argument
+behind clause 5's deliberately-undecided snapshot question.
+
+**9. Synthetic email — rejected.**
+
+```
+customer-{id}@banhao.local   ← REJECTED
+```
+
+Any generated, platform-owned or otherwise non-contactable address is refused
+as the value handed to a live payment. Two reasons, both decisive:
+
+- **It is not contactable.** The customer cannot be reached at it, ever.
+- **It would silently break payment/refund communication.** Stripe would send
+  the refund bank-account request to BANHAO instead of the customer, so the
+  customer is never asked for the account their refund requires — a failure
+  that produces no error and would be discovered only when a real refund is
+  attempted.
+
+It also injects knowingly false personal data into a financial system and into
+a third-party processor's records.
+
+**Narrow, explicit carve-out, so the rejection is not over-read:** clearly
+labelled placeholder addresses remain legitimate in **development and test
+surfaces only** — `NullPaymentProvider`, fixtures, and dev seeds (the existing
+`dev-seed-merchant@banhao.invalid`, annotated *"cannot be a real address"*, is
+unaffected) — where no real customer and no real payment exist. Such a value
+must never reach a live PaymentIntent.
+
+**10. Supabase Auth email — rejected as the authoritative source.**
+
+BANHAO customer authentication is **phone-first**, and the recon proved the
+Auth email is not an established runtime source: nothing in the repository
+writes `auth.users.email` for a customer, the provisioning trigger copies only
+`phone`, and no server-side Auth user lookup exists anywhere in the API.
+
+**Authentication architecture is unchanged by this decision.** No Auth email is
+written, read, required or backfilled; `auth.users` is not touched. Should
+email/password or social login ever be introduced (which
+`packages/validation/src/auth.ts` already anticipates as a future possibility),
+that is its own decision and does not retroactively make the Auth email the
+authoritative payment address.
+
+### Explicit non-decisions
+
+This decision must **not** be read as implying any of the following, none of
+which is true as of this lock:
+
+- The **Stripe adapter is implemented**. It is not — `NullPaymentProvider`
+  remains the bound provider.
+- The **refund flow is implemented**, or that **Q-020** is resolved. Neither.
+- The **customer email collection UX is implemented**. It is not; no screen,
+  field or copy exists.
+- A **database migration exists**. None does — clause 5 authorizes writing one
+  later, it does not write one.
+- **Validation exists**. It does not.
+- **Q-012 is resolved**. It is not.
+
+Also not decided: the customer-facing copy and its Thai wording; the behaviour
+when a customer declines to supply an email (under DEC-016 there is no cash
+fallback, so this is a real product question and is left open); bounce or
+deliverability handling; whether the email is snapshotted per order
+(clause 5); and whether email ever becomes an authentication method.
+
+### Why
+
+Product Owner decision, 2026-09-08, on the evidence of
+`docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md`.
+
+The recon established that BANHAO has no customer email **by construction** —
+not merely missing, but absent from every table, every DTO and every
+request-scoped principal — while Stripe PromptPay's confirm call requires one,
+proven by a captured HTTP 400 rather than by documentation.
+
+Of the five candidate sources, only collecting a real address into BANHAO's own
+schema satisfies both halves of the problem: it produces a value Stripe accepts
+**and** a value that can actually reach the customer when a refund needs their
+bank account. The scoping choice — collect at payment, not at signup — is what
+keeps this small: no backfill, no retroactive gate, no change to phone-first
+onboarding, and the customer is asked exactly where the reason is self-evident.
+
+### Alternatives
+
+Each was evaluated in full in the recon (§ 5) and is rejected here:
+
+- **Supabase Auth email** — an empty source for every real customer; making it
+  viable would mean writing an authentication credential, conflating "how you
+  sign in" with "where we email you about a refund". Clause 10.
+- **Client-supplied on the payment request** — contradicts the payment
+  endpoint's documented no-request-body design and puts an unvalidated,
+  unpersisted value on the money path. Its valid insight (only the customer
+  knows their email) is preserved by clause 2's collect-before-payment.
+- **Synthetic/platform address** — clause 9.
+- **An email-free PromptPay flow** — unsupported by any evidence; Stripe's
+  client-side flows relocate *who collects* the email rather than removing it,
+  and DEC-055 clause 12 forbids the SDK and publishable key that route needs.
+- **Collecting at signup instead of at payment** — rejected as
+  disproportionate: it would gate phone-first onboarding on a field only
+  payers need, and would force a backfill or a retroactive block on every
+  existing customer.
+
+### Consequences
+
+- **The Stripe adapter is unblocked architecturally.** It can be written
+  against a decided input; it remains unusable end-to-end until collection
+  lands, which is correct — Stripe is not being enabled yet regardless
+  (DEC-055 clause 11's starvation prerequisite and Q-020 gate enablement
+  independently).
+- **A future additive migration on `profiles` is authorized** (clause 5) — and
+  is still an explicit, separately-instructed act, per the standing rule that
+  no migration is added without instruction.
+- **A new category of personal data enters the system**, creating a dependency
+  for Q-012 (clause 7).
+- **Online payment acquires a customer-data precondition.** Under DEC-016
+  (online-only, no cash fallback) a customer with no valid email cannot
+  complete payment — which is exactly why clause 3 requires that to fail
+  visibly rather than silently.
+- **DEC-055 Addendum A-9 stops being open.** Its recorded dependency is
+  resolved by this decision; A-9's own text is unchanged and now
+  cross-references here.
+- No change to the payment presentation contract, the payment lifecycle, the
+  provider abstraction, authentication, or any economics.
+
+### Evidence
+
+Product Owner instruction, 2026-09-08 ("BANHAO — DEC-056 CUSTOMER EMAIL
+DECISION LOCK"), on `docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md` (2026-09-08),
+which cites its own repository basis file-by-file: `profiles` and
+`handle_new_user` (`supabase/migrations/20260809000002_profiles_and_roles.sql`),
+the `display_name`-only grant (`20260809000003_harden_profiles_rls.sql:59`),
+`addresses` (`20260811000001_identity_domain.sql:121-122`), the order contact
+snapshots (`20260811000005_order_domain.sql:46-47`) and `create_order()`
+(`20260819000001_order_creation_function.sql`),
+`apps/api/src/supabase/supabase.service.ts:112`,
+`apps/api/src/common/guards/supabase-auth.guard.ts:82-86`,
+`apps/api/src/common/types.ts:66-70`,
+`apps/api/src/modules/payments/payments.service.ts`,
+`payment-provider.interface.ts`, `packages/validation/src/payment.ts`,
+`packages/validation/src/auth.ts`, `apps/customer/src/hooks/useAuth.tsx:100,105`,
+and `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` § 2 for the Stripe requirement.
+
+### Related Requirements
+
+DEC-055 Addendum A-9 (**the dependency this resolves**) · Q-020 (refund
+mechanism — **`OPEN`**, untouched, clause 8) · Q-012 (PDPA — **`OPEN`**,
+dependency recorded, clause 7) · DEC-016 (online-only, why a payer with no
+email cannot fall back to cash) · DEC-015 (provider access only through the
+abstraction) · CON-002 (webhook-only confirmation) · CON-005 (no secrets in
+client bundles)
+
+### Related Architecture
+
+`docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md` ·
+`supabase/migrations/20260809000002_profiles_and_roles.sql` (the table that
+will own the field) · `apps/api/src/modules/payments/payments.service.ts` (the
+server-side read) · `apps/api/src/modules/payments/payment-provider.interface.ts`
+(`CreatePaymentInput`, the additive field) · `packages/validation`
+(the future email schema) · `docs/PAYMENT_LIFECYCLE.md` § 2
+
+### Supersedes / Superseded By
+
+None / None. **Resolves DEC-055 Addendum A-9's recorded implementation
+dependency**, and supersedes no decision — DEC-055 and its Addendum A stand
+unchanged in full, as do DEC-015, DEC-016, DEC-039, DEC-048, DEC-049 and every
+economics decision.
+
+**Why a new number rather than a third DEC-055 addendum:** DEC-055 is a
+provider-selection and payment-integration decision. This introduces a **new
+customer-data field**, a **future schema migration**, a **payment-input
+policy** and a **PDPA-related collection purpose** — subject matter DEC-055 has
+no authority over. Addendum A was correct precisely because it closed a
+question DEC-055 opened about its *own* presentation contract; this is not that.

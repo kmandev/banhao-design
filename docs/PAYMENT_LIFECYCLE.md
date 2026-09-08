@@ -125,6 +125,24 @@ a stale code. Stripe documents no lifetime for the image URL either; it is
 treated as a short-lived presentation, valid for the active attempt only, which
 is why no image copying, proxying or storage is introduced.
 
+**A payment cannot be initiated without a customer email** — `ACCEPTED`,
+**DEC-056**. Stripe PromptPay's confirm call requires `billing_details[email]`,
+so issuing a QR has a customer-data precondition that the `CREATED --> PENDING`
+edge in § 3 does not otherwise show. The rules, in full:
+
+- The email is **BANHAO-owned customer data**, collected **at payment time**
+  (never at phone-OTP signup), validated, and persisted on `profiles` — a
+  **future** migration; no column exists today.
+- The payment service reads it **server-side**, never from the request body
+  (the endpoint has none) and never from the JWT claim.
+- When it is absent or invalid, **payment initiation fails closed** — an
+  explicit error, never a synthetic or substituted address.
+
+**Not implemented**: no migration, no validation, no collection UI. Under
+DEC-016 (online-only, no cash fallback) this makes a valid email a hard
+precondition for paying at all — which is precisely why it must fail visibly.
+DEC-056 resolves neither **Q-020** nor **Q-012**.
+
 ---
 
 ## 3. Payment state machine
