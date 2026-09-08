@@ -38,8 +38,23 @@ export interface CreatePaymentInput {
 export interface CreatePaymentResult {
   /** The provider's identifier for this payment. */
   providerPaymentId: string;
-  /** Payload the client renders, e.g. a PromptPay QR string. Never a secret. */
-  presentation?: { type: 'QR_STRING'; value: string; expiresAt: string };
+  /**
+   * What the customer is shown to complete payment. Never a secret.
+   *
+   * Provider-neutral by design (DEC-055 Addendum A) — a QR image URL the
+   * client renders directly, plus an optional hosted fallback page. There is
+   * deliberately no raw payload field here: Stripe PromptPay (the first real
+   * provider) never returns one, only pre-rendered image/hosted-page URLs.
+   * Provider-specific fields (Stripe's `data`, for one) stay inside that
+   * provider's own adapter and are never promoted onto this shape.
+   *
+   * Deliberately carries no expiry. A payment attempt's validity window is
+   * BANHAO's own policy (`payment_attempts.expires_at`, computed by
+   * `PaymentsService`), never a value read off the provider — see
+   * `docs/PAYMENT_LIFECYCLE.md` § 3 ("`EXPIRED` is BANHAO's, not the
+   * provider's").
+   */
+  presentation?: { type: 'QR_CODE'; imageUrl: string; hostedInstructionsUrl?: string };
 }
 
 export interface RefundInput {

@@ -54,22 +54,36 @@ describe('NullPaymentProvider', () => {
       expect(result.providerPaymentId).toMatch(/^NULL-/);
     });
 
-    it('returns a QR_STRING presentation with an expiry roughly 10 minutes out', async () => {
+    it('returns a QR_CODE presentation with an imageUrl', async () => {
       const provider = new NullPaymentProvider();
-      const before = Date.now();
       const result = await provider.createPayment(INPUT);
-      const after = Date.now();
 
-      expect(result.presentation?.type).toBe('QR_STRING');
-      const expiresAt = new Date(result.presentation!.expiresAt).getTime();
-      expect(expiresAt).toBeGreaterThanOrEqual(before + 9 * 60 * 1000);
-      expect(expiresAt).toBeLessThanOrEqual(after + 11 * 60 * 1000);
+      expect(result.presentation?.type).toBe('QR_CODE');
+      expect(typeof result.presentation?.imageUrl).toBe('string');
     });
 
-    it('the QR value is explicitly labelled NULL, never formatted as a real PromptPay payload', async () => {
+    it('the image URL is explicitly labelled null-provider, never formatted as a real PromptPay/Stripe host', async () => {
       const provider = new NullPaymentProvider();
       const result = await provider.createPayment(INPUT);
-      expect(result.presentation?.value).toMatch(/^NULL-QR:/);
+      expect(result.presentation?.imageUrl).toMatch(/^https:\/\/null-provider\.local\//);
+    });
+
+    it(
+      'the presentation carries no expiresAt — DEC-055 Addendum A: expiry is BANHAO\'s ' +
+        'own payment-attempt policy, never the provider\'s',
+      async () => {
+        const provider = new NullPaymentProvider();
+        const result = await provider.createPayment(INPUT);
+
+        expect(result.presentation).toBeDefined();
+        expect(result.presentation).not.toHaveProperty('expiresAt');
+      },
+    );
+
+    it('the presentation carries no hostedInstructionsUrl — the null provider has no fallback page to offer', async () => {
+      const provider = new NullPaymentProvider();
+      const result = await provider.createPayment(INPUT);
+      expect(result.presentation).not.toHaveProperty('hostedInstructionsUrl');
     });
 
     it('two calls for two different orders produce two different providerPaymentIds — never a fixed fixture value', async () => {

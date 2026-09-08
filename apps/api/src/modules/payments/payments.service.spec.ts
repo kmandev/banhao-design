@@ -1,7 +1,22 @@
-import { PaymentsService } from './payments.service';
+import { PaymentsService, PAYMENT_ATTEMPT_TTL_MS } from './payments.service';
 import type { SupabaseService } from '../../supabase/supabase.service';
 import type { AuthenticatedUser } from '../../common/types';
 import type { PaymentProvider, CreatePaymentResult } from './payment-provider.interface';
+
+/**
+ * Asserts `actualIso` is a real, freshly-computed BANHAO expiry — never a
+ * literal echoed from the provider (DEC-055 Addendum A:
+ * `CreatePaymentResult.presentation` carries no expiry field at all, so any
+ * value here came from `PaymentsService`'s own clock). A tolerant range,
+ * mirroring the pattern `NullPaymentProvider`'s own test used before expiry
+ * ownership moved here.
+ */
+function expectFreshExpiry(actualIso: string | undefined, beforeMs: number, afterMs: number): void {
+  expect(actualIso).toBeDefined();
+  const actualMs = new Date(actualIso as string).getTime();
+  expect(actualMs).toBeGreaterThanOrEqual(beforeMs + PAYMENT_ATTEMPT_TTL_MS);
+  expect(actualMs).toBeLessThanOrEqual(afterMs + PAYMENT_ATTEMPT_TTL_MS);
+}
 
 /**
  * Phase F-1 — `PaymentsService.createPayment`.
@@ -68,8 +83,20 @@ function supabaseStub(results: Result[]) {
 
 const PROVIDER_RESULT: CreatePaymentResult = {
   providerPaymentId: 'NULL-fixed-id',
-  presentation: { type: 'QR_STRING', value: 'NULL-QR:order-1:NULL-fixed-id', expiresAt: '2026-08-24T05:00:00.000Z' },
+  // No expiresAt — DEC-055 Addendum A: the provider contract carries none.
+  presentation: { type: 'QR_CODE', imageUrl: 'https://null-provider.local/qr/order-1/NULL-fixed-id.png' },
 };
+
+/**
+ * A `payment_attempts` row already durably stored, as `fetchPaymentWithAttempt`
+ * or `resumePayment`'s live-attempt branch would read it back — a plain DB
+ * read, decoupled from `PROVIDER_RESULT` (which no longer carries an expiry to
+ * derive one from) and from real time (the row was written at some past
+ * moment, not "just now"). Reused across every fixture representing "what is
+ * already in the database", never a fresh provider call.
+ */
+const STORED_ATTEMPT_QR_PAYLOAD = 'https://null-provider.local/qr/order-1/NULL-fixed-id.png';
+const STORED_ATTEMPT_EXPIRES_AT = '2026-08-24T05:00:00.000Z';
 
 function buildService(
   results: Result[],
@@ -182,7 +209,7 @@ describe('PaymentsService.createPayment — first initialization', () => {
     });
   });
 
-  it('inserts payment_attempts attempt_no 1 with the provider QR and expiry', async () => {
+  it('inserts payment_attempts attempt_no 1 with the provider image URL and a BANHAO-computed expiry', async () => {
     const { subject, calls } = buildService([
       { data: TRANSITIONED_ORDER, error: null },
       { data: null, error: null },
@@ -190,16 +217,18 @@ describe('PaymentsService.createPayment — first initialization', () => {
       { data: null, error: null },
     ]);
 
+    const before = Date.now();
     await subject.createPayment(customerUser(), ORDER_ID);
+    const after = Date.now();
 
     const attemptInsert = calls.find((c) => c.table === 'payment_attempts');
     expect(attemptInsert?.payload).toMatchObject({
       payment_id: INSERTED_PAYMENT.id,
       attempt_no: 1,
       state: 'PENDING',
-      qr_payload: PROVIDER_RESULT.presentation!.value,
-      expires_at: PROVIDER_RESULT.presentation!.expiresAt,
+      qr_payload: PROVIDER_RESULT.presentation!.imageUrl,
     });
+    expectFreshExpiry(attemptInsert?.payload?.expires_at as string | undefined, before, after);
   });
 
   it('returns the payment id, reference, state, amount, currency and QR', async () => {
@@ -210,15 +239,46 @@ describe('PaymentsService.createPayment — first initialization', () => {
       { data: null, error: null },
     ]);
 
+    const before = Date.now();
     const result = await subject.createPayment(customerUser(), ORDER_ID);
+    const after = Date.now();
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       paymentId: INSERTED_PAYMENT.id,
       paymentReference: INSERTED_PAYMENT.payment_reference,
       state: 'PENDING',
       amountSatang: TRANSITIONED_ORDER.grand_total_satang,
       currency: 'THB',
-      qr: { value: PROVIDER_RESULT.presentation!.value, expiresAt: PROVIDER_RESULT.presentation!.expiresAt },
+    });
+    expect(result.qr).toMatchObject({ type: 'QR_CODE', imageUrl: PROVIDER_RESULT.presentation!.imageUrl });
+    // PROVIDER_RESULT has no hostedInstructionsUrl — must not appear on the wire.
+    expect(result.qr).not.toHaveProperty('hostedInstructionsUrl');
+    expectFreshExpiry(result.qr?.expiresAt, before, after);
+  });
+
+  it('preserves hostedInstructionsUrl in the response when the provider supplies one', async () => {
+    const resultWithHosted: CreatePaymentResult = {
+      providerPaymentId: 'NULL-with-hosted',
+      presentation: {
+        type: 'QR_CODE',
+        imageUrl: 'https://null-provider.local/qr/order-1/NULL-with-hosted.png',
+        hostedInstructionsUrl: 'https://null-provider.local/instructions/order-1',
+      },
+    };
+    const { subject } = buildService(
+      [
+        { data: TRANSITIONED_ORDER, error: null },
+        { data: null, error: null },
+        { data: INSERTED_PAYMENT, error: null },
+        { data: null, error: null },
+      ],
+      { provider: { createPayment: jest.fn().mockResolvedValue(resultWithHosted) } },
+    );
+
+    const result = await subject.createPayment(customerUser(), ORDER_ID);
+
+    expect(result.qr).toMatchObject({
+      hostedInstructionsUrl: resultWithHosted.presentation!.hostedInstructionsUrl,
     });
   });
 
@@ -295,7 +355,7 @@ describe('PaymentsService.createPayment — idempotent retry (DEC-028)', () => {
       { data: { ...TRANSITIONED_ORDER, customer_id: CUSTOMER_ID, state: 'PENDING_PAYMENT' }, error: null },
       { data: INSERTED_PAYMENT, error: null }, // readExistingPayment: payments select
       {
-        data: { qr_payload: PROVIDER_RESULT.presentation!.value, expires_at: PROVIDER_RESULT.presentation!.expiresAt },
+        data: { qr_payload: STORED_ATTEMPT_QR_PAYLOAD, expires_at: STORED_ATTEMPT_EXPIRES_AT },
         error: null,
       }, // readExistingPayment: payment_attempts select
     ]);
@@ -332,7 +392,7 @@ describe('PaymentsService.createPayment — idempotent retry (DEC-028)', () => {
       { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } }, // payments insert loses the race
       { data: INSERTED_PAYMENT, error: null }, // read-back: payments select
       {
-        data: { qr_payload: PROVIDER_RESULT.presentation!.value, expires_at: PROVIDER_RESULT.presentation!.expiresAt },
+        data: { qr_payload: STORED_ATTEMPT_QR_PAYLOAD, expires_at: STORED_ATTEMPT_EXPIRES_AT },
         error: null,
       }, // read-back: payment_attempts select
     ]);
@@ -382,20 +442,23 @@ const PENDING_PAYMENT_ORDER = { ...TRANSITIONED_ORDER, customer_id: CUSTOMER_ID,
 
 const REGENERATED_PROVIDER_RESULT: CreatePaymentResult = {
   providerPaymentId: 'NULL-regenerated-id',
+  // No expiresAt — DEC-055 Addendum A: the provider contract carries none.
   presentation: {
-    type: 'QR_STRING',
-    value: 'NULL-QR:order-1:NULL-regenerated-id',
-    expiresAt: '2026-08-24T05:20:00.000Z',
+    type: 'QR_CODE',
+    imageUrl: 'https://null-provider.local/qr/order-1/NULL-regenerated-id.png',
   },
 };
+
+/** What a regenerated attempt's DB read-back carries — a plain stored row, decoupled from real time. */
+const REGENERATED_ATTEMPT_STORED_EXPIRES_AT = '2026-08-24T05:20:00.000Z';
 
 function attemptRow(overrides: { attempt_no?: number; state?: string } = {}) {
   return {
     id: 'attempt-1',
     attempt_no: overrides.attempt_no ?? 1,
     state: overrides.state ?? 'PENDING',
-    qr_payload: PROVIDER_RESULT.presentation!.value,
-    expires_at: PROVIDER_RESULT.presentation!.expiresAt,
+    qr_payload: STORED_ATTEMPT_QR_PAYLOAD,
+    expires_at: STORED_ATTEMPT_EXPIRES_AT,
   };
 }
 
@@ -431,7 +494,7 @@ describe('PaymentsService.createPayment — resumption: live attempt (A)', () =>
       state: 'PENDING',
       amountSatang: INSERTED_PAYMENT.amount_satang,
       currency: 'THB',
-      qr: { value: PROVIDER_RESULT.presentation!.value, expiresAt: PROVIDER_RESULT.presentation!.expiresAt },
+      qr: { type: 'QR_CODE', imageUrl: STORED_ATTEMPT_QR_PAYLOAD, expiresAt: STORED_ATTEMPT_EXPIRES_AT },
     });
     expect(createPayment).not.toHaveBeenCalled();
     expect(calls.filter((c) => c.table !== 'orders' && (c.op === 'insert' || c.op === 'update'))).toHaveLength(0);
@@ -444,8 +507,9 @@ describe('PaymentsService.createPayment — resumption: live attempt (A)', () =>
 
     expect(result.state).toBe('PROCESSING');
     expect(result.qr).toEqual({
-      value: PROVIDER_RESULT.presentation!.value,
-      expiresAt: PROVIDER_RESULT.presentation!.expiresAt,
+      type: 'QR_CODE',
+      imageUrl: STORED_ATTEMPT_QR_PAYLOAD,
+      expiresAt: STORED_ATTEMPT_EXPIRES_AT,
     });
     expect(createPayment).not.toHaveBeenCalled();
     expect(calls.filter((c) => c.table !== 'orders' && (c.op === 'insert' || c.op === 'update'))).toHaveLength(0);
@@ -466,8 +530,8 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
             id: 'attempt-2',
             attempt_no: 2,
             state: 'PENDING',
-            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
-            expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.imageUrl,
+            expires_at: REGENERATED_ATTEMPT_STORED_EXPIRES_AT,
           },
           error: null,
         }, // payment_attempts insert
@@ -476,7 +540,9 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
       { provider: { createPayment: regeneratedCreatePayment } },
     );
 
+    const before = Date.now();
     const result = await subject.createPayment(customerUser(), ORDER_ID);
+    const after = Date.now();
 
     expect(regeneratedCreatePayment).toHaveBeenCalledTimes(1);
 
@@ -485,9 +551,13 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
       payment_id: INSERTED_PAYMENT.id,
       attempt_no: 2,
       state: 'PENDING',
-      qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
-      expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+      qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.imageUrl,
     });
+    // The INSERT payload's expiry is computed fresh by PaymentsService itself
+    // (never echoed from the provider) — asserted against real elapsed time,
+    // distinct from the DB read-back literal above (which represents
+    // whatever Postgres actually returns, decoupled from this in-process call).
+    expectFreshExpiry(attemptInsert?.payload?.expires_at as string | undefined, before, after);
 
     const paymentUpdate = calls.find((c) => c.table === 'payments' && c.op === 'update');
     expect(paymentUpdate?.payload).toEqual({
@@ -499,8 +569,9 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
 
     expect(result.state).toBe('PENDING');
     expect(result.qr).toEqual({
-      value: REGENERATED_PROVIDER_RESULT.presentation!.value,
-      expiresAt: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+      type: 'QR_CODE',
+      imageUrl: REGENERATED_PROVIDER_RESULT.presentation!.imageUrl,
+      expiresAt: REGENERATED_ATTEMPT_STORED_EXPIRES_AT,
     });
   });
 
@@ -517,8 +588,8 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
             id: 'attempt-2',
             attempt_no: 2,
             state: 'PENDING',
-            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
-            expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.imageUrl,
+            expires_at: REGENERATED_ATTEMPT_STORED_EXPIRES_AT,
           },
           error: null,
         },
@@ -576,7 +647,7 @@ describe('PaymentsService.createPayment — resumption: regeneration (B, C)', ()
     const result = await subject.createPayment(customerUser(), ORDER_ID);
 
     expect(result.state).toBe('PENDING');
-    expect(result.qr).toEqual({ value: 'q', expiresAt: 'e' });
+    expect(result.qr).toEqual({ type: 'QR_CODE', imageUrl: 'q', expiresAt: 'e' });
     const attemptInserts = calls.filter((c) => c.table === 'payment_attempts' && c.op === 'insert');
     expect(attemptInserts).toHaveLength(1); // never retried, never discarded
   });
@@ -616,8 +687,8 @@ describe('PaymentsService.createPayment — concurrent regeneration (9)', () => 
             id: 'attempt-2',
             attempt_no: 2,
             state: 'PENDING',
-            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.value,
-            expires_at: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+            qr_payload: REGENERATED_PROVIDER_RESULT.presentation!.imageUrl,
+            expires_at: REGENERATED_ATTEMPT_STORED_EXPIRES_AT,
           },
           error: null,
         },
@@ -630,8 +701,9 @@ describe('PaymentsService.createPayment — concurrent regeneration (9)', () => 
     expect(regeneratedCreatePayment).toHaveBeenCalledTimes(1); // this caller's own (wasted) provider call
     expect(result.state).toBe('PENDING');
     expect(result.qr).toEqual({
-      value: REGENERATED_PROVIDER_RESULT.presentation!.value,
-      expiresAt: REGENERATED_PROVIDER_RESULT.presentation!.expiresAt,
+      type: 'QR_CODE',
+      imageUrl: REGENERATED_PROVIDER_RESULT.presentation!.imageUrl,
+      expiresAt: REGENERATED_ATTEMPT_STORED_EXPIRES_AT,
     });
     const attemptInserts = calls.filter((c) => c.table === 'payment_attempts' && c.op === 'insert');
     expect(attemptInserts).toHaveLength(1); // the one attempt, which conflicted — never retried

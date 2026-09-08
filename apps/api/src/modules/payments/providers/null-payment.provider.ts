@@ -10,9 +10,6 @@ import type {
   WebhookVerification,
 } from '../payment-provider.interface';
 
-/** How long a simulated QR stays valid — matches `docs/PAYMENT_LIFECYCLE.md` § 4's 10-minute window. */
-const SIMULATED_QR_TTL_MS = 10 * 60 * 1000;
-
 /** The header {@link NullPaymentWebhookSimulator} signs into. Canonical casing, for docs and tests. */
 export const NULL_PROVIDER_SIGNATURE_HEADER = 'X-Null-Signature';
 
@@ -79,10 +76,13 @@ function isSimulatedEventPayload(value: unknown): value is SimulatedEventPayload
  *
  * - Every identifier it mints is prefixed `NULL-`, unambiguous in a log or a
  *   database row.
- * - The "QR" is a labelled placeholder string, never a real PromptPay
- *   payload — V1.1 §8's own explicit non-goal: "no PromptPay QR rendering
- *   until a provider issues real payloads."
+ * - The presentation is a labelled placeholder image URL, never a real
+ *   PromptPay payload or a real image — V1.1 §8's own explicit non-goal: "no
+ *   PromptPay QR rendering until a provider issues real payloads."
  * - No network call, no SDK, no real credential of any kind is used or read.
+ * - It mints no expiry (DEC-055 Addendum A): a payment attempt's validity
+ *   window is `PaymentsService`'s own policy, computed the same way for every
+ *   provider — this provider has no opinion on it, real or simulated.
  */
 @Injectable()
 export class NullPaymentProvider implements PaymentProvider {
@@ -104,19 +104,19 @@ export class NullPaymentProvider implements PaymentProvider {
 
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
     const providerPaymentId = `NULL-${randomUUID()}`;
-    const expiresAt = new Date(Date.now() + SIMULATED_QR_TTL_MS).toISOString();
 
     return {
       providerPaymentId,
       presentation: {
-        type: 'QR_STRING',
-        // Deliberately not QR-shaped data — a real provider's payload would
-        // be, but rendering this as an actual scannable code would blur the
-        // line V1.1 §8 draws. Any value derived from `input` here is for
-        // traceability in logs only, never money: `input.amount` never
-        // reaches this string.
-        value: `NULL-QR:${input.orderId}:${providerPaymentId}`,
-        expiresAt,
+        type: 'QR_CODE',
+        // Deliberately not a real, fetchable image — a labelled placeholder
+        // URL, never a real PromptPay QR. Rendering this as an actual
+        // scannable code would blur the line V1.1 §8 draws. Any value
+        // derived from `input` here is for traceability in logs only, never
+        // money: `input.amount` never reaches this string.
+        imageUrl: `https://null-provider.local/qr/${input.orderId}/${providerPaymentId}.png`,
+        // No hostedInstructionsUrl — optional, and the null provider has
+        // nothing to offer as a fallback page.
       },
     };
   }

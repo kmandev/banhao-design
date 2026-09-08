@@ -19,9 +19,19 @@ export interface PaymentInitiationResponse {
   state: string;
   amountSatang: Satang;
   currency: string;
-  /** Present whenever the (simulated, dev-only) provider returned one — absent only if it did not. */
+  /**
+   * Present whenever the provider returned a presentation — absent only if
+   * it did not. Provider-neutral (DEC-055 Addendum A): `imageUrl` is a QR
+   * image the client renders directly; `hostedInstructionsUrl` is an
+   * optional fallback page, present only when the provider call that minted
+   * this attempt supplied one. `expiresAt` is BANHAO's own payment-attempt
+   * expiry (`payment_attempts.expires_at`) — never a provider-supplied
+   * value; the provider contract carries no expiry field at all.
+   */
   qr?: {
-    value: string;
+    type: 'QR_CODE';
+    imageUrl: string;
+    hostedInstructionsUrl?: string;
     expiresAt: string;
   };
 }

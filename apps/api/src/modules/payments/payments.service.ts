@@ -35,8 +35,38 @@ interface PaymentAttemptRow {
   expires_at: string | null;
 }
 
-/** The fields `toResponse` actually reads off an attempt — every call site has at least this much. */
-type AttemptPresentation = Pick<PaymentAttemptRow, 'qr_payload' | 'expires_at'>;
+/**
+ * The fields `toResponse` actually reads off an attempt — every call site has
+ * at least this much.
+ *
+ * `hosted_instructions_url` is deliberately **not** a `payment_attempts`
+ * column (DEC-055 Addendum A left it out to avoid a migration this task did
+ * not need) — it exists only in memory, threaded through from a fresh
+ * `CreatePaymentResult.presentation.hostedInstructionsUrl` on the two call
+ * sites that actually call the provider (`initializePayment`,
+ * `regenerateAttempt`). A response built from a plain DB read
+ * (`PaymentAttemptRow` — every idempotent/resumed read, and a losing
+ * regeneration's read-back of the winner's attempt) never carries it, because
+ * nothing persists it. This is a known, accepted limitation: the field is
+ * optional and present only on the request that minted it.
+ */
+type AttemptPresentation = Pick<PaymentAttemptRow, 'qr_payload' | 'expires_at'> & {
+  hosted_instructions_url?: string;
+};
+
+/**
+ * How long a payment attempt (QR) stays valid — BANHAO's own policy
+ * (DEC-055 Addendum A), computed here and only here. Matches the pre-existing
+ * 10-minute window `NullPaymentProvider` used to invent for itself; moving it
+ * here changes nothing about the duration, only who decides it. Never read
+ * off a provider result — `CreatePaymentResult.presentation` carries no
+ * expiry field at all.
+ */
+export const PAYMENT_ATTEMPT_TTL_MS = 10 * 60 * 1000;
+
+function computeAttemptExpiresAt(): string {
+  return new Date(Date.now() + PAYMENT_ATTEMPT_TTL_MS).toISOString();
+}
 
 /**
  * Payment states from which a repeat call to this endpoint must regenerate a
@@ -351,14 +381,21 @@ export class PaymentsService {
       throw new DomainError('PROVIDER_UNAVAILABLE', { message: 'Payment provider unavailable' });
     }
 
+    // Expiry is BANHAO's own policy, computed once here — never read off
+    // `result.presentation` (DEC-055 Addendum A: the provider contract
+    // carries no expiry field at all). Only set when there is a presentation
+    // to expire, mirroring the original null-together-with-qr_payload
+    // symmetry: an attempt with no QR has nothing for a countdown to guard.
+    const attemptExpiresAt = result.presentation ? computeAttemptExpiresAt() : null;
+
     const { data: insertedAttempt, error: insertError } = await this.supabase.admin
       .from('payment_attempts')
       .insert({
         payment_id: payment.id,
         attempt_no: nextAttemptNo,
         state: 'PENDING',
-        qr_payload: result.presentation?.value ?? null,
-        expires_at: result.presentation?.expiresAt ?? null,
+        qr_payload: result.presentation?.imageUrl ?? null,
+        expires_at: attemptExpiresAt,
       })
       .select('id, attempt_no, state, qr_payload, expires_at')
       .maybeSingle<PaymentAttemptRow>();
@@ -367,7 +404,10 @@ export class PaymentsService {
       if (isUniqueViolation(insertError)) {
         // Lost the attempt_no race — a concurrent regeneration already won.
         // Read back its attempt rather than retrying: the winner's write is
-        // exactly as valid as ours would have been (DEC-028).
+        // exactly as valid as ours would have been (DEC-028). This is a plain
+        // DB read, so — correctly — it never carries a hostedInstructionsUrl
+        // from *our* wasted provider call (see AttemptPresentation's own doc
+        // comment).
         const found = await this.fetchPaymentWithAttempt(orderId);
         if (found) {
           return this.toResponse(found.payment, found.attempt);
@@ -381,6 +421,15 @@ export class PaymentsService {
       throw new DomainError('INTERNAL_ERROR', { message: 'Payment regeneration returned no result' });
     }
 
+    // Merges the DB-confirmed row with the hostedInstructionsUrl this exact
+    // provider call just returned — never persisted (no column exists for
+    // it, DEC-055 Addendum A), so it must be carried through here rather than
+    // read back from `insertedAttempt` alone.
+    const attemptPresentation: AttemptPresentation = {
+      ...insertedAttempt,
+      hosted_instructions_url: result.presentation?.hostedInstructionsUrl,
+    };
+
     const { data: transitioned, error: paymentUpdateError } = await this.supabase.admin
       .from('payments')
       .update({ state: 'PENDING', provider_payment_id: result.providerPaymentId })
@@ -393,11 +442,11 @@ export class PaymentsService {
       this.logger.error(
         `payments PENDING transition failed while regenerating attempt ${nextAttemptNo} for order ${orderId}: ${paymentUpdateError.message}`,
       );
-      return this.toResponse(payment, insertedAttempt);
+      return this.toResponse(payment, attemptPresentation);
     }
 
     if (transitioned) {
-      return this.toResponse(transitioned, insertedAttempt);
+      return this.toResponse(transitioned, attemptPresentation);
     }
 
     // 0 rows: payments.state moved between the insert above and this UPDATE
@@ -410,7 +459,7 @@ export class PaymentsService {
       .eq('id', payment.id)
       .maybeSingle<PaymentRow>();
 
-    return this.toResponse(current ?? payment, insertedAttempt);
+    return this.toResponse(current ?? payment, attemptPresentation);
   }
 
   private async initializePayment(
@@ -473,9 +522,13 @@ export class PaymentsService {
       throw new DomainError('INTERNAL_ERROR', { message: 'Payment initiation returned no result' });
     }
 
+    // Expiry is BANHAO's own policy (DEC-055 Addendum A), computed once here
+    // — never read off `result.presentation`, which carries no expiry field
+    // at all. Only set when there is a presentation to expire.
     const attemptRow: AttemptPresentation = {
-      qr_payload: result.presentation?.value ?? null,
-      expires_at: result.presentation?.expiresAt ?? null,
+      qr_payload: result.presentation?.imageUrl ?? null,
+      expires_at: result.presentation ? computeAttemptExpiresAt() : null,
+      hosted_instructions_url: result.presentation?.hostedInstructionsUrl,
     };
 
     const { error: attemptError } = await this.supabase.admin.from('payment_attempts').insert({
@@ -500,9 +553,22 @@ export class PaymentsService {
       state: payment.state,
       amountSatang: payment.amount_satang,
       currency: payment.currency,
+      // `expiresAt` here is `payment_attempts.expires_at` — BANHAO's own
+      // attempt-lifecycle clock (DEC-055 Addendum A) — never a value read
+      // off a provider result. `hostedInstructionsUrl` is present only when
+      // this exact call minted it (see AttemptPresentation's own comment);
+      // omitted, not `undefined`, when absent, so it never appears in the
+      // wire response at all.
       qr:
         attempt?.qr_payload && attempt.expires_at
-          ? { value: attempt.qr_payload, expiresAt: attempt.expires_at }
+          ? {
+              type: 'QR_CODE',
+              imageUrl: attempt.qr_payload,
+              expiresAt: attempt.expires_at,
+              ...(attempt.hosted_instructions_url
+                ? { hostedInstructionsUrl: attempt.hosted_instructions_url }
+                : {}),
+            }
           : undefined,
     };
   }

@@ -40,7 +40,11 @@ const PAYMENT_RESULT = {
   state: 'PENDING',
   amountSatang: 7500,
   currency: 'THB',
-  qr: { value: 'NULL-QR:order-1:NULL-fixed-id', expiresAt: '2026-08-24T05:00:00.000Z' },
+  qr: {
+    type: 'QR_CODE' as const,
+    imageUrl: 'https://null-provider.local/qr/order-1/NULL-fixed-id.png',
+    expiresAt: '2026-08-24T05:00:00.000Z',
+  },
 };
 
 function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
