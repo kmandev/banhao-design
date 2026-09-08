@@ -3,6 +3,8 @@ import {
   DELIVERY_CONTACT_ATTEMPTS_REQUIRED,
   DELIVERY_FAILURE_WAIT_SECONDS,
   uuidSchema,
+  type AwaitingFailureDelivery,
+  type AwaitingFailureListResponse,
   type DeliveryFailureCause,
   type FailDeliveryRequest,
   type FailDeliveryResponse,
@@ -12,6 +14,12 @@ import { DomainError } from '../../common/errors/domain-error';
 import { getCorrelationId } from '../../common/correlation/correlation';
 import type { AuthenticatedUser } from '../../common/types';
 import { OrdersService } from '../orders/orders.service';
+import {
+  ARRIVAL_TIMEOUT_DELIVERY_STATE,
+  ARRIVAL_TIMEOUT_ORDER_STATE,
+  arrivalTimeoutCutoff,
+} from '../rider/arrival-timeout-policy';
+import { ARRIVAL_TIMEOUT_ACTION } from '../rider/arrival-timeout-escalation.service';
 
 /** `deliveries`, the columns this command reads and writes. */
 interface DeliveryRow {
@@ -53,6 +61,18 @@ const FAILABLE_ORDER_STATE = 'DELIVERING';
 
 /** The `audit_logs.action` this command records under. */
 const FAILURE_AUDIT_ACTION = 'DELIVERY_FAILURE_DECLARED';
+
+/** How many awaiting-failure rows one page reads. A bound on work, not a policy value. */
+const AWAITING_DEFAULT_LIMIT = 50;
+const AWAITING_MAX_LIMIT = 100;
+
+/** `deliveries` joined to its order, for the operator's working list. No money column is selected. */
+interface AwaitingFailureRow {
+  id: string;
+  order_id: string;
+  rider_id: string | null;
+  arrived_at: string;
+}
 
 /**
  * `POST /api/v1/admin/supervisor/deliveries/:id/fail` — BQ-017 Slice #2.
@@ -144,6 +164,199 @@ export class DeliveryFailureService {
     private readonly supabase: SupabaseService,
     private readonly orders: OrdersService,
   ) {}
+
+  /**
+   * The operator's working list — BQ-017 Slice #3.
+   *
+   * Deliveries that have been `ARRIVED` at the customer for at least DEC-053's
+   * five minutes and whose order is still `DELIVERING`. Read-only: nothing is
+   * claimed, assigned, locked or consumed, and a delivery leaves this list
+   * only by actually being resolved.
+   *
+   * ## Why it lives here rather than in `SupervisorCaseService`
+   *
+   * A *case* in that service is an `audit_logs` row written by an AI Operations
+   * playbook — it filters `actor_type = 'AI'` and `AI_OPS_*`, and its subject
+   * is whatever the agent escalated on. This list is neither: its rows are live
+   * `deliveries`, its eligibility is DEC-053's own precondition set, and its
+   * companion is {@link failDelivery} directly above it. Putting it beside the
+   * command means one class owns "what DEC-053 considers actionable", so the
+   * operator can never be shown a case the command would then refuse — which
+   * two independent copies of the predicate would eventually produce.
+   *
+   * The shared constants come from `arrival-timeout-policy.ts`, so this listing
+   * and `ArrivalTimeoutEscalationService` select the same population.
+   *
+   * ## What it deliberately does not carry
+   *
+   * No amount, fee, total, refund, payout or compensation — the projection
+   * discipline `docs/HUMAN_SUPERVISOR_CONTRACT.md` § 7 imposes on every
+   * supervisor surface, and here also because DEC-053's economics are blocked
+   * on Q-020 and BQ-024. No `causeCode`: the cause is what the operator
+   * decides, and offering one before they have would be the system proposing
+   * the economic outcome it may not choose.
+   *
+   * `failureResolvable` reports whether every DEC-053 precondition is already
+   * met. A `false` never hides a row — a delivery waiting on the rider's second
+   * contact attempt is often the one an operator most needs to see.
+   */
+  async listAwaitingFailure(limit = AWAITING_DEFAULT_LIMIT): Promise<AwaitingFailureListResponse> {
+    const bounded = Math.min(
+      Math.max(Math.trunc(limit) || AWAITING_DEFAULT_LIMIT, 1),
+      AWAITING_MAX_LIMIT,
+    );
+    const now = new Date();
+
+    const { data, error } = await this.supabase.admin
+      .from('deliveries')
+      .select('id, order_id, rider_id, arrived_at')
+      .eq('state', ARRIVAL_TIMEOUT_DELIVERY_STATE)
+      // `arrived_at` is DEC-054's anchor. A null cannot satisfy `.lte(...)`,
+      // so a delivery with no recorded arrival is excluded by the query
+      // itself rather than by a check that could be forgotten.
+      .lte('arrived_at', arrivalTimeoutCutoff(now))
+      .order('arrived_at', { ascending: true })
+      .limit(bounded)
+      .returns<AwaitingFailureRow[]>();
+
+    if (error) {
+      throw new DomainError('INTERNAL_ERROR', {
+        message: `Awaiting-failure read failed: ${error.message}`,
+      });
+    }
+
+    const rows = data ?? [];
+
+    if (rows.length === 0) {
+      return { deliveries: [], window: { limit: bounded, returned: 0, resolvableInWindow: 0 } };
+    }
+
+    // The order half of eligibility, plus the order number an operator needs
+    // to find the case in any other surface. Live state, never a snapshot.
+    const orders = await this.readDeliveringOrders(rows.map((row) => row.order_id));
+    const attempts = await this.countContactAttemptsFor(rows.map((row) => row.id));
+    const escalated = await this.listEscalatedIds(rows.map((row) => row.id));
+
+    const deliveries: AwaitingFailureDelivery[] = [];
+
+    for (const row of rows) {
+      const order = orders.get(row.order_id);
+
+      // An order that has ended some other way is not a case this operator can
+      // act on with the failure command, so it is not shown as one.
+      if (!order) {
+        continue;
+      }
+
+      const waitedSeconds = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(row.arrived_at).getTime()) / 1000),
+      );
+      const contactAttempts = attempts.get(row.id) ?? 0;
+
+      deliveries.push({
+        deliveryId: row.id,
+        orderId: row.order_id,
+        orderNumber: order.order_number,
+        riderId: row.rider_id,
+        deliveryState: ARRIVAL_TIMEOUT_DELIVERY_STATE,
+        orderState: ARRIVAL_TIMEOUT_ORDER_STATE,
+        arrivedAt: row.arrived_at,
+        waitedSeconds,
+        waitSecondsRequired: DELIVERY_FAILURE_WAIT_SECONDS,
+        contactAttempts,
+        contactAttemptsRequired: DELIVERY_CONTACT_ATTEMPTS_REQUIRED,
+        // Every DEC-053 precondition, evaluated exactly as `failDelivery`
+        // evaluates them — the wait is already implied by the query above.
+        failureResolvable: contactAttempts >= DELIVERY_CONTACT_ATTEMPTS_REQUIRED,
+        escalated: escalated.has(row.id),
+      });
+    }
+
+    return {
+      deliveries,
+      window: {
+        limit: bounded,
+        returned: deliveries.length,
+        resolvableInWindow: deliveries.filter((d) => d.failureResolvable).length,
+      },
+    };
+  }
+
+  /** The still-`DELIVERING` orders among these ids, keyed by id. No money column is selected. */
+  private async readDeliveringOrders(
+    orderIds: string[],
+  ): Promise<Map<string, { order_number: string }>> {
+    const { data, error } = await this.supabase.admin
+      .from('orders')
+      .select('id, order_number, state')
+      .in('id', [...new Set(orderIds)])
+      .eq('state', ARRIVAL_TIMEOUT_ORDER_STATE)
+      .returns<{ id: string; order_number: string; state: string }[]>();
+
+    if (error) {
+      throw new DomainError('INTERNAL_ERROR', {
+        message: `Awaiting-failure order read failed: ${error.message}`,
+      });
+    }
+
+    return new Map((data ?? []).map((row) => [row.id, { order_number: row.order_number }]));
+  }
+
+  /**
+   * Contact-attempt counts for a whole page, in one read.
+   *
+   * Counted from the rows rather than with a per-delivery `count` query: the
+   * cap is two per delivery (`delivery_contact_attempts`' own constraints), so
+   * a page of 100 deliveries reads at most 200 rows.
+   */
+  private async countContactAttemptsFor(deliveryIds: string[]): Promise<Map<string, number>> {
+    const { data, error } = await this.supabase.admin
+      .from('delivery_contact_attempts')
+      .select('delivery_id')
+      .in('delivery_id', deliveryIds)
+      .returns<{ delivery_id: string }[]>();
+
+    if (error) {
+      throw new DomainError('INTERNAL_ERROR', {
+        message: `Awaiting-failure contact attempt read failed: ${error.message}`,
+      });
+    }
+
+    const counts = new Map<string, number>();
+    for (const row of data ?? []) {
+      counts.set(row.delivery_id, (counts.get(row.delivery_id) ?? 0) + 1);
+    }
+    return counts;
+  }
+
+  /**
+   * Which of these deliveries the tick has already escalated.
+   *
+   * Presence only. An escalation is a record that the wait elapsed, never a
+   * claim on the work and never a precondition of resolving it — an operator
+   * who reaches a delivery before the tick does may still fail it.
+   *
+   * A read failure here degrades to "not escalated" rather than failing the
+   * whole listing: the flag is advisory, and losing it must not cost an
+   * operator their working list.
+   */
+  private async listEscalatedIds(deliveryIds: string[]): Promise<Set<string>> {
+    const { data, error } = await this.supabase.admin
+      .from('audit_logs')
+      .select('entity_id')
+      .eq('action', ARRIVAL_TIMEOUT_ACTION)
+      .eq('entity_type', 'delivery')
+      .in('entity_id', deliveryIds)
+      .returns<{ entity_id: string }[]>();
+
+    if (error) {
+      this.logger.error(`Awaiting-failure escalation read failed: ${error.message}`);
+      return new Set();
+    }
+
+    return new Set((data ?? []).map((row) => row.entity_id));
+  }
 
   async failDelivery(
     user: AuthenticatedUser,

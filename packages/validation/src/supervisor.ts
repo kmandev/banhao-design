@@ -254,3 +254,80 @@ export interface FailDeliveryResponse {
   /** `deliveries.failed_at`, the moment the failure was declared. */
   failedAt: string | null;
 }
+
+/**
+ * One delivery waiting on an operator's failure decision — BQ-017 Slice #3,
+ * `GET /api/v1/admin/supervisor/deliveries/awaiting-failure`.
+ *
+ * ## What it is, and what it is not
+ *
+ * It is the operator's working list for DEC-053: deliveries that have been
+ * `ARRIVED` at the customer for at least the approved wait and whose order is
+ * still `DELIVERING`. It is a **derived view of live domain state**, not a
+ * queue and not a work item — nothing is claimed, assigned or consumed by
+ * reading it, and a delivery leaves the list only by actually being resolved.
+ *
+ * It is **not** an assertion that the delivery should fail. DEC-053 § 2 makes
+ * the operator the authority; this listing says a case needs a person to look,
+ * which is the whole of what a timer may say.
+ *
+ * ## No financial field, and no cause
+ *
+ * No amount, fee, total, refund, payout or compensation appears — the same
+ * projection discipline `docs/HUMAN_SUPERVISOR_CONTRACT.md` § 7 imposes on
+ * every supervisor surface, and here for the additional reason that DEC-053's
+ * economics are blocked on Q-020 and BQ-024.
+ *
+ * There is deliberately **no `causeCode`**. A cause is what the operator
+ * decides; presenting one before they have would be the system proposing the
+ * economic outcome it is forbidden to choose.
+ */
+export interface AwaitingFailureDelivery {
+  deliveryId: string;
+  orderId: string;
+  orderNumber: string;
+  /** `deliveries.rider_id`, or null when the delivery somehow carries none. Needed to locate the rider on the ground. */
+  riderId: string | null;
+  /** Always `ARRIVED` for a row in this list — stated rather than assumed, since the console renders it. */
+  deliveryState: string;
+  /** Always `DELIVERING` — the order-domain name for the same step (DEC-018). */
+  orderState: string;
+  /** ISO-8601. `deliveries.arrived_at` — DEC-054's anchor, never merchant arrival. */
+  arrivedAt: string;
+  /** Whole seconds since {@link arrivedAt}, derived at read time. */
+  waitedSeconds: number;
+  /** DEC-053 § 3's five minutes, so the console states the policy rather than hard-coding it. */
+  waitSecondsRequired: number;
+  /** How many customer contact attempts the rider has recorded. */
+  contactAttempts: number;
+  /** DEC-053 § 3's two, for the same reason as `waitSecondsRequired`. */
+  contactAttemptsRequired: number;
+  /**
+   * Whether every DEC-053 precondition is already satisfied, so the console
+   * can distinguish "ready to resolve" from "still waiting on the rider's
+   * second contact attempt" without re-deriving the policy itself.
+   *
+   * `false` never hides the row: a delivery an operator cannot yet resolve is
+   * often exactly the one they most need to see.
+   */
+  failureResolvable: boolean;
+  /** Whether the tick has already recorded an escalation for this delivery. Presence, not a claim on the work. */
+  escalated: boolean;
+}
+
+/**
+ * `GET /api/v1/admin/supervisor/deliveries/awaiting-failure`.
+ *
+ * `window` is reported rather than assumed, exactly as
+ * {@link SupervisorCaseListResponse} does: this reads a bounded page and any
+ * count taken from it is a count of *this page*.
+ */
+export interface AwaitingFailureListResponse {
+  deliveries: AwaitingFailureDelivery[];
+  window: {
+    limit: number;
+    returned: number;
+    /** How many of the returned rows already satisfy every DEC-053 precondition. */
+    resolvableInWindow: number;
+  };
+}

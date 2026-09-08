@@ -70,6 +70,10 @@ function makeStub() {
 /** The DEC-053 failure command's service, stubbed at the boundary. */
 function makeFailureStub() {
   return {
+    listAwaitingFailure: jest.fn().mockResolvedValue({
+      deliveries: [],
+      window: { limit: 50, returned: 0, resolvableInWindow: 0 },
+    }),
     failDelivery: jest.fn().mockResolvedValue({
       deliveryId: DELIVERY_ID,
       orderId: 'order-1',
@@ -136,6 +140,11 @@ const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post'; path: string
     body: { outcome: 'RESOLVED', reason: 'ปิดเคส' },
   },
   {
+    name: 'awaiting failure',
+    method: 'get',
+    path: '/api/v1/admin/supervisor/deliveries/awaiting-failure',
+  },
+  {
     name: 'fail delivery',
     method: 'post',
     path: `/api/v1/admin/supervisor/deliveries/${DELIVERY_ID}/fail`,
@@ -158,9 +167,13 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   function serviceWasCalled(): boolean {
-    return [stub.listCases, stub.getCase, stub.resolveCase, failures.failDelivery].some(
-      (fn) => fn.mock.calls.length > 0,
-    );
+    return [
+      stub.listCases,
+      stub.getCase,
+      stub.resolveCase,
+      failures.failDelivery,
+      failures.listAwaitingFailure,
+    ].some((fn) => fn.mock.calls.length > 0);
   }
 
   it.each(ROUTES)('refuses an anonymous caller on $name with 401', async (route) => {

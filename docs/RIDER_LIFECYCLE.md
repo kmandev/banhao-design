@@ -135,16 +135,28 @@ stateDiagram-v2
 **`RIDER_SEARCHING` has no timeout that cancels anything.** It loops until a
 rider accepts or an operator decides otherwise — DEC-022.
 
-⬦ **`ARRIVED` is `ACCEPTED` policy (DEC-054) and not implemented.** Two
-arrivals exist and must never be conflated: **`AT_MERCHANT` is arrival at the
-shop** — the existing `POST /api/v1/rider/deliveries/:id/arrived`, unchanged —
-while **`ARRIVED` is arrival at the customer's delivery location**, a new
-transition whose timestamp is the authoritative anchor for DEC-053's
-five-minute wait. The timer must never start at merchant arrival. `ARRIVED` is
-not yet in `deliveries.state`'s CHECK constraint and there is no
-customer-arrival timestamp column, so implementing it needs an additive
-migration under its own explicit instruction. The direct `EN_ROUTE → DELIVERED`
-edge is what the runtime does **today**, before `ARRIVED` exists.
+⬦ **`ARRIVED` is `ACCEPTED` policy (DEC-054) and now implemented** (BQ-017
+Slices #1–#3). Two arrivals exist and must never be conflated:
+**`AT_MERCHANT` is arrival at the shop** — the existing
+`POST /api/v1/rider/deliveries/:id/arrived`, unchanged — while **`ARRIVED` is
+arrival at the customer's delivery location**, reached by
+`POST /api/v1/rider/deliveries/:id/arrived-at-customer`, whose `arrived_at`
+timestamp is the authoritative anchor for DEC-053's five-minute wait. The timer
+never starts at merchant arrival.
+
+The direct `EN_ROUTE → DELIVERED` edge is **deliberately retained**: neither
+DEC-053 nor DEC-054 makes tapping arrival a precondition of delivering, so a
+rider who never taps it is never blocked.
+
+**The five-minute wait escalates; it never fails.** A tick phase raises one
+append-only `audit_logs` escalation per eligible delivery and issues no
+`UPDATE` at all, and an operator then works the case from
+`GET /api/v1/admin/supervisor/deliveries/awaiting-failure`. Only
+`POST /api/v1/admin/supervisor/deliveries/:id/fail` moves the delivery — DEC-053
+§ 2 makes the operator the authority, so `ARRIVED + 5 min → FAILED` is a
+sequence this system deliberately cannot perform on its own. The **economic**
+consequences DEC-053 defines remain unimplemented: refunds are blocked on
+**Q-020** and rider compensation on **BQ-024**.
 
 Mapping to Order state (the customer-facing single source of truth, REQ-002):
 
@@ -155,9 +167,9 @@ Mapping to Order state (the customer-facing single source of truth, REQ-002):
 | `RIDER_REASSIGNING` | **unchanged** — DEC-021 | Searching again; the order is untouched |
 | `PICKED_UP` | `PICKED_UP` | — |
 | `EN_ROUTE` | `DELIVERING` | — |
-| `ARRIVED` ⬦ | `DELIVERING` | Rider at the customer's door — **DEC-054**, not implemented. Timer anchor for DEC-053 |
+| `ARRIVED` ⬦ | `DELIVERING` | Rider at the customer's door — **DEC-054**, implemented. Timer anchor for DEC-053; the order does not move (DEC-018) |
 | `DELIVERED` | `DELIVERED` | — |
-| `FAILED` | `DELIVERY_FAILED` | **`ACCEPTED` — DEC-053** (operator-declared after 2 contact attempts and a 5-minute wait from **customer arrival**, `ARRIVED` — never merchant arrival). **Not implemented** — nothing writes either state. **DEC-054 grants a narrow DEC-APP-006 carve-out** allowing `DELIVERY_FAILED` on this path only, with **BQ-013 still `OPEN`** |
+| `FAILED` | `DELIVERY_FAILED` | **`ACCEPTED` — DEC-053** (operator-declared after 2 contact attempts and a 5-minute wait from **customer arrival**, `ARRIVED` — never merchant arrival). **Operationally implemented**: the operator command writes both states, closes the rider's assignment as `CANCELLED` and releases their availability slot; the customer and merchant are notified once (`OrderDeliveryFailed`). **Economics unimplemented** — Q-020, BQ-024. **DEC-054 grants a narrow DEC-APP-006 carve-out** allowing `DELIVERY_FAILED` on this path only, with **BQ-013 still `OPEN`** |
 
 Operator **force-unassign** (`ปุ่มบังคับปลดงาน`) is `ACCEPTED` (DEC-032) and
 routes through `RIDER_REASSIGNING` with an audit record.

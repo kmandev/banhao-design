@@ -10,6 +10,10 @@ import {
   type NoRiderEscalationResult,
 } from '../rider/no-rider-escalation.service';
 import {
+  ArrivalTimeoutEscalationService,
+  type ArrivalTimeoutEscalationResult,
+} from '../rider/arrival-timeout-escalation.service';
+import {
   ProofPhotoRetentionService,
   type ProofPhotoRetentionResult,
 } from '../rider/proof-photo-retention.service';
@@ -31,6 +35,8 @@ export interface TickAcceptedResponse {
   dispatch: DispatchRoundResult;
   /** DEC-022 — the no-rider escalation check this tick ran (Phase H final gap). */
   noRiderEscalation: NoRiderEscalationResult;
+  /** DEC-053 § 3 — the five-minute customer-arrival wait check this tick ran (BQ-017). Escalation only; it never fails a delivery. */
+  arrivalTimeoutEscalation: ArrivalTimeoutEscalationResult;
   /** DEC-039 — the POD proof-photo retention purge this tick ran. */
   podRetention: ProofPhotoRetentionResult;
   /** H-2 — the outbox notification dispatch round this tick ran (ADR-005, ADR-011). */
@@ -79,6 +85,23 @@ export interface TickAcceptedResponse {
  * this same tick rather than waiting for the next one. It follows the same
  * never-throws contract `NoRiderEscalationService` documents on itself.
  *
+ * `arrivalTimeoutEscalation` (DEC-053 § 3, BQ-017 Slice #3) runs right after
+ * `noRiderEscalation` — same rider/delivery domain, same elapsed-time shape,
+ * and placed among the delivery checks rather than at the end because nothing
+ * else in this sequence touches an `ARRIVED` delivery: `dispatch` works
+ * `RIDER_SEARCHING`, `noRiderEscalation` the same, `podRetention` only
+ * `DELIVERED` ones, and the two AI phases read the outbox rather than
+ * `deliveries`. No earlier phase can therefore make an eligible case
+ * disappear before this one sees it.
+ *
+ * It is an **escalation only**. It issues no UPDATE at all: it records an
+ * append-only `audit_logs` row for an operator and changes no delivery, order,
+ * assignment, availability or financial row. DEC-053 § 2 reserves the failure
+ * declaration for the operator, so a tick that could declare one would make
+ * that authority advisory — the same reasoning `noRiderEscalation` records for
+ * DEC-022's "cancellation is a decision, never a timeout". It follows the same
+ * never-throws contract as every phase above it.
+ *
  * `outboxDispatch` (H-2, ADR-005/ADR-011) runs next, additive in the same
  * way, and follows the same never-throws contract `OutboxDispatchService`
  * documents on itself.
@@ -105,6 +128,7 @@ export class TickController {
     private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
     private readonly dispatch: DispatchService,
     private readonly noRiderEscalation: NoRiderEscalationService,
+    private readonly arrivalTimeoutEscalation: ArrivalTimeoutEscalationService,
     private readonly podRetention: ProofPhotoRetentionService,
     private readonly outboxDispatch: OutboxDispatchService,
     private readonly aiOps: MerchantAcceptanceTimeoutService,
@@ -121,6 +145,7 @@ export class TickController {
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
     const dispatch = await this.dispatch.runDispatchRound();
     const noRiderEscalation = await this.noRiderEscalation.run();
+    const arrivalTimeoutEscalation = await this.arrivalTimeoutEscalation.run();
     const podRetention = await this.podRetention.run();
     const outboxDispatch = await this.outboxDispatch.dispatchPending();
     const aiOps = await this.aiOps.run();
@@ -131,6 +156,7 @@ export class TickController {
       paymentAttemptExpiry,
       dispatch,
       noRiderEscalation,
+      arrivalTimeoutEscalation,
       podRetention,
       outboxDispatch,
       aiOps,

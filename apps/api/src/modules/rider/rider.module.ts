@@ -14,6 +14,7 @@ import { DeliveryProofService } from './delivery-proof.service';
 import { DeliveryPickupService } from './delivery-pickup.service';
 import { DispatchService } from './dispatch.service';
 import { NoRiderEscalationService } from './no-rider-escalation.service';
+import { ArrivalTimeoutEscalationService } from './arrival-timeout-escalation.service';
 import { ProofPhotoRetentionService } from './proof-photo-retention.service';
 import { DISPATCH_STRATEGY } from './dispatch-strategy.interface';
 import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
@@ -28,7 +29,8 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
  * abstraction, and it is why `DispatchService` owns the round while the
  * strategy owns only candidate selection.
  *
- * `DispatchService`, `NoRiderEscalationService` (DEC-022) and
+ * `DispatchService`, `NoRiderEscalationService` (DEC-022),
+ * `ArrivalTimeoutEscalationService` (DEC-053 § 3) and
  * `ProofPhotoRetentionService` (DEC-039) are exported for `TickModule`,
  * exactly as `PaymentEventProcessingService` and `PaymentAttemptExpiryService`
  * are — the scheduled tick is a caller of this module, never the other way
@@ -63,11 +65,13 @@ import { BroadcastDispatchStrategy } from './broadcast-dispatch.strategy';
     DeliveryProofService,
     DispatchService,
     NoRiderEscalationService,
+    ArrivalTimeoutEscalationService,
     ProofPhotoRetentionService,
   ],
   exports: [
     DispatchService,
     NoRiderEscalationService,
+    ArrivalTimeoutEscalationService,
     ProofPhotoRetentionService,
     // Exported for Phase J's no-rider triage projection, which needs the size
     // of the pool dispatch would broadcast to right now. Exporting the seam

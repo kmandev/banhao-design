@@ -422,13 +422,39 @@ describe('Phase I — the controller boundary', () => {
       (name) => name !== 'constructor',
     );
 
-    // Three reads, one audit-only write, and `failDelivery` — the single
+    // Four reads (`awaitingFailure` is BQ-017 Slice #3's operator working
+    // list, read-only), one audit-only write, and `failDelivery` — the single
     // command DEC-054 carved out of DEC-APP-006 for DEC-053's post-pickup
     // failure path. Every other operational command remains ABSENT rather
     // than disabled: no cancel, release, redispatch, pause, refund, ledger or
     // settlement route exists here, because each is still gated on an open
     // decision (BQ-013, UX-Q-006, Q-001, Q-002, Q-020, Q-032).
-    expect(methods.sort()).toEqual(['detail', 'failDelivery', 'list', 'me', 'resolve']);
+    expect(methods.sort()).toEqual([
+      'awaitingFailure',
+      'detail',
+      'failDelivery',
+      'list',
+      'me',
+      'resolve',
+    ]);
+  });
+
+  /**
+   * BQ-017 Slice #3. The escalation surface must stay read-only: the timer
+   * raises attention, and only `failDelivery` moves state.
+   */
+  it('exposes exactly one state-changing method, however many read surfaces exist', () => {
+    const methods = Object.getOwnPropertyNames(SupervisorController.prototype).filter(
+      (name) => name !== 'constructor',
+    );
+    const mutating = methods.filter((name) => name === 'failDelivery' || name === 'resolve');
+
+    expect(mutating.sort()).toEqual(['failDelivery', 'resolve']);
+    // `resolve` writes an audit row only; `failDelivery` is the sole route
+    // that moves a delivery or an order.
+    expect(methods).not.toContain('resolveEscalation');
+    expect(methods).not.toContain('dismissEscalation');
+    expect(methods).not.toContain('claimEscalation');
   });
 
   it.each([

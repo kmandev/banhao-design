@@ -3,6 +3,7 @@ import type { PaymentEventProcessingService } from '../payments/payment-event-pr
 import type { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import type { DispatchService } from '../rider/dispatch.service';
 import type { NoRiderEscalationService } from '../rider/no-rider-escalation.service';
+import type { ArrivalTimeoutEscalationService } from '../rider/arrival-timeout-escalation.service';
 import type { ProofPhotoRetentionService } from '../rider/proof-photo-retention.service';
 import type { OutboxDispatchService } from '../notifications/outbox-dispatch.service';
 import type { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-acceptance-timeout.service';
@@ -39,6 +40,7 @@ describe('TickController', () => {
     noRiderEscalationResult = { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
     aiOpsResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
     aiOpsNoRiderResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
+    arrivalTimeoutResult = { examined: 0, escalated: 0, skipped: 0, failed: 0 },
   ) {
     const processPendingEvents = jest.fn().mockResolvedValue(paymentEventsResult);
     const processExpiredAttempts = jest.fn().mockResolvedValue(expiryResult);
@@ -48,6 +50,10 @@ describe('TickController', () => {
     const dispatch = { runDispatchRound } as unknown as DispatchService;
     const runNoRiderEscalation = jest.fn().mockResolvedValue(noRiderEscalationResult);
     const noRiderEscalation = { run: runNoRiderEscalation } as unknown as NoRiderEscalationService;
+    const runArrivalTimeout = jest.fn().mockResolvedValue(arrivalTimeoutResult);
+    const arrivalTimeoutEscalation = {
+      run: runArrivalTimeout,
+    } as unknown as ArrivalTimeoutEscalationService;
     const run = jest.fn().mockResolvedValue(podRetentionResult);
     const podRetention = { run } as unknown as ProofPhotoRetentionService;
     const dispatchPending = jest.fn().mockResolvedValue(outboxDispatchResult);
@@ -61,6 +67,7 @@ describe('TickController', () => {
       paymentAttemptExpiry,
       dispatch,
       noRiderEscalation,
+      arrivalTimeoutEscalation,
       podRetention,
       outboxDispatch,
       aiOps,
@@ -72,6 +79,7 @@ describe('TickController', () => {
       processExpiredAttempts,
       runDispatchRound,
       runNoRiderEscalation,
+      runArrivalTimeout,
       run,
       dispatchPending,
       runAiOps,
@@ -91,6 +99,7 @@ describe('TickController', () => {
       paymentAttemptExpiry: { expired: 1, skipped: 0 },
       dispatch: { deliveries: 3, offers: 7, expiredOffers: 2 },
       noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
+  arrivalTimeoutEscalation: { examined: 0, escalated: 0, skipped: 0, failed: 0 },
       podRetention: {
         enabled: false,
         referencedCandidates: 0,
@@ -141,6 +150,9 @@ describe('TickController', () => {
       'paymentAttemptExpiry',
       'dispatch',
       'noRiderEscalation',
+      // BQ-017 Slice #3 — DEC-053's five-minute customer-arrival wait, placed
+      // among the delivery checks rather than at the end. Escalation only.
+      'arrivalTimeoutEscalation',
       'podRetention',
       'outboxDispatch',
       'aiOps',
@@ -175,6 +187,65 @@ describe('TickController', () => {
     expect(runNoRiderEscalation).toHaveBeenCalledWith();
     expect(result.noRiderEscalation).toEqual(noRiderEscalationResult);
     expect(result.accepted).toBe(true);
+  });
+
+  it('runs the customer-arrival timeout check exactly once per tick — DEC-053 § 3, BQ-017', async () => {
+    const arrivalTimeoutResult = { examined: 4, escalated: 2, skipped: 2, failed: 0 };
+    const { controller, runArrivalTimeout } = build(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      arrivalTimeoutResult,
+    );
+
+    const result = await controller.handle();
+
+    expect(runArrivalTimeout).toHaveBeenCalledTimes(1);
+    expect(runArrivalTimeout).toHaveBeenCalledWith();
+    expect(result.arrivalTimeoutEscalation).toEqual(arrivalTimeoutResult);
+    expect(result.accepted).toBe(true);
+  });
+
+  /**
+   * The escalation must not run after a phase that could remove an eligible
+   * case from under it. Nothing in this sequence touches an `ARRIVED`
+   * delivery — dispatch and the no-rider check work `RIDER_SEARCHING`,
+   * retention works `DELIVERED`, and the AI phases read the outbox — but the
+   * ordering is pinned so a future phase cannot be inserted ahead of it
+   * without this failing.
+   */
+  it('runs the arrival-timeout check after the no-rider check and before POD retention', async () => {
+    const order: string[] = [];
+    const { controller, runNoRiderEscalation, runArrivalTimeout, run } = build();
+
+    runNoRiderEscalation.mockImplementation(async () => {
+      order.push('noRider');
+      return { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 };
+    });
+    runArrivalTimeout.mockImplementation(async () => {
+      order.push('arrivalTimeout');
+      return { examined: 0, escalated: 0, skipped: 0, failed: 0 };
+    });
+    run.mockImplementation(async () => {
+      order.push('podRetention');
+      return {
+        enabled: false,
+        referencedCandidates: 0,
+        orphanCandidates: 0,
+        purged: 0,
+        skipped: 0,
+        failed: 0,
+      };
+    });
+
+    await controller.handle();
+
+    expect(order).toEqual(['noRider', 'arrivalTimeout', 'podRetention']);
   });
 
   it('runs the POD retention pass exactly once per tick — DEC-039, no scheduler of its own', async () => {

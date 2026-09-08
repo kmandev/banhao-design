@@ -25,6 +25,8 @@ interface Recorded {
   table: string;
   op: 'select' | 'insert' | 'update' | 'count';
   eq: Record<string, unknown>;
+  lte: Record<string, unknown>;
+  inFilters: Record<string, readonly unknown[]>;
   payload?: Record<string, unknown>;
 }
 
@@ -35,7 +37,7 @@ function supabaseStub(results: Result[]) {
 
   const admin = {
     from(table: string) {
-      const call: Recorded = { table, op: 'select', eq: {} };
+      const call: Recorded = { table, op: 'select', eq: {}, lte: {}, inFilters: {} };
       calls.push(call);
 
       const builder: Record<string, unknown> = {
@@ -62,6 +64,17 @@ function supabaseStub(results: Result[]) {
           }
           return builder;
         },
+        lte(column: string, value: unknown) {
+          call.lte[column] = value;
+          return builder;
+        },
+        in(column: string, values: readonly unknown[]) {
+          call.inFilters[column] = values;
+          return builder;
+        },
+        order: () => builder,
+        limit: () => builder,
+        returns: () => Promise.resolve(nextResult()),
         maybeSingle: () => Promise.resolve(nextResult()),
         then: (resolve: (r: Result) => unknown) => Promise.resolve(nextResult()).then(resolve),
       };
@@ -329,6 +342,224 @@ describe('DeliveryFailureService — a successful failure resolution', () => {
     // And nothing financial was written onto the delivery either.
     const claim = calls.find((c) => c.table === 'deliveries' && c.op === 'update');
     expect(claim?.payload).not.toHaveProperty('rider_earning_satang');
+  });
+});
+
+/**
+ * BQ-017 Slice #3 — the operator's working list. Read-only: a delivery leaves
+ * it by being resolved, never by being read.
+ */
+describe('DeliveryFailureService — the awaiting-failure listing', () => {
+  const OTHER_DELIVERY = 'delivery-2';
+  const OTHER_ORDER = 'order-2';
+
+  /** The scan, the order read, the attempt read, then the escalation read. */
+  function listing(
+    deliveries: Array<Record<string, unknown>>,
+    orders: Array<Record<string, unknown>>,
+    attempts: Array<{ delivery_id: string }>,
+    escalated: string[] = [],
+  ): Result[] {
+    return [
+      { data: deliveries, error: null },
+      { data: orders, error: null },
+      { data: attempts, error: null },
+      { data: escalated.map((entity_id) => ({ entity_id })), error: null },
+    ];
+  }
+
+  function arrivedRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: DELIVERY_ID,
+      order_id: ORDER_ID,
+      rider_id: RIDER_ID,
+      arrived_at: LONG_AGO,
+      ...overrides,
+    };
+  }
+
+  function deliveringOrder(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return { id: ORDER_ID, order_number: 'BH-20260907-0001', state: 'DELIVERING', ...overrides };
+  }
+
+  it('returns an eligible delivery with everything an operator needs to locate it', async () => {
+    const { supabase } = supabaseStub(
+      listing(
+        [arrivedRow()],
+        [deliveringOrder()],
+        [{ delivery_id: DELIVERY_ID }, { delivery_id: DELIVERY_ID }],
+      ),
+    );
+
+    const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    expect(result.deliveries).toHaveLength(1);
+    expect(result.deliveries[0]).toMatchObject({
+      deliveryId: DELIVERY_ID,
+      orderId: ORDER_ID,
+      orderNumber: 'BH-20260907-0001',
+      riderId: RIDER_ID,
+      deliveryState: 'ARRIVED',
+      orderState: 'DELIVERING',
+      arrivedAt: LONG_AGO,
+      contactAttempts: 2,
+      contactAttemptsRequired: 2,
+      waitSecondsRequired: 300,
+      failureResolvable: true,
+      escalated: false,
+    });
+    expect(result.deliveries[0]?.waitedSeconds).toBeGreaterThanOrEqual(300);
+  });
+
+  it('anchors the scan on arrived_at and the ARRIVED state, never an earlier milestone', async () => {
+    const { supabase, calls } = supabaseStub(
+      listing([arrivedRow()], [deliveringOrder()], []),
+    );
+
+    await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    const scan = calls[0];
+    expect(scan?.table).toBe('deliveries');
+    expect(scan?.eq).toMatchObject({ state: 'ARRIVED' });
+    expect(Object.keys(scan?.lte ?? {})).toEqual(['arrived_at']);
+  });
+
+  it('exposes no financial field and no cause', async () => {
+    const { supabase } = supabaseStub(
+      listing([arrivedRow()], [deliveringOrder()], [{ delivery_id: DELIVERY_ID }]),
+    );
+
+    const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    const serialised = JSON.stringify(result).toLowerCase();
+    for (const forbidden of [
+      'satang',
+      'refund',
+      'amount',
+      'total',
+      'payout',
+      'compensation',
+      'commission',
+      'causecode',
+      'failure_cause',
+    ]) {
+      expect(serialised).not.toContain(forbidden);
+    }
+  });
+
+  it('selects no money column from orders', async () => {
+    const { supabase, calls } = supabaseStub(
+      listing([arrivedRow()], [deliveringOrder()], []),
+    );
+
+    await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    const orderRead = calls.find((c) => c.table === 'orders');
+    expect(orderRead?.eq).toMatchObject({ state: 'DELIVERING' });
+    expect(orderRead?.op).toBe('select');
+  });
+
+  it('reports a delivery that has not yet met the contact requirement, without hiding it', async () => {
+    const { supabase } = supabaseStub(
+      listing([arrivedRow()], [deliveringOrder()], [{ delivery_id: DELIVERY_ID }]),
+    );
+
+    const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    expect(result.deliveries).toHaveLength(1);
+    expect(result.deliveries[0]).toMatchObject({ contactAttempts: 1, failureResolvable: false });
+    expect(result.window.resolvableInWindow).toBe(0);
+  });
+
+  it('omits a delivery whose order is no longer DELIVERING', async () => {
+    const { supabase } = supabaseStub(
+      // The order read returns nothing for it.
+      listing([arrivedRow()], [], []),
+    );
+
+    const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    expect(result.deliveries).toHaveLength(0);
+  });
+
+  it('reports whether the tick has already escalated each delivery', async () => {
+    const { supabase } = supabaseStub(
+      listing(
+        [arrivedRow(), arrivedRow({ id: OTHER_DELIVERY, order_id: OTHER_ORDER })],
+        [deliveringOrder(), deliveringOrder({ id: OTHER_ORDER, order_number: 'BH-20260907-0002' })],
+        [],
+        [DELIVERY_ID],
+      ),
+    );
+
+    const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    expect(result.deliveries.map((d) => [d.deliveryId, d.escalated])).toEqual([
+      [DELIVERY_ID, true],
+      [OTHER_DELIVERY, false],
+    ]);
+  });
+
+  it('returns an empty page rather than reading further when nothing is overdue', async () => {
+    const { supabase, calls } = supabaseStub([{ data: [], error: null }]);
+
+    const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    expect(result).toEqual({
+      deliveries: [],
+      window: { limit: 50, returned: 0, resolvableInWindow: 0 },
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('bounds the page size, and never reads unbounded', async () => {
+    for (const [requested, expected] of [
+      [undefined, 50],
+      [10, 10],
+      [500, 100],
+      [0, 50],
+      [-5, 1],
+    ] as const) {
+      const { supabase } = supabaseStub([{ data: [], error: null }]);
+      const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure(
+        requested,
+      );
+      expect(result.window.limit).toBe(expected);
+    }
+  });
+
+  it('writes nothing at all — reading the list claims no work', async () => {
+    const { supabase, calls } = supabaseStub(
+      listing([arrivedRow()], [deliveringOrder()], [{ delivery_id: DELIVERY_ID }]),
+    );
+
+    await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    expect(calls.filter((c) => c.op === 'insert')).toHaveLength(0);
+    expect(calls.filter((c) => c.op === 'update')).toHaveLength(0);
+  });
+
+  it('degrades to "not escalated" rather than failing the listing when the escalation read errors', async () => {
+    const { supabase } = supabaseStub([
+      { data: [arrivedRow()], error: null },
+      { data: [deliveringOrder()], error: null },
+      { data: [], error: null },
+      { data: null, error: { message: 'connection reset' } },
+    ]);
+
+    const result = await buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure();
+
+    expect(result.deliveries).toHaveLength(1);
+    expect(result.deliveries[0]?.escalated).toBe(false);
+  });
+
+  it('surfaces a delivery read failure as INTERNAL_ERROR', async () => {
+    const { supabase } = supabaseStub([{ data: null, error: { message: 'connection reset' } }]);
+
+    await expectDomainError(
+      buildService(supabase, ordersStub(jest.fn())).listAwaitingFailure(),
+      'INTERNAL_ERROR',
+    );
   });
 });
 
@@ -712,6 +943,111 @@ describe('DeliveryFailureService — idempotency and conflicting causes', () => 
       buildService(supabase, ordersStub(failOrder)).failDelivery(staffUser(), DELIVERY_ID, REQUEST),
       'INVALID_TRANSITION',
     );
+  });
+});
+
+/**
+ * BQ-017 Slice #3, Part 5. The failure event must reach the customer and the
+ * merchant exactly once per declared failure — never twice for a retry, and
+ * never at all for a refusal.
+ */
+describe('DeliveryFailureService — OrderDeliveryFailed is emitted exactly once', () => {
+  it('emits it once for a successful declaration', async () => {
+    const { supabase, calls } = supabaseStub(happyPath());
+    const failOrder = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERY_FAILED' });
+
+    await buildService(supabase, ordersStub(failOrder)).failDelivery(staffUser(), DELIVERY_ID, REQUEST);
+
+    const outbox = calls.filter((c) => c.table === 'outbox');
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.payload).toMatchObject({ event_type: 'OrderDeliveryFailed' });
+  });
+
+  it('emits no second event on a same-cause retry', async () => {
+    const { supabase, calls } = supabaseStub([
+      deliveryRow({ state: 'FAILED', failed_at: FAILED_AT, failure_cause: 'CUSTOMER_UNREACHABLE' }),
+      ASSIGNMENT_CLOSED,
+      SLOT_RELEASED,
+    ]);
+    const failOrder = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERY_FAILED' });
+
+    const result = await buildService(supabase, ordersStub(failOrder)).failDelivery(
+      staffUser(),
+      DELIVERY_ID,
+      REQUEST,
+    );
+
+    expect(result.state).toBe('FAILED');
+    expect(calls.filter((c) => c.table === 'outbox')).toHaveLength(0);
+  });
+
+  it('emits nothing for a different-cause retry, which is rejected', async () => {
+    const { supabase, calls } = supabaseStub([
+      deliveryRow({ state: 'FAILED', failed_at: FAILED_AT, failure_cause: 'RIDER_CAUSED' }),
+    ]);
+    const failOrder = jest.fn();
+
+    await expectDomainError(
+      buildService(supabase, ordersStub(failOrder)).failDelivery(staffUser(), DELIVERY_ID, REQUEST),
+      'CONFLICT',
+    );
+
+    expect(calls.filter((c) => c.table === 'outbox')).toHaveLength(0);
+  });
+
+  it('emits nothing when a precondition refuses the declaration', async () => {
+    const { supabase, calls } = supabaseStub([deliveryRow(), orderRow(), attemptCount(0)]);
+    const failOrder = jest.fn();
+
+    await expectDomainError(
+      buildService(supabase, ordersStub(failOrder)).failDelivery(staffUser(), DELIVERY_ID, REQUEST),
+      'CONFLICT',
+    );
+
+    expect(calls.filter((c) => c.table === 'outbox')).toHaveLength(0);
+  });
+
+  it('emits nothing when the delivery is in a state that cannot be failed', async () => {
+    const { supabase, calls } = supabaseStub([deliveryRow({ state: 'EN_ROUTE' })]);
+    const failOrder = jest.fn();
+
+    await expectDomainError(
+      buildService(supabase, ordersStub(failOrder)).failDelivery(staffUser(), DELIVERY_ID, REQUEST),
+      'INVALID_TRANSITION',
+    );
+
+    expect(calls.filter((c) => c.table === 'outbox')).toHaveLength(0);
+  });
+
+  it('names only this delivery and its own order in the event', async () => {
+    const { supabase, calls } = supabaseStub(happyPath());
+    const failOrder = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERY_FAILED' });
+
+    await buildService(supabase, ordersStub(failOrder)).failDelivery(staffUser(), DELIVERY_ID, REQUEST);
+
+    const outbox = calls.find((c) => c.table === 'outbox');
+    expect(outbox?.payload).toMatchObject({
+      aggregate_type: 'delivery',
+      aggregate_id: DELIVERY_ID,
+    });
+  });
+
+  /**
+   * The payload travels to a customer's and a merchant's notification. It must
+   * carry no operator identity, no reason text and no audit detail.
+   */
+  it('leaks no staff identity, operator reason or audit detail into the event', async () => {
+    const { supabase, calls } = supabaseStub(happyPath());
+    const failOrder = jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERY_FAILED' });
+
+    await buildService(supabase, ordersStub(failOrder)).failDelivery(staffUser(), DELIVERY_ID, REQUEST);
+
+    const serialised = JSON.stringify(calls.find((c) => c.table === 'outbox')?.payload);
+    expect(serialised).not.toContain(STAFF_USER_ID);
+    expect(serialised).not.toContain(REQUEST.reason);
+    expect(serialised).not.toContain('staffRole');
+    expect(serialised).not.toContain('CUSTOMER_UNREACHABLE');
+    expect(serialised.toLowerCase()).not.toContain('satang');
   });
 });
 

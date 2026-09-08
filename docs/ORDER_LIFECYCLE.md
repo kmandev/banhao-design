@@ -179,7 +179,7 @@ stateDiagram-v2
 | **Customer cancellation** | Free through **`MERCHANT_ACCEPTED`**; merchant confirmation during `PREPARING` (confirmed = **full refund**); support-only after `PICKED_UP` | **`ACCEPTED` — DEC-050** (resolves BQ-016). **No Phase 1 cancellation fee.** Post-pickup outcome is **DEC-053**; cooked-food cost is **DEC-051/052**. **Runtime stops at `PAID`** — not yet implemented |
 | **Rider cancellation** | Delivery reassigns; **the order is not cancelled** | `ACCEPTED` — **DEC-021** |
 | **No rider** | Retry → manual dispatch → operator decision. **Never auto-cancel** | `ACCEPTED` — **DEC-022** |
-| **Delivery failure** | **customer arrival** (`ARRIVED`, **not** `AT_MERCHANT`) → 2 contact attempts → 5-minute wait → **operator declares failure**; delivery `FAILED`, order `DELIVERY_FAILED`. Economics are cause-dependent | **`ACCEPTED` — DEC-053**, with the customer-arrival anchor and a narrow DEC-APP-006 carve-out locked by **DEC-054** (BQ-013 stays `OPEN`); runtime not implemented |
+| **Delivery failure** | **customer arrival** (`ARRIVED`, **not** `AT_MERCHANT`) → 2 contact attempts → 5-minute wait → **operator declares failure**; delivery `FAILED`, order `DELIVERY_FAILED`. Economics are cause-dependent | **`ACCEPTED` — DEC-053**, with the customer-arrival anchor and a narrow DEC-APP-006 carve-out locked by **DEC-054** (BQ-013 stays `OPEN`). **Operational runtime implemented** (BQ-017 Slices #1–#3): the five-minute wait raises an operator escalation and **never fails anything by itself**; only the operator command moves either state. **Economics unimplemented** — Q-020, BQ-024 |
 | **Cost of wasted food** | Allocated **by cause** — platform-caused **and customer-caused pre-pickup** to BANHAO (`PLATFORM_WRITE_OFF`), merchant-caused to the merchant; prepared from `PREPARING`, valued at `orders.subtotal_satang` | **`ACCEPTED` — DEC-051, DEC-052**; runtime not implemented |
 
 ### No-rider, in the order domain
@@ -255,9 +255,17 @@ is allocated by cause, so a failed or cancelled-after-preparation event must
 carry a cause code. `orders.cause_code` is the intended field and this table
 the intended vocabulary — **neither is expanded by DEC-051**; an insufficiency
 found in implementation is raised as a new open question, not filled silently.
-⚠️ **Not implemented:** the cancel API's `.strict()` schema rejects
-`causeCode` (`VALIDATION_FAILED`, pinned by tests) and no code writes
-`orders.cause_code`.
+⚠️ **Partly implemented.** The cancel API's `.strict()` schema still rejects
+`causeCode` (`VALIDATION_FAILED`, pinned by tests) and no cancellation writes
+`orders.cause_code` — a cancellation is not a delivery failure, and BQ-017
+Slice #2 deliberately did not widen it. **One writer now exists**: DEC-053's
+operator failure command writes `orders.cause_code` (and the delivery-domain
+copy `deliveries.failure_cause`) from its own six-value vocabulary —
+`CUSTOMER_UNREACHABLE`, `CUSTOMER_REFUSED`, `RIDER_CAUSED`, `MERCHANT_CAUSED`,
+`PLATFORM_CAUSED`, `INDETERMINATE`. Those six are validated in
+`@banhao/validation` for that path only; **no database CHECK constrains
+`cause_code`**, because the wider taxonomy below is still `PROPOSED`. The other
+rows of this table remain unwritten by anything.
 
 | Code | Terminal state | Fault |
 |---|---|---|

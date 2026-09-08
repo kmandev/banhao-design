@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { failDeliverySchema, resolveSupervisorCaseSchema } from '@banhao/validation';
 import type {
+  AwaitingFailureListResponse,
   FailDeliveryResponse,
   ResolveSupervisorCaseResponse,
   SupervisorIdentityResponse,
@@ -120,6 +121,34 @@ export class SupervisorController {
   ): Promise<ResolveSupervisorCaseResponse> {
     const request = parseOrThrow(resolveSupervisorCaseSchema, body);
     return this.cases.resolveCase(id, request, user);
+  }
+
+  /**
+   * BQ-017 Slice #3 — the operator's DEC-053 working list: deliveries that
+   * have been `ARRIVED` at the customer for at least five minutes with their
+   * order still `DELIVERING`.
+   *
+   * **Read-only, and the timer's only output.** The tick phase that watches
+   * the five-minute wait records an append-only escalation and changes nothing
+   * (see `ArrivalTimeoutEscalationService`); this route is how a person then
+   * sees it. Reading the list claims nothing and resolves nothing — a delivery
+   * leaves it only by being resolved through the command below.
+   *
+   * **A row here is a request for attention, never a verdict.** DEC-053 § 2
+   * makes the operator the authority; nothing about appearing in this list
+   * means the delivery should fail, and no `causeCode` is offered, because the
+   * cause is what the operator decides.
+   *
+   * Carries no financial field — the same projection discipline
+   * `docs/HUMAN_SUPERVISOR_CONTRACT.md` § 7 imposes on every surface here.
+   */
+  @Get('deliveries/awaiting-failure')
+  @ApiOkResponse({
+    description: 'Deliveries ARRIVED past the DEC-053 wait, awaiting an operator decision',
+  })
+  async awaitingFailure(@Query('limit') limit?: string): Promise<AwaitingFailureListResponse> {
+    const parsed = limit === undefined ? undefined : Number.parseInt(limit, 10);
+    return this.failures.listAwaitingFailure(Number.isFinite(parsed) ? (parsed as number) : undefined);
   }
 
   /**

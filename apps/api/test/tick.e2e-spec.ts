@@ -23,6 +23,7 @@ import { PaymentEventProcessingService } from '../src/modules/payments/payment-e
 import { PaymentAttemptExpiryService } from '../src/modules/payments/payment-attempt-expiry.service';
 import { DispatchService } from '../src/modules/rider/dispatch.service';
 import { NoRiderEscalationService } from '../src/modules/rider/no-rider-escalation.service';
+import { ArrivalTimeoutEscalationService } from '../src/modules/rider/arrival-timeout-escalation.service';
 import { ProofPhotoRetentionService } from '../src/modules/rider/proof-photo-retention.service';
 import { OutboxDispatchService } from '../src/modules/notifications/outbox-dispatch.service';
 import { MerchantAcceptanceTimeoutService } from '../src/modules/ai-ops/merchant-acceptance-timeout.service';
@@ -49,6 +50,7 @@ const PHASE_RESULTS = {
   paymentAttemptExpiry: { expired: 0, skipped: 0 },
   dispatch: { deliveries: 0, offers: 0, expiredOffers: 0 },
   noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
+  arrivalTimeoutEscalation: { examined: 0, escalated: 0, skipped: 0, failed: 0 },
   podRetention: {
     enabled: false,
     referencedCandidates: 0,
@@ -143,6 +145,8 @@ describe('POST /internal/tick (integration)', () => {
       .useValue({ runDispatchRound: async () => PHASE_RESULTS.dispatch })
       .overrideProvider(NoRiderEscalationService)
       .useValue({ run: async () => PHASE_RESULTS.noRiderEscalation })
+      .overrideProvider(ArrivalTimeoutEscalationService)
+      .useValue({ run: async () => PHASE_RESULTS.arrivalTimeoutEscalation })
       .overrideProvider(ProofPhotoRetentionService)
       .useValue({ run: async () => PHASE_RESULTS.podRetention })
       .overrideProvider(OutboxDispatchService)

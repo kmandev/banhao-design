@@ -1779,6 +1779,40 @@
         ]
       }
     },
+    "/api/v1/admin/supervisor/deliveries/awaiting-failure": {
+      "get": {
+        "operationId": "SupervisorController_awaitingFailure",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deliveries ARRIVED past the DEC-053 wait, awaiting an operator decision"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/supervisor/deliveries/{id}/fail": {
       "post": {
         "operationId": "SupervisorController_failDelivery",

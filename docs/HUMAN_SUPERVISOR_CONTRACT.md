@@ -103,6 +103,63 @@ all. Every command that *would* change domain state — cancel, release,
 redispatch, pause a merchant, refund — is either gated on an open decision
 (§ 6) or belongs to the A-xx financial half.
 
+## 5.1 The DEC-053 post-pickup failure surface (BQ-017)
+
+Phase I's second command, and the first that moves domain state. Read DEC-053
+and DEC-054 before changing anything here.
+
+**The flow, in full, and the order of authority:**
+
+```
+delivery reaches ARRIVED            rider taps "arrived at customer" (DEC-054)
+        ↓
+rider records contact attempts      up to 2, append-only evidence
+        ↓
+5 minutes elapse from arrived_at    DEC-053 § 3 — never from merchant arrival
+        ↓
+tick raises an escalation           audit_logs row, SYSTEM/worker. Changes nothing.
+        ↓
+OPERATOR ATTENTION REQUIRED         GET  …/deliveries/awaiting-failure  (read-only)
+        ↓
+operator reviews and decides        the cause is theirs, and only theirs
+        ↓
+operator declares the failure       POST …/deliveries/:id/fail  { causeCode, reason }
+        ↓
+delivery FAILED · order DELIVERY_FAILED
+```
+
+**The five-minute wait never fails anything.** The tick phase
+(`ArrivalTimeoutEscalationService`) issues no `UPDATE` of any kind — it reads,
+and it appends one `audit_logs` row. There is no code path from the timer to a
+state change, which is what makes DEC-053 § 2's *"the operator is the authority
+that declares the failure"* structural rather than promised. Any future
+document or diagram showing `ARRIVED + 5 min → FAILED` is describing something
+this system deliberately cannot do.
+
+| Surface | Route | Authority |
+|---|---|---|
+| Escalation | none — a tick phase | Raises attention. Moves nothing |
+| Operator working list | `GET /api/v1/admin/supervisor/deliveries/awaiting-failure` | **Read-only.** Reading claims nothing; a delivery leaves the list only by being resolved |
+| Failure declaration | `POST /api/v1/admin/supervisor/deliveries/:id/fail` | The only route that moves a delivery or an order on this path |
+
+The working list carries what locating and triaging a case needs — delivery and
+order ids, the order number, the rider, `arrived_at`, elapsed wait, contact
+attempts, both states, and whether the tick has already escalated it. It
+carries **no amount and no `causeCode`**: the cause is the operator's decision,
+and offering one would be the system proposing the economic outcome § 7 forbids
+it to surface at all.
+
+**Preconditions are enforced server-side and have no override**: delivery
+`ARRIVED`, order `DELIVERING`, at least 2 recorded contact attempts, at least 5
+minutes since `arrived_at`. DEC-053 makes the operator the authority *after*
+its conditions are met, not instead of them.
+
+**Operator notification remains out of scope**, unchanged from § 6 below:
+`OutboxDispatchService` skips `OPERATOR` recipients by design (Phase H), so
+operator visibility is the audit trail and this listing — not a channel. The
+customer and merchant *are* notified of the declared failure, once, through the
+existing outbox (`OrderDeliveryFailed`).
+
 ## 6. Blocked, and rendered as blocked
 
 Per the Admin package's interaction rules and DEC-040 § 5, a control whose
@@ -113,7 +170,7 @@ policy does not exist is **not** shipped as a hopeful button:
 | L4 approval of `pause_merchant` | **BQ-013** — no auto-pause threshold exists | Not built. The console states the dependency; no approve control exists to press |
 | No-rider terminal outcome (cancel / fail) | **UX-Q-006** | No control. The case can be resolved with a reason; the delivery is untouched |
 | Safe drop-off, customer-unavailable resolution | **OD-04**, UX-Q-006 | Not built |
-| Failed delivery, cost of wasted food | Policy now locked — **DEC-051/052** (food cost) and **DEC-053** (post-pickup failure); **DEC-054** carves `DELIVERY_FAILED` out of DEC-APP-006 for that path | **Still not built.** The operator failure-resolution command does not exist, and refund/ledger consequences stay blocked on **Q-020** |
+| Failed delivery, cost of wasted food | Policy locked — **DEC-051/052** (food cost) and **DEC-053** (post-pickup failure); **DEC-054** carves `DELIVERY_FAILED` out of DEC-APP-006 for that path | **Operational half BUILT** (BQ-017 Slices #1–#3) — see § 5.1. The **economic** half stays blocked: no refund, no ledger reversal, no food-loss posting and no rider compensation, on **Q-020** and **BQ-024** |
 | Repeated rider cancellation consequences | **Q-032** | Not built |
 | Refund, settlement, earnings, ledger writes | Q-001, Q-002, Q-010, Q-020 · CON-002 · DEC-034 | Not built, and absent from the command surface entirely — not merely disabled |
 

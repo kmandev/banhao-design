@@ -297,4 +297,18 @@ if grep -q "FAIL" /tmp/banhao-contact-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS VERIFICATION PASSED"
+echo "==> Running BQ-017 Slice #3 arrival-timeout escalation assertions (no migration; query semantics)"
+docker cp "$REPO_ROOT/supabase/tests/delivery_arrival_timeout_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/delivery_arrival_timeout_test.sql 2>&1 | tee /tmp/banhao-timeout-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> BQ-017 arrival-timeout verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-timeout-out.log; then
+  echo "==> BQ-017 arrival-timeout verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT VERIFICATION PASSED"
