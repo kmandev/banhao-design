@@ -64,6 +64,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-052** | **Customer-caused pre-pickup cooked-food loss is absorbed by BANHAO (`PLATFORM_WRITE_OFF`) — a narrow clarification closing DEC-051's recorded residual** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/DECISIONS.md` DEC-051, `docs/SETTLEMENT_MODEL.md` § 9, BQ-015 (remains resolved) |
 | **DEC-053** | **Post-pickup delivery failure: operator-resolved `DELIVERY_FAILED` / delivery `FAILED`, 2 contact attempts + 5-minute wait from `ARRIVED`, cause-dependent economics** | **ACCEPTED — POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/ORDER_LIFECYCLE.md` § 4, § 5, § 6, `docs/SETTLEMENT_MODEL.md` § 9, BQ-017 (resolved) |
 | **DEC-054** | **Customer-arrival anchor `EN_ROUTE → ARRIVED` (distinct from `AT_MERCHANT`), and a narrow DEC-APP-006 carve-out letting DEC-053 use `DELIVERY_FAILED` while BQ-013 stays `OPEN`** | **ACCEPTED — POLICY / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/RIDER_LIFECYCLE.md` § 4, `docs/BANHAO-APP-ARCHITECTURE-V1.md` (DEC-APP-006), DEC-053 |
+| **DEC-055** | **Q-001 resolved: Stripe is the Phase 1 payment provider (PromptPay / THB), behind the existing `PaymentProvider` abstraction, with no Stripe Connect in Phase 1** | **ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md` § 0, § 2, DEC-015, Q-001 (resolved) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -692,25 +693,31 @@ None / None.
 
 ## DEC-015 — Payment provider access via abstraction layer only
 
-**Status:** ACCEPTED
+**Status:** ACCEPTED · **provider selected 2026-09-08 — see DEC-055**
 **Date:** 2026-08-09
 **Owner:** PRODUCT_OWNER
 
 ### Decision
 
-All payment provider access goes through a `PaymentProvider` interface. No business logic may import a provider SDK directly. **No provider is selected — Q-001 remains OPEN.**
+All payment provider access goes through a `PaymentProvider` interface. No business logic may import a provider SDK directly.
+
+**The abstraction requirement is unconditional and is not weakened by a provider having been chosen.** As of **DEC-055** (2026-09-08) the Phase 1 provider is **Stripe**, and it is integrated as a concrete implementation *behind* this interface — never as a dependency of `PaymentsService`, `PaymentEventProcessingService`, the order services, or any ledger service.
 
 ### Why
 
-Q-001 (provider) is downstream of Q-002 (legal/settlement model), which needs Thai legal review. The abstraction lets the foundation be built now without prejudging that answer, and keeps provider choice reversible.
+The abstraction let the foundation be built before a provider existed, and keeps the choice reversible.
+
+Its original reasoning — that Q-001 (provider) was downstream of Q-002 (legal/settlement model) — was **superseded by DEC-055**, which resolved Q-001 while Q-002 remains `OPEN`. That is safe only because DEC-055 § 4 declines Stripe Connect for Phase 1: Q-002 governs merchant of record and who holds funds, which is exactly what Connect would decide. See DEC-055's "Relationship to DEC-015".
 
 ### Alternatives
 
-Integrating a provider now — rejected as premature given the open legal question and the finding that no provider supports native PromptPay refunds (Q-020).
+Integrating a provider in 2026-08 — rejected as premature at the time, given the open legal question and the finding that no examined provider supported native PromptPay refunds (Q-020). DEC-055 revisited that judgement on evidence, not on preference.
 
 ### Consequences
 
-`NullPaymentProvider` throws on every operation deliberately, so money paths cannot silently appear functional. Provider SDK imports are confined to `payments/providers/`.
+Provider SDK imports are confined to `payments/providers/`.
+
+`NullPaymentProvider` is **retained** as the development and test provider under DEC-APP-007, including its production startup assertion. It still refuses `refund()` outright, so refund paths cannot silently appear functional while Q-020 is `OPEN`. Stripe becomes a second binding at `PaymentsModule`'s existing swap point — the single line this abstraction exists to make sufficient.
 
 ### Evidence
 
@@ -722,11 +729,11 @@ REQ-003
 
 ### Related Architecture
 
-`apps/api/src/modules/payments/payment-provider.interface.ts`
+`apps/api/src/modules/payments/payment-provider.interface.ts` · `payments.module.ts`
 
 ### Supersedes / Superseded By
 
-None / None.
+None / **Reasoning superseded in part by DEC-055** (2026-09-08), which resolved Q-001 to Stripe. This decision's *substance* — provider access only through the abstraction — is reaffirmed unchanged by DEC-055 § 1.
 
 ---
 
@@ -5551,3 +5558,374 @@ post-pickup failure path only, and adds the customer-arrival anchor DEC-053
 depends on. Does not supersede or modify DEC-019, DEC-021, DEC-022, DEC-038,
 DEC-044, DEC-048, DEC-049, DEC-050, DEC-051, DEC-052 or DEC-053, each of which
 stands unchanged.
+
+---
+
+## DEC-055 — Q-001 resolved: Stripe is the Phase 1 payment provider, behind the existing `PaymentProvider` abstraction, without Connect
+
+**Status:** ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · **RUNTIME NOT IMPLEMENTED** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Resolves **Q-001**, open since 2026-08-09. Selects the provider and locks the
+architecture it must be integrated through. **No runtime code is authorized by
+this decision.**
+
+**1. The provider.**
+
+```
+Q-001 Payment Provider = Stripe
+```
+
+Phase 1 payment method is **PromptPay**, currency **THB**. The abstraction
+DEC-015 established remains mandatory and unweakened:
+
+```
+PaymentsService → PaymentProvider → StripePaymentProvider → Stripe
+```
+
+**No BANHAO domain service may call Stripe directly.** `PaymentsService`,
+`PaymentEventProcessingService`, the order services and any future ledger
+service must not depend on Stripe SDK types. Stripe-specific concepts stay
+inside the adapter, under `payments/providers/`, exactly where DEC-015 confines
+provider SDK imports today.
+
+`NullPaymentProvider` is **not** removed. It remains the development and test
+provider under DEC-APP-007, including its production startup assertion; Stripe
+becomes a second binding selected at `PaymentsModule`'s existing one-line swap
+point.
+
+**2. Money representation.** BANHAO continues to store integer **satang**
+(ADR-007, CON-003). THB is a two-decimal currency and Stripe amounts are in the
+smallest currency unit, so:
+
+```
+orders.grand_total_satang  →  Stripe PaymentIntent.amount
+```
+
+is a **direct** mapping. **No currency conversion, and no floating-point money
+arithmetic, is permitted anywhere on this path.**
+
+**3. Provider fee assumption.** The current Stripe Thailand published rate for
+PromptPay is **1.65% per successful payment**. Recorded here as an **external
+provider-cost assumption only**.
+
+It **must not** be hardcoded into payment state transitions, order logic,
+ledger logic, commission calculation, service-fee calculation, or delivery
+calculation. Provider fees belong to provider/economic configuration and change
+independently of BANHAO policy.
+
+Also recorded: **Stripe's processing fee is not returned when a payment is
+refunded** under standard pricing. This matters for unit economics and is
+stated so it is not discovered later.
+
+**This decision changes no BANHAO economics.** Merchant commission (DEC-043),
+service fee (DEC-036, DEC-047, DEC-048), delivery fee (DEC-035), rider earning
+(DEC-044) and the delivery funding gap (DEC-045) are untouched and remain
+authoritative. Provider cost is a separate layer from platform pricing.
+
+**4. Stripe Connect — DO NOT USE in Phase 1.**
+
+```
+Customer → BANHAO Stripe account → BANHAO internal ledger → future settlement/payout
+```
+
+No connected accounts, no Stripe transfers, no application fees in Phase 1.
+Six reasons, each grounded in what already exists:
+
+1. PostgreSQL is the financial system of record (**DEC-014**), and the ledger
+   already models `MERCHANT_PAYABLE`, `RIDER_PAYABLE`, `PLATFORM_REVENUE` and
+   `PLATFORM_WRITE_OFF`. Connect would introduce a competing source of truth.
+2. Merchant and rider payable concepts already exist internally.
+3. Settlement and payout are not implemented — six tables are deliberately
+   deferred and `ledger_entry_groups.settlement_id` carries no FK.
+4. **Q-002** (legal/settlement model, merchant of record) is `OPEN` and
+   `LEGAL_REVIEW_REQUIRED`.
+5. Adopting Connect *is* choosing a legal structure for who holds funds, which
+   would pre-empt Q-002.
+6. Connect should be reconsidered only when settlement and legal ownership of
+   funds are explicitly designed.
+
+This is a **Phase 1 lock, not a prohibition.** Future Connect adoption stays
+open.
+
+**5. Payment-event normalization — an architectural rule, not a preference.**
+
+Stripe webhook payloads **must be adapted into BANHAO's existing payment-event
+vocabulary inside the adapter, before reaching the generic processor.**
+
+`PaymentEventProcessingService` reads `payment_events.raw_payload` with flat
+top-level lookups (`providerPaymentId`, `amountSatang`) and matches
+`event_type` against its own `payment.succeeded` / `payment.failed` vocabulary.
+Stripe nests its data under `data.object` and names its events
+`payment_intent.succeeded` / `payment_intent.payment_failed`. The adapter is
+responsible for that translation:
+
+```
+Stripe event  →  BANHAO normalized payment event
+```
+
+**The normalized payload must embed the original Stripe event object** in a
+dedicated field, so nothing is lost for forensics or audit.
+
+**The generic payment-event processor must not become Stripe-aware.**
+
+**6. Webhook architecture unchanged.** `POST /webhooks/payments/:provider`
+stays **ingest-only** (ADR-008, DEC-APP-005): receive raw bytes, verify the
+Stripe signature, identify the provider event id, deduplicate on the existing
+`(provider, provider_event_id)` unique constraint, persist one `payment_events`
+row, respond.
+
+The webhook must **never** mark an order `PAID`, mark a payment `SUCCESS`,
+create ledger entries, or perform refund accounting. Those stay in the
+tick-driven pipeline. **No second asynchronous payment pipeline is created.**
+This preserves **DEC-003** and **CON-002**: only a signature-verified provider
+webhook may confirm a payment.
+
+**7. Phase 1 Stripe events.** Exactly three:
+
+```
+payment_intent.succeeded
+payment_intent.payment_failed
+payment_intent.canceled
+```
+
+**Refund events are NOT enabled.** `refund.created`, `refund.updated` and
+`refund.failed` remain gated behind **Q-020** and the starvation fix (clause
+10). They must not be subscribed or processed merely because Stripe supports
+them.
+
+**8. Idempotency.** Payment creation uses **deterministic** idempotency keys —
+never a random UUID, because the key is the crash-recovery anchor.
+
+```
+initial payment      Idempotency-Key = orderId
+regenerated attempt  Idempotency-Key = `${orderId}:${attemptNo}`   (or equivalent deterministic per-attempt key)
+```
+
+The per-attempt key is **required**, not cosmetic: `regenerateAttempt`
+currently passes `orderId`, which under a real provider would replay the
+original PaymentIntent instead of creating the new QR that regeneration exists
+to produce.
+
+**9. Refund interface — an additive extension is required before Stripe refund
+implementation.** `RefundResult` is `{ providerRefundId }` only, and a provider
+refund id alone **cannot prove refund finality**. Required:
+
+- `RefundResult.status`, discriminating `SUCCEEDED | PENDING | REQUIRES_ACTION | FAILED`;
+- `getRefundStatus(...)`, for crash recovery and reconciliation.
+
+`getPaymentStatus(providerPaymentId)` is recorded as a **potential** additive
+capability for payment reconciliation. It is **not** mandatory for the first
+Stripe adapter slice, and the interface must not be widened speculatively.
+
+**Neither is implemented by this decision** — both belong to the Q-020
+implementation slice.
+
+**10. Refund finality — DEC-049 is unchanged and authoritative.**
+
+```
+Stripe refund accepted  ≠  BANHAO refund finality
+```
+
+A reversal ledger group is posted **only** at verified terminal finality:
+
+```
+REFUND_PROCESSING  →  no reversal
+REFUNDED           →  reversal ledger groups (DEC-049 § 2)
+```
+
+Stripe's `requires_action` and `pending` both map to **`REFUND_PROCESSING`**,
+which DEC-049 § 5 already forbids posting from. **No new refund state and no
+migration are required.**
+
+**11. Payment-event starvation is a mandatory prerequisite.**
+
+```
+PAYMENT EVENT STARVATION FIX REQUIRED
+```
+
+`PaymentEventProcessingService` releases the claim (`processed_at = null`) for
+any unrecognized `event_type`, and `payment_events` has no attempts counter, no
+backoff and no dead-letter column — so such an event is re-claimed every tick
+forever and, being oldest, permanently occupies a slot in the 25-row batch.
+
+**This is a pre-existing generic defect, not a Stripe change.** Before Stripe
+production events are enabled: unknown event types must not retry forever or
+occupy the head of the queue, valid events must not be starved, genuinely
+transient failures must remain retryable, and every event must remain
+auditable. It ships as **its own isolated slice with its own tests**.
+
+**12. PromptPay QR presentation — NOT LOCKED.**
+
+```
+PromptPay QR presentation mapping = OPEN / SANDBOX SPIKE REQUIRED
+```
+
+Stripe's Direct API guide documents the Stripe.js client path
+(`stripe.confirmPromptPayPayment`) and only alludes to a non-Stripe.js path.
+The exact server-side `next_action` shape for PromptPay is **not confirmed**.
+Until a sandbox spike settles it, do **not** add the Stripe React Native SDK,
+add a publishable key, change customer UI, or assume either a QR image URL or a
+QR payload field.
+
+**13. Environment variables.** Server secrets only:
+
+```
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+```
+
+Both follow the established `packages/config/src/env.ts` pattern — optional at
+the schema level, validated where the capability is actually constructed (the
+`StorageService` precedent) — so a missing Stripe key never fails startup for
+unrelated routes. Neither may ever reach a mobile or browser bundle (CON-005),
+the same rule as `SUPABASE_SERVICE_ROLE_KEY`. `STRIPE_WEBHOOK_SECRET` is
+distinct from `PAYMENT_WEBHOOK_DEV_SECRET`, which remains the null provider's
+dev-only key.
+
+**A publishable key is not locked**, and remains conditional on clause 12.
+
+### Explicit non-decisions
+
+This decision selects a provider and locks how it is integrated. It does
+**not** decide:
+
+- **Q-020** — the refund mechanism or refund finality source. Selecting Stripe
+  makes a provider-mediated refund *possible*; it does not decide that BANHAO
+  will use it. Stripe's PromptPay refunds require the customer to supply bank
+  details by email, which is a product decision that remains open.
+- **Q-002** — the legal/settlement model or merchant of record. Clause 4 exists
+  precisely to keep this unprejudiced.
+- Any BANHAO economics — commission, service fee, delivery fee, rider earning,
+  delivery margin, promotion funding, or refund economics.
+- Partial refunds (**BQ-031**), or the customer-facing refund copy.
+- Settlement, payout, or the six deferred settlement tables.
+- The exact `next_action` field mapping (clause 12).
+- Whether `getPaymentStatus` is added (clause 9).
+
+### Why
+
+Product Owner decision, 2026-09-08, following the Q-001 provider-selection
+recon, the Q-020 refund-finality recon, and the 2C2P/Antom commercial-gate
+recon.
+
+Stripe was selected because it is the only examined provider with **documented
+API refunds for PromptPay** — full and partial — together with a refund state
+machine (`requires_action → pending → succeeded / failed / canceled`), refund
+webhooks, a retrieve-refund endpoint and idempotency keys, which is what
+DEC-049 § 5's "verified refund finality" actually requires. Its PromptPay rate
+(1.65%) matches Opn/Omise, so cost did not distinguish them; refund capability
+did. Stripe operates a real Thai entity and PromptPay is a first-class Thailand
+payment method for Thai-registered accounts.
+
+The alternatives all failed on refund rather than collection: Opn/Omise states
+*"PromptPay charges cannot be voided or refunded"*; Xendit and GB Prime Pay
+mark PromptPay refunds unsupported; Beam requires manual out-of-band refunds;
+SCB and Bangkok Bank expose same-rail refund APIs but only **before ~23:00 on
+the same day**, which DEC-053's operator-resolved failure flow routinely misses
+by construction; 2C2P/Antom has the strongest crash-recovery primitives but
+gates refunds behind unobtained commercial approval and does not document
+whether the customer must act.
+
+### Relationship to DEC-015 — reasoning superseded, substance preserved
+
+**DEC-015's substance is unchanged and is reaffirmed**: all provider access
+goes through `PaymentProvider`, and no business logic imports a provider SDK.
+
+**DEC-015's stated reasoning is superseded on one point.** It recorded that
+*"Q-001 (provider) is downstream of Q-002 (legal/settlement model)"*. This
+decision resolves Q-001 while Q-002 remains `OPEN`, which inverts that stated
+dependency. That is safe **only because of clause 4**: Q-002 governs who is
+merchant of record and who holds funds, and those questions live in Stripe
+Connect — which this decision explicitly declines to adopt. Collecting into
+BANHAO's own account and accounting internally is what the system already does,
+so nothing about Q-002 is prejudged. **Had Connect been adopted, this decision
+would have pre-empted Q-002 and should have been refused.**
+
+Recorded explicitly rather than left implicit, because a future reader
+comparing DEC-015's "Why" against this decision would otherwise find an
+unexplained contradiction.
+
+### Alternatives
+
+- **Opn / Omise** — rejected as primary. Identical PromptPay rate and the best
+  Thai-native documentation, but PromptPay refunds are explicitly impossible,
+  which would force an operator-attested manual rail for every refund. Remains
+  the runner-up if the Product Owner later prefers a manual refund rail.
+- **2C2P / Antom** — rejected for now. Strongest documented idempotency and
+  crash recovery of any candidate, and PromptPay is not in its refund exclusion
+  list, but refunds require commercial approval that has not been obtained and
+  no source states whether the customer must act. Reconsiderable if that
+  enquiry returns favourably.
+- **SCB / Bangkok Bank direct acquiring** — rejected. Same-day-only refund
+  windows are incompatible with DEC-053's post-pickup failure flow.
+- **Adopting Stripe Connect now** — rejected. See clause 4.
+- **Remaining blocked until Q-002 resolves** — rejected. Clause 4 makes
+  provider selection independent of the legal model, and DEC-APP-007 already
+  had Phases E–I shipping against `NullPaymentProvider`; a provider is now the
+  gate on progress, not the legal model.
+
+### Consequences
+
+- **Q-001 leaves the P0 open-questions list.** Three P0 items remain: Q-002,
+  Q-020, BQ-030 (stacking only).
+- **Phase F′ is no longer blocked by Q-001.** It remains blocked by **Q-020**
+  and, for anything settlement-shaped, by **Q-002**.
+- The `PaymentProvider` interface gains two additive members before any refund
+  work (clause 9). Both are additive; `NullPaymentProvider` continues to throw.
+- The payment-event starvation defect becomes **blocking** for Stripe
+  enablement (clause 11).
+- A sandbox spike is required before the customer-facing QR path can be built
+  (clause 12).
+- **The customer-facing refund copy becomes a known exposure.** The Customer
+  App promises *"เงินจะเข้าบัญชีเดิมที่ใช้จ่าย ภายใน 1–3 วันทำการ"*, and
+  Stripe's PromptPay refund requires the customer to supply their bank account
+  by email. That copy is inaccurate as written under every available rail. It
+  is **not** fixed by this decision — it belongs to Q-020 and Q-017 — but it is
+  recorded so it is not discovered at launch.
+- `NullPaymentProvider` and DEC-APP-007's development posture are unchanged.
+
+### Evidence
+
+Product Owner instruction, 2026-09-08 ("BANHAO — Q-001 STRIPE PROVIDER,
+PRODUCT OWNER DECISION LOCK"), following three read-only recons in the same
+session. Provider capability verified against Stripe's own documentation:
+`docs.stripe.com/payments/promptpay` (PromptPay: TH business locations, THB,
+"Refunds / Partial refunds: Yes / Yes", and the customer-bank-account
+requirement), `docs.stripe.com/refunds` (the `requires_action` status
+transition table, refund events, failure reasons),
+`stripe.com/en-th/pricing/local-payment-methods` (PromptPay 1.65%),
+`support.stripe.com/questions/stripe-thailand-support-for-marketplaces`
+(Connect constraints in Thailand). Repository basis:
+`apps/api/src/modules/payments/payment-provider.interface.ts`,
+`payments.service.ts`, `payment-event-processing.service.ts`,
+`apps/api/src/modules/webhooks/webhooks.controller.ts`,
+`supabase/migrations/20260811000006_payment_domain.sql`,
+`packages/config/src/env.ts`.
+
+### Related Requirements
+
+Q-001 (**resolved by this decision**) · Q-002 (legal/settlement model —
+**`OPEN`**, deliberately unprejudiced by clause 4) · Q-020 (refund mechanism —
+**`OPEN`**, still blocking all refund runtime) · BQ-031 (partial refunds —
+`OPEN`) · Q-017 (consumer protection — the refund copy exposure) · REQ-003
+(idempotency) · CON-002 (webhook-only confirmation) · CON-003, ADR-007
+(integer satang) · CON-005 (no secrets in client bundles)
+
+### Related Architecture
+
+`apps/api/src/modules/payments/payment-provider.interface.ts` ·
+`payments.module.ts` (the binding swap point) · `providers/` ·
+`apps/api/src/modules/webhooks/webhooks.controller.ts` ·
+`payment-event-processing.service.ts` · `packages/config/src/env.ts` ·
+`docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 8 · `docs/SETTLEMENT_MODEL.md` § 3.1,
+§ 3.2 · `supabase/migrations/20260811000006_payment_domain.sql`
+
+### Supersedes / Superseded By
+
+None / None. **Resolves Q-001.** Supersedes **DEC-015's stated reasoning** that
+Q-001 is downstream of Q-002 (see "Relationship to DEC-015" above) while
+reaffirming DEC-015's substance in full. Does not modify DEC-003, DEC-014,
+DEC-016, DEC-035, DEC-036, DEC-043, DEC-044, DEC-045, DEC-046, DEC-047,
+DEC-048, DEC-049, DEC-APP-005 or DEC-APP-007, each of which stands unchanged.

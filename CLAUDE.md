@@ -56,7 +56,7 @@ simple, avoid unnecessary abstraction, and make every change reviewable in Git.
 | Admin | Next.js | DEC-012 |
 | Monorepo | pnpm workspaces + Turborepo | DEC-013 |
 | Financial truth | PostgreSQL is the system of record | DEC-014 |
-| Payments | Abstraction only — **no provider selected** | DEC-015 |
+| Payments | Abstraction only (DEC-015) — provider **selected 2026-09-08: Stripe**, not implemented | DEC-015, DEC-055 |
 
 Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 `@expo-google-fonts/ibm-plex-sans-thai` (no runtime fetch).
@@ -479,12 +479,20 @@ migration explicitly instructed for the current phase — see §10.
 - Every new table needs `revoke ... from anon, authenticated` **first** —
   Supabase grants `ALL` on public tables by default.
 
-**Open questions blocking real money — and only real money:** Q-001 payment
-provider, Q-002 legal settlement model, Q-020 PromptPay
-refund mechanism (no provider supports native PromptPay refunds — see
-`ai/RESEARCH/PAYMENT_RESEARCH.md`). **Q-010 (platform fee) is resolved** —
-**DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht. Under
-**DEC-APP-007** the remaining three gate **Phase F′ only**; build the whole
+**Open questions blocking real money — and only real money:** Q-002 legal
+settlement model, Q-020 PromptPay refund mechanism. **Q-001 (payment provider)
+is resolved** — **DEC-055**, 2026-09-08: **Stripe**, PromptPay/THB, behind the
+existing `PaymentProvider` abstraction, **no Stripe Connect in Phase 1** (so
+Q-002 stays unprejudiced). **Runtime is not implemented** —
+`NullPaymentProvider` is still bound, and DEC-055 records two engineering
+prerequisites before Stripe events may be enabled: the payment-event starvation
+fix and a PromptPay QR sandbox spike. Q-020 still blocks **every** refund path;
+Stripe supports PromptPay refunds but requires the customer to supply a bank
+account by email, so the mechanism remains a product decision (see
+`ai/RESEARCH/PAYMENT_RESEARCH.md` for the rail-level finding). **Q-010
+(platform fee) is resolved** — **DEC-043**, 2026-09-05, 8% of the food
+subtotal, round to whole baht. Under **DEC-APP-007** the remaining two gate
+**Phase F′ only**; build the whole
 order → delivery flow against `NullPaymentProvider`. The
 schema stores **amounts, never rates**, so the open numbers can be set later
 without a migration — **do not invent a default anywhere in the application.**

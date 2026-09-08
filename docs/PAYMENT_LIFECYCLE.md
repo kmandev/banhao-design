@@ -8,8 +8,12 @@ Written 2026-08-10 (EVENT-013), locked to the approved decisions 2026-08-10
 [`SETTLEMENT_MODEL.md`](SETTLEMENT_MODEL.md) ·
 [`OPEN_BUSINESS_QUESTIONS.md`](OPEN_BUSINESS_QUESTIONS.md)
 
-**No payment provider is selected** (DEC-015, Q-001). Nothing here is an
-integration design, and nothing here may be implemented yet.
+**The Phase 1 provider is Stripe** — **DEC-055** (2026-09-08), resolving
+**Q-001**: PromptPay, THB, behind the existing `PaymentProvider` abstraction
+(DEC-015, unchanged), with **no Stripe Connect in Phase 1**. **Runtime is not
+implemented**: `NullPaymentProvider` is still the bound provider, and no Stripe
+adapter, credential or SDK exists in the repository. Nothing here is an
+integration design.
 
 ## Status legend
 
@@ -43,7 +47,7 @@ appear to work untested. Do not "fix" it.
 
 | Method | Phase 1 | Note |
 |---|---|---|
-| **Online (PromptPay QR)** | **Enabled** — the only method | Provider not selected (Q-001) |
+| **Online (PromptPay QR)** | **Enabled** — the only method | Provider selected: **Stripe** (DEC-055). Not yet implemented |
 | **Cash on Delivery** | **Disabled** | Not removed from the model |
 | Wallet / stored value | Excluded | Would raise an e-money question (Q-002) |
 | Cards | Not in Phase 1 | — |
@@ -59,10 +63,12 @@ Payment, Delivery or Settlement. Concretely:
   refund path stay documented and dormant.
 
 ⚠️ **Consequence the Product Owner should hold onto:** removing cash makes
-**Q-001** (provider) and **Q-020** (PromptPay refund mechanism) *more* blocking,
-not less. In Phase 1, 100% of revenue and 100% of refunds run through a rail
-whose provider is unchosen and whose native refund capability research says does
-not exist. There is no cash fallback for either.
+**Q-020** (PromptPay refund mechanism) *more* blocking, not less. In Phase 1,
+100% of revenue and 100% of refunds run through one rail, with no cash fallback
+for either. **Q-001 is resolved** — the provider is Stripe (**DEC-055**) — but
+that does **not** relieve this: Stripe's PromptPay refunds require the customer
+to supply their bank account by email, so the refund *mechanism* and its
+customer experience remain open under Q-020.
 
 ✅ **Resolved.** The Customer App's cash option at checkout, its cash CTA
 variant and the `เปลี่ยนเป็นเงินสด` fallback on payment failure have been
@@ -357,8 +363,9 @@ exactly what this catches. Late payments (DEC-029) get their own queue.
 their bank can pull money back **after** merchant and rider have been paid.
 
 PromptPay is a push-based bank transfer rather than a card rail, so a card-style
-chargeback may not apply in the same form — but that depends on the provider
-(Q-001) and the legal model (Q-002). Do not assume the risk is zero.
+chargeback may not apply in the same form — but that depends on the provider's
+own dispute handling (**Stripe**, DEC-055) and on the legal model (Q-002, still
+`OPEN`). Do not assume the risk is zero.
 
 ---
 

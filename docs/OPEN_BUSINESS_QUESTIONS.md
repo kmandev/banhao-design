@@ -82,12 +82,17 @@ on. **Decide them before then, not during.**
 
 | ID | Decision needed | Blocks |
 |---|---|---|
-| Q-001 | **Payment provider** — more urgent since DEC-016 made online the only method | Payment module, webhooks |
 | Q-002 | Legal / settlement model, merchant of record · `LEGAL_REVIEW_REQUIRED` | Payment, settlement, onboarding terms |
 | Q-020 | **PromptPay refund mechanism** — DEC-016 removed the cash-refund fallback | Refund flow, customer refund UX |
 | BQ-030 | **Stacking only** — the funder model is decided (DEC-046: per-promotion, `PLATFORM` or `MERCHANT`, no split). Promotion-engine scope; does **not** block ledger/`CUSTOMER_PAYMENT` work, since `discount_satang` is always `0` today | Promotion engine only |
 
-**Four remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
+**Q-001 left this list on 2026-09-08 — DEC-055**: the Phase 1 payment provider
+is **Stripe** (PromptPay, THB), integrated behind the existing
+`PaymentProvider` abstraction, with **no Stripe Connect in Phase 1** so that
+**Q-002 stays unprejudiced**. Runtime is **not** implemented, and DEC-055
+resolves **nothing** about refunds — **Q-020 still blocks every refund path**.
+
+**Three remain, down from fifteen.** The nine cleared are BQ-010, BQ-012,
 BQ-014, BQ-019, BQ-023 (deferred), BQ-025, the model halves of BQ-026/027/028,
 the **numeric** halves of BQ-026 (DEC-035) and BQ-027 (DEC-036) as of
 2026-08-24, and — as of 2026-09-05 — the **numeric** half of BQ-028 / Q-010
@@ -1964,7 +1969,7 @@ No `Q-NNN` was resolved by this pass. Cross-references added:
 
 | Q | Subject | Related BQ |
 |---|---|---|
-| Q-001 | Payment provider | `docs/PAYMENT_LIFECYCLE.md` |
+| Q-001 | Payment provider | **RESOLVED 2026-09-08 — DEC-055: Stripe** (PromptPay/THB, no Connect in Phase 1). `docs/PAYMENT_LIFECYCLE.md` |
 | Q-002 | Legal / settlement model | BQ-005, BQ-022, BQ-032 |
 | Q-003 | Full refund policy | **BQ-016** (extends — **resolved 2026-09-07, DEC-050**; Q-003's remaining edge cases stay open), BQ-031 |
 | Q-004 | Cash-remittance limit | **BQ-034** (extends), BQ-023 |
