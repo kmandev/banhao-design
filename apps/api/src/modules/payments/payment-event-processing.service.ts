@@ -3,7 +3,7 @@ import { SupabaseService } from '../../supabase/supabase.service';
 import { calculateFoodSubtotalCommissionSatang } from './commission-pricing';
 
 /** How many unprocessed `payment_events` one tick claims work from at most. */
-const BATCH_SIZE = 25;
+export const BATCH_SIZE = 25;
 
 type ReconciliationKind = 'UNMATCHED_EVENT' | 'AMOUNT_MISMATCH' | 'LATE_PAYMENT' | 'SURPLUS_PAYMENT';
 
@@ -56,9 +56,9 @@ interface PaymentAttemptRow {
  * and simply skips it. If the claimed row's processing throws an *unexpected*
  * error, the claim is explicitly released (`processed_at` set back to
  * `null`, `processing_error` recorded) so the next tick retries it — a
- * definitively classified outcome (success, or any of the four
- * reconciliation kinds below) is never released, because it does not need
- * to be reprocessed.
+ * definitively classified outcome (success, one of the four reconciliation
+ * kinds below, or an unsupported event type — see `markUnsupportedEventType`)
+ * is never released, because none of them needs to be reprocessed.
  *
  * ## The money-movement anchor — DEC-030
  *
@@ -81,10 +81,20 @@ interface PaymentAttemptRow {
  * state-machine transition F-2b never handled (every claimed event was
  * previously treated as a success regardless of its actual type — a
  * correctness gap, not a deliberate simplification). Any other event type is
- * genuinely unrecognized: this throws rather than guessing, so the claim is
- * released for retry/investigation (see `processOne`) instead of either
- * silently recording money that may not exist or silently discarding a
- * signal that might.
+ * genuinely unrecognized: `markUnsupportedEventType` records why on the
+ * event's own `processing_error` and leaves the claim held — **terminal,
+ * never retried** — rather than guessing at money that may not exist.
+ *
+ * This is deliberately different from the "unexpected error → release the
+ * claim" rule stated above: an *unrecognized event type* is a known,
+ * permanent fact about the event, never a transient condition a retry could
+ * fix. Releasing it (the original F-2b behaviour) meant the same oldest
+ * unsupported event was re-claimed and re-released every tick forever —
+ * `processPendingEvents` always re-selects the same oldest `BATCH_SIZE`
+ * unprocessed rows by `received_at` — which could starve every genuinely
+ * processable event behind it. Nothing about the event is lost: `raw_payload`
+ * is immutable and `processing_error` records exactly what happened, so this
+ * stays fully auditable without ever re-entering the queue.
  *
  * ## Ledger posting — DEC-043, and CUSTOMER_PAYMENT (SETTLEMENT_MODEL.md § 3.1)
  *
@@ -266,7 +276,17 @@ export class PaymentEventProcessingService {
     }
 
     if (event.event_type !== SUCCEEDED_EVENT_TYPE) {
-      throw new Error(`Unrecognized payment_events.event_type "${event.event_type}" for event ${event.id}`);
+      // Terminal, not thrown: an event type this service has no handler for is a
+      // known, permanent fact about this event — never a transient condition a
+      // retry could resolve. Throwing here (the previous behaviour) released the
+      // claim (`processed_at = null`) unconditionally, and because
+      // `processPendingEvents` always re-selects the SAME oldest
+      // `BATCH_SIZE` unprocessed rows in `received_at` order, an unsupported
+      // event type sitting at the head of the queue was re-claimed and
+      // re-released every tick forever — starving every genuinely processable
+      // event behind it. See `markUnsupportedEventType`.
+      await this.markUnsupportedEventType(event.id, event.event_type);
+      return;
     }
 
     const eventAmountSatang = readAmount(event.raw_payload, 'amountSatang');
@@ -954,6 +974,50 @@ export class PaymentEventProcessingService {
 
     if (error) {
       throw new Error(`ledger_entries insert failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Marks a claimed event with an unsupported/unhandled `event_type` as
+   * done — terminal, never retried, but never silently discarded either.
+   *
+   * The claim already set `processed_at` (`processOne`'s guarded UPDATE);
+   * this method does not touch it, so the row stays with `processed_at` set
+   * and drops out of `processPendingEvents`'s `processed_at IS NULL` query
+   * for good. It only writes
+   * `processing_error`, which — along with `raw_payload`, kept exactly as
+   * ingested — is the permanent audit trail of *why* nothing else happened:
+   * `payment_events` is append-only except for these two columns
+   * (`payment_events_enforce_immutable_columns`), so nothing about the
+   * original event is ever lost or rewritten.
+   *
+   * No `reconciliation_cases` row is opened. `UNMATCHED_EVENT` means "no
+   * payment could be resolved for this event" — a different fact — and
+   * `reconciliation_cases.kind`'s CHECK has no value for "unsupported event
+   * type" today; inventing a name for one would be a schema change this fix
+   * does not need and is not authorized to make. A `logger.warn` is the
+   * operational signal instead, matching every other "known outcome, no
+   * table opinion needed" path in this service.
+   *
+   * Never throws. This is itself the fix: a failure to write the audit note
+   * must not fall back to throwing, which would release the claim and
+   * reintroduce exactly the starvation this method exists to prevent — the
+   * event is already, correctly, terminally processed either way.
+   */
+  private async markUnsupportedEventType(eventId: string, eventType: string): Promise<void> {
+    const message = `Unsupported payment_events.event_type "${eventType}" — no handler exists for it; recorded as terminal, not retried.`;
+
+    this.logger.warn(`payment_event ${eventId}: ${message}`);
+
+    const { error } = await this.supabase.admin
+      .from('payment_events')
+      .update({ processing_error: message })
+      .eq('id', eventId);
+
+    if (error) {
+      this.logger.error(
+        `payment_events.processing_error write failed for unsupported event ${eventId}: ${error.message}`,
+      );
     }
   }
 

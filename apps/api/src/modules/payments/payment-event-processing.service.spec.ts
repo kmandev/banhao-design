@@ -1,4 +1,4 @@
-import { PaymentEventProcessingService } from './payment-event-processing.service';
+import { BATCH_SIZE, PaymentEventProcessingService } from './payment-event-processing.service';
 import type { SupabaseService } from '../../supabase/supabase.service';
 
 /**
@@ -579,25 +579,197 @@ describe('PaymentEventProcessingService.processOne — payment.failed (PROCESSIN
   });
 });
 
-describe('PaymentEventProcessingService.processOne — unrecognized event type (fail closed)', () => {
-  it('an event type that is neither payment.succeeded nor payment.failed releases the claim for retry, never recorded as either', async () => {
+describe('PaymentEventProcessingService.processOne — unsupported event type (terminal, never retried)', () => {
+  /**
+   * The starvation fix's core behaviour change. Previously this exact
+   * scenario asserted `result === 'skipped'` and a `processed_at: null`
+   * release — i.e. "retry forever". That was the bug: `processPendingEvents`
+   * always re-selects the same oldest `BATCH_SIZE` unprocessed rows, so a
+   * released unsupported event at the head of the queue was reclaimed and
+   * re-released every tick, starving every genuinely processable event
+   * behind it. The correct behaviour is terminal: claimed once, marked with
+   * an explanatory `processing_error`, and never returned to the pending set
+   * again — proven below by asserting `processed_at` is never written back
+   * to `null`.
+   */
+  it('an event type with no handler is marked processed with an explanatory processing_error, and the claim is never released', async () => {
     const { supabase, calls } = supabaseStub([
       { data: claimedEvent({ event_type: 'payment.refunded', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
       { data: paymentRow(), error: null },
       { data: null, error: null }, // payment_events.payment_id backfill
-      { data: null, error: null }, // release update
+      { data: null, error: null }, // processing_error write (markUnsupportedEventType)
     ]);
     const service = new PaymentEventProcessingService(supabase);
 
     const result = await service.processOne(EVENT_ID);
 
-    expect(result).toBe('skipped');
+    // Terminal, same as every other definitively-classified outcome in this
+    // service (payment.failed, AMOUNT_MISMATCH, UNMATCHED_EVENT all also
+    // return 'processed' without moving money) — never 'skipped', which
+    // means "retry me".
+    expect(result).toBe('processed');
     expect(calls.find((c) => c.table === 'payments' && c.op === 'update')).toBeUndefined();
     expect(calls.find((c) => c.table === 'payment_transactions')).toBeUndefined();
-    const releaseCall = calls[calls.length - 1];
-    expect(releaseCall?.table).toBe('payment_events');
-    expect(releaseCall?.payload).toMatchObject({ processed_at: null });
-    expect(releaseCall?.payload?.processing_error).toContain('Unrecognized');
+    expect(calls.find((c) => c.table === 'orders' && c.op === 'update')).toBeUndefined();
+    // No reconciliation_cases row: UNMATCHED_EVENT means something different
+    // ("no payment could be resolved"), and there is no `kind` for
+    // "unsupported event type" without a migration this fix does not make.
+    expect(calls.find((c) => c.table === 'reconciliation_cases')).toBeUndefined();
+
+    const errorWrite = calls[calls.length - 1];
+    expect(errorWrite?.table).toBe('payment_events');
+    expect(errorWrite?.op).toBe('update');
+    // The claim's own UPDATE already set processed_at; this write must not
+    // touch it — writing it back to null is exactly the starvation bug.
+    expect(errorWrite?.payload).not.toHaveProperty('processed_at');
+    expect(errorWrite?.payload?.processing_error).toContain('Unsupported');
+    expect(errorWrite?.payload?.processing_error).toContain('payment.refunded');
+  });
+
+  it.each(['payment.canceled', 'payment.expired', 'charge.refunded', 'some.future.event'])(
+    '%s is treated the same way — terminal, not retried, not thrown',
+    async (eventType) => {
+      const { supabase, calls } = supabaseStub([
+        { data: claimedEvent({ event_type: eventType, raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
+        { data: paymentRow(), error: null },
+        { data: null, error: null },
+        { data: null, error: null },
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      const result = await service.processOne(EVENT_ID);
+
+      expect(result).toBe('processed');
+      // The claim's own UPDATE legitimately sets `processed_at` to a
+      // timestamp — that write is expected and correct. What must never
+      // happen is a SECOND write setting it back to `null` (a release).
+      const release = calls.find(
+        (c) => c.table === 'payment_events' && c.op === 'update' && c.payload?.processed_at === null,
+      );
+      expect(release).toBeUndefined();
+    },
+  );
+
+  it('a write failure on the processing_error note is logged and swallowed, never thrown — throwing here would reintroduce starvation', async () => {
+    const { supabase } = supabaseStub([
+      { data: claimedEvent({ event_type: 'payment.refunded', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: { message: 'connection reset' } }, // processing_error write itself fails
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    // Must not throw and must still report 'processed' — the event was
+    // already, correctly, terminally claimed; only the diagnostic note
+    // failed to persist, which is best-effort and must not resurrect the
+    // starvation this fix removes.
+    await expect(service.processOne(EVENT_ID)).resolves.toBe('processed');
+  });
+});
+
+/**
+ * The starvation regression itself (Test C). `processPendingEvents` selects
+ * the oldest `BATCH_SIZE` unprocessed rows every call — a real Postgres
+ * `ORDER BY received_at ASC LIMIT BATCH_SIZE` re-evaluated fresh each tick.
+ * Two calls to `processPendingEvents`, each against its own stub, model two
+ * such ticks honestly:
+ *
+ *   tick 1 — the oldest BATCH_SIZE rows are ALL unsupported events (the
+ *            exact starvation precondition: they fill the entire window)
+ *   tick 2 — with those BATCH_SIZE rows now `processed_at IS NOT NULL`
+ *            (proven by tick 1's own assertions below), the next-oldest
+ *            unprocessed row a real query would return is the genuine
+ *            `payment.succeeded` event
+ *
+ * Before the fix this never happened: tick 1's release-on-throw behaviour
+ * left every one of those rows `processed_at IS NULL` again, so tick 2's
+ * query would return the exact same BATCH_SIZE unsupported rows forever,
+ * and the succeeded event — always newer, always outside the window — would
+ * never be selected by any tick.
+ */
+describe('PaymentEventProcessingService — starvation regression (BATCH_SIZE unsupported events ahead of a valid one)', () => {
+  it('BATCH_SIZE unsupported events do not remain pending, so the next tick reaches and fully completes a payment.succeeded event behind them', async () => {
+    // Tick 1: the oldest BATCH_SIZE (25) rows are all unsupported.
+    const unsupportedIds = Array.from({ length: BATCH_SIZE }, (_, i) => `unsupported-${i}`);
+    const tick1Results: Result[] = [
+      { data: unsupportedIds.map((id) => ({ id })), error: null }, // processPendingEvents' own SELECT
+    ];
+    for (let i = 0; i < unsupportedIds.length; i++) {
+      tick1Results.push(
+        { data: claimedEvent({ event_type: 'payment.refunded', raw_payload: { providerPaymentId: PROVIDER_PAYMENT_ID } }), error: null }, // claim
+        { data: paymentRow(), error: null }, // payments select
+        { data: null, error: null }, // payment_events.payment_id backfill
+        { data: null, error: null }, // processing_error write
+      );
+    }
+    const tick1 = supabaseStub(tick1Results);
+    const service1 = new PaymentEventProcessingService(tick1.supabase);
+
+    const tick1Summary = await service1.processPendingEvents();
+
+    // All BATCH_SIZE handled as terminal — none skipped for retry. Proves
+    // the previously-starving batch no longer perpetuates itself.
+    expect(tick1Summary).toEqual({ processed: BATCH_SIZE, skipped: 0 });
+    const anyReleasedBackToPending = tick1.calls.some(
+      (c) => c.table === 'payment_events' && c.op === 'update' && c.payload?.processed_at === null,
+    );
+    expect(anyReleasedBackToPending).toBe(false);
+
+    // Tick 2: with the 25 unsupported rows no longer `processed_at IS NULL`,
+    // the next tick's query returns the genuinely valid event — which must
+    // now run the FULL success path to completion (end state, not merely
+    // "did not throw"), exactly matching the existing full-success-path test.
+    const tick2 = supabaseStub([
+      { data: [{ id: EVENT_ID }], error: null }, // processPendingEvents' own SELECT
+      { data: claimedEvent(), error: null }, // claim
+      { data: paymentRow(), error: null }, // payments select
+      { data: null, error: null }, // payment_events.payment_id backfill
+      { data: ATTEMPT_ROW, error: null }, // payment_attempts select
+      { data: { id: 'txn-1' }, error: null }, // payment_transactions insert
+      { data: null, error: null }, // payments -> SUCCESS
+      { data: null, error: null }, // payment_attempts -> SUCCESS
+      { data: { id: ORDER_ID }, error: null }, // orders -> PAID
+      { data: null, error: null }, // order_status_history insert
+      ...freshCommissionLedgerStubs(),
+      ...freshCustomerPaymentLedgerStubs(),
+      ...freshServiceFeeLedgerStubs(),
+    ]);
+    const service2 = new PaymentEventProcessingService(tick2.supabase);
+
+    const tick2Summary = await service2.processPendingEvents();
+
+    expect(tick2Summary).toEqual({ processed: 1, skipped: 0 });
+
+    // End-to-end result, not merely "did not throw": payment SUCCESS, order
+    // PAID, the money movement recorded, and the ledger posted.
+    const txInsert = tick2.calls.find((c) => c.table === 'payment_transactions');
+    expect(txInsert?.payload).toMatchObject({
+      payment_id: PAYMENT_ID,
+      amount_satang: AMOUNT,
+      direction: 'IN',
+    });
+
+    const paymentUpdate = tick2.calls.find(
+      (c) => c.table === 'payments' && c.op === 'update' && c.payload?.state === 'SUCCESS',
+    );
+    expect(paymentUpdate?.eq).toMatchObject({ id: PAYMENT_ID });
+
+    const orderUpdate = tick2.calls.find((c) => c.table === 'orders' && c.op === 'update');
+    expect(orderUpdate?.payload).toMatchObject({ state: 'PAID' });
+    expect(orderUpdate?.eq).toMatchObject({ id: ORDER_ID, state: 'PENDING_PAYMENT' });
+
+    const commissionGroup = tick2.calls.find(
+      (c) => c.table === 'ledger_entry_groups' && c.op === 'insert' && c.payload?.kind === 'MERCHANT_COMMISSION',
+    );
+    expect(commissionGroup).toBeDefined();
+    const customerPaymentGroup = tick2.calls.find(
+      (c) => c.table === 'ledger_entry_groups' && c.op === 'insert' && c.payload?.kind === 'CUSTOMER_PAYMENT',
+    );
+    expect(customerPaymentGroup).toBeDefined();
+    const serviceFeeGroup = tick2.calls.find(
+      (c) => c.table === 'ledger_entry_groups' && c.op === 'insert' && c.payload?.kind === 'SERVICE_FEE_REVENUE',
+    );
+    expect(serviceFeeGroup).toBeDefined();
   });
 });
 
