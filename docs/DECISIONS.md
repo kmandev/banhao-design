@@ -66,6 +66,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-054** | **Customer-arrival anchor `EN_ROUTE → ARRIVED` (distinct from `AT_MERCHANT`), and a narrow DEC-APP-006 carve-out letting DEC-053 use `DELIVERY_FAILED` while BQ-013 stays `OPEN`** | **ACCEPTED — POLICY / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/RIDER_LIFECYCLE.md` § 4, `docs/BANHAO-APP-ARCHITECTURE-V1.md` (DEC-APP-006), DEC-053 |
 | **DEC-055** | **Q-001 resolved: Stripe is the Phase 1 payment provider (PromptPay / THB), behind the existing `PaymentProvider` abstraction, with no Stripe Connect in Phase 1** · **Addendum A (same day): the PromptPay presentation contract is locked — provider-neutral `QR_CODE`, `imageUrl` from `image_url_png`, no `expiresAt` on provider presentation** | **ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 3, DEC-015, Q-001 (resolved), `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` |
 | **DEC-056** | **Customer payment email: BANHAO-owned customer data, collected at payment time (never at phone-OTP signup), validated, persisted on `profiles`, read server-side, and failing closed when absent — never synthetic, never the Supabase Auth email** | **ACCEPTED — POLICY / DATA MODEL · RUNTIME NOT IMPLEMENTED · NO MIGRATION YET** | **2026-09-08** | `docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md`, DEC-055 Addendum A-9, Q-012 (`OPEN`), Q-020 (`OPEN`) |
+| **DEC-060** | **Q-020 reconciliation schema: `reconciliation_cases.kind` gains six refund anomaly values (A–F) plus a partial unique index scoped to them only; case G stays in `payment_events.processing_error`, no new kind** | **ACCEPTED — SCHEMA / ARCHITECTURE · MIGRATION NOT YET WRITTEN** | **2026-09-09** | `supabase/migrations/20260811000010_audit_notification_infra_domain.sql`, `apps/api/src/modules/admin/reconciliation-case.service.ts`, DEC-049, DEC-057, Q-020 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -7316,3 +7317,335 @@ DEC-050, DEC-051, DEC-052 or DEC-053, each of which stands unchanged and is
 applied, not altered, by this decision. Resolves the one component every one
 of those decisions explicitly left open: whether `MERCHANT_COMMISSION` is
 reversed on a full refund.
+
+---
+
+## DEC-060 — Q-020 reconciliation schema: `reconciliation_cases.kind` widened for durable refund anomaly cases, scoped dedup index, case G stays schema-safe
+
+**Status:** ACCEPTED — SCHEMA / ARCHITECTURE · **MIGRATION NOT YET WRITTEN** · **Date:** 2026-09-09 · **Owner:** PRODUCT_OWNER
+
+### Decision
+
+Q-020 Slice 4 (reconciliation, recovery, operational visibility) reached a
+genuine schema blocker: `reconciliation_cases.kind`'s CHECK constraint
+(`20260811000010_audit_notification_infra_domain.sql`) permits only
+`LATE_PAYMENT`, `SURPLUS_PAYMENT`, `AMOUNT_MISMATCH`, `UNMATCHED_EVENT` — none
+of the refund-domain anomalies the reconciliation detector must persist. This
+decision locks the **minimal additive schema** that unblocks it. It does not
+implement the detector, the self-heal logic, or any recovery action — those
+remain a future slice's work, gated on this decision the same way DEC-049
+gated Slice 3's ledger reversal code.
+
+**1. Six new `kind` values — cases A–F, not A–G.**
+
+```
+PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED   (A)
+LOCAL_REFUNDED_PROVIDER_NOT_CONFIRMED   (B)
+REFUND_AMOUNT_MISMATCH                  (C)
+MISSING_PROVIDER_REFUND_ID              (D)
+MISSING_PROVIDER_EVENT                  (E)
+REFUNDED_LEDGER_INCOMPLETE              (F)
+```
+
+Every one of these is anchored to an actual `refunds` row — A/C are raised
+once a specific refund has already been matched (event processing or a
+scan); B/D/E/F are raised by a scan of `refunds`/`ledger_entry_groups`
+directly. `refunds.payment_id` is `not null`, so all six always have a
+non-null `payment_id` to anchor to (§ 3).
+
+**2. Case G (`PROVIDER_LOCAL_STATE_DIVERGENCE`) gets no new `kind`.**
+
+Slice 4 already recorded this via `payment_events.processing_error`
+(`RefundEventProcessingService`, the branch that fires when a provider
+`SUCCEEDED` event arrives for a refund already `REFUND_FAILED`/
+`REFUND_REJECTED`). Recon for this decision confirms it needs no durable
+typed row: it is detected exactly once, at the moment a specific
+already-claimed, immutable `payment_events` row is processed — never a
+state-at-rest condition a periodic scan must re-discover, unlike A/B/D/E/F.
+It cannot recur for that event (the claim is permanent) and there is nothing
+to "reopen." A future decision may still choose to surface it in the same
+operator inbox as the other six for UX consolidation, but that is a
+presentation choice, not a Q-020 reconciliation requirement, and is not
+authorized by this entry.
+
+**3. `payment_id` is sufficient. No `refund_id` column is added.**
+
+Phase 1's refund model already guarantees at most one `refunds` row per
+`payments` row, permanently: `refunds.refund_reference` is the deterministic
+`REFUND-<payment_reference>` value (Slice 1, `RefundService`), unique, and
+`payments.order_id` is itself unique (DEC-028) — so `payment_id` is already a
+stable 1:1 proxy for "which refund this case is about." Adding a `refund_id`
+column would duplicate a relationship the existing foreign-key graph already
+expresses uniquely, for every one of the six anomalies (§ 1's own reasoning).
+This does not change if `BQ-031` (partial refund) is later resolved to allow
+more than one refund per payment — that would be its own decision, and this
+one does not anticipate or foreclose it.
+
+**4. Dedup index — scoped to the six new kinds only, never the four existing ones.**
+
+```sql
+create unique index reconciliation_cases_refund_open_key
+  on public.reconciliation_cases (kind, payment_id)
+  where state in ('OPEN', 'IN_PROGRESS')
+    and kind in (
+      'PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED',
+      'LOCAL_REFUNDED_PROVIDER_NOT_CONFIRMED',
+      'REFUND_AMOUNT_MISMATCH',
+      'MISSING_PROVIDER_REFUND_ID',
+      'MISSING_PROVIDER_EVENT',
+      'REFUNDED_LEDGER_INCOMPLETE'
+    );
+```
+
+The naive version of this index — `(kind, payment_id)` unscoped, covering all
+ten kinds — was considered and rejected (§ "Alternatives"): `openCase`
+(`PaymentEventProcessingService`) has inserted the four existing kinds with
+**no** dedup for over a month of this project's history, so an unscoped
+unique index could fail to create at all against a database already holding
+duplicate `OPEN`/`IN_PROGRESS` rows for the same `(kind, payment_id)` pair —
+an additive migration must never risk failing against data it does not
+control. Scoping the `WHERE` clause to only the six brand-new kinds makes
+this **provably safe**: no row of any of those six kinds exists anywhere
+before this migration runs (they are not yet legal `kind` values), so the
+index has zero rows to validate against at creation time, by construction.
+
+This index answers every property required of it:
+
+- **One active case per anomaly** — a second `INSERT` for the same
+  `(kind, payment_id)` while an `OPEN`/`IN_PROGRESS` row exists conflicts
+  (`23505`), handled by the same insert-first/read-back/self-heal pattern
+  DEC-049 §7 already established for `ledger_entry_groups.group_key` —
+  **no new idempotency architecture**, exactly as that decision requires of
+  itself.
+- **Historical `RESOLVED`/`CLOSED` cases preserved** — the index is
+  *partial*: a resolved row no longer counts toward it, so it is never
+  touched, renamed, or removed by a later detection cycle.
+- **Multiple different anomaly kinds for one payment** — `kind` is part of
+  the index key, so an `OPEN` `REFUND_AMOUNT_MISMATCH` and an `OPEN`
+  `MISSING_PROVIDER_EVENT` may coexist for the same `payment_id`; they are
+  independent facts.
+- **Recurrence after resolution** — once a case leaves `OPEN`/`IN_PROGRESS`,
+  the partial index stops counting it, so a genuinely new future occurrence
+  of the same `(kind, payment_id)` inserts cleanly as its own new row. This
+  is precisely how "re-open only when a genuinely new anomaly occurrence
+  exists" is satisfied: a *new row*, never a resurrected old one, and never
+  a row this migration or any application code mutates back to `OPEN` on its
+  own.
+- **Concurrent workers, no case storm** — the unique index is the
+  concurrency authority (never a prior `SELECT`), so two ticks racing to
+  detect the same anomaly for the same payment produce exactly one row,
+  the same guarantee `ledger_entry_groups.group_key` already gives Slice 3's
+  ledger postings.
+- **Existing reconciliation case compatibility** — the four existing kinds
+  are never named in the new index's `WHERE` clause, so their multi-year-old,
+  never-deduplicated `LATE_PAYMENT`/`SURPLUS_PAYMENT`/`AMOUNT_MISMATCH`/
+  `UNMATCHED_EVENT` rows (and `PaymentEventProcessingService.openCase`,
+  which inserts them) are untouched and unaffected — this decision changes
+  their behaviour in no way.
+
+**5. Migration operations — the exact, minimal set.**
+
+```sql
+alter table public.reconciliation_cases
+  drop constraint reconciliation_cases_kind_check;
+
+alter table public.reconciliation_cases
+  add constraint reconciliation_cases_kind_check
+  check (kind in (
+    'LATE_PAYMENT', 'SURPLUS_PAYMENT', 'AMOUNT_MISMATCH', 'UNMATCHED_EVENT',
+    'PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED', 'LOCAL_REFUNDED_PROVIDER_NOT_CONFIRMED',
+    'REFUND_AMOUNT_MISMATCH', 'MISSING_PROVIDER_REFUND_ID',
+    'MISSING_PROVIDER_EVENT', 'REFUNDED_LEDGER_INCOMPLETE'
+  ));
+
+create unique index reconciliation_cases_refund_open_key
+  on public.reconciliation_cases (kind, payment_id)
+  where state in ('OPEN', 'IN_PROGRESS')
+    and kind in (
+      'PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED', 'LOCAL_REFUNDED_PROVIDER_NOT_CONFIRMED',
+      'REFUND_AMOUNT_MISMATCH', 'MISSING_PROVIDER_REFUND_ID',
+      'MISSING_PROVIDER_EVENT', 'REFUNDED_LEDGER_INCOMPLETE'
+    );
+```
+
+Following the AI-01 precedent (`20260903000001_audit_logs_ai_actor_type.sql`)
+exactly: drop-then-recreate the single unnamed CHECK by its deterministic
+default name (`<table>_<column>_check`), a strict superset every existing row
+already satisfies, no other column, trigger, grant, or RLS state touched. The
+constraint's actual live name must be confirmed against `pg_constraint`
+before the migration runs, the same verification step that entry documents
+for itself — this decision does not waive it.
+
+**6. No RLS change, no new grant, no new access surface.**
+
+`reconciliation_cases` keeps its existing default-deny posture: no policy for
+`anon`/`authenticated` before or after this migration, `service_role`-only
+access via the API, unchanged. No customer, rider, or merchant access is
+introduced or implied.
+
+### Explicit non-decisions
+
+This is a schema decision only. It does **not** decide, and must not be read
+as deciding:
+
+- **The reconciliation detector itself** — what runs the scan, on what
+  cadence, and how it composes with `/internal/tick` is future implementation
+  work this decision gates, not performs.
+- **Automatic refund recovery of any kind.** No self-heal beyond what Slice 3
+  already does (its own `RefundLedgerReversalService` self-heal, unchanged)
+  is authorized here.
+- **Any financial override mechanism.** No endpoint, command, or migration
+  here lets any actor set `refunds.state = 'REFUNDED'`, mutate a ledger
+  entry, or move money.
+- **Partial refunds** — `BQ-031` remains open and untouched; every one of
+  the six new kinds assumes Q-020's existing full-refund-only scope
+  (DEC-057 § 1).
+- **Any refund business rule** — eligibility (DEC-050/053), the state
+  mapping (DEC-057 § 4), the reversal shape (DEC-049/059) — all unchanged.
+- **AI financial authority of any kind.** DEC-040's constraints are
+  untouched; nothing here grants the AI Operations pipeline a read or write
+  path to `reconciliation_cases`, and no refund-domain command is added to
+  its catalog.
+- **Case E's exact staleness threshold.** No configured TTL/retry constant
+  for "how long is too long since a refund request" exists anywhere in this
+  repository today (`PaymentReconciliationService`'s own `graceWindowMs`
+  parameter documents the identical absence for payments) — the boundary
+  a future detector uses for `MISSING_PROVIDER_EVENT` is that
+  implementation's own parameter to justify, not fixed here.
+- **Whether the event-level "unmatched"/"identity conflict" anomalies
+  `RefundEventProcessingService` already logs to `payment_events.processing_error`
+  (distinct from cases A–G as named) ever get promoted to a durable
+  `reconciliation_cases` row** — if they ever are, the existing
+  `UNMATCHED_EVENT` kind may already be an honest fit (it already means "no
+  payment could be resolved for this event," domain-neutral), which would
+  need no schema change at all; this decision does not decide that either
+  way.
+- **`packages/validation/src/reconciliation.ts`'s `RECONCILIATION_CASE_KINDS`
+  array** — it must be extended to include the six new values **when the
+  detector is implemented**, alongside the migration landing, not before;
+  this decision does not itself touch source.
+
+### Why
+
+Product Owner decision, 2026-09-09, following Q-020 Slice 4's own recon,
+which found the exact blocker (`reconciliation_cases_kind_check` has no
+refund vocabulary) and the exact reason no repeated-scan detector could be
+built safely without a dedup key. The six-kind (not seven) scope follows
+directly from re-examining case G against what Slice 4 already shipped: a
+schema-safe, already-working, already-tested visibility path exists for it,
+and DEC-040/every prior decision in this project's history treats "does not
+invent a new value that isn't needed" as the default, not the exception — the
+Q-020 Slice 4 mission's own instruction ("do NOT create duplicate schema
+vocabulary for G unless RECON proves it is required") is applied literally
+here: recon did not prove it, so it is not added. The scoped-not-unscoped
+dedup index follows the same discipline: the smallest change that is
+*provably* safe against a table this decision does not otherwise inspect
+row-by-row beats a broader one whose safety would depend on an assumption
+about data this decision cannot verify from documentation alone.
+
+### Alternatives
+
+- **Unscoped `(kind, payment_id)` unique index, covering all ten kinds** —
+  rejected. `openCase`'s four existing kinds have never been deduplicated;
+  an unscoped index risks failing to create at all against
+  already-duplicated historical `OPEN`/`IN_PROGRESS` rows, and even if it
+  happened to succeed today, it would silently change the four existing
+  kinds' long-standing behaviour (no dedup) as an unintended side effect of
+  a decision scoped to refund reconciliation only.
+- **A `refund_id` column on `reconciliation_cases`** — rejected. `payment_id`
+  already uniquely identifies the associated refund under Phase 1's
+  full-refund-only, one-refund-per-payment model (§ 3); adding a second
+  column for the same relationship is schema for its own sake, the exact
+  thing `docs/DATABASE_MIGRATION_V1_REPORT.md`'s own discipline (and this
+  project's "do not add a table/column without a stated reason") already
+  forbids.
+- **A seventh kind for case G** — rejected for now (§ 2). Nothing about
+  the existing `payment_events.processing_error` path is lossy, duplicative,
+  or operationally invisible; the only gain would be listing it alongside
+  the other six in the same inbox, a presentation concern this decision does
+  not need to solve to unblock Slice 4's core requirement.
+- **A generic `reconciliation_cases.metadata jsonb` escape hatch instead of
+  named `kind` values** — rejected. It would defeat the entire point of a
+  typed, filterable, "identifiable" case (Slice 4's own read path already
+  filters and displays by `kind`), and contradicts DEC-049's own repeated
+  warning about un-filtered aggregation conflating distinct facts.
+
+### Consequences
+
+- A future migration (not written by this decision) may widen
+  `reconciliation_cases_kind_check` and add
+  `reconciliation_cases_refund_open_key` exactly as § 5 specifies, once
+  written and reviewed as its own migration file.
+- The Q-020 Slice 4 reconciliation detector becomes buildable: it may insert
+  one of the six new kinds, relying on `reconciliation_cases_refund_open_key`
+  for idempotency, following the exact insert-first/read-back pattern
+  `RefundLedgerReversalService` (Slice 3) and `ledger_entry_groups.group_key`
+  (DEC-049) already established.
+- `packages/validation/src/reconciliation.ts`'s `RECONCILIATION_CASE_KINDS`/
+  `ReconciliationCaseKind` must be extended with the six new values in the
+  same slice that implements the detector — not before, and not as part of
+  this decision.
+- Case G stays exactly as Slice 4 left it: visible via
+  `payment_events.processing_error`, not the reconciliation-cases read path,
+  until and unless a future decision explicitly revisits § 2.
+- No existing row, index, policy, grant, or trigger on `reconciliation_cases`
+  changes in any way.
+
+### Implementation status
+
+**Migration not yet written.** This decision locks the schema design only —
+no `supabase/migrations/*.sql` file exists for it yet, no source file in
+`apps/` changed, and no kind value is legal in the database until that
+migration is authored, reviewed against `pg_constraint`'s live constraint
+name (§ 5), and applied under its own explicit instruction, per this
+project's standing rule that no migration is added opportunistically.
+
+### Evidence
+
+Product Owner instruction, 2026-09-09 ("BANHAO — Q-020 RECONCILIATION
+SCHEMA — DECISION PREPARATION + DECISION LOCK"), following the Q-020 Slice 4
+implementation session's own `SLICE 4 BLOCKED` report and this decision's own
+read-only recon: `reconciliation_cases_kind_check`'s exact current values
+(`20260811000010_audit_notification_infra_domain.sql`), the table's complete
+column set (no `refund_id`, `payment_id` nullable-but-always-populated for
+every one of the six new kinds' triggering conditions), the absence of any
+existing unique constraint on the table, the AI-01 migration
+(`20260903000001_audit_logs_ai_actor_type.sql`) as the precedent for a safe
+additive CHECK widening, and `apps/api/src/modules/admin/reconciliation-case.service.ts`/
+`apps/api/src/modules/payments/refund-event-processing.service.ts` (Slice 4)
+as the current, unmodified read path and case-G handling this decision
+builds on top of without altering.
+
+### Related Requirements
+
+DEC-028 (idempotency — the same principle this decision's dedup index
+extends) · DEC-032 (operator accountability, unchanged — resolution still
+requires a reason at the application layer) · DEC-033 (multi-role identity —
+unaffected, no RLS or grant change) · DEC-049 (ledger reversal architecture —
+the insert-first/self-heal pattern this decision's dedup index reuses,
+unchanged) · DEC-057 (refund mechanism and finality — the six new kinds all
+describe divergence from what DEC-057 §4 already locks, unchanged) · DEC-058
+(refund authority — unaffected; no new financial actor or authority is
+created) · DEC-059 (full refund accounting — case F watches its own reversal
+groups, unchanged) · Q-020 (this decision's own subject)
+
+### Related Architecture
+
+`supabase/migrations/20260811000010_audit_notification_infra_domain.sql`
+(`reconciliation_cases`, the table this decision widens) ·
+`supabase/migrations/20260903000001_audit_logs_ai_actor_type.sql` (the exact
+additive-CHECK-widening precedent this decision follows) ·
+`supabase/migrations/20260811000006_payment_domain.sql` (`refunds`, the
+1:1 payment↔refund relationship § 3 relies on) ·
+`apps/api/src/modules/admin/reconciliation-case.service.ts` (the existing
+read/resolve path this decision's new kinds will appear through, unchanged
+by this decision) · `apps/api/src/modules/payments/refund-event-processing.service.ts`
+(case G's existing `payment_events.processing_error` handling, unchanged) ·
+`packages/validation/src/reconciliation.ts` (`RECONCILIATION_CASE_KINDS`,
+to be extended when the detector lands, not by this decision)
+
+### Supersedes / Superseded By
+
+None / None. Does not supersede or modify DEC-049, DEC-057, DEC-058, or
+DEC-059, each of which stands unchanged. Resolves the schema blocker Q-020
+Slice 4 reported, and only that.
