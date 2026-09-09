@@ -7649,3 +7649,251 @@ to be extended when the detector lands, not by this decision)
 None / None. Does not supersede or modify DEC-049, DEC-057, DEC-058, or
 DEC-059, each of which stands unchanged. Resolves the schema blocker Q-020
 Slice 4 reported, and only that.
+
+---
+
+## DEC-061 — Q-002 Owner Decision Lock: D-01…D-14 (commission, service fee, dynamic rider/delivery economics, contribution guardrail, operational distance, minimum order value, promotion funding)
+
+**Status:** **LOCKED — ECONOMIC POLICY** · **RUNTIME NOT IMPLEMENTED** · **Date:** 2026-09-09 · **Owner:** PRODUCT_OWNER
+
+### Owner-approved scope
+
+Locks the Q-002 Phase 1 economic policy set as fourteen sub-decisions,
+**D-01…D-14**, prepared by `docs/Q-002-OWNER-DECISION-PACK.md` (§8A–§8D) and
+`docs/Q-002-ECONOMICS-ARCHITECTURE-SPEC.md`.
+
+**This entry locks economic policy only.** It implements nothing and authorizes
+nothing: no pricing engine, no geospatial or routing integration, no settlement,
+no configuration infrastructure, no schema, no migration. Every value below is an
+**economic decision**, not an implementation instruction.
+
+### D-01 — Merchant commission rate
+
+**Merchant commission = 10% of food subtotal.**
+
+**PARTIAL supersession of DEC-043 — the numeric rate only.** DEC-043 is
+**preserved** in every other respect: the commission base remains the **food
+subtotal** (delivery fee and service fee stay excluded), and the whole-baht
+rounding rule is unchanged. Historical orders remain immutable and their already
+recognised commission is **never recomputed**.
+
+### D-02 — Commission rounding
+
+**Preserve the existing whole-baht commission rounding rule**, unchanged. No new
+rounding mechanism is introduced and no rounding redesign is authorized.
+
+### D-03 — Customer service fee
+
+**Service fee = 5% of food subtotal, with a minimum of ฿5.** Economically:
+percentage 5%, floor ฿5. Future implementation must use integer-satang
+semantics. **Supersedes DEC-036's fixed-fee model** (with D-04).
+
+### D-04 — Service fee cap
+
+**Customer service fee maximum = ฿15 per order.** The fee therefore follows
+**percentage → floor → cap**. Exact evaluation ordering may be finalized during
+implementation provided the economic result preserves this locked meaning.
+
+**D-03 and D-04 together fully supersede DEC-036.** **DEC-047** (service-fee
+recognition timing) and **DEC-048** (service-fee refund treatment) are
+**preserved unchanged**.
+
+### D-05 — Rider share
+
+**The rider receives 80% of the calculated customer delivery fee** — the
+rider-share model for the dynamic delivery-fee architecture.
+
+### D-06 — Rider minimum
+
+**Minimum rider earning = ฿12 per completed eligible delivery.**
+
+DEC-044's rider exclusions are **preserved**: **no surge, no peak bonus, no
+tips, no rider-side platform fee.** None of these mechanisms is introduced.
+
+### D-07 — Rider base
+
+**Rider required earning base = ฿8.**
+
+### D-08 — Rider distance component
+
+**Rider required earning increases by ฿1.20 per operational road kilometre.**
+
+**The distance metric MUST be road distance.** This must never be interpreted as
+straight-line or geodesic distance.
+
+### D-09 — Minimum customer delivery fee
+
+**Customer delivery fee minimum = ฿15.**
+
+**D-09 is a DERIVED parameter**, not an independent assumption: it follows from
+D-06 ÷ D-05 (฿12 ÷ 80% = ฿15). It must never be represented as an unrelated
+economic value, and must be recomputed if D-05 or D-06 changes.
+
+### D-10 — Maximum customer delivery fee
+
+**Customer delivery fee maximum = ฿35.** The maximum must remain **above the
+delivery fee required at the D-12 operational edge**, so that the cap can never
+bind inside the serviceable area and silently underfund a rider. Not to be
+changed in isolation.
+
+### D-11 — Minimum safe contribution
+
+**BANHAO must not accept an order unless the calculated expected BANHAO
+contribution is at least ฿5.** A **strict pre-acceptance, order-level economic
+guardrail**, evaluated **before** order acceptance.
+
+The contribution calculation must include all applicable known economics before
+acceptance: commission, service fee, delivery economics, promotion funding
+impact, payment processing cost, and any other configured order-level costs in
+the approved pricing model. If `expected contribution < ฿5` then **REJECT**.
+
+> **SEMANTIC BOUNDARY — explicit and binding.** **D-11 does NOT mean BANHAO can
+> never lose money after accepting an order.** It guarantees only that the
+> deterministic calculated contribution *at acceptance* meets the configured
+> floor. It does **not** eliminate post-acceptance delivery variance, refunds,
+> chargebacks, fraud, delivery failures, rider-cost variance, provider fee
+> divergence, operational write-offs, or other unforeseen losses. **D-11 must
+> never be described as a solvency guarantee.**
+
+### D-12 — Maximum operational distance
+
+**Maximum operational ROAD DISTANCE = 15 km.**
+
+**CRITICAL — this is NOT a 15 km circular radius, NOT straight-line distance,
+and NOT geodesic distance.** It is an operational road-distance limit. Orders
+beyond it are to be treated as non-serviceable rather than served through a
+silent rider subsidy.
+
+The future geospatial architecture direction is **service polygon → road
+distance → economics engine → D-11 guardrail**. **This entry locks no routing or
+geocoding provider** — provider selection remains OPEN (see Open items).
+
+### D-13 — Minimum order value
+
+**No minimum order value is required for solvency in Phase 1.** The economics
+engine and the D-11 guardrail remain authoritative.
+
+This does **not** prohibit future commercial experimentation. Any minimum order
+value introduced later for conversion, basket-size optimization, customer
+experience or merchant economics must be a **separate future owner decision**.
+
+### D-14 — Promotion funder
+
+**Promotions may be funded by either MERCHANT or PLATFORM, with MERCHANT as the
+Phase 1 default.** DEC-046's prohibition on Phase 1 split/shared funding is
+**preserved**: merchant-funded allowed, platform-funded allowed, **split funding
+not in Phase 1**.
+
+**A promotion can never bypass D-11.** The pricing engine must compute the
+resulting contribution **after** applying the promotion's funding economics, and
+then apply the D-11 guardrail to that result.
+
+### Derived versus independent parameters
+
+Future implementation must not treat these as unrelated arbitrary numbers:
+
+- **D-09 is derived** from D-05 and D-06.
+- **D-10 is constrained** by D-12 and the rider economics.
+- **D-11 is an independent, owner-set contribution floor.**
+- **D-12 is an operational serviceability limit**, not a pricing input.
+
+### Historical order immutability
+
+These decisions apply to orders **priced and accepted under the active
+configuration after activation**. **Historical orders remain immutable and
+retain their original recorded economics.** Historical refunds must continue to
+reverse the **original recorded economics**. Historical orders must never be
+recomputed using the latest configuration. This preserves **Q-020**.
+
+### Supersession map
+
+**SUPERSEDES DEC-035** — the flat ฿10 delivery-fee model, replaced by the
+dynamic delivery economics in D-05, D-06, D-07, D-08, D-09, D-10 and D-12. The
+flat ฿10 model is no longer the target future pricing model.
+
+**SUPERSEDES DEC-036 in full** — replaced by D-03 and D-04.
+
+**PARTIALLY SUPERSEDES DEC-043** — the **commission rate only** (8% → 10%, D-01).
+**PRESERVED:** the commission base (food subtotal) and the whole-baht rounding
+rule. DEC-043 must not be treated as wholly superseded.
+
+**SUPERSEDES DEC-044's rider earning model** — replaced by D-05, D-06, D-07 and
+D-08. **PRESERVED:** no surge, no peak bonus, no tips, no rider-side platform
+fee.
+
+**SUPERSEDES DEC-045** — its fixed ฿2 platform write-off assumption is
+incompatible with dynamic delivery economics, under which BANHAO's delivery
+margin can be positive.
+
+> **This supersession requires a future accounting/ledger redesign, which this
+> entry does NOT perform and does NOT authorize.** The redesign must ensure
+> BANHAO does not post a fictional fixed ฿2 loss against a potentially positive
+> dynamic delivery margin, and must correctly represent delivery-fee revenue,
+> rider payable, and BANHAO delivery margin. Until that redesign is separately
+> decided and built, the existing `RIDER_EARNING` ledger treatment is unchanged
+> in code.
+
+### Preserved decisions
+
+**DEC-046, DEC-047, DEC-048, DEC-049 and DEC-059 remain in force** unless
+specifically superseded by a later decision. None is rewritten by this entry.
+**Q-020 remains valid**, and historical refund accounting must continue to use
+original recorded economics.
+
+### Configuration principles for future implementation
+
+Architectural rules for subsequent implementation decisions. **This entry does
+not implement the configuration system.**
+
+1. Economic parameters must not be hard-coded.
+2. Pricing parameters must be configurable.
+3. Configuration versions must be immutable once active.
+4. Orders must snapshot the configuration version used for pricing.
+5. Configuration changes must be auditable.
+6. Configuration activation must require authorization.
+7. Configuration changes must record a mandatory reason.
+8. Invalid configuration must fail closed.
+9. Missing configuration must fail closed.
+10. A configured zero is valid when explicitly configured — missing configuration
+    is never equivalent to zero.
+11. **AI has no financial authority** (DEC-040, restated).
+12. Pricing acceptance must be **server-authoritative** (DEC-E-01, ADR-001).
+
+### Open items — explicitly NOT locked by this entry
+
+- **D-15** settlement cadence · **D-16** distance provider/source · **D-17**
+  distance accuracy policy · **D-18** configuration activation authority ·
+  **D-19** mid-checkout configuration-version behaviour.
+- **Routing/geocoding provider selection**, including Google — OPEN pending the
+  Buntharik geocoding field evaluation, current provider-pricing verification,
+  and **Q-018 / TQ-004**.
+- Geo-fence polygon implementation · Google Maps billing verification.
+- Commission-base treatment for merchant-funded promotions.
+- `PLATFORM_WRITE_OFF` account taxonomy · delivery-fee revenue ledger posting ·
+  merchant payable ledger posting · rider compensation ledger redesign.
+- Post-acceptance risk buffer.
+- **BQ-024** rider compensation eligibility/amount · **BQ-030** promotion
+  stacking · settlement, legal and tax decisions · future multi-hub architecture.
+
+None of the above is converted into a locked decision by this entry.
+
+### Implementation status
+
+**RUNTIME NOT IMPLEMENTED.** Known blockers, recorded not resolved: distance is
+not computable today (`addresses.lat`/`lng` are optional and incompletely
+populated; `orders.distance_m` is never populated by any code path), and no
+economic configuration infrastructure exists in the repository.
+
+### Evidence
+
+`docs/Q-002-OWNER-DECISION-PACK.md` §8A (D-03/D-04), §8B (D-05…D-10, D-12),
+§8C (D-13/D-14), §8D (D-11); `docs/Q-002-ECONOMICS-ARCHITECTURE-SPEC.md`. All
+supporting figures were independently recomputed before this lock.
+
+### Supersedes / Superseded By
+
+**Supersedes:** DEC-035 (full), DEC-036 (full), DEC-043 (**partial — rate
+only**), DEC-044 (rider earning model, exclusions preserved), DEC-045 (with a
+future ledger redesign required). **Superseded by:** none.
+**Preserves:** DEC-046, DEC-047, DEC-048, DEC-049, DEC-059, and all of Q-020
+(DEC-057, DEC-058, DEC-060), each unchanged.
