@@ -66,7 +66,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-054** | **Customer-arrival anchor `EN_ROUTE → ARRIVED` (distinct from `AT_MERCHANT`), and a narrow DEC-APP-006 carve-out letting DEC-053 use `DELIVERY_FAILED` while BQ-013 stays `OPEN`** | **ACCEPTED — POLICY / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-07** | `docs/RIDER_LIFECYCLE.md` § 4, `docs/BANHAO-APP-ARCHITECTURE-V1.md` (DEC-APP-006), DEC-053 |
 | **DEC-055** | **Q-001 resolved: Stripe is the Phase 1 payment provider (PromptPay / THB), behind the existing `PaymentProvider` abstraction, with no Stripe Connect in Phase 1** · **Addendum A (same day): the PromptPay presentation contract is locked — provider-neutral `QR_CODE`, `imageUrl` from `image_url_png`, no `expiresAt` on provider presentation** | **ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 3, DEC-015, Q-001 (resolved), `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` |
 | **DEC-056** | **Customer payment email: BANHAO-owned customer data, collected at payment time (never at phone-OTP signup), validated, persisted on `profiles`, read server-side, and failing closed when absent — never synthetic, never the Supabase Auth email** | **ACCEPTED — POLICY / DATA MODEL · RUNTIME NOT IMPLEMENTED · NO MIGRATION YET** | **2026-09-08** | `docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md`, DEC-055 Addendum A-9, Q-012 (`OPEN`), Q-020 (`OPEN`) |
-| **DEC-060** | **Q-020 reconciliation schema: `reconciliation_cases.kind` gains six refund anomaly values (A–F) plus a partial unique index scoped to them only; case G stays in `payment_events.processing_error`, no new kind** | **ACCEPTED — SCHEMA / ARCHITECTURE · MIGRATION NOT YET WRITTEN** | **2026-09-09** | `supabase/migrations/20260811000010_audit_notification_infra_domain.sql`, `apps/api/src/modules/admin/reconciliation-case.service.ts`, DEC-049, DEC-057, Q-020 |
+| **DEC-060** | **Q-020 reconciliation schema: `reconciliation_cases.kind` gains six refund anomaly values (A–F) plus a partial unique index scoped to them only; case G stays in `payment_events.processing_error`, no new kind** | **ACCEPTED — SCHEMA / ARCHITECTURE · LOCKED · IMPLEMENTED — migration applied live to `banhao-dev`** | **2026-09-09** | `supabase/migrations/20260811000010_audit_notification_infra_domain.sql`, `apps/api/src/modules/admin/reconciliation-case.service.ts`, DEC-049, DEC-057, Q-020 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -6548,7 +6548,7 @@ question DEC-055 opened about its *own* presentation contract; this is not that.
 
 ## DEC-057 — Q-020 Phase 1 refund mechanism: full-refund-only scope, hybrid finality, PromptPay state mapping, reconciliation as a production prerequisite
 
-**Status:** ACCEPTED — ARCHITECTURE / POLICY · **NOT IMPLEMENTED** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+**Status:** ACCEPTED — ARCHITECTURE / POLICY · **LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED, `Q-020 ACCEPTED WITH NON-BLOCKING FINDINGS` (2026-09-09)** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
 
 ### Decision
 
@@ -6901,7 +6901,7 @@ and is applied, not altered, by this decision.
 
 ## DEC-058 — Refund authority: actor boundaries for request, approval, execution, cancellation and override
 
-**Status:** ACCEPTED — POLICY · **NOT IMPLEMENTED** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+**Status:** ACCEPTED — POLICY · **LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED, `Q-020 ACCEPTED WITH NON-BLOCKING FINDINGS` (2026-09-09)** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
 
 ### Decision
 
@@ -7068,7 +7068,7 @@ supersedes or modifies neither.
 
 ## DEC-059 — Full refund accounting: which ledger components reverse, and which do not
 
-**Status:** ACCEPTED — POLICY · **NOT IMPLEMENTED** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
+**Status:** ACCEPTED — POLICY · **LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED, `Q-020 ACCEPTED WITH NON-BLOCKING FINDINGS` (2026-09-09)** · **Date:** 2026-09-08 · **Owner:** PRODUCT_OWNER
 
 ### Decision
 
@@ -7322,7 +7322,7 @@ reversed on a full refund.
 
 ## DEC-060 — Q-020 reconciliation schema: `reconciliation_cases.kind` widened for durable refund anomaly cases, scoped dedup index, case G stays schema-safe
 
-**Status:** ACCEPTED — SCHEMA / ARCHITECTURE · **MIGRATION NOT YET WRITTEN** · **Date:** 2026-09-09 · **Owner:** PRODUCT_OWNER
+**Status:** ACCEPTED — SCHEMA / ARCHITECTURE · **LOCKED · IMPLEMENTED — migration `20260909000001` applied live to `banhao-dev`, reconciliation detector built through Q-020 Slice 4B, E2E acceptance audit PASSED, `Q-020 ACCEPTED WITH NON-BLOCKING FINDINGS` (2026-09-09)** · **Date:** 2026-09-09 · **Owner:** PRODUCT_OWNER
 
 ### Decision
 
