@@ -3,7 +3,11 @@
 Orientation file for AI agents. Written 2026-08-10, updated 2026-08-12 (Phase A /
 A-1) after the Application Architecture V1.1 approval; reconciled 2026-08-30
 (D-7) to the actual repository state after Phases B–D, E (foundation), and G
-(rider/delivery, incl. G7 proof-of-delivery) work landed.
+(rider/delivery, incl. G7 proof-of-delivery) work landed; Q-020 status
+reconciled 2026-09-09 at `1981972d` after DEC-057/058/059/060 and Q-020
+Slices 1–4B (refund initiation, Stripe refund adapter, webhook finality,
+ledger reversal, reconciliation schema, reconciliation detector) landed on
+this branch — see §9/§10.
 
 > **Authoritative for application implementation:**
 > [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
@@ -364,7 +368,7 @@ this file summarises it.
 | **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | `NullPaymentProvider` module implemented (service, controller, webhook simulator, attempt-expiry, event processing) in the API; ledger-balances-to-zero property not independently re-verified in this update |
 | **G** | Rider & delivery — depends on E, **not** F | Substantial implementation: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, and the G7 proof-of-delivery flow (driver capture → compressed/EXIF-stripped upload → private R2 storage → signed download → customer read UI), all with test coverage (EVENT-023). Full-phase completion not independently re-verified in this update |
 | **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
-| **I** | Admin operations | **Started 2026-09-03 — the Human Supervisor half.** Exception inbox, case detail and case closure are built end to end (API + console + boundary tests). The financial half (payments, refunds, reconciliation, ledger, settlement) is designed and **not built**: Q-001, Q-002, Q-020 and Q-032 gate it (Q-010/BQ-028's commission rate is resolved — **DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht). Two design artifacts govern the phase and `docs/HUMAN_SUPERVISOR_CONTRACT.md` says which one governs what. See §13 |
+| **I** | Admin operations | **Started 2026-09-03 — the Human Supervisor half.** Exception inbox, case detail and case closure are built end to end (API + console + boundary tests). The financial half (payments, refunds, reconciliation, ledger, settlement) is **partially built**: refund initiation, the Stripe refund adapter, webhook finality, ledger reversal, the reconciliation schema and the reconciliation detector (Q-020, Slices 1–4B, `1981972d`) exist at the API layer, and operator/admin reconciliation-case visibility/resolution already covers the six Q-020 refund kinds through the existing `SupervisorController` path. **Settlement and payout remain unbuilt.** Q-001, Q-002 and Q-032 still gate the rest (Q-010/BQ-028's commission rate is resolved — **DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht; Q-001/payment-provider selection is resolved — **DEC-055** — runtime enablement status is tracked in §10, not restated here). Two design artifacts govern the phase and `docs/HUMAN_SUPERVISOR_CONTRACT.md` says which one governs what. See §13 |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
 | **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION STARTED 2026-09-03, two playbooks built (§12).** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4` and **applied and verified live 2026-09-03**, see §7). Read DEC-040 — including its *Implementation status* section — before any Phase J work |
 
@@ -380,12 +384,18 @@ API integration tests → **only then** Cloud Run.
 
 Running alongside, not blocking:
 
-1. **Answer the remaining 6 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
-   Q-001, Q-002, Q-020, BQ-015, BQ-027 (**refundability only** —
+1. **Answer the remaining 5 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
+   Q-001, Q-002, BQ-015, BQ-027 (**refundability only** —
    the amount is decided), BQ-030 (**stacking only** — the funder model is
    decided). Q-010/BQ-028 (commission rate) left this list 2026-09-05
-   (**DEC-043**), and the same day the funder half of BQ-030 left it too
-   (**DEC-046**). Every structural question is answered; what is left is
+   (**DEC-043**), the same day the funder half of BQ-030 left it too
+   (**DEC-046**), and **Q-020 (refund mechanism, authority, and full-refund
+   ledger accounting) left it 2026-09-08 — DEC-057/DEC-058/DEC-059** (its
+   reconciliation-schema follow-on, **DEC-060**, locked 2026-09-09). Q-020
+   is no longer an open decision and no longer belongs on this list —
+   Slices 1–4B implementing it are merged (`1981972d`, see §10) — the Q-020
+   End-to-End Acceptance Audit is what remains, not a business-decision
+   gap. Every structural question is answered; what is left is
    numbers, the provider, legal, and a stacking rule. **These block F′
    only** — DEC-APP-007 keeps them off the critical path for the other
    eight phases.
@@ -480,18 +490,31 @@ migration explicitly instructed for the current phase — see §10.
   Supabase grants `ALL` on public tables by default.
 
 **Open questions blocking real money — and only real money:** Q-002 legal
-settlement model, Q-020 PromptPay refund mechanism. **Q-001 (payment provider)
+settlement model. **Q-020 (PromptPay refund mechanism) is resolved and
+implemented** — **DEC-057** (mechanism/finality/reconciliation-as-prerequisite),
+**DEC-058** (refund authority: customer requests only, operator/admin
+approves/executes/cancels/overrides, system executes mechanically only per a
+locked policy, AI excluded entirely), **DEC-059** (full-refund ledger
+accounting — `CUSTOMER_PAYMENT`, `SERVICE_FEE_REVENUE` and
+`MERCHANT_COMMISSION` reverse; rider compensation stays gated on `BQ-024`)
+and **DEC-060** (reconciliation schema) are all `ACCEPTED`, 2026-09-08/09, and
+Q-020 Slices 1–4B — refund initiation, the Stripe refund adapter, webhook
+finality, ledger reversal, the reconciliation schema, and the reconciliation
+detector (anomalies A–D and F implemented; E documented as an intentional
+no-op — no valid staleness boundary exists in this codebase and none was
+invented) — are merged at `1981972d`, concurrency-verified against a real
+two-connection Postgres race. **Do not treat Q-020 as `OPEN` in new work.**
+What Q-020 still gates is the **Q-020 End-to-End Acceptance Audit**
+(production Stripe webhook registration, live verification), not an
+undecided business question. **Q-001 (payment provider)
 is resolved** — **DEC-055**, 2026-09-08: **Stripe**, PromptPay/THB, behind the
 existing `PaymentProvider` abstraction, **no Stripe Connect in Phase 1** (so
 Q-002 stays unprejudiced). **Runtime is not implemented** —
 `NullPaymentProvider` is still bound, and DEC-055 records two engineering
 prerequisites before Stripe events may be enabled: the payment-event starvation
-fix and a PromptPay QR sandbox spike. Q-020 still blocks **every** refund path;
-Stripe supports PromptPay refunds but requires the customer to supply a bank
-account by email, so the mechanism remains a product decision (see
-`ai/RESEARCH/PAYMENT_RESEARCH.md` for the rail-level finding). **Q-010
+fix and a PromptPay QR sandbox spike. **Q-010
 (platform fee) is resolved** — **DEC-043**, 2026-09-05, 8% of the food
-subtotal, round to whole baht. Under **DEC-APP-007** the remaining two gate
+subtotal, round to whole baht. Under **DEC-APP-007** the remaining item gates
 **Phase F′ only**; build the whole
 order → delivery flow against `NullPaymentProvider`. The
 schema stores **amounts, never rates**, so the open numbers can be set later
