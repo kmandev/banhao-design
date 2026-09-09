@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { BATCH_SIZE } from './payment-event-processing.service';
+import { RefundLedgerReversalService } from './refund-ledger-reversal.service';
+
+/** `refunds.state` values the ledger must never reverse against — a transition into `REFUNDED` is blocked from either of these by `transitionRefund`'s own guard, so a refund already in one of them before this event must never trigger a reversal either. */
+const LEDGER_REVERSAL_BLOCKED_STATES = new Set(['REFUND_FAILED', 'REFUND_REJECTED']);
 
 /** `payment_events`, the columns a claimed refund-domain row needs. */
 interface ClaimedRefundEventRow {
@@ -130,20 +134,42 @@ const STATE_BY_PROVIDER_STATUS: Record<string, string> = {
  * stale/out-of-order event, which is not an error, produces no duplicate
  * side effect, and needs no separate idempotency table.
  *
+ * ## Ledger reversal — DEC-049/DEC-059, Slice 3, delegated
+ *
+ * Once `transitionRefund` targets `REFUNDED`, and the refund's own
+ * pre-transition state (already loaded above, before the guarded UPDATE)
+ * was not already one of the two *other* terminal states
+ * (`REFUND_FAILED`/`REFUND_REJECTED`), this calls
+ * `RefundLedgerReversalService.postReversals` — never conditioned on whether
+ * `transitionRefund`'s own guarded `UPDATE` actually changed a row. That
+ * distinction matters under at-least-once event processing (Step 17): a
+ * redelivered event for an already-`REFUNDED` refund still needs the ledger
+ * call attempted (idempotent via `group_key`, self-healing a crash between a
+ * prior run's state transition and its ledger posting), while an event that
+ * would have moved a refund *out of* `REFUND_FAILED`/`REFUND_REJECTED` must
+ * never reach the ledger at all — that transition is illegal and blocked by
+ * `transitionRefund`'s own guard, so no financial side effect may follow it
+ * either. This file never reads or writes `ledger_entry_groups`/
+ * `ledger_entries` directly — see `RefundLedgerReversalService`'s own class
+ * doc comment for the reversal shape itself.
+ *
  * ## What this service deliberately does NOT do
  *
- * No DEC-049/DEC-059 ledger reversal of any kind — `ledger_entry_groups` and
- * `ledger_entries` are never read or written anywhere in this file. No
- * `reconciliation_cases` row (see above). No notification, no customer UI,
- * no AI command, no retry scheduler, no partial refund, no second Stripe API
- * call — this service only ever reads `refunds`/`payments` and writes
- * `refunds.state`/`payment_events.processing_error`/`payment_events.payment_id`.
+ * No `reconciliation_cases` row (see above). No notification, no customer
+ * UI, no AI command, no retry scheduler, no partial refund, no second Stripe
+ * API call — this service reads `refunds`/`payments`, writes
+ * `refunds.state`/`payment_events.processing_error`/`payment_events.payment_id`,
+ * and delegates ledger reversal to `RefundLedgerReversalService` rather than
+ * touching a ledger table itself.
  */
 @Injectable()
 export class RefundEventProcessingService {
   private readonly logger = new Logger(RefundEventProcessingService.name);
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly ledgerReversal: RefundLedgerReversalService,
+  ) {}
 
   /** Claims and processes up to `BATCH_SIZE` unprocessed refund-domain events. Called once per tick. */
   async processPendingEvents(): Promise<{ processed: number; skipped: number }> {
@@ -328,6 +354,15 @@ export class RefundEventProcessingService {
     }
 
     await this.transitionRefund(refund.id, targetState);
+
+    // DEC-049 §5/DEC-059 — ledger reversal fires only on the path that
+    // targets REFUNDED, and only when the refund was not already blocked
+    // into a different terminal state before this event arrived. See this
+    // class's own doc comment, "Ledger reversal — DEC-049/DEC-059, Slice 3,
+    // delegated".
+    if (targetState === 'REFUNDED' && !LEDGER_REVERSAL_BLOCKED_STATES.has(refund.state)) {
+      await this.ledgerReversal.postReversals(refund.id, payment.id);
+    }
   }
 
   /**

@@ -1,5 +1,6 @@
 import { RefundEventProcessingService } from './refund-event-processing.service';
 import { BATCH_SIZE } from './payment-event-processing.service';
+import type { RefundLedgerReversalService } from './refund-ledger-reversal.service';
 import type { SupabaseService } from '../../supabase/supabase.service';
 
 /**
@@ -9,8 +10,17 @@ import type { SupabaseService } from '../../supabase/supabase.service';
  * guards depend on) and returns queued results in call order, so a test can
  * assert a guard is actually IN the query, not merely checked afterward in
  * application code. `tablesTouched` backs the mandatory ledger-isolation
- * assertions (Q-020 Slice 2 mission, Step 16).
+ * assertions (Q-020 Slice 2 mission, Step 16) — this file's own
+ * `RefundEventProcessingService` never touches a ledger table directly in
+ * any scenario, Slice 2 or Slice 3, because reversal posting is delegated to
+ * `RefundLedgerReversalService` (mocked here, tested on its own in
+ * `refund-ledger-reversal.service.spec.ts`).
  */
+
+/** Q-020 Slice 3 — a bare mock of the injected ledger-reversal collaborator, so this file's own assertions stay about event claiming/matching/state, not ledger content. */
+function fakeLedgerReversal(): RefundLedgerReversalService {
+  return { postReversals: jest.fn().mockResolvedValue(undefined) } as unknown as RefundLedgerReversalService;
+}
 
 type Result = { data: unknown; error: { message: string; code?: string } | null };
 
@@ -138,7 +148,7 @@ describe('RefundEventProcessingService.processOne — claiming', () => {
       { data: null, error: null }, // payment_events payment_id backfill
       { data: null, error: null }, // refunds transition UPDATE
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -151,7 +161,7 @@ describe('RefundEventProcessingService.processOne — claiming', () => {
 
   it('returns "skipped" without throwing when the row is already claimed (0 rows returned)', async () => {
     const { supabase } = supabaseStub([{ data: null, error: null }]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -164,7 +174,7 @@ describe('RefundEventProcessingService.processOne — claiming', () => {
       { data: null, error: { message: 'connection reset' } }, // refunds lookup throws
       { data: null, error: null }, // release UPDATE
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -185,7 +195,7 @@ describe('RefundEventProcessingService — matching (Step 7)', () => {
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processOne(EVENT_ID);
 
@@ -200,7 +210,7 @@ describe('RefundEventProcessingService — matching (Step 7)', () => {
       { data: claimedEvent({ raw_payload: { status: 'SUCCEEDED', amountSatang: AMOUNT } }), error: null },
       { data: null, error: null }, // markAnomaly write
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -217,7 +227,7 @@ describe('RefundEventProcessingService — matching (Step 7)', () => {
       { data: null, error: null }, // refunds lookup finds nothing
       { data: null, error: null }, // markAnomaly write
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -235,7 +245,7 @@ describe('RefundEventProcessingService — matching (Step 7)', () => {
       { data: null, error: null }, // payment_id backfill
       { data: null, error: null }, // markAnomaly write
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -255,7 +265,7 @@ describe('RefundEventProcessingService — amount validation (Step 8)', () => {
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processOne(EVENT_ID);
 
@@ -271,7 +281,7 @@ describe('RefundEventProcessingService — amount validation (Step 8)', () => {
       { data: null, error: null }, // payment_id backfill
       { data: null, error: null }, // markAnomaly write
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -290,7 +300,7 @@ describe('RefundEventProcessingService — amount validation (Step 8)', () => {
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processOne(EVENT_ID);
 
@@ -323,7 +333,7 @@ describe('RefundEventProcessingService — DEC-057 §4 state mapping', () => {
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processOne(EVENT_ID);
 
@@ -339,7 +349,7 @@ describe('RefundEventProcessingService — DEC-057 §4 state mapping', () => {
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processOne(EVENT_ID);
 
@@ -365,7 +375,7 @@ describe('RefundEventProcessingService — DEC-057 §4 state mapping', () => {
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processOne(EVENT_ID);
 
@@ -382,7 +392,7 @@ describe('RefundEventProcessingService — finality and terminal protection (DEC
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processOne(EVENT_ID);
 
@@ -412,7 +422,7 @@ describe('RefundEventProcessingService — finality and terminal protection (DEC
       { data: null, error: null },
       { data: null, error: null }, // guarded UPDATE — matches 0 rows in real Postgres
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -434,7 +444,7 @@ describe('RefundEventProcessingService — finality and terminal protection (DEC
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
     const outcome = await service.processOne(EVENT_ID);
     expect(outcome).toBe('processed');
 
@@ -444,7 +454,7 @@ describe('RefundEventProcessingService — finality and terminal protection (DEC
     // (provider, provider_event_id) constraint at ingest, proven in
     // `webhooks.controller.spec.ts`; this proves the claim side stays inert.
     const { supabase: supabase2 } = supabaseStub([{ data: null, error: null }]);
-    const service2 = new RefundEventProcessingService(supabase2);
+    const service2 = new RefundEventProcessingService(supabase2, fakeLedgerReversal());
     const secondOutcome = await service2.processOne(EVENT_ID);
     expect(secondOutcome).toBe('skipped');
   });
@@ -462,7 +472,7 @@ describe('RefundEventProcessingService — charge.refunded and unsupported event
       },
       { data: null, error: null }, // markInert write
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -477,7 +487,7 @@ describe('RefundEventProcessingService — charge.refunded and unsupported event
       { data: claimedEvent({ event_type: 'refund.something_new' }), error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const outcome = await service.processOne(EVENT_ID);
 
@@ -490,7 +500,7 @@ describe('RefundEventProcessingService — charge.refunded and unsupported event
 describe('RefundEventProcessingService.processPendingEvents — batching and starvation safety', () => {
   it('claims only refund-domain events (event_type LIKE refund.%), never payment.* rows', async () => {
     const { supabase, calls } = supabaseStub([{ data: [], error: null }]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     await service.processPendingEvents();
 
@@ -511,7 +521,7 @@ describe('RefundEventProcessingService.processPendingEvents — batching and sta
       { data: null, error: null },
       { data: null, error: null },
     ]);
-    const service = new RefundEventProcessingService(supabase);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
 
     const result = await service.processPendingEvents();
 
@@ -519,8 +529,8 @@ describe('RefundEventProcessingService.processPendingEvents — batching and sta
   });
 });
 
-describe('RefundEventProcessingService — ledger isolation (Step 16, mandatory)', () => {
-  it('never reads or writes ledger_entry_groups or ledger_entries, across every scenario this file exercises', async () => {
+describe('RefundEventProcessingService — ledger isolation (Q-020 Slice 2/3)', () => {
+  it('never itself reads or writes ledger_entry_groups or ledger_entries — reversal posting is fully delegated to the mocked RefundLedgerReversalService', async () => {
     const scenarios: Result[][] = [
       // Full success finality.
       [
@@ -554,12 +564,157 @@ describe('RefundEventProcessingService — ledger isolation (Step 16, mandatory)
 
     for (const results of scenarios) {
       const { supabase, tablesTouched } = supabaseStub(results);
-      const service = new RefundEventProcessingService(supabase);
+      const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
       await service.processOne(EVENT_ID);
 
       expect(tablesTouched.has('ledger_entry_groups')).toBe(false);
       expect(tablesTouched.has('ledger_entries')).toBe(false);
       expect(tablesTouched.has('reconciliation_cases')).toBe(false);
     }
+  });
+});
+
+describe('RefundEventProcessingService — ledger reversal trigger (Q-020 Slice 3, DEC-049 §5/DEC-059)', () => {
+  function eventWithStatus(providerStatus: string) {
+    return claimedEvent({
+      raw_payload: {
+        providerRefundId: PROVIDER_REFUND_ID,
+        providerPaymentId: PROVIDER_PAYMENT_ID,
+        status: providerStatus,
+        amountSatang: AMOUNT,
+      },
+    });
+  }
+
+  it('calls postReversals(refundId, paymentId) exactly once when the provider status is SUCCEEDED and the refund was not already blocked', async () => {
+    const { supabase } = supabaseStub([
+      { data: eventWithStatus('SUCCEEDED'), error: null },
+      { data: refundRow({ state: 'REFUND_PENDING' }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null }, // backfill
+      { data: null, error: null }, // transition update
+    ]);
+    const ledgerReversal = fakeLedgerReversal();
+    const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+    await service.processOne(EVENT_ID);
+
+    expect(ledgerReversal.postReversals).toHaveBeenCalledTimes(1);
+    expect(ledgerReversal.postReversals).toHaveBeenCalledWith(REFUND_ID, PAYMENT_ID);
+  });
+
+  it('still calls postReversals when the refund was already REFUNDED before this event (redelivery/self-heal) — idempotency lives in the ledger service, not a skip here', async () => {
+    const { supabase } = supabaseStub([
+      { data: eventWithStatus('SUCCEEDED'), error: null },
+      { data: refundRow({ state: 'REFUNDED' }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: null },
+    ]);
+    const ledgerReversal = fakeLedgerReversal();
+    const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+    await service.processOne(EVENT_ID);
+
+    expect(ledgerReversal.postReversals).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['PENDING', 'REQUIRES_ACTION', 'FAILED', 'CANCELED'])(
+    'never calls postReversals for provider status %s — only SUCCEEDED reaches REFUNDED',
+    async (providerStatus) => {
+      const { supabase } = supabaseStub([
+        { data: eventWithStatus(providerStatus), error: null },
+        { data: refundRow({ state: 'REFUND_PENDING' }), error: null },
+        { data: paymentRow(), error: null },
+        { data: null, error: null },
+        { data: null, error: null },
+      ]);
+      const ledgerReversal = fakeLedgerReversal();
+      const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+      await service.processOne(EVENT_ID);
+
+      expect(ledgerReversal.postReversals).not.toHaveBeenCalled();
+    },
+  );
+
+  it('never calls postReversals when the refund was already REFUND_FAILED before this event, even if this event reports SUCCEEDED — the illegal transition is blocked and must carry no financial side effect', async () => {
+    const { supabase } = supabaseStub([
+      { data: eventWithStatus('SUCCEEDED'), error: null },
+      { data: refundRow({ state: 'REFUND_FAILED' }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: null },
+    ]);
+    const ledgerReversal = fakeLedgerReversal();
+    const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+    await service.processOne(EVENT_ID);
+
+    expect(ledgerReversal.postReversals).not.toHaveBeenCalled();
+  });
+
+  it('never calls postReversals when the refund was already REFUND_REJECTED before this event, even if this event reports SUCCEEDED', async () => {
+    const { supabase } = supabaseStub([
+      { data: eventWithStatus('SUCCEEDED'), error: null },
+      { data: refundRow({ state: 'REFUND_REJECTED' }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: null },
+    ]);
+    const ledgerReversal = fakeLedgerReversal();
+    const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+    await service.processOne(EVENT_ID);
+
+    expect(ledgerReversal.postReversals).not.toHaveBeenCalled();
+  });
+
+  it('never calls postReversals for an anomaly (amount mismatch) — no ledger call without a state transition', async () => {
+    const { supabase } = supabaseStub([
+      {
+        data: claimedEvent({
+          raw_payload: {
+            providerRefundId: PROVIDER_REFUND_ID,
+            providerPaymentId: PROVIDER_PAYMENT_ID,
+            status: 'SUCCEEDED',
+            amountSatang: 1,
+          },
+        }),
+        error: null,
+      },
+      { data: refundRow(), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: null }, // markAnomaly write
+    ]);
+    const ledgerReversal = fakeLedgerReversal();
+    const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+    await service.processOne(EVENT_ID);
+
+    expect(ledgerReversal.postReversals).not.toHaveBeenCalled();
+  });
+
+  it('a failure inside postReversals propagates and releases the claim for retry, exactly like any other transient processing failure', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: eventWithStatus('SUCCEEDED'), error: null },
+      { data: refundRow({ state: 'REFUND_PENDING' }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: null, error: null },
+      { data: null, error: null }, // release-claim update
+    ]);
+    const ledgerReversal: RefundLedgerReversalService = {
+      postReversals: jest.fn().mockRejectedValue(new Error('ledger anomaly: mismatched entry')),
+    } as unknown as RefundLedgerReversalService;
+    const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+    const outcome = await service.processOne(EVENT_ID);
+
+    expect(outcome).toBe('skipped');
+    const releaseCall = calls[calls.length - 1]!;
+    expect(releaseCall.payload).toMatchObject({ processed_at: null });
+    expect(releaseCall.payload?.processing_error).toContain('ledger anomaly');
   });
 });

@@ -6,6 +6,7 @@ import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { PaymentEventProcessingService } from './payment-event-processing.service';
 import { RefundEventProcessingService } from './refund-event-processing.service';
+import { RefundLedgerReversalService } from './refund-ledger-reversal.service';
 import { PaymentAttemptExpiryService } from './payment-attempt-expiry.service';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 
@@ -39,6 +40,12 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
  * — see that class's own doc comment for why it is a second, independent
  * claim loop over `payment_events` rather than a change to
  * `PaymentEventProcessingService` itself.
+ *
+ * `RefundLedgerReversalService` (Q-020 Slice 3, DEC-049/DEC-059) is injected
+ * into `RefundEventProcessingService` alone — it has no controller and is
+ * never consumed by `TickModule` directly, matching DEC-049's own point that
+ * ledger reversal is triggered *by* refund finality, not a scheduler of its
+ * own.
  */
 @Module({
   controllers: [PaymentsController],
@@ -47,6 +54,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     { provide: CUSTOMER_EMAIL_SOURCE, useClass: ProfileCustomerEmailSource },
     PaymentsService,
     PaymentEventProcessingService,
+    RefundLedgerReversalService,
     RefundEventProcessingService,
     PaymentAttemptExpiryService,
     PaymentReconciliationService,
