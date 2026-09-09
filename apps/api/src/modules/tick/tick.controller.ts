@@ -4,6 +4,10 @@ import { Public } from '../../common/decorators/public.decorator';
 import { TickHmacGuard } from '../../common/guards/tick-hmac.guard';
 import { PaymentEventProcessingService } from '../payments/payment-event-processing.service';
 import { RefundEventProcessingService } from '../payments/refund-event-processing.service';
+import {
+  RefundReconciliationDetectorService,
+  type RefundReconciliationRunResult,
+} from '../payments/refund-reconciliation-detector.service';
 import { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import { DispatchService, type DispatchRoundResult } from '../rider/dispatch.service';
 import {
@@ -32,6 +36,8 @@ export interface TickAcceptedResponse {
   paymentEvents: { processed: number; skipped: number };
   /** Q-020 Slice 2 (DEC-057 §5) — how many refund-domain `payment_events` rows this tick claimed and processed. */
   refundEvents: { processed: number; skipped: number };
+  /** Q-020 Slice 4B (DEC-060) — the refund reconciliation detector + safe-recovery pass this tick ran. */
+  refundReconciliation: RefundReconciliationRunResult;
   /** How many timed-out `payment_attempts` rows this tick expired. */
   paymentAttemptExpiry: { expired: number; skipped: number };
   /** G-2 — the broadcast dispatch round this tick ran (DEC-020, DEC-037). */
@@ -78,6 +84,17 @@ export interface TickAcceptedResponse {
  * It posts no ledger entry (DEC-059 is Slice 3) and follows the same
  * never-throws-out-of-a-single-event contract every phase here already
  * follows.
+ *
+ * `refundReconciliation` (Q-020 Slice 4B, DEC-060) runs right after
+ * `refundEvents` — a fresh event gets one full chance at normal deterministic
+ * processing earlier in this same tick before the detector re-inspects
+ * state-at-rest, so a merely-in-flight refund is never mistaken for an
+ * anomaly. It never calls Stripe, never mutates `refunds`/`payments`, and its
+ * only ledger-table write is delegating to the existing
+ * `RefundLedgerReversalService.postReversals` self-heal (Case F) — see
+ * `RefundReconciliationDetectorService`'s own doc comment for the six
+ * anomalies and the authority boundary. It follows the same never-throws
+ * contract as every phase here.
  *
  * `dispatch` is G-2's broadcast round (DEC-020), attached here rather than to a
  * scheduler of its own: DEC-APP-010 fixes the Cloudflare Worker cron at 60
@@ -140,6 +157,7 @@ export class TickController {
   constructor(
     private readonly paymentEvents: PaymentEventProcessingService,
     private readonly refundEvents: RefundEventProcessingService,
+    private readonly refundReconciliation: RefundReconciliationDetectorService,
     private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
     private readonly dispatch: DispatchService,
     private readonly noRiderEscalation: NoRiderEscalationService,
@@ -158,6 +176,7 @@ export class TickController {
   async handle(): Promise<TickAcceptedResponse> {
     const paymentEvents = await this.paymentEvents.processPendingEvents();
     const refundEvents = await this.refundEvents.processPendingEvents();
+    const refundReconciliation = await this.refundReconciliation.run();
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
     const dispatch = await this.dispatch.runDispatchRound();
     const noRiderEscalation = await this.noRiderEscalation.run();
@@ -170,6 +189,7 @@ export class TickController {
       accepted: true,
       paymentEvents,
       refundEvents,
+      refundReconciliation,
       paymentAttemptExpiry,
       dispatch,
       noRiderEscalation,

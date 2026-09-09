@@ -325,4 +325,49 @@ if grep -q "FAIL" /tmp/banhao-reconciliation-refund-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND VERIFICATION PASSED"
+echo "==> Seeding Q-020 Slice 4B reconciliation-case concurrency fixtures"
+run_sql "$REPO_ROOT/supabase/tests/refund_reconciliation_concurrency_setup.sql"
+
+echo "==> Launching TWO CONCURRENT reconciliation_cases inserts for the SAME (kind, payment_id)"
+echo "    (both racing for PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED / a1900000-...-0000a2)"
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc \
+  "select test_attempt_reconciliation_case_insert('PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED', 'a1900000-0000-0000-0000-0000000000a2'::uuid, 'a1900000-0000-0000-0000-000000000002'::uuid)" \
+  > /tmp/banhao-reconciliation-case-a.out 2>&1 &
+CASE_A_PID=$!
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc \
+  "select test_attempt_reconciliation_case_insert('PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED', 'a1900000-0000-0000-0000-0000000000a2'::uuid, 'a1900000-0000-0000-0000-000000000002'::uuid)" \
+  > /tmp/banhao-reconciliation-case-b.out 2>&1 &
+CASE_B_PID=$!
+wait "$CASE_A_PID" "$CASE_B_PID"
+
+echo "    Attempt A result: $(cat /tmp/banhao-reconciliation-case-a.out | tr -d '[:space:]')"
+echo "    Attempt B result: $(cat /tmp/banhao-reconciliation-case-b.out | tr -d '[:space:]')"
+
+CASE_A_RESULT="$(cat /tmp/banhao-reconciliation-case-a.out | tr -d '[:space:]')"
+CASE_B_RESULT="$(cat /tmp/banhao-reconciliation-case-b.out | tr -d '[:space:]')"
+if [[ "$CASE_A_RESULT" == "t" && "$CASE_B_RESULT" == "t" ]]; then
+  echo "==> CRITICAL FAILURE: both concurrent reconciliation_cases inserts report success. reconciliation_cases_refund_open_key did NOT hold."
+  exit 1
+fi
+if [[ "$CASE_A_RESULT" != "t" && "$CASE_B_RESULT" != "t" ]]; then
+  echo "==> FAILURE: neither concurrent insert succeeded — something else is wrong."
+  exit 1
+fi
+echo "    Exactly one concurrent insert won, as required (DEC-060 §4)."
+
+echo ""
+echo "==> Running Q-020 Slice 4B reconciliation-case concurrency assertions"
+docker cp "$REPO_ROOT/supabase/tests/refund_reconciliation_concurrency_assertions.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/refund_reconciliation_concurrency_assertions.sql 2>&1 | tee /tmp/banhao-reconciliation-concurrency-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> Q-020 Slice 4B reconciliation-case concurrency verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-reconciliation-concurrency-out.log; then
+  echo "==> Q-020 Slice 4B reconciliation-case concurrency verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY VERIFICATION PASSED"

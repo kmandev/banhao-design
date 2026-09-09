@@ -21,6 +21,7 @@ import { TICK_SIGNATURE_HEADER } from '../src/common/guards/tick-hmac.guard';
 import { IS_PUBLIC_KEY } from '../src/common/decorators/public.decorator';
 import { PaymentEventProcessingService } from '../src/modules/payments/payment-event-processing.service';
 import { RefundEventProcessingService } from '../src/modules/payments/refund-event-processing.service';
+import { RefundReconciliationDetectorService } from '../src/modules/payments/refund-reconciliation-detector.service';
 import { PaymentAttemptExpiryService } from '../src/modules/payments/payment-attempt-expiry.service';
 import { DispatchService } from '../src/modules/rider/dispatch.service';
 import { NoRiderEscalationService } from '../src/modules/rider/no-rider-escalation.service';
@@ -46,9 +47,19 @@ const TICK_SECRET = 'e2e-test-tick-secret';
  * that a correctly signed request reaches the handler and its result is
  * serialised through the normal success envelope.
  */
+const EMPTY_REFUND_RECONCILIATION_PHASE = { examined: 0, opened: 0, reused: 0, resolved: 0 } as const;
+
 const PHASE_RESULTS = {
   paymentEvents: { processed: 0, skipped: 0 },
   refundEvents: { processed: 0, skipped: 0 },
+  refundReconciliation: {
+    providerSucceededLocalNotRefunded: EMPTY_REFUND_RECONCILIATION_PHASE,
+    localRefundedProviderNotConfirmed: EMPTY_REFUND_RECONCILIATION_PHASE,
+    refundAmountMismatch: EMPTY_REFUND_RECONCILIATION_PHASE,
+    missingProviderRefundId: EMPTY_REFUND_RECONCILIATION_PHASE,
+    missingProviderEvent: EMPTY_REFUND_RECONCILIATION_PHASE,
+    refundedLedgerIncomplete: EMPTY_REFUND_RECONCILIATION_PHASE,
+  },
   paymentAttemptExpiry: { expired: 0, skipped: 0 },
   dispatch: { deliveries: 0, offers: 0, expiredOffers: 0 },
   noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
@@ -126,7 +137,8 @@ describe('POST /internal/tick (integration)', () => {
       R2_PUBLIC_URL: 'https://example.invalid',
       // `TickModule` also imports `PaymentsModule` directly (for
       // `PaymentEventProcessingService`/`RefundEventProcessingService`/
-      // `PaymentAttemptExpiryService`, all three overridden below) — but
+      // `RefundReconciliationDetectorService`/`PaymentAttemptExpiryService`,
+      // all four overridden below) — but
       // `PaymentsService` and `PAYMENT_PROVIDER`
       // (`StripePaymentProvider` since DEC-055) are not overridden, so Nest
       // still constructs the real provider, whose constructor throws
@@ -153,6 +165,8 @@ describe('POST /internal/tick (integration)', () => {
       .useValue({ processPendingEvents: async () => PHASE_RESULTS.paymentEvents })
       .overrideProvider(RefundEventProcessingService)
       .useValue({ processPendingEvents: async () => PHASE_RESULTS.refundEvents })
+      .overrideProvider(RefundReconciliationDetectorService)
+      .useValue({ run: async () => PHASE_RESULTS.refundReconciliation })
       .overrideProvider(PaymentAttemptExpiryService)
       .useValue({ processExpiredAttempts: async () => PHASE_RESULTS.paymentAttemptExpiry })
       .overrideProvider(DispatchService)

@@ -1,6 +1,10 @@
 import { TickController } from './tick.controller';
 import type { PaymentEventProcessingService } from '../payments/payment-event-processing.service';
 import type { RefundEventProcessingService } from '../payments/refund-event-processing.service';
+import type {
+  RefundReconciliationDetectorService,
+  RefundReconciliationRunResult,
+} from '../payments/refund-reconciliation-detector.service';
 import type { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import type { DispatchService } from '../rider/dispatch.service';
 import type { NoRiderEscalationService } from '../rider/no-rider-escalation.service';
@@ -21,12 +25,29 @@ import type { NoRiderTriageService } from '../ai-ops/no-rider-triage.service';
  * operations, DEC-040).
  * Now also invokes `RefundEventProcessingService` (Q-020 Slice 2, DEC-057 §5)
  * — its own independent claim loop over the same `payment_events` table,
- * reported separately from `paymentEvents`.
+ * reported separately from `paymentEvents`. Now also invokes
+ * `RefundReconciliationDetectorService` (Q-020 Slice 4B, DEC-060) — the
+ * refund reconciliation detector + safe-recovery pass, reported separately
+ * as `refundReconciliation`.
  * All these services are plain stubs here — their own logic is each one's own
  * `*.spec.ts` file's job. This file proves only the wiring: the tick handler
  * calls every processor and reports what each did, additively to the
  * original `{ accepted: true }` shape.
  */
+
+function emptyPhase() {
+  return { examined: 0, opened: 0, reused: 0, resolved: 0 };
+}
+
+const EMPTY_REFUND_RECONCILIATION_RESULT: RefundReconciliationRunResult = {
+  providerSucceededLocalNotRefunded: emptyPhase(),
+  localRefundedProviderNotConfirmed: emptyPhase(),
+  refundAmountMismatch: emptyPhase(),
+  missingProviderRefundId: emptyPhase(),
+  missingProviderEvent: emptyPhase(),
+  refundedLedgerIncomplete: emptyPhase(),
+};
+
 describe('TickController', () => {
   function build(
     paymentEventsResult = { processed: 2, skipped: 1 },
@@ -46,12 +67,15 @@ describe('TickController', () => {
     aiOpsNoRiderResult = { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
     arrivalTimeoutResult = { examined: 0, escalated: 0, skipped: 0, failed: 0 },
     refundEventsResult = { processed: 0, skipped: 0 },
+    refundReconciliationResult: RefundReconciliationRunResult = EMPTY_REFUND_RECONCILIATION_RESULT,
   ) {
     const processPendingEvents = jest.fn().mockResolvedValue(paymentEventsResult);
     const processExpiredAttempts = jest.fn().mockResolvedValue(expiryResult);
     const paymentEvents = { processPendingEvents } as unknown as PaymentEventProcessingService;
     const processRefundEvents = jest.fn().mockResolvedValue(refundEventsResult);
     const refundEvents = { processPendingEvents: processRefundEvents } as unknown as RefundEventProcessingService;
+    const runRefundReconciliation = jest.fn().mockResolvedValue(refundReconciliationResult);
+    const refundReconciliation = { run: runRefundReconciliation } as unknown as RefundReconciliationDetectorService;
     const paymentAttemptExpiry = { processExpiredAttempts } as unknown as PaymentAttemptExpiryService;
     const runDispatchRound = jest.fn().mockResolvedValue(dispatchResult);
     const dispatch = { runDispatchRound } as unknown as DispatchService;
@@ -72,6 +96,7 @@ describe('TickController', () => {
     const controller = new TickController(
       paymentEvents,
       refundEvents,
+      refundReconciliation,
       paymentAttemptExpiry,
       dispatch,
       noRiderEscalation,
@@ -85,6 +110,7 @@ describe('TickController', () => {
       controller,
       processPendingEvents,
       processRefundEvents,
+      runRefundReconciliation,
       processExpiredAttempts,
       runDispatchRound,
       runNoRiderEscalation,
@@ -106,6 +132,7 @@ describe('TickController', () => {
       accepted: true,
       paymentEvents: { processed: 2, skipped: 1 },
       refundEvents: { processed: 0, skipped: 0 },
+      refundReconciliation: EMPTY_REFUND_RECONCILIATION_RESULT,
       paymentAttemptExpiry: { expired: 1, skipped: 0 },
       dispatch: { deliveries: 3, offers: 7, expiredOffers: 2 },
       noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
@@ -162,6 +189,55 @@ describe('TickController', () => {
     expect(result.accepted).toBe(true);
   });
 
+  it('invokes the refund reconciliation detector exactly once per tick and reports the outcome separately — Q-020 Slice 4B', async () => {
+    const refundReconciliationResult: RefundReconciliationRunResult = {
+      providerSucceededLocalNotRefunded: { examined: 1, opened: 1, reused: 0, resolved: 0 },
+      localRefundedProviderNotConfirmed: { examined: 2, opened: 0, reused: 1, resolved: 0 },
+      refundAmountMismatch: { examined: 0, opened: 0, reused: 0, resolved: 0 },
+      missingProviderRefundId: { examined: 0, opened: 0, reused: 0, resolved: 0 },
+      missingProviderEvent: { examined: 0, opened: 0, reused: 0, resolved: 0 },
+      refundedLedgerIncomplete: { examined: 3, opened: 1, reused: 0, resolved: 1 },
+    };
+    const { controller, runRefundReconciliation } = build(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      refundReconciliationResult,
+    );
+
+    const result = await controller.handle();
+
+    expect(runRefundReconciliation).toHaveBeenCalledTimes(1);
+    expect(runRefundReconciliation).toHaveBeenCalledWith();
+    expect(result.refundReconciliation).toEqual(refundReconciliationResult);
+    expect(result.accepted).toBe(true);
+  });
+
+  it('runs refund-event processing before refund reconciliation — a fresh event gets one normal processing chance first', async () => {
+    const order: string[] = [];
+    const { controller, processRefundEvents, runRefundReconciliation } = build();
+
+    processRefundEvents.mockImplementation(async () => {
+      order.push('refundEvents');
+      return { processed: 0, skipped: 0 };
+    });
+    runRefundReconciliation.mockImplementation(async () => {
+      order.push('refundReconciliation');
+      return EMPTY_REFUND_RECONCILIATION_RESULT;
+    });
+
+    await controller.handle();
+
+    expect(order).toEqual(['refundEvents', 'refundReconciliation']);
+  });
+
   it('invokes payment-attempt expiry and reports the outcome, additive to the original shape', async () => {
     const { controller, processExpiredAttempts } = build();
 
@@ -181,6 +257,7 @@ describe('TickController', () => {
       'accepted',
       'paymentEvents',
       'refundEvents',
+      'refundReconciliation',
       'paymentAttemptExpiry',
       'dispatch',
       'noRiderEscalation',

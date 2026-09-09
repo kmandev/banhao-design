@@ -7,6 +7,7 @@ import { PaymentsService } from './payments.service';
 import { PaymentEventProcessingService } from './payment-event-processing.service';
 import { RefundEventProcessingService } from './refund-event-processing.service';
 import { RefundLedgerReversalService } from './refund-ledger-reversal.service';
+import { RefundReconciliationDetectorService } from './refund-reconciliation-detector.service';
 import { PaymentAttemptExpiryService } from './payment-attempt-expiry.service';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 
@@ -42,10 +43,17 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
  * `PaymentEventProcessingService` itself.
  *
  * `RefundLedgerReversalService` (Q-020 Slice 3, DEC-049/DEC-059) is injected
- * into `RefundEventProcessingService` alone — it has no controller and is
- * never consumed by `TickModule` directly, matching DEC-049's own point that
- * ledger reversal is triggered *by* refund finality, not a scheduler of its
- * own.
+ * into `RefundEventProcessingService` and `RefundReconciliationDetectorService`
+ * alone — it has no controller and is never consumed by `TickModule`
+ * directly, matching DEC-049's own point that ledger reversal is triggered
+ * *by* refund finality (Slice 2) or a verified self-heal need (Slice 4B),
+ * not a scheduler of its own.
+ *
+ * `RefundReconciliationDetectorService` (Q-020 Slice 4B, DEC-060) is its own
+ * tick phase, consumed by `TickModule` alongside `RefundEventProcessingService`
+ * — see that class's own doc comment for the six anomalies it detects and
+ * why case F's self-heal reuses `RefundLedgerReversalService.postReversals`
+ * rather than writing a ledger row itself.
  */
 @Module({
   controllers: [PaymentsController],
@@ -56,6 +64,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     PaymentEventProcessingService,
     RefundLedgerReversalService,
     RefundEventProcessingService,
+    RefundReconciliationDetectorService,
     PaymentAttemptExpiryService,
     PaymentReconciliationService,
   ],
@@ -63,6 +72,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     PAYMENT_PROVIDER,
     PaymentEventProcessingService,
     RefundEventProcessingService,
+    RefundReconciliationDetectorService,
     PaymentAttemptExpiryService,
     PaymentReconciliationService,
   ],
