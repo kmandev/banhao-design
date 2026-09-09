@@ -670,6 +670,27 @@ describe('RefundEventProcessingService — ledger reversal trigger (Q-020 Slice 
     expect(ledgerReversal.postReversals).not.toHaveBeenCalled();
   });
 
+  it('Q-020 Slice 4, case G — records PROVIDER_LOCAL_STATE_DIVERGENCE via payment_events.processing_error, and never calls the guarded refunds UPDATE at all (the guard would only no-op it)', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: eventWithStatus('SUCCEEDED'), error: null },
+      { data: refundRow({ state: 'REFUND_FAILED' }), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null }, // payment_events.payment_id backfill
+      { data: null, error: null }, // markAnomaly write — the 5th and final call
+    ]);
+    const ledgerReversal = fakeLedgerReversal();
+    const service = new RefundEventProcessingService(supabase, ledgerReversal);
+
+    const outcome = await service.processOne(EVENT_ID);
+
+    expect(outcome).toBe('processed');
+    expect(calls.some((c) => c.table === 'refunds' && c.op === 'update')).toBe(false);
+    const anomalyWrite = calls[calls.length - 1]!;
+    expect(anomalyWrite.table).toBe('payment_events');
+    expect(anomalyWrite.payload?.processing_error).toContain('PROVIDER_LOCAL_STATE_DIVERGENCE');
+    expect(anomalyWrite.payload?.processing_error).toContain('REFUND_FAILED');
+  });
+
   it('never calls postReversals for an anomaly (amount mismatch) — no ledger call without a state transition', async () => {
     const { supabase } = supabaseStub([
       {

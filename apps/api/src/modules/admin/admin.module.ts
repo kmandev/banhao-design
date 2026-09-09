@@ -5,6 +5,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
+import { ReconciliationCaseService } from './reconciliation-case.service';
 import { SupervisorController } from './supervisor.controller';
 
 /**
@@ -33,11 +34,16 @@ import { SupervisorController } from './supervisor.controller';
  * or `OrdersService`, because refund initiation is not a payment-creation or
  * order-transition operation — it neither touches `payments.state` nor
  * `orders.state` (see `RefundService`'s own doc comment).
+ *
+ * `ReconciliationCaseService` (Q-020 Slice 4) needs only `SupabaseModule` —
+ * it reads/writes `reconciliation_cases` directly, the same table
+ * `PaymentEventProcessingService.openCase` already writes, under this
+ * console's existing `@Roles('OPERATOR', 'ADMIN')` grant.
  */
 @Module({
   imports: [SupabaseModule, OrdersModule, PaymentsModule],
   controllers: [SupervisorController],
-  providers: [SupervisorCaseService, DeliveryFailureService, RefundService],
+  providers: [SupervisorCaseService, DeliveryFailureService, RefundService, ReconciliationCaseService],
   exports: [SupervisorCaseService],
 })
 export class AdminModule {}

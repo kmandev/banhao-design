@@ -8,7 +8,12 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { failDeliverySchema, initiateRefundSchema, resolveSupervisorCaseSchema } from '@banhao/validation';
+import {
+  failDeliverySchema,
+  initiateRefundSchema,
+  resolveSupervisorCaseSchema,
+  resolveReconciliationCaseSchema,
+} from '@banhao/validation';
 import type {
   AwaitingFailureListResponse,
   FailDeliveryResponse,
@@ -17,6 +22,9 @@ import type {
   SupervisorIdentityResponse,
   SupervisorCaseDetailResponse,
   SupervisorCaseListResponse,
+  ReconciliationCaseListResponse,
+  ReconciliationCaseDetailResponse,
+  ResolveReconciliationCaseResponse,
 } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -25,6 +33,7 @@ import type { AuthenticatedUser } from '../../common/types';
 import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
+import { ReconciliationCaseService } from './reconciliation-case.service';
 
 /**
  * Human Supervisor console — Phase I, screens S-02, S-03 and S-06 of the AI
@@ -60,6 +69,14 @@ import { RefundService } from './refund.service';
  *
  * The remaining state-changing writes are a case resolution (an audit row
  * only) and the DEC-053 delivery-failure command.
+ *
+ * **Q-020 Slice 4** adds the `reconciliation_cases` read path
+ * (`GET reconciliation-cases`, `GET reconciliation-cases/:id`) a prior
+ * production audit found missing, plus an operator resolution record
+ * (`POST reconciliation-cases/:id/resolve`) — advisory metadata only, never a
+ * refund/payment/order/ledger mutation. It does not add a refund-specific
+ * anomaly `kind`; see `ReconciliationCaseService`'s own doc comment and this
+ * slice's final report for the schema decision that blocks that half.
  */
 @ApiTags('admin')
 @ApiBearerAuth('bearer')
@@ -72,6 +89,7 @@ export class SupervisorController {
     private readonly cases: SupervisorCaseService,
     private readonly failures: DeliveryFailureService,
     private readonly refunds: RefundService,
+    private readonly reconciliation: ReconciliationCaseService,
   ) {}
 
   /**
@@ -244,5 +262,50 @@ export class SupervisorController {
   ): Promise<InitiateRefundResponse> {
     const request = parseOrThrow(initiateRefundSchema, body);
     return this.refunds.initiateRefund(user, id, request);
+  }
+
+  /**
+   * Q-020 Slice 4 — the `reconciliation_cases` read path a prior production
+   * audit found missing. Every case `PaymentEventProcessingService.openCase`
+   * has ever written (`LATE_PAYMENT`/`SURPLUS_PAYMENT`/`AMOUNT_MISMATCH`/
+   * `UNMATCHED_EVENT` — this table's entire committed vocabulary today), newest
+   * first. `kind`/`state` filter against that same committed vocabulary and
+   * reject an unrecognized value rather than silently returning nothing.
+   */
+  @Get('reconciliation-cases')
+  @ApiOkResponse({ description: 'Reconciliation cases, newest first' })
+  async listReconciliationCases(
+    @Query('kind') kind?: string,
+    @Query('state') state?: string,
+    @Query('limit') limit?: string,
+  ): Promise<ReconciliationCaseListResponse> {
+    return this.reconciliation.listCases({ kind, state, limit });
+  }
+
+  /** One reconciliation case, by id. */
+  @Get('reconciliation-cases/:id')
+  @ApiOkResponse({ description: 'One reconciliation case' })
+  @ApiNotFoundResponse({ description: 'No reconciliation case with this id' })
+  async getReconciliationCase(@Param('id') id: string): Promise<ReconciliationCaseDetailResponse> {
+    return this.reconciliation.getCase(id);
+  }
+
+  /**
+   * The operator's own resolution record — never an automatic outcome of a
+   * scan running (see `ReconciliationCaseService.resolveCase`'s own doc
+   * comment). Writes only this table's advisory metadata; no refund,
+   * payment, order or ledger row is touched by this route.
+   */
+  @Post('reconciliation-cases/:id/resolve')
+  @HttpCode(200)
+  @ApiOkResponse({ description: 'Reconciliation case updated with the operator\'s own resolution record' })
+  @ApiNotFoundResponse({ description: 'No reconciliation case with this id' })
+  async resolveReconciliationCase(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ResolveReconciliationCaseResponse> {
+    const request = parseOrThrow(resolveReconciliationCaseSchema, body);
+    return this.reconciliation.resolveCase(id, request, user);
   }
 }

@@ -19,6 +19,7 @@ import { SupervisorController } from './supervisor.controller';
 import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
+import { ReconciliationCaseService } from './reconciliation-case.service';
 
 /**
  * The HTTP boundary of the Human Supervisor console — Phase I.
@@ -101,9 +102,47 @@ function makeRefundStub() {
   };
 }
 
+const RECONCILIATION_CASE_ID = 'aa400000-0000-4000-8000-000000000001';
+
+/** Q-020 Slice 4's service, stubbed at the boundary — same shape as `makeStub`. */
+function makeReconciliationStub() {
+  return {
+    listCases: jest.fn().mockResolvedValue({ cases: [], window: { limit: 50, returned: 0, openCount: 0 } }),
+    getCase: jest.fn().mockResolvedValue({
+      case: {
+        id: RECONCILIATION_CASE_ID,
+        kind: 'AMOUNT_MISMATCH',
+        state: 'OPEN',
+        paymentId: null,
+        orderId: null,
+        paymentEventId: null,
+        assignedTo: null,
+        resolutionNote: null,
+        createdAt: '2026-09-09T00:00:00.000Z',
+        updatedAt: '2026-09-09T00:00:00.000Z',
+      },
+    }),
+    resolveCase: jest.fn().mockResolvedValue({
+      case: {
+        id: RECONCILIATION_CASE_ID,
+        kind: 'AMOUNT_MISMATCH',
+        state: 'RESOLVED',
+        paymentId: null,
+        orderId: null,
+        paymentEventId: null,
+        assignedTo: 'user-operator-1',
+        resolutionNote: 'confirmed',
+        createdAt: '2026-09-09T00:00:00.000Z',
+        updatedAt: '2026-09-09T00:00:00.000Z',
+      },
+    }),
+  };
+}
+
 type Stub = ReturnType<typeof makeStub>;
 type FailureStub = ReturnType<typeof makeFailureStub>;
 type RefundStub = ReturnType<typeof makeRefundStub>;
+type ReconciliationStub = ReturnType<typeof makeReconciliationStub>;
 
 function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
   @Injectable()
@@ -122,6 +161,7 @@ async function buildApp(
   stub: Stub,
   failures: FailureStub = makeFailureStub(),
   refunds: RefundStub = makeRefundStub(),
+  reconciliation: ReconciliationStub = makeReconciliationStub(),
 ): Promise<INestApplication> {
   const guards: Provider[] = [
     { provide: APP_GUARD, useValue: fakeAuthGuard(user) },
@@ -135,6 +175,7 @@ async function buildApp(
       { provide: SupervisorCaseService, useValue: stub },
       { provide: DeliveryFailureService, useValue: failures },
       { provide: RefundService, useValue: refunds },
+      { provide: ReconciliationCaseService, useValue: reconciliation },
       ...guards,
       { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
       Reflector,
@@ -175,6 +216,22 @@ const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post'; path: string
     path: `/api/v1/admin/supervisor/orders/${ORDER_ID}/refund`,
     body: { reason: 'ยกเลิกก่อนร้านรับออเดอร์' },
   },
+  {
+    name: 'reconciliation cases list',
+    method: 'get',
+    path: '/api/v1/admin/supervisor/reconciliation-cases',
+  },
+  {
+    name: 'reconciliation case detail',
+    method: 'get',
+    path: `/api/v1/admin/supervisor/reconciliation-cases/${RECONCILIATION_CASE_ID}`,
+  },
+  {
+    name: 'reconciliation case resolve',
+    method: 'post',
+    path: `/api/v1/admin/supervisor/reconciliation-cases/${RECONCILIATION_CASE_ID}/resolve`,
+    body: { state: 'RESOLVED', resolutionNote: 'confirmed via Stripe dashboard' },
+  },
 ];
 
 describe('SupervisorController — HTTP boundary', () => {
@@ -182,11 +239,13 @@ describe('SupervisorController — HTTP boundary', () => {
   let stub: Stub;
   let failures: FailureStub;
   let refunds: RefundStub;
+  let reconciliation: ReconciliationStub;
 
   beforeEach(() => {
     stub = makeStub();
     failures = makeFailureStub();
     refunds = makeRefundStub();
+    reconciliation = makeReconciliationStub();
   });
 
   afterEach(async () => {
@@ -201,11 +260,14 @@ describe('SupervisorController — HTTP boundary', () => {
       failures.failDelivery,
       failures.listAwaitingFailure,
       refunds.initiateRefund,
+      reconciliation.listCases,
+      reconciliation.getCase,
+      reconciliation.resolveCase,
     ].some((fn) => fn.mock.calls.length > 0);
   }
 
   it.each(ROUTES)('refuses an anonymous caller on $name with 401', async (route) => {
-    app = await buildApp(null, stub, failures, refunds);
+    app = await buildApp(null, stub, failures, refunds, reconciliation);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(401);
 
@@ -213,7 +275,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it.each(ROUTES)('refuses a signed-in non-staff caller on $name with 403', async (route) => {
-    app = await buildApp(NON_STAFF, stub, failures, refunds);
+    app = await buildApp(NON_STAFF, stub, failures, refunds, reconciliation);
 
     // A revoked grant is indistinguishable from never having had one, which is
     // the point: the guard re-reads `platform_staff` per request, so a grant
@@ -224,13 +286,13 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it.each(ROUTES)('admits a staff caller on $name', async (route) => {
-    app = await buildApp(OPERATOR, stub, failures, refunds);
+    app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(200);
   });
 
   it('passes the server-verified identity to the service, never a body field', async () => {
-    app = await buildApp(OPERATOR, stub, failures, refunds);
+    app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -245,7 +307,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('rejects a blank reason before the service runs', async () => {
-    app = await buildApp(OPERATOR, stub, failures, refunds);
+    app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -257,7 +319,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('rejects a body carrying an unknown field', async () => {
-    app = await buildApp(OPERATOR, stub, failures, refunds);
+    app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -271,7 +333,7 @@ describe('SupervisorController — HTTP boundary', () => {
     stub.resolveCase.mockRejectedValue(
       new DomainError('CONFLICT', { message: 'already resolved', details: { caseId: CASE_ID } }),
     );
-    app = await buildApp(OPERATOR, stub, failures, refunds);
+    app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     const response = await request(app.getHttpServer())
       .post(`/api/v1/admin/supervisor/cases/${CASE_ID}/resolve`)
@@ -283,7 +345,7 @@ describe('SupervisorController — HTTP boundary', () => {
   });
 
   it('exposes no route outside the four above', async () => {
-    app = await buildApp(OPERATOR, stub, failures, refunds);
+    app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
     const server = app.getHttpServer();
 
     // A generic mutation path would be the one thing that voids this whole

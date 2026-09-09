@@ -136,26 +136,33 @@ const STATE_BY_PROVIDER_STATUS: Record<string, string> = {
  *
  * ## Ledger reversal — DEC-049/DEC-059, Slice 3, delegated
  *
- * Once `transitionRefund` targets `REFUNDED`, and the refund's own
- * pre-transition state (already loaded above, before the guarded UPDATE)
- * was not already one of the two *other* terminal states
- * (`REFUND_FAILED`/`REFUND_REJECTED`), this calls
+ * When `targetState` is `REFUNDED` and the refund's own pre-transition state
+ * (already loaded above, before the guarded UPDATE) was **not** already one
+ * of the two *other* terminal states (`REFUND_FAILED`/`REFUND_REJECTED`),
+ * this calls `transitionRefund` and then
  * `RefundLedgerReversalService.postReversals` — never conditioned on whether
  * `transitionRefund`'s own guarded `UPDATE` actually changed a row. That
  * distinction matters under at-least-once event processing (Step 17): a
  * redelivered event for an already-`REFUNDED` refund still needs the ledger
  * call attempted (idempotent via `group_key`, self-healing a crash between a
- * prior run's state transition and its ledger posting), while an event that
- * would have moved a refund *out of* `REFUND_FAILED`/`REFUND_REJECTED` must
- * never reach the ledger at all — that transition is illegal and blocked by
- * `transitionRefund`'s own guard, so no financial side effect may follow it
- * either. This file never reads or writes `ledger_entry_groups`/
- * `ledger_entries` directly — see `RefundLedgerReversalService`'s own class
- * doc comment for the reversal shape itself.
+ * prior run's state transition and its ledger posting). This file never
+ * reads or writes `ledger_entry_groups`/`ledger_entries` directly — see
+ * `RefundLedgerReversalService`'s own class doc comment for the reversal
+ * shape itself.
+ *
+ * When the refund's pre-transition state *was* already
+ * `REFUND_FAILED`/`REFUND_REJECTED` and this event still reports `SUCCEEDED`,
+ * neither `transitionRefund` nor the ledger call ever runs (Q-020 Slice 4,
+ * case G — `PROVIDER_LOCAL_STATE_DIVERGENCE`): the move is illegal, so no
+ * financial side effect may follow it, and this is recorded via
+ * `markAnomaly` rather than silently doing nothing, so an operator can find
+ * it.
  *
  * ## What this service deliberately does NOT do
  *
- * No `reconciliation_cases` row (see above). No notification, no customer
+ * No `reconciliation_cases` row of a refund-specific `kind` (see this file's
+ * own "Fail-closed anomalies" section above and this slice's final report —
+ * the table's CHECK constraint has none yet). No notification, no customer
  * UI, no AI command, no retry scheduler, no partial refund, no second Stripe
  * API call — this service reads `refunds`/`payments`, writes
  * `refunds.state`/`payment_events.processing_error`/`payment_events.payment_id`,
@@ -353,14 +360,34 @@ export class RefundEventProcessingService {
       return;
     }
 
+    // Q-020 Slice 4, case G (PROVIDER_LOCAL_STATE_DIVERGENCE) — provider says
+    // SUCCEEDED, but this refund was already blocked into a different
+    // terminal state before this event arrived. `transitionRefund`'s own
+    // guard already refuses this move (REFUND_FAILED/REFUND_REJECTED never
+    // become REFUNDED), so skipping the call here changes no outcome — but
+    // until this slice, nothing recorded that a provider-reported finality
+    // could not be reconciled through any existing deterministic transition.
+    // A durable, typed `reconciliation_cases` row for this needs a `kind`
+    // this table's CHECK constraint does not yet have (this slice's own
+    // final report reports the exact blocker); `payment_events.processing_error`
+    // is the existing audit column every other anomaly in this file already
+    // uses, and is available today without a schema change.
+    if (targetState === 'REFUNDED' && LEDGER_REVERSAL_BLOCKED_STATES.has(refund.state)) {
+      await this.markAnomaly(
+        event.id,
+        `PROVIDER_LOCAL_STATE_DIVERGENCE: refund ${refund.id} was already ${refund.state} before this event ` +
+          'reported SUCCEEDED — the transition to REFUNDED is illegal and was blocked, no ledger reversal was ' +
+          'posted. Requires manual review — a true financial contradiction, not a transient condition a retry can resolve.',
+      );
+      return;
+    }
+
     await this.transitionRefund(refund.id, targetState);
 
     // DEC-049 §5/DEC-059 — ledger reversal fires only on the path that
-    // targets REFUNDED, and only when the refund was not already blocked
-    // into a different terminal state before this event arrived. See this
-    // class's own doc comment, "Ledger reversal — DEC-049/DEC-059, Slice 3,
-    // delegated".
-    if (targetState === 'REFUNDED' && !LEDGER_REVERSAL_BLOCKED_STATES.has(refund.state)) {
+    // targets REFUNDED. See this class's own doc comment, "Ledger reversal
+    // — DEC-049/DEC-059, Slice 3, delegated".
+    if (targetState === 'REFUNDED') {
       await this.ledgerReversal.postReversals(refund.id, payment.id);
     }
   }

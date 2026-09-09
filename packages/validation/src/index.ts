@@ -13,3 +13,4 @@ export * from './restaurant-hours';
 export * from './restaurant-profile';
 export * from './restaurant-availability';
 export * from './supervisor';
+export * from './reconciliation';
