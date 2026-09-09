@@ -111,9 +111,42 @@ describe('ReconciliationCaseService.listCases', () => {
     const { supabase } = supabaseStub([]);
     const service = new ReconciliationCaseService(supabase);
 
-    await expect(service.listCases({ kind: 'REFUND_AMOUNT_MISMATCH' })).rejects.toMatchObject({
+    await expect(service.listCases({ kind: 'NOT_A_REAL_KIND' })).rejects.toMatchObject({
       code: 'VALIDATION_FAILED',
     });
+  });
+
+  // DEC-060/20260909000001 — case G deliberately has no durable reconciliation_cases
+  // kind (schema-safe via payment_events.processing_error instead); this is
+  // still, correctly, an unrecognized filter value.
+  it('rejects PROVIDER_LOCAL_STATE_DIVERGENCE specifically — DEC-060 §2 deliberately added no kind for case G', async () => {
+    const { supabase } = supabaseStub([]);
+    const service = new ReconciliationCaseService(supabase);
+
+    await expect(service.listCases({ kind: 'PROVIDER_LOCAL_STATE_DIVERGENCE' })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
+  // Slice 4A (DEC-060) — the six new Q-020 refund kinds, plus the
+  // RIDER_RELEASE_INVARIANT kind this file's own recon found was already
+  // live (20260825000001) but missing from this vocabulary until now.
+  it.each([
+    'RIDER_RELEASE_INVARIANT',
+    'PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED',
+    'LOCAL_REFUNDED_PROVIDER_NOT_CONFIRMED',
+    'REFUND_AMOUNT_MISMATCH',
+    'MISSING_PROVIDER_REFUND_ID',
+    'MISSING_PROVIDER_EVENT',
+    'REFUNDED_LEDGER_INCOMPLETE',
+  ])('accepts %s as a recognized kind filter', async (kind) => {
+    const { supabase, calls } = supabaseStub([{ data: [], error: null }]);
+    const service = new ReconciliationCaseService(supabase);
+
+    await service.listCases({ kind });
+
+    const listCall = calls[0]!;
+    expect(listCall.eq).toMatchObject({ kind });
   });
 
   it('rejects an unrecognized state filter the same way', async () => {

@@ -9,18 +9,29 @@ import { z } from 'zod';
  * DEC-032) — the read path a prior production audit found missing — and a
  * reason-carrying resolve action, both under the existing
  * `@Roles('OPERATOR', 'ADMIN')` grant `SupervisorController` already
- * enforces. It does **not** add a refund-specific anomaly kind: the four
- * values below are `reconciliation_cases.kind`'s entire committed CHECK
- * constraint (`20260811000010_audit_notification_infra_domain.sql`). Widening
- * it to carry Q-020's own anomaly vocabulary (`PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED`
- * and the rest) is a schema decision this slice's own final report flags as
- * blocked, not something this file works around by inventing a client-side
- * vocabulary the database would reject.
+ * enforces.
  *
- * `RECONCILIATION_CASE_KINDS`/`RECONCILIATION_CASE_STATES` are the database's
- * own vocabulary, restated here so a client can render/filter against it
- * without guessing — extend only alongside a migration that widens the
- * matching CHECK constraint, never independently of one.
+ * `RECONCILIATION_CASE_KINDS`/`RECONCILIATION_CASE_STATES` are the
+ * database's own vocabulary, restated here so a client can render/filter
+ * against it without guessing — extend only alongside a migration that
+ * widens the matching CHECK constraint, never independently of one.
+ *
+ * ## Slice 4A (DEC-060, `20260909000001_reconciliation_cases_refund_kinds.sql`)
+ *
+ * `RECONCILIATION_CASE_KINDS` originally listed only the four kinds
+ * `20260811000010_audit_notification_infra_domain.sql` shipped. That was
+ * already stale by the time this file was first written:
+ * `20260825000001_reconciliation_rider_release_invariant.sql` had already
+ * added a fifth, `RIDER_RELEASE_INVARIANT` (opened via `delivery_id`, never
+ * `payment_id`) — a pre-existing gap this slice's own recon found and
+ * corrects here, not a new kind this decision invents. The six
+ * `PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED`…`REFUNDED_LEDGER_INCOMPLETE` values
+ * are DEC-060's own new lock — every one of them raised only once a specific
+ * `refunds` row is resolved, always carrying `payment_id`, deduplicated while
+ * `OPEN`/`IN_PROGRESS` by `reconciliation_cases_refund_open_key`. This array
+ * is the complete, exact set the live CHECK constraint now accepts —
+ * `ReconciliationCaseService`'s own filter validation must never drift from
+ * it in either direction.
  */
 
 export const RECONCILIATION_CASE_KINDS = [
@@ -28,6 +39,13 @@ export const RECONCILIATION_CASE_KINDS = [
   'SURPLUS_PAYMENT',
   'AMOUNT_MISMATCH',
   'UNMATCHED_EVENT',
+  'RIDER_RELEASE_INVARIANT',
+  'PROVIDER_SUCCEEDED_LOCAL_NOT_REFUNDED',
+  'LOCAL_REFUNDED_PROVIDER_NOT_CONFIRMED',
+  'REFUND_AMOUNT_MISMATCH',
+  'MISSING_PROVIDER_REFUND_ID',
+  'MISSING_PROVIDER_EVENT',
+  'REFUNDED_LEDGER_INCOMPLETE',
 ] as const;
 
 export type ReconciliationCaseKind = (typeof RECONCILIATION_CASE_KINDS)[number];

@@ -311,4 +311,18 @@ if grep -q "FAIL" /tmp/banhao-timeout-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT VERIFICATION PASSED"
+echo "==> Running DEC-060 reconciliation_cases refund-kind assertions (20260909000001)"
+docker cp "$REPO_ROOT/supabase/tests/reconciliation_cases_refund_kinds_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/reconciliation_cases_refund_kinds_test.sql 2>&1 | tee /tmp/banhao-reconciliation-refund-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> DEC-060 reconciliation_cases refund-kind verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-reconciliation-refund-out.log; then
+  echo "==> DEC-060 reconciliation_cases refund-kind verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND VERIFICATION PASSED"
