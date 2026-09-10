@@ -2,7 +2,7 @@
 
 **Status:** `OPEN` · **Priority:** T1 · **Type:** research + decision preparation
 **Related decision:** **D-16 (distance provider/source) — `OPEN`**
-**Last updated:** 2026-09-10 (field benchmark design §17–§33; Buntharik fixture acquisition plan §35–§49)
+**Last updated:** 2026-09-10 (field benchmark design §17–§33; fixture acquisition plan §35–§49; first public-POI candidate acquisition pass §50–§59)
 
 > **This document decides nothing.** It is the authoritative research and
 > decision-preparation record for **Q-018** (map/address accuracy) and
@@ -549,15 +549,18 @@ DEC-061 itself records.
 | **Benchmark blocker** | **Real Buntharik coordinate fixtures and a service-zone polygon do not exist** (§20, §32). The repository holds four synthetic dev points inside ~1 km; none is benchmark-eligible |
 | **Fixture acquisition** | **Planned, not started** — §35–§49. Target ~20–30 public coordinates supporting ~20–40 routes. **`FIXTURE ACQUISITION REQUIRED` for the entire population** (§46): no real coordinate could be safely established from existing material, and none was fabricated |
 | **Fixture privacy rule** | **No customer address, name or phone number is a fixture.** Public POIs only; real customer routing data waits on Q-012, TQ-016 and BQ-022 (§36.2) |
-| **Owner decisions pending** | OD-1…OD-8 (§48) — sample size, thresholds, local reviewer, POI sufficiency, web-research follow-up, delivery-GPS use, fixture separation, service polygon |
+| **Owner decisions pending** | OD-1…OD-8 (§48; status table §51) — sample size, thresholds, local reviewer, POI sufficiency, web-research permission, delivery-GPS use, fixture separation, service polygon. **None is locked in `docs/DECISIONS.md`** |
+| **Candidate fixtures** | **29 `CANDIDATE`** from OpenStreetMap, 2026-09-10 — 6 origins, 23 destinations, **30 rejections recorded**, **0 `HIGH` confidence**, **none `VALIDATED`** (§50–§56). A **30-route** candidate matrix exists (§54), all bands **preliminary geodesic** |
+| **What the candidates cannot yet support** | **No distance-accuracy metric** — that needs `HIGH` fixtures and an assigned local reviewer, and neither exists (§56.1). ตลาดสดบุณฑริก is still unlocated; band G is `NOT ESTABLISHED` |
 
 ---
 
 ## 15. Scope of this document
 
-**Documentation, decision preparation, benchmark design and fixture-acquisition
-planning only.** This applies to every revision of this document, including the
-§17–§33 field-benchmark design and the §35–§49 fixture acquisition plan, both
+**Documentation, decision preparation, benchmark design, fixture-acquisition
+planning and public-POI candidate research only.** This applies to every
+revision of this document, including the §17–§33 field-benchmark design, the
+§35–§49 fixture acquisition plan and the §50–§59 candidate acquisition pass, all
 added 2026-09-10. While producing it, none of the following occurred and none is
 authorized by it:
 
@@ -572,7 +575,7 @@ authorized by it:
 - no credential introduced;
 - no external routing API called;
 - no API credit spent;
-- no geocoding or map lookup performed;
+- no routing, distance or duration request of any kind issued to any provider;
 - no fixture, seed or database row created, mutated or deleted;
 - no coordinate fabricated;
 - no customer address, name, phone number or other personal data used;
@@ -2177,6 +2180,10 @@ acquisition and can proceed in parallel.
 **Nothing below is decided here.** These are the items a later owner review must
 settle. **D-16 remains `OPEN`. D-17 remains `OPEN`.**
 
+> **Current status of each item is tracked in §51**, which records the owner's
+> stated working direction as of 2026-09-10 and confirms that **none of
+> OD-1…OD-8 is locked in `docs/DECISIONS.md`**.
+
 | ID | Item | Notes |
 |---|---|---|
 | **OD-1** | **Final benchmark sample size** — 20–40 routes (§42.2) versus §18.4's earlier ~76 | §42.2 reconciles the two and proposes 20–40; the owner chooses |
@@ -2210,7 +2217,445 @@ classification (§37.2) rather than deleted.
 
 ---
 
-## 50. Sources
+## 50. Part IV — Public POI candidate acquisition pass
+
+Executed 2026-09-10 under the owner's OD-5 direction (§51). Part III said what
+had to be acquired; this part is the **first controlled acquisition pass** and
+its results.
+
+**What was done:** two public, non-routing data sources were queried for named
+public places inside อำเภอบุณฑริก. **No routing API was called.** No Google,
+OSRM, TomTom, HERE or Mapbox request was issued, no distance or duration was
+requested from any provider, no credential was used, no API credit was spent.
+
+**What this produced:** **29 accepted `CANDIDATE` fixtures** (6 origins, 23
+destinations) and **30 recorded rejections**, from 59 named elements examined.
+**Nothing is `VALIDATED`** — a web-sourced coordinate is a candidate, and
+promotion requires field or on-site confirmation (§39.1).
+
+**Every coordinate below came from a query performed during this pass and is
+cited to a specific OpenStreetMap element id.** None was written from memory,
+inferred, or adjusted.
+
+---
+
+## 51. Owner decision gate — OD-1…OD-8 status
+
+`VERIFIED` — `docs/DECISIONS.md` was read at `1e10a25b`. **No `DEC-` entry locks
+any of OD-1…OD-8.** The latest decision is DEC-061, whose *Open items* section
+explicitly leaves D-16, D-17 and routing/geocoding provider selection open.
+
+The statuses below reflect the owner's stated working direction for this task.
+**A working direction is not a lock**, and none of these was written into
+`docs/DECISIONS.md`.
+
+| OD | Item | Status | Working direction applied |
+|---|---|---|---|
+| **OD-1** | Benchmark sample size | **`OWNER-APPROVAL REQUIRED`** | **20–40 route cases**, stratified not Cartesian; each origin in ~2–6 routes; each evaluated stratum ≥3 routes or explicitly reported not evaluated. Applied in §54 (30 routes). Supersedes §18.4's ~76 in direction only |
+| **OD-2** | Acceptance thresholds | **`PROPOSED — REQUIRES OWNER APPROVAL`** | §25.2's eight thresholds are **unchanged and unlocked**: aggregate success ≥98%, band F ≥95%, p95 absolute distance error ≤800 m, p95 percentage ≤15%, impossible-route ≤2%, dangerous impossible-route **0**, p95 latency ≤1500 ms, repeat distance spread ≤100 m |
+| **OD-3** | Local reviewer | **`BLOCKED — LOCAL REVIEWER NOT ASSIGNED`** | Tier 2 qualitative ground truth is **required** (§43). **No named reviewer exists in this repository and none was invented.** Every §25.1 qualitative gate is unevaluable until one is assigned |
+| **OD-4** | Public POI sufficiency | **`OWNER-APPROVAL REQUIRED`** · working recommendation **accepted for Phase 1** | **Public POIs are acceptable for the Phase 1 benchmark population**, with this limitation permanently visible in the benchmark report: **public POIs are road-accessible points and do not fully represent the final approach to customer residences, especially small ซอย, alleys and house entrances** (§36.3). This pass makes that limitation concrete — see §55.3 |
+| **OD-5** | Web research permission | **`OWNER-APPROVAL REQUIRED`** · working direction **applied in this pass** | **Web research authorized for candidate acquisition.** Web-sourced coordinates are **`MEDIUM` at best** and remain **`CANDIDATE`** until validation. **Provider-derived coordinates stay capped at `LOW`** — using a provider's own geocoding to validate that provider's routing is circular (§39.1) |
+| **OD-6** | Real delivery GPS eligibility | **`NOT AUTHORIZED`** | Remains blocked on **Q-012** (PDPA lawful basis, `LEGAL_REVIEW_REQUIRED`), **TQ-016** (rider location retention and access) and **BQ-022** (`LEGAL_REVIEW_REQUIRED` on contractor status). All three verified still open. No delivery GPS was used, requested or designed for |
+| **OD-7** | Minimum fixture separation | **`PROPOSED`** | **150 m.** Applied as a validation rule in this pass; it rejected three candidates (§55). Not locked |
+| **OD-8** | Service-zone polygon | **`BLOCKER — SERVICE-ZONE POLYGON NOT DEFINED`** | **No polygon was created and none was derived.** See §57 |
+
+**D-16 remains `OPEN`. D-17 remains `OPEN`.** Neither was changed by this pass,
+and no provider lock exists.
+
+---
+
+## 52. Acquisition method and sources
+
+`VERIFIED` — retrieval date **2026-09-10**.
+
+| Source | What it gave | Class |
+|---|---|---|
+| **Nominatim** (OpenStreetMap) — `https://nominatim.openstreetmap.org/search` | The district as OSM **relation 18929401**: centroid `14.6708230, 105.4024781`, postcode **34230**, bounding box **lat 14.3841250 – 14.9580407, lon 105.2517714 – 105.5799590** | `PUBLIC_MAP_POI` |
+| **Overpass API** — `https://overpass-api.de/api/interpreter`, three bounded queries over `area(3618929401)` | All named elements carrying `amenity`, `shop`, `office`, `place`, `tourism`, `building`, `leisure`, `historic` or a retail/religious `landuse` tag — **59 named elements in the whole district** | `PUBLIC_MAP_POI` |
+
+**Attribution:** all coordinates below are **© OpenStreetMap contributors,
+ODbL 1.0** (`http://osm.org/copyright`), as returned by the queries.
+
+### 52.1 Why OpenStreetMap, and what that costs
+
+OSM was chosen over a commercial map's POI listing for one reason: **it is not
+Google.** Seeding a test of Google's routing with Google's own geocodes is the
+circularity §39.1 forbids, and OSM is independent of it.
+
+> **This is not free of circularity in the other direction.** `RESEARCHED`
+> OSM is precisely the data a future **OSRM** deployment would route on (§6).
+> An OSM-derived coordinate is therefore **MEDIUM for testing Google** but
+> **must be flagged in any Google-versus-OSRM comparison** (§28), where it
+> favours OSRM by construction. The comparison protocol must either use
+> field-captured (`HIGH`) coordinates for that run, or state the bias
+> explicitly. **Recorded here so it is not discovered later as a surprise.**
+
+### 52.2 The headline finding — OSM POI coverage is very sparse
+
+`VERIFIED`
+
+**59 named elements exist in the entire district**, and **20 of them are private
+houses**. There is no restaurant, no bakery, no supermarket, no post office, no
+police station, no ที่ว่าการอำเภอ and no bank named anywhere in
+อำเภอบุณฑริก in OSM. The whole merchant-like inventory is one café, one fast-food
+shop, two 7-Elevens, one fuel station, one motorcycle dealer and two generically
+named market buildings.
+
+> **Do not over-read this.** Sparse **POI** coverage is not the same as sparse
+> **road-network** coverage, and this pass measured only the former. OSM road
+> completeness in อำเภอบุณฑริก **was not measured and remains unverified** —
+> it is exactly what §8's field test exists to determine. What this finding does
+> establish is that **OSM cannot supply a full fixture population by itself**,
+> and that field capture (§47) remains necessary rather than optional.
+
+### 52.3 ตลาดสดบุณฑริก — still not located
+
+`VERIFIED`
+
+**The repository's own designated launch anchor (§37.3) was not found.** No
+element named ตลาดสดบุณฑริก exists in OSM for this district. Two market
+buildings exist, both named with the bare generic word **ตลาด** — one 5.9 km
+NW of the town node, one 5.4 km SE. **Neither is in the town centre**, and
+neither can be assumed to be the fresh market the business rules mean.
+
+**ตลาดสดบุณฑริก therefore remains `FIXTURE ACQUISITION REQUIRED`**, and the
+3 km merchant catchment it defines still cannot be drawn.
+
+### 52.4 A synthetic cluster resolved — reconciling §37.1
+
+`VERIFIED` — this refines, and partially answers, §37.1.
+
+§37.1 recorded two invented coordinate clusters ~45 km apart and deliberately
+declined to choose between them. The district bounding box retrieved in this
+pass settles half of it:
+
+- The **tracking-prototype cluster** (`14.3689`–`14.3735`, §37 cluster 3) lies
+  **south of the district's southern bbox edge of `14.3841250`**. It is
+  therefore **provably outside อำเภอบุณฑริก**.
+- The **dev-seed and G-7.1 cluster** (`14.775`–`14.781`, §37 clusters 1 and 2)
+  lies **inside** the bounding box, roughly 2 km east of the town node.
+
+> **This changes nothing about their status.** Being inside a bounding box is
+> not being inside the district polygon, still less being a real place. **All
+> three clusters remain `SYNTHETIC — SMOKE TEST ONLY`** and remain barred from
+> every accuracy, coverage, D-12 and D-16 metric (§37.2). What is now recorded
+> is only that one of them cannot even be in the right district — which is
+> further reason not to treat any of them as geography.
+
+---
+
+## 53. Candidate fixtures
+
+**Status for every row below: `CANDIDATE`.** None is `VALIDATED`. `road_distance_m`
+is **`UNKNOWN`** and `final_benchmark_stratum` is **`UNKNOWN`** for all of them
+until a routing run measures them (§7 of this part, and §40.1).
+
+`source_type` = `PUBLIC_MAP_POI` · `source_reference` = the OSM element id shown
+· `retrieval_date` = 2026-09-10 · `public_poi` = true for every accepted row.
+
+### 53.1 Candidate origins — 6 (target 5–10 ✓)
+
+| Fixture | Name | Category | Lat | Lon | OSM element | m from town node | Quadrant | Confidence | Note |
+|---|---|---|---|---|---|---:|---|---|---|
+| `BTK-O-01` | 7-Eleven | convenience store | 14.758558 | 105.407170 | `node/2630704302` | 343 | CENTRE | MEDIUM |  |
+| `BTK-O-02` | Honda | motorcycle dealer | 14.758180 | 105.405736 | `node/2630704204` | 502 | CENTRE | MEDIUM |  |
+| `BTK-O-03` | Cafe Amazon | café | 14.768883 | 105.393400 | `node/4657264121` | 2127 | NW | MEDIUM |  |
+| `BTK-O-04` | ครุแหม่ม เบอร์เกอร์ | fast food | 14.784105 | 105.378483 | `node/8738392973` | 4419 | NW | MEDIUM |  |
+| `BTK-O-05` | ตลาด | market building | 14.809700 | 105.393236 | `way/697933982` | 5932 | NW | LOW | Name is the generic word ตลาด; the OSM element is unique but the business is not individually identified. Field confirmation required before HIGH. |
+| `BTK-O-06` | ตลาด | market building | 14.736628 | 105.454776 | `way/698206773` | 5387 | SE | LOW | As BTK-O-05. |
+
+### 53.2 Candidate destinations — 23 (target 15–20; over target, see §56.3)
+
+| Fixture | Name | Category | Lat | Lon | OSM element | m from town node | Quadrant | Confidence | Note |
+|---|---|---|---|---|---|---:|---|---|---|
+| `BTK-D-01` | โรงพยาบาลบุณฑริก | hospital | 14.756831 | 105.410503 | `node/7856667533` | 240 | CENTRE | MEDIUM |  |
+| `BTK-D-02` | บุณฑริก | town place node | 14.758981 | 105.410330 | `node/968513166` | 0 | CENTRE | LOW | A place node, not a building. Marks the town, not an arrival point. |
+| `BTK-D-03` | โรงเรียน | school | 14.769356 | 105.461465 | `way/691574366` | 5618 | NE | LOW | Name is the generic word โรงเรียน. |
+| `BTK-D-04` | วัดบ้านโนนสูง | temple | 14.768820 | 105.463141 | `way/691615158` | 5783 | NE | MEDIUM |  |
+| `BTK-D-05` | ศาลาประชาคมหมู่บ้าน | village community hall | 14.770730 | 105.463101 | `way/691589068` | 5823 | NE | MEDIUM |  |
+| `BTK-D-06` | ศาลาประชาคมหมู่บ้าน | village community hall | 14.735618 | 105.456725 | `way/698206860` | 5625 | SE | MEDIUM |  |
+| `BTK-D-07` | โรงเรียนบ้านหนองแสง | school | 14.731533 | 105.457522 | `way/698414755` | 5922 | SE | MEDIUM |  |
+| `BTK-D-08` | โรงเรียนบ้านโนนหุ่ง | school | 14.808758 | 105.394428 | `way/697939672` | 5793 | NW | MEDIUM |  |
+| `BTK-D-09` | วัดโนนศิราราม | temple | 14.814862 | 105.391824 | `way/697933981` | 6524 | NW | MEDIUM |  |
+| `BTK-D-10` | วัดบ้านโนนน้อย | temple | 14.711930 | 105.455415 | `way/699049772` | 7133 | SE | MEDIUM |  |
+| `BTK-D-11` | โรงพยาบาลส่งเสริมสุขภาพตำบล | sub-district health station | 14.732973 | 105.343689 | `node/6249505587` | 7728 | SW | MEDIUM |  |
+| `BTK-D-12` | วัดบ้านป่เตี้ย | temple | 14.795661 | 105.474232 | `way/698806394` | 7990 | NE | MEDIUM |  |
+| `BTK-D-13` | โรงเรียนบ้านป่าเตี้ย | school | 14.798149 | 105.474434 | `way/698806430` | 8153 | NE | LOW | Named as a school but tagged building=apartments. Category conflict; field confirmation required. |
+| `BTK-D-14` | โรงเรียนบ้านหนองกบ | school | 14.842000 | 105.451581 | `way/711561956` | 10241 | NE | MEDIUM |  |
+| `BTK-D-15` | โรงเรียนบ้านเจริญชัย | school | 14.895521 | 105.465581 | `way/698806623` | 16303 | NE | MEDIUM |  |
+| `BTK-D-16` | โรงพยาบาลส่งเสริมสุขภาพตำบล | sub-district health station | 14.600765 | 105.376198 | `node/6249354888` | 17972 | SW | MEDIUM |  |
+| `BTK-D-17` | วัดบ้านหนองเม็ก | temple | 14.592505 | 105.376765 | `way/698566540` | 18860 | SW | MEDIUM |  |
+| `BTK-D-18` | รร.บ้านสร้างหอม ม.7 | school | 14.577689 | 105.360846 | `way/691559466` | 20850 | SW | MEDIUM |  |
+| `BTK-D-19` | บ้านสร้างหอม | village place node | 14.575116 | 105.359796 | `node/6249525741` | 21155 | SW | LOW | A place node, not a building. |
+| `BTK-D-20` | Wat Sukhantharam | temple | 14.572916 | 105.359835 | `node/1202685310` | 21391 | SW | MEDIUM |  |
+| `BTK-D-21` | โรงเรียนบ้านคำบาก | school | 14.557185 | 105.339997 | `way/699314333` | 23680 | SW | MEDIUM |  |
+| `BTK-D-22` | ศาลาประชาคม | community hall | 14.559004 | 105.339391 | `way/691565571` | 23509 | SW | LOW | Name is the generic word ศาลาประชาคม. |
+| `BTK-D-24` | น้ำตกห้วยทรายใหญ่ | waterfall / attraction | 14.918380 | 105.504709 | `node/1203969733` | 20422 | NE | LOW | Access road quality and rideability entirely unverified. |
+
+---
+
+## 54. Candidate route matrix — 30 routes
+
+**No routing was executed.** Every distance below is a **great-circle
+(haversine) separation between the two fixture coordinates**, computed locally.
+
+> **`PRELIMINARY GEODESIC CLASSIFICATION` — every band letter in this table is
+> provisional.** `road_distance_m = UNKNOWN` and
+> `final_benchmark_stratum = UNKNOWN` for all 30 routes. **Geodesic distance is
+> not, and must never be used as, D-12 evidence** (DEC-061 D-12 is a **road
+> distance** limit).
+
+`ground_truth_tier` for all 30 routes: **Tier 2 intended, currently unavailable
+— OD-3 blocked.** `reviewer_requirement`: **a local reviewer is required for
+every route**; none is assigned.
+
+| Route | Origin | Destination | Preliminary geodesic (m) | Preliminary band | Purpose |
+|---|---|---|---:|---|---|
+| `BTK-R-01` | `BTK-O-01` | `BTK-D-01` | 407 | A | Town baseline — shortest realistic delivery |
+| `BTK-R-02` | `BTK-O-02` | `BTK-D-01` | 534 | A | Town baseline, second town origin |
+| `BTK-R-03` | `BTK-O-01` | `BTK-D-02` | 343 | A | Approach behaviour on a place node rather than a building |
+| `BTK-R-04` | `BTK-O-03` | `BTK-D-01` | 2275 | B | Highway-side origin into the town centre |
+| `BTK-R-05` | `BTK-O-01` | `BTK-D-03` | 5960 | C | Town to NE village school |
+| `BTK-R-06` | `BTK-O-03` | `BTK-D-04` | 7499 | C | NW highway origin to NE village temple |
+| `BTK-R-07` | `BTK-O-02` | `BTK-D-05` | 6324 | C | Town to NE village community hall |
+| `BTK-R-08` | `BTK-O-01` | `BTK-D-06` | 5908 | C | Town to SE village community hall |
+| `BTK-R-09` | `BTK-O-02` | `BTK-D-07` | 6308 | C | Town to SE village school |
+| `BTK-R-10` | `BTK-O-03` | `BTK-D-08` | 4435 | B | NW origin to NW village school |
+| `BTK-R-11` | `BTK-O-04` | `BTK-D-09` | 3709 | B | NW food shop to NW village temple |
+| `BTK-R-12` | `BTK-O-03` | `BTK-D-10` | 9197 | C | NW origin to SE village temple — crosses town on local roads |
+| `BTK-R-13` | `BTK-O-02` | `BTK-D-11` | 7237 | C | Town to SW health station — the west corridor |
+| `BTK-R-14` | `BTK-O-03` | `BTK-D-12` | 9187 | C | NW origin to NE village temple, longer local road |
+| `BTK-R-15` | `BTK-O-04` | `BTK-D-13` | 10433 | D | NW food shop to NE village school |
+| `BTK-R-16` | `BTK-O-01` | `BTK-D-14` | 10435 | D | Town to far NE village school |
+| `BTK-R-17` | `BTK-O-05` | `BTK-D-08` | 166 | A | NW market to adjacent school — sub-km rural pair |
+| `BTK-R-18` | `BTK-O-05` | `BTK-D-09` | 594 | A | NW market to nearby temple — short rural pair |
+| `BTK-R-19` | `BTK-O-06` | `BTK-D-07` | 639 | A | SE market to nearby school — short rural pair |
+| `BTK-R-20` | `BTK-O-06` | `BTK-D-10` | 2747 | B | SE market to village temple |
+| `BTK-R-21` | `BTK-O-06` | `BTK-D-06` | 238 | A | SE market to adjacent community hall — sub-km rural |
+| `BTK-R-22` | `BTK-O-05` | `BTK-D-14` | 7227 | C | NW market to far NE school — cross-district |
+| `BTK-R-23` | `BTK-O-04` | `BTK-D-15` | 15528 | E* | Tightest over-15 km geodesic pair — D-12 probe |
+| `BTK-R-24` | `BTK-O-02` | `BTK-D-16` | 17790 | E* | Town to far SW health station — D-12 probe |
+| `BTK-R-25` | `BTK-O-04` | `BTK-D-17` | 21306 | E* | NW food shop to far SW village temple — over-limit probe |
+| `BTK-R-26` | `BTK-O-02` | `BTK-D-18` | 20642 | E* | Town to far SW village school — over-limit probe |
+| `BTK-R-27` | `BTK-O-01` | `BTK-D-21` | 23529 | E* | Town to furthest SW school — over-limit probe |
+| `BTK-R-28` | `BTK-O-03` | `BTK-D-24` | 20481 | E* | NW origin to far NE waterfall — access-quality probe |
+| `BTK-R-29` | `BTK-O-06` | `BTK-D-19` | 20662 | E* | SE market to SW village node — cross-district rural |
+| `BTK-R-30` | `BTK-O-05` | `BTK-D-22` | 28471 | E* | NW market to far SW community hall — longest probe |
+
+
+### 54.1 Matrix properties
+
+| Property | Value | Rule | Result |
+|---|---|---|---|
+| Route count | 30 | OD-1: 20–40 | **PASS** |
+| Routes per origin | 6, 6, 6, 4, 4, 4 | OD-1: ~2–6 | **PASS** |
+| Distinct destinations used | 22 of 23 | — | `BTK-D-20` unused; retained as a candidate |
+| Cartesian size avoided | 6 × 23 = 138 possible | §42.1 | 30 selected — **78% not taken** |
+| Preliminary band A | 7 routes | ≥3 | **PASS (preliminary)** |
+| Preliminary band B | 4 routes | ≥3 | **PASS (preliminary)** |
+| Preliminary band C | 9 routes | ≥3 | **PASS (preliminary)** |
+| Preliminary band D | **2 routes** | ≥3 | **BELOW TARGET (preliminary)** — see below |
+| Preliminary band E* (>15 km geodesic) | 8 routes | — | D-12 over-limit probes |
+
+**On the band D shortfall.** Road distance is always **greater than or equal to**
+geodesic distance, so the nine band C routes will shift upward once routed and
+several are expected to land in band D. **That is an expectation, not a
+guarantee.** If band D still holds fewer than 3 routes after the run, it is
+**reported as not evaluated** (§18.3's rule, unchanged) — never padded, and
+never filled by reclassifying a band C route on a geodesic figure.
+
+**On band E\*.** A geodesic separation above 15 km guarantees a road distance
+above 15 km, so all eight are certain D-12 rejections. `BTK-R-23` is the
+tightest at 15.5 km geodesic. **What the population lacks is a route that could
+plausibly land just *under* 15 km by road** — the accept side of the D-12
+boundary — because no candidate destination sits at a geodesic distance where
+that is likely. `BTK-R-15` and `BTK-R-16` (both ~10.4 km geodesic) are the only
+realistic candidates and may land either side. **Recorded as a gap** (§56).
+
+---
+
+## 55. Rejections — 30 recorded, nothing silently discarded
+
+### 55.1 Individually recorded rejections — 10
+
+| OSM element | Rejection reason | Why |
+|---|---|---|
+| `node/4657248336` | `TOO_CLOSE_TO_EXISTING` | 35 m from the 7-Eleven at the same fuel-station complex; BTK-O-03 represents the site |
+| `node/4657264120` | `TOO_CLOSE_TO_EXISTING` | 70 m from BTK-O-03 at the same fuel-station complex |
+| `way/691608143` | `TOO_CLOSE_TO_EXISTING` | 130 m from BTK-D-20 and 140 m from BTK-D-19, below the 150 m proposed minimum |
+| `way/699046337` | `INVALID_CATEGORY` | Named as a village community hall but tagged building=house; cannot be distinguished from a residence without field confirmation |
+| `way/698566541` | `INVALID_CATEGORY` | As above |
+| `way/691573771` | `INVALID_CATEGORY` | As above |
+| `way/698566542` | `SENSITIVE_LOCATION` | A Border Patrol Police base tagged amenity=school. Both the category and the security sensitivity disqualify it |
+| `node/11212239880` | `AREA_NOT_A_POINT` | A wildlife sanctuary. The node is an arbitrary point inside a large protected area, not an arrival point |
+| `way/691615178` | `AMBIGUOUS_LOCATION` | Named ลาน มัน (a cassava drying yard) and tagged building=house; neither a public POI nor an identifiable arrival point |
+| `way/698414766` | `PRIVATE_RESIDENCE` | Named ห้องเช่า (rental rooms) — residential |
+
+### 55.2 Bulk rejection — 20 private residences
+
+Twenty elements are named with a bare house number (`4`, `18`, `101`, `115`,
+`117`, `120`, `128`, `166`, `199`, `227`, `237`, `251`, `258`, `269`, `280`,
+`284`, `296`, `363`, `30/1`, `ุ65`) and tagged `building=house` or
+`building=yes`; several also carry `addr:housenumber`.
+
+**All 20 are rejected with reason `PRIVATE_RESIDENCE`.**
+
+> **Their coordinates are deliberately not reproduced in this document.**
+> Recording where twenty private homes are, in a document about delivery
+> routing, would be exactly the privacy failure §36.2 exists to prevent — and
+> the fact that they are publicly visible in OSM does not make republishing them
+> here necessary or appropriate. They are identifiable by OSM element id in the
+> query results if a future pass needs to re-check them, and that is sufficient.
+
+### 55.3 What the rejections say about the population
+
+`VERIFIED` — this is OD-4's limitation, made concrete.
+
+**Of 59 named elements in the district, 20 — a third — are private houses, and
+almost every remaining public POI is a school, temple, health station or
+community hall sitting on a village road.** The public-POI population therefore
+tests **arrival at a village landmark**, not **arrival at a specific house down
+a ซอย**, which is what a BANHAO delivery actually is.
+
+**This limitation must stay visible in every benchmark report built on this
+population.** It is not a defect in the acquisition — it is a property of what
+can be collected without customer data, and OD-4 accepts it deliberately.
+
+---
+
+## 56. Validation results
+
+All ten §41 checks were applied to all 59 elements.
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Traceable source | **PASS** — every accepted fixture carries an OSM element id and a retrieval date |
+| 2 | Public POI status | **PASS** — 21 non-public or non-arrival elements rejected (20 residences + 1 rental building) |
+| 3 | Coordinate completeness | **PASS** — every accepted fixture has both lat and lon at 6 decimal places |
+| 4 | Coordinate plausibility | **PASS** — every accepted coordinate falls inside the district bounding box retrieved in §52 |
+| 5 | Duplicate coordinate / same-POI duplication | **PASS** — no exact duplicates; the fuel-station complex collapsed to one fixture |
+| 6 | Minimum separation (OD-7, 150 m) | **PASS after 3 rejections** — zero violations remain among the 29 accepted |
+| 7 | Geographic spread | **PASS with gaps** — see §56.2 |
+| 8 | Locality plausibility | **PASS** — all inside the district bbox; none inside water or a protected area (the one sanctuary node was rejected) |
+| 9 | Role suitability | **PASS after 4 rejections** — category conflicts and area-not-a-point rejected |
+| 10 | Privacy safety | **PASS** — no residence, no personal name, no phone number, no customer address, no order data. One security-sensitive site rejected |
+
+### 56.1 Confidence distribution
+
+| Confidence | Count | Notes |
+|---|---|---|
+| `HIGH` | **0** | **No fixture is HIGH.** No field capture, no official record, no on-site confirmation has occurred |
+| `MEDIUM` | 21 | Named, specifically identifiable OSM elements |
+| `LOW` | 8 | Generic names (ตลาด, โรงเรียน, ศาลาประชาคม), place nodes, one tag/category conflict, one unverified-access attraction |
+
+> **Consequence, stated plainly.** §21.1 permits a distance-delta metric only
+> against Tier 1 or Tier 2 ground truth, and §39.3 makes `LOW` diagnostic-only.
+> With **zero HIGH fixtures and no assigned reviewer**, this population can
+> today support **route success, coverage, impossible-route and latency**
+> metrics — and **no distance-accuracy metric at all.**
+
+### 56.2 Geographic coverage achieved
+
+Relative to the town node `บุณฑริก` (`node/968513166`, `14.758981, 105.410330`):
+
+| Quadrant | Accepted fixtures | Assessment |
+|---|---|---|
+| CENTRE | 4 | Town baseline covered |
+| NW | 5 | Covered at 2.1–6.5 km |
+| NE | 8 | Best-covered direction, 5.6–20.4 km |
+| SE | 4 | Covered at 5.4–7.1 km |
+| SW | 9 | Covered, but **almost all at 18–24 km** |
+
+**Gaps, stated rather than smoothed over:**
+
+- **No SW or S fixture between roughly 8 and 18 km.** The south jumps from one
+  health station at 7.7 km straight to 18 km. Band D in the southern half is
+  unrepresented.
+- **No fixture due west.** The western district is empty of named public POIs in
+  OSM.
+- **Central town is thin** — 4 fixtures, of which two are the hospital and the
+  town node itself. Band A rests largely on two shop coordinates.
+- **Band G (difficult road network): `NOT ESTABLISHED`.** Nothing in the
+  retrieved data identifies a bridge, river crossing, detour or disconnected
+  segment relevant to delivery. **No band G case was invented**, and the stratum
+  is reported as not evaluated until a local reviewer or field pass identifies
+  genuine cases.
+
+### 56.3 Counts against target
+
+| Target | Achieved | Verdict |
+|---|---|---|
+| ~20–30 coordinates | **29** | **MET** |
+| 5–10 origins | **6** | **MET** |
+| 15–20 destinations | **23** | **OVER** — deliberately retained. Over-supply at candidate stage costs nothing and gives the field pass room to drop fixtures that fail on-site confirmation. Trim to target during Stage A if desired |
+| 20–40 routes | **30** | **MET** |
+| ≥3 routes per evaluated stratum | **A/B/C yes, D no (2), G none** | **PARTIAL** — see §54.1 |
+
+---
+
+## 57. Service zone — unchanged and still blocking
+
+**`OD-8 BLOCKED — SERVICE-ZONE POLYGON NOT DEFINED`.**
+
+**No polygon was created, and none was derived.** The district bounding box and
+relation id retrieved in §52 are **research evidence**, not a service zone:
+
+- a **bounding box is a rectangle**, and a service zone is a business boundary
+  (§3);
+- the **district boundary is an administrative fact**, and using it as the
+  service zone would be a business decision this task has no authority to make —
+  it would commit BANHAO to serving the entire district including points 24 km
+  from town, which D-12 alone would reject;
+- `service_areas` / `zones` remain deferred with no table and no polygon column
+  (§27), unchanged.
+
+The evidence **is** useful for a future polygon decision, and is recorded as
+such: relation `18929401`, bbox `14.3841250–14.9580407 / 105.2517714–105.5799590`,
+and the observed clustering of public POIs along a NW–SE axis through the town.
+**Defining the polygon remains OD-8, an owner decision.**
+
+Consequently fixtures **B-012** (inside polygon, over 15 km road) and **B-013**
+(outside polygon) from §20.3 remain **BLOCKED**, not merely unacquired.
+
+---
+
+## 58. What remains `FIXTURE ACQUISITION REQUIRED`
+
+| Item | Status after this pass |
+|---|---|
+| Any `HIGH`-confidence coordinate | **REQUIRED** — zero exist; needs field capture or on-site confirmation |
+| ตลาดสดบุณฑริก anchor coordinate | **REQUIRED** — not present in OSM (§52.3) |
+| Real merchant coordinates | **REQUIRED** — the six origins are proxies (two 7-Eleven-class chains, a café, a burger shop, two generic markets), not BANHAO merchants |
+| Southern/western 8–18 km fixtures | **REQUIRED** — coverage gap (§56.2) |
+| A plausible just-under-15 km road-distance route | **REQUIRED** — the accept side of the D-12 boundary is unrepresented (§54.1) |
+| Band G difficult cases | **`NOT ESTABLISHED`** — existence unverified; none invented |
+| Customer-residence-like destinations (ซอย, house entrances) | **NOT ACQUIRABLE under OD-4/OD-6** — this is the accepted limitation (§55.3), not a gap to be closed with customer data |
+| Local reviewer | **OD-3 BLOCKED** |
+| Service-zone polygon | **OD-8 BLOCKED** |
+| Distance-accuracy capability | **BLOCKED** — requires HIGH fixtures **and** a reviewer; neither exists |
+
+---
+
+## 59. Part IV conflicts and reconciliations
+
+Two, both stated rather than applied silently:
+
+1. **§37.1 is refined by §52.4.** It said no attempt was made to decide between
+   the two synthetic clusters; the district bounding box now shows the
+   tracking-prototype cluster is outside the district entirely. **Their status is
+   unchanged** — all three clusters remain `SYNTHETIC — SMOKE TEST ONLY`.
+2. **§39.1's "provider-geocoded" cap is extended by §52.1.** The original rule
+   was written against the Google-testing-Google circularity. This pass records
+   the mirror case: an OSM-derived coordinate is **MEDIUM for testing Google**
+   but **biased toward OSRM** in the §28 comparison, and must be flagged there.
+
+**No approved architecture document was modified. `docs/DECISIONS.md` is
+untouched. DEC-061 is unchanged. D-16 and D-17 both remain `OPEN`.**
+
+---
+
+## 60. Sources
 
 - `ai/RESEARCH/MAPS_LOCATION.md` — provider capability and pricing research,
   checked 2026-08-09.
@@ -2240,4 +2685,10 @@ classification (§37.2) rather than deleted.
 - `docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md` §1 (F19, F20) — the repository's
   existing conventions for privileged live fixture data and for read-only live
   verification, and why benchmark fixtures belong in neither.
-- Repository state for Part III verified at `a0ac526c`.
+- Repository state for Part III verified at `a0ac526c`; Part IV at `1e10a25b`.
+- **OpenStreetMap**, © OpenStreetMap contributors, **ODbL 1.0**
+  (`http://osm.org/copyright`) — every candidate coordinate in §53, retrieved
+  2026-09-10 via `https://nominatim.openstreetmap.org/search` (district relation
+  18929401) and `https://overpass-api.de/api/interpreter` (three bounded
+  `area(3618929401)` queries). **No routing, distance or duration request was
+  made to any provider.**
