@@ -140,6 +140,29 @@ Field testing in Buntharik cannot be done remotely.
 an interface so the provider is swappable, and prefer banded pricing (BQ-026's
 recommendation) precisely because it tolerates geocoding error.
 
+> **Updated 2026-09-10 — read
+> [`ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`](../ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md)
+> before acting on the paragraph above.** It is the authoritative Q-018 / TQ-004
+> research and decision-preparation record, and it reconciles this entry
+> explicitly (§13).
+>
+> Two changes since this recommendation was written:
+>
+> 1. **The banded-pricing preference is superseded by DEC-061**, which locked
+>    dynamic distance-based delivery economics (D-05…D-10, D-12). Banding is no
+>    longer the target model.
+> 2. **The Product Owner has approved a Phase 1 direction:** PostGIS
+>    service-zone polygon as the free pre-check, then **Google Compute Routes**
+>    as the authoritative road-routing engine; OSRM as a future
+>    cost-optimization candidate judged on total cost of ownership; TomTom,
+>    HERE and Mapbox excluded from the Phase 1 production architecture. This is
+>    an **OWNER-APPROVED DIRECTION — PENDING FIELD VALIDATION**, not a lock.
+>
+> **"Field-test before selecting" still stands**, and **TQ-004 and its economic
+> counterpart D-16 both remain `OPEN`** pending Buntharik field evidence and
+> current provider-pricing verification. Keeping distance behind a swappable
+> interface also still stands.
+
 ---
 
 ## TQ-005 — Production deployment topology and hosting

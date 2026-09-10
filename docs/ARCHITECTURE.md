@@ -208,7 +208,8 @@ Supabase Storage free tier (1 GB) for images; Cloudflare R2 at Stage 2.
 | Payments | PromptPay QR via a provider, webhook-confirmed | **No provider selected** (Q-001). `NullPaymentProvider` only |
 | Push | Expo Push + FCM | Not built |
 | SMS OTP | ThaiBulkSMS (~฿0.15/credit) | Not configured — Supabase Test OTP in dev |
-| Maps | MapLibre GL + OSM tiles | Prototype only (Q-018) |
+| Maps (display) | MapLibre GL + OSM tiles | Prototype only (Q-018) |
+| Road routing / distance | **Nothing integrated.** Owner-approved Phase 1 *direction* is PostGIS service-zone polygon → Google Compute Routes → pricing engine — see `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md` | **Not built.** Q-018/TQ-004 and D-16 all `OPEN`; `orders.distance_m` is never populated |
 | Error tracking | Sentry free tier | Phase A |
 
 CON-002 stands: **only a signature-verified provider webhook may confirm a

@@ -2004,7 +2004,7 @@ No `Q-NNN` was resolved by this pass. Cross-references added:
 | Q-012 | PDPA retention | BQ-004, BQ-018 · **DEC-056** (2026-09-08) introduces a **new category of personal data** — a customer payment email, purpose recorded narrowly as payment processing and payment/refund-related communication. Retention, subject rights and deletion on account closure for it belong here. **Q-012 stays `OPEN`; DEC-056 does not clear it legally** |
 | Q-013 | Anti-fraud | BQ-018 |
 | Q-014 | Authorization granularity | **BQ-038** (extends) |
-| Q-018 | Map/address accuracy | BQ-001, BQ-026 |
+| Q-018 | Map/address accuracy | BQ-001, BQ-026 · **still `OPEN`.** Authoritative research and decision preparation: `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md` (2026-09-10). The owner has approved a **direction** — PostGIS service-zone polygon pre-check, then **Google Compute Routes** as the Phase 1 authoritative road-routing engine, OSRM only as a later TCO-judged optimization, TomTom/HERE/Mapbox excluded from Phase 1 production — labelled **OWNER-APPROVED DIRECTION — PENDING FIELD VALIDATION**. **No provider is selected**, no Buntharik field evidence exists, and **D-16 (distance source) remains `OPEN`** |
 | Q-019 | SMS sender ID | BQ-035 |
 | Q-020 | PromptPay refund mechanism | BQ-031, DQ-03 · **still `OPEN`** — and note **DEC-055 Addendum A-9**: Stripe requests refund bank details by emailing the address given at PaymentIntent confirmation. **DEC-056** (2026-09-08) locks where that address comes from (BANHAO-owned, collected at payment, `profiles`, fail closed) but resolves nothing here: whether Stripe's refund API itself requires or accepts an email is **`NOT VERIFIED`** and belongs to this question |
 
