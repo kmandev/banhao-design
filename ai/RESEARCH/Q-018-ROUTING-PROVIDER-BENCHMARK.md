@@ -2,7 +2,7 @@
 
 **Status:** `OPEN` · **Priority:** T1 · **Type:** research + decision preparation
 **Related decision:** **D-16 (distance provider/source) — `OPEN`**
-**Last updated:** 2026-09-10 (field benchmark design added — §17–§33)
+**Last updated:** 2026-09-10 (field benchmark design §17–§33; Buntharik fixture acquisition plan §35–§49)
 
 > **This document decides nothing.** It is the authoritative research and
 > decision-preparation record for **Q-018** (map/address accuracy) and
@@ -547,13 +547,17 @@ DEC-061 itself records.
 | **Q-018 / TQ-004** | **`OPEN`** |
 | **Field benchmark** | **Designed, not executed** — §17–§33. Objective, fixture matrix, ground-truth tiers, metric formulas, proposed thresholds, D-12 matrix, execution stages and cost controls |
 | **Benchmark blocker** | **Real Buntharik coordinate fixtures and a service-zone polygon do not exist** (§20, §32). The repository holds four synthetic dev points inside ~1 km; none is benchmark-eligible |
+| **Fixture acquisition** | **Planned, not started** — §35–§49. Target ~20–30 public coordinates supporting ~20–40 routes. **`FIXTURE ACQUISITION REQUIRED` for the entire population** (§46): no real coordinate could be safely established from existing material, and none was fabricated |
+| **Fixture privacy rule** | **No customer address, name or phone number is a fixture.** Public POIs only; real customer routing data waits on Q-012, TQ-016 and BQ-022 (§36.2) |
+| **Owner decisions pending** | OD-1…OD-8 (§48) — sample size, thresholds, local reviewer, POI sufficiency, web-research follow-up, delivery-GPS use, fixture separation, service polygon |
 
 ---
 
 ## 15. Scope of this document
 
-**Documentation, decision preparation and benchmark design only.** This applies
-to every revision of this document, including the §17–§33 field-benchmark design
+**Documentation, decision preparation, benchmark design and fixture-acquisition
+planning only.** This applies to every revision of this document, including the
+§17–§33 field-benchmark design and the §35–§49 fixture acquisition plan, both
 added 2026-09-10. While producing it, none of the following occurred and none is
 authorized by it:
 
@@ -568,7 +572,10 @@ authorized by it:
 - no credential introduced;
 - no external routing API called;
 - no API credit spent;
-- no fixture, seed or database row mutated;
+- no geocoding or map lookup performed;
+- no fixture, seed or database row created, mutated or deleted;
+- no coordinate fabricated;
+- no customer address, name, phone number or other personal data used;
 - no change to D-17.
 
 ---
@@ -579,12 +586,17 @@ Sections 0–15 above are the **research and decision-preparation** half of this
 document: what is known, what the owner has approved as a direction, and why
 D-16 is not yet lockable.
 
-Sections 17–33 below are the **benchmark design** half, added 2026-09-10. They
+Sections 17–33 are the **benchmark design** half, added 2026-09-10. They
 specify the field test §8 requires — its population, fixtures, ground truth,
 metrics, proposed thresholds, economic simulation, execution stages and cost
 controls — so that a later, separately authorized task can execute it safely.
 
-**Both halves are documentation.** Neither implements routing, and neither locks
+Sections 35–49 are **Part III — Buntharik real-world fixture acquisition**, added
+the same day. Part II found that the benchmark cannot run at all on the
+geography this repository holds; Part III is the acquisition and validation plan
+for the real public fixtures it needs, and the privacy rule that bounds them.
+
+**All three parts are documentation.** None implements routing, and none locks
 D-16.
 
 ---
@@ -1518,7 +1530,687 @@ Two adjacent constraints are **reinforced**, not contradicted, by this design:
 
 ---
 
-## 34. Sources
+## 34. Part II closing — the blocker Part III addresses
+
+Part II's design is complete and executable **except for its inputs.** Of the
+eleven prerequisites in §32, the two that gate everything else are geographic:
+**real Buntharik coordinate fixtures**, and a **service-zone polygon**. Neither
+exists, and no amount of further benchmark design produces either.
+
+The polygon is a business-boundary decision (§3) and is tracked as **OD-8**
+(§48). The fixtures are field work, and Part III below is their acquisition and
+validation plan.
+
+---
+
+## 35. Part III — Buntharik real-world fixture acquisition
+
+Added 2026-09-10. Part II (§16–§33) designed the benchmark and identified its
+hard blocker: **the repository contains no real Buntharik geography.** Part III
+is the acquisition and validation plan for the fixtures that blocker needs.
+
+**This part acquires nothing.** It defines what must be collected, from what
+sources, to what quality standard, how it is validated, and what it is rejected
+for. **No coordinate is invented anywhere in it.**
+
+**Nothing in this part was executed.** No routing API was called, no Google,
+TomTom, HERE, Mapbox or OSRM request was issued, no geocoding lookup was
+performed, no credential was introduced, no migration was written, no database
+row was created or mutated, no pricing logic was touched. **DEC-061 is
+unchanged; D-16 and D-17 both remain `OPEN`.**
+
+---
+
+## 36. Acquisition objective, and the privacy rule that bounds it
+
+### 36.1 Objective
+
+`PROPOSED`
+
+Acquire approximately **20–30 real public geographic coordinates** in
+อำเภอบุณฑริก, sufficient to build approximately **15–20 representative
+origin/destination routes** covering every benchmark stratum (§18).
+
+### 36.2 Privacy rule — binding, not advisory
+
+**No customer data enters this benchmark.** The following must never be used as
+a fixture:
+
+- real customer addresses;
+- private residential addresses;
+- customer names;
+- phone numbers;
+- order addresses or any `orders.delivery_address_snapshot` value;
+- any personally identifiable delivery information.
+
+**Public benchmark fixtures are preferred over customer addresses for Q-018
+Phase 1 validation.** Real customer routing data may be introduced **only after
+the applicable legal and privacy decisions are resolved** — **Q-012** (PDPA
+lawful basis and retention, `LEGAL_REVIEW_REQUIRED`), **TQ-016** (rider location
+retention and access) and, for anything involving rider movement, **BQ-022**.
+Until then, a customer address is not a fixture, however convenient.
+
+Permitted fixture subjects — public, non-sensitive locations only:
+
+- restaurants, cafés and food shops that trade publicly;
+- markets and food centres;
+- schools, where used as a public POI rather than to reach a person;
+- government offices;
+- hospitals and health stations;
+- petrol stations;
+- temples (วัด);
+- public facilities and community buildings;
+- road intersections;
+- public landmarks;
+- publicly listed commercial locations.
+
+> **The benchmark measures routing quality, not customer data.** A public
+> petrol station at the end of a village road tests exactly the same road
+> network as the house next to it, and carries none of the risk.
+
+### 36.3 One consequence worth stating plainly
+
+A public POI is typically **on** a road; a customer's house is often **down** a
+ซอย or behind a gate. Public fixtures therefore systematically **understate**
+the hardest part of BANHAO's real routing problem — the final approach. The
+benchmark must record this as a known limitation of its own population, and
+band F (§18.2) partially compensates by deliberately selecting POIs that sit on
+village and narrow roads rather than on highways. It does not fully compensate,
+and the report must say so rather than imply the population is representative
+of real deliveries.
+
+---
+
+## 37. Existing fixture inventory — the complete picture
+
+`VERIFIED` at `a0ac526c`, 2026-09-10.
+
+The repository contains **three mutually inconsistent clusters of invented
+coordinates and no real ones.**
+
+| # | Cluster | Where | Values | Self-declared status |
+|---|---|---|---|---|
+| 1 | Dev catalog seed | `supabase/seed-dev/catalog_dev_seed.sql:105,114` | `14.780000,105.420000` (R1) · `14.781000,105.421000` (R2) | Address lines end `(ที่อยู่ทดสอบ)`; description reads `ไม่ใช่ร้านจริง`; the file header states it "is NOT product content and must never be presented as a real restaurant, menu, or price" |
+| 2 | G-7.1 delivery fixture | `supabase/seed-dev/g71_offer_fixture.sql:122,272,309` | pickup reuses R1 · dropoffs `14.775000,105.415000` and `14.776000,105.416000` | `(g71 fixture)` markers throughout; addresses read `บ้านทดสอบ G7.1` |
+| 3 | Tracking map prototype | `design/tracking/tracking-map.html:22,34` and its duplicate `docs/design/tracking-map.html` | `14.3735,105.4090` (shop) · `14.3689,105.4165` (customer) · `14.3712,105.4128` (rider) · a 5-point polyline between them | Inline comment: `// ตัวอย่าง: อ.บุณฑริก จ.อุบลราชธานี (พิกัดโดยประมาณ, ข้อมูลจำลอง)` — *approximate coordinates, simulated data*. Tooltips read `ร้านตัวอย่าง`, `(ข้อมูลจำลอง)` |
+
+Also present, and **not** a coordinate source: `supabase/tests/restaurant_availability_test.sql:84`
+creates an `addresses` row at `14.31, 105.21` **inside a transactional domain
+test**; it never reaches `banhao-dev`. Coordinate literals in `apps/**` unit
+tests are in-memory doubles.
+
+### 37.1 The clusters disagree with each other
+
+`VERIFIED`
+
+Cluster 1/2 sits near latitude **14.78**; cluster 3 sits near latitude
+**14.37**. These are roughly **45 km apart** — they cannot both be the same
+town, and neither carries a source. `docs/TODO.md:99` already records the
+tracking prototype's data as simulated and flags replacing it "with a real
+geocoding/location source before any real use".
+
+> **This is the finding, not a curiosity.** Nothing in this repository has ever
+> been anchored to real Buntharik geography, and two independent invented
+> anchors have drifted 45 km apart without anyone noticing — because nothing
+> ever consumed them geographically. **No attempt was made to decide which
+> cluster is "closer to right".** Both are `SYNTHETIC`, and a guess between two
+> unsourced values is still a guess.
+
+### 37.2 Status of the synthetic fixtures — preserved, and quarantined
+
+**All three clusters are preserved.** Nothing is deleted, renamed or moved: they
+serve their original purposes (catalog browsing, offer-inbox testing, a design
+prototype) and those purposes are unaffected by routing.
+
+They are hereby classified **`SYNTHETIC — SMOKE TEST ONLY`**. They may be used
+for exactly one thing: proving the benchmark harness mechanically runs — that it
+reads a fixture file, issues a request, parses a response and writes a result.
+
+**They must never enter:**
+
+- accuracy metrics (§24.4, §24.5);
+- rural coverage metrics (§24.2);
+- distance error metrics of any kind;
+- D-12 acceptance metrics (§26);
+- the qualitative small-road verdicts (§24.3);
+- **any evidence presented for a D-16 decision.**
+
+A benchmark report that includes a synthetic point in any accuracy figure is
+invalid and must be rerun.
+
+### 37.3 Real geographic facts the repository does hold
+
+Two, and only two — both without coordinates:
+
+| Fact | Source | Confidence |
+|---|---|---|
+| **อำเภอบุณฑริก exists in OpenStreetMap as an administrative boundary relation, postcode 34230**, and บุณฑริก exists as a place/town node in ตำบลคอแลน | `ai/RESEARCH/SOURCES.md:212–216`, from a live Nominatim query recorded 2026-08-09 | `RESEARCHED`. **No coordinate was recorded from that query**, and an admin boundary implies nothing about house-number coverage |
+| **ตลาดสดบุณฑริก is BANHAO's own designated launch centre** — "20–30 restaurants within a **3 km radius of ตลาดสดบุณฑริก**", and the customer design uses "ใกล้ตลาดสดบุณฑริก" as its landmark example | `docs/BUSINESS_RULES.md:84,811`, `docs/RIDER_LIFECYCLE.md:30`, `docs/OPEN_BUSINESS_QUESTIONS.md:205` | `VERIFIED` as a **named place**. **Its coordinates appear nowhere in this repository** |
+
+**ตลาดสดบุณฑริก is therefore the natural anchor of the fixture population** —
+it is the repository's own stated centre of gravity, it is unambiguously a
+public POI, and the 3 km merchant catchment gives band A and B a defensible
+shape. **Its coordinate is `FIXTURE ACQUISITION REQUIRED`.**
+
+---
+
+## 38. Fixture categories
+
+`PROPOSED`
+
+### 38.1 Origin fixtures — merchant-like public locations
+
+**Target: 5–10.** These stand in for BANHAO merchants, so they must be the kind
+of place a BANHAO merchant actually is: a shop on a road in or near town, not a
+landmark on a highway.
+
+Preferred, in order: restaurants · cafés · food shops · markets and food
+centres.
+
+Required fields per candidate (a subset of §44's schema):
+
+`fixture_id` · `name` · `latitude` · `longitude` · `locality` ·
+`coordinate_source` · source URL or reference where one exists ·
+`coordinate_confidence` · public/private classification · intended
+`road_class`.
+
+**Distribution requirement.** At least one origin must sit **outside** the 3 km
+ตลาดสดบุณฑริก catchment. An all-central origin set makes every band C and D
+route share the same starting road, and a single bad road segment would then
+contaminate the entire outer-distance result.
+
+### 38.2 Destination fixtures — public, and geographically spread
+
+**Target: 15–20.** These stand in for delivery addresses.
+
+Preferred categories: public facilities · public landmarks · commercial
+locations · markets · schools · temples · petrol stations · community
+facilities.
+
+**Private homes are excluded** (§36.2).
+
+**Distribution requirement — the point of the whole exercise.** Destinations
+must be **spread across the operating area, not clustered in town.** A set of 20
+destinations all within the market catchment would produce a benchmark that
+measures one square kilometre and says nothing about อำเภอบุณฑริก.
+
+---
+
+## 39. Source hierarchy and coordinate confidence
+
+`PROPOSED — REQUIRES OWNER APPROVAL`
+
+This refines §19.2 and §19.3 for acquisition. **A coordinate with no traceable
+source is not a fixture** and must be rejected, however plausible it looks.
+
+| Confidence | Source class | Examples | Benchmark use |
+|---|---|---|---|
+| **HIGH** | Field-captured, or official/authoritative public record | A GPS reading taken standing at the location · an official government facility register · a coordinate confirmed on site by the local reviewer (§43) | Eligible for every metric, including distance accuracy |
+| **MEDIUM** | Reputable public map/POI source, or local knowledge without a site visit | An OpenStreetMap node with a name and a sensible tag set · a public business listing · a place the local reviewer knows personally but has not re-visited | Eligible, **flagged in reporting**. Acceptable for route success, coverage and impossible-route metrics |
+| **LOW** | Secondary public source, or derived | A coordinate quoted in an article or directory with no primary reference · a coordinate inferred from a nearby feature | **Diagnostic only.** Never a distance-accuracy input |
+| **SYNTHETIC** | Invented test data | The three clusters in §37 | **Smoke test only** (§37.2) |
+
+### 39.1 The provider-geocoded trap
+
+A coordinate obtained by geocoding an address through a routing/mapping provider
+is **`PROVIDER_GEOCODED`** and is capped at **LOW** confidence for this
+benchmark, because using a provider's own geocode as the input to a test of that
+provider's routing measures the provider against itself. It may be used to
+*propose* a candidate for field confirmation, never to score one.
+
+**The same applies to any coordinate obtained by public web research.** Web
+research may identify *which* public places exist and roughly where they are; it
+promotes a candidate to **MEDIUM at best**, and only when the source is a
+primary public record or a named, tagged OSM node. Promotion to **HIGH** requires
+field capture or the local reviewer's on-site confirmation.
+
+### 39.2 Required provenance record
+
+Every fixture carries: `coordinate_source` (the class above), the concrete
+reference (URL, register name, or "field capture by <role>"), the **retrieval or
+capture date**, and `coordinate_confidence`. **Anonymous or untraceable
+coordinates are rejected** with reason `NO_TRACEABLE_SOURCE` (§41).
+
+**No personal information may be scraped or recorded** in the course of this
+research — a business name and its public location, nothing more.
+
+---
+
+## 40. Geographic stratification and coverage
+
+`PROPOSED`
+
+### 40.1 Bands — and the classification rule that must not be broken
+
+The population must eventually cover bands **A–G** as defined in §18.1.
+
+> **A fixture pair's band is `PRELIMINARY GEODESIC CLASSIFICATION` until a route
+> has been computed for it.** `VERIFIED` as a D-12 requirement.
+>
+> Straight-line distance is a **planning aid only**: it is how the acquisition
+> team decides which candidate probably lands in band C rather than band D. It
+> is **not** the band, and it is **never** the D-12 test — D-12 is a **road
+> distance** limit, not a radius and not a geodesic distance (DEC-061 D-12,
+> unchanged).
+>
+> Every fixture and route record therefore carries **three distinct fields**:
+> `preliminary_geodesic_band` (planning), `road_distance_m` (populated by the
+> benchmark run), and `final_benchmark_stratum` (assigned from road distance
+> after the run). A report that presents a geodesic band as a result is invalid.
+
+Practically: road distance in a rural district commonly exceeds straight-line
+distance by a wide margin, so a candidate pair whose geodesic separation is
+12 km may well be a band E or an over-15 km case. Acquisition should therefore
+**over-sample the 8–14 km geodesic range** to be confident of populating bands
+D and E after routing.
+
+### 40.2 Coverage targets
+
+| Coverage dimension | Requirement |
+|---|---|
+| **Central town** | Present, but capped — no more than roughly half the destinations |
+| **North / south / east / west** | Each direction from the town centre represented by at least one destination |
+| **Village / rural** | At least 5 destinations on village or local roads (band F feeds from here) |
+| **Outer area** | At least 3 destinations far enough out to produce band D and E routes after routing |
+| **Difficult (band G)** | Only where genuinely present — see §46 |
+
+### 40.3 The service-zone caveat
+
+**The final service zone is not defined.** `VERIFIED` — no polygon column, table
+or seed exists, and `service_areas` / `zones` remain deferred with `zone_id`
+carrying no foreign key (§27). The repository's only stated geographic scope is
+the district (อำเภอบุณฑริก) and the 3 km merchant catchment around
+ตลาดสดบุณฑริก.
+
+Acquisition must therefore **not** be scoped to a polygon that does not exist.
+Collect across the district as described above; the polygon, when it is defined,
+will classify these fixtures rather than the reverse. Fixture B-013 (§20.3, the
+outside-polygon case) **cannot be finalised until the polygon exists** — that
+remains an open prerequisite (§47), not something acquisition can close.
+
+---
+
+## 41. Quality, duplicate and rejection rules
+
+`PROPOSED`
+
+Every candidate is validated before it becomes a fixture. **Nothing is silently
+discarded** — every rejection is recorded with its `rejection_reason` and kept in
+the candidate list, so the same bad candidate is not re-proposed later.
+
+| Check | Rule | Rejection reason |
+|---|---|---|
+| Duplicate coordinate | Identical `latitude`/`longitude` to an existing fixture | `DUPLICATE_COORDINATE` |
+| Too close to another fixture | Below a minimum separation — **`PROPOSED`: 150 m** between two fixtures of the same type. Two destinations 20 m apart add a row and no information | `TOO_CLOSE_TO_EXISTING` |
+| Invalid latitude/longitude | Outside valid ranges, transposed lat/lng, truncated precision, or a null island value | `INVALID_COORDINATE` |
+| Outside the intended operating area | Outside อำเภอบุณฑริก, or so far outside that no plausible service zone reaches it | `OUTSIDE_OPERATING_AREA` |
+| Impossible geographic location | In water, in a field with no road access, on a runway, or otherwise not a place a rider can arrive at | `IMPOSSIBLE_LOCATION` |
+| Wrong POI category | Categorised as a public POI but actually a private residence, or a category that does not match §38 | `INVALID_CATEGORY` |
+| Stale or closed | The business has closed, moved, or the facility no longer operates | `STALE_LOCATION` |
+| Ambiguous | The name matches several places, or the source does not identify which one | `AMBIGUOUS_LOCATION` |
+| Low confidence | `coordinate_confidence` is `LOW` and the fixture is proposed for an accuracy-bearing route | `CONFIDENCE_TOO_LOW` |
+| No traceable source | `coordinate_source` cannot be stated concretely | `NO_TRACEABLE_SOURCE` |
+
+**A rejected candidate may be re-admitted** once its defect is fixed — for
+example a `LOW`-confidence candidate promoted to `HIGH` by field capture. The
+re-admission and its reason are recorded; the original rejection row is not
+deleted.
+
+**Precision hygiene.** Record coordinates at 5–6 decimal places. `numeric(9,6)`
+is what the schema stores (§7), and 6 decimal places is roughly 0.1 m —
+recording more precision than the source has is a false claim of accuracy, and
+recording fewer than 5 introduces error at the same scale as the thing being
+measured.
+
+---
+
+## 42. Route matrix design
+
+`PROPOSED`
+
+### 42.1 Why a stratified sample, not a Cartesian product
+
+With 8 origins and 18 destinations, the full matrix is **144 routes**. That is
+the wrong design for four independent reasons:
+
+1. **It measures the wrong thing.** 144 routes drawn from 26 points are heavily
+   correlated: every route from one origin shares its first road segment, so one
+   bad segment contaminates 18 "independent" results and inflates any error rate
+   built from them. A stratified sample deliberately spreads across origins so
+   that correlated failures are visible rather than multiplied.
+2. **It buries the strata that matter.** A Cartesian matrix over a town-centred
+   population is dominated by short town routes. Band F and band G — the cases
+   most likely to fail, and the ones D-16 actually turns on — would be a handful
+   of rows among a hundred, and the aggregate figures would be carried by the
+   easy cases (§24.9 exists to prevent exactly this).
+3. **Ground truth does not scale.** Tier 2 verification is a person judging a
+   route (§43). 144 routes is not reviewable; 20–40 is. An unverified route
+   contributes nothing to a distance-accuracy metric, so a matrix larger than
+   the ground-truth budget is mostly padding.
+4. **Cost and quota.** §31 requires a small, enumerated, budget-capped request
+   set. A Cartesian matrix that grows quadratically with fixture count is the
+   opposite of a bounded one.
+
+### 42.2 Target size, and the reconciliation it forces
+
+**Target: approximately 20–40 route cases.**
+
+> **Reconciliation — this supersedes §18.4's proposed ~76 routes.** `PROPOSED`
+> §18.4 was written before the fixture inventory was known and sized the
+> population from statistical comfort alone. With **zero** real fixtures in hand
+> (§37) and Tier 2 as the ceiling on ground truth (§21), 20–40 routes built from
+> 20–30 acquired coordinates is the achievable and reviewable target. §18.4's
+> stratum table remains a useful shape; its totals are superseded by this
+> section. **Final sample size is an owner decision** (§48, OD-1), and the
+> §24.4 rule stands unchanged: any percentile must be published with its `N`,
+> and with `N < 20` in a stratum the maximum is reported alongside the p95.
+
+### 42.3 Route record
+
+| Field | Notes |
+|---|---|
+| `route_id` | Stable, e.g. `R-001`. Maps onto the `B-0NN` cases in §20.3 where they correspond |
+| `origin_fixture_id` | From §38.1 |
+| `destination_fixture_id` | From §38.2 |
+| `route_type` | `RESTAURANT_TO_CUSTOMER` (a merchant-like origin) or `POINT_TO_POINT` (diagnostic, §19.1) |
+| `preliminary_band` | **`PRELIMINARY GEODESIC CLASSIFICATION`** — planning only (§40.1) |
+| `preliminary_geodesic_m` | The straight-line separation used to propose that band |
+| `ground_truth_tier` | Expected tier: 2 where a reviewer is available, else none |
+| `benchmark_stratum` | Required stratum this route is meant to fill (A–G). **Final stratum is assigned from road distance after the run** |
+| `purpose` | One line: what this route is for |
+| `notes` | Known local context — a bridge, a seasonal road, an access restriction |
+
+### 42.4 Sampling rule
+
+`PROPOSED`
+
+- Every origin appears in **at least 2** and **at most 6** routes — enough to
+  see origin-specific behaviour, not enough to let one origin dominate.
+- Every required stratum has **at least 3** routes, or is explicitly reported as
+  **not evaluated** (§18.3's rule, unchanged).
+- Band F is sampled **across** bands A–D, not concentrated at one distance.
+- Bands D and E are drawn from the over-sampled 8–14 km geodesic candidates
+  (§40.1), accepting that some will land in a different band once routed.
+- The §24.8 consistency subset (repeat requests) is chosen to span strata, not
+  taken from the shortest routes.
+
+---
+
+## 43. Tier 2 ground truth — the local reviewer process
+
+`PROPOSED`
+
+**Tier 1 (rider GPS trace) is unavailable and is not introduced here.**
+`VERIFIED` — location capture is a single foreground reading with a `{lat,lng}`
+payload and latest-position-only storage, gated on Q-012 and TQ-016 (§21).
+**Tier 2 — human verification using actual local road knowledge — is the highest
+achievable ground truth** for the first benchmark run.
+
+### 43.1 What the reviewer is asked
+
+For each route, given the provider's proposed route, the reviewer records:
+
+| Question | Answer form |
+|---|---|
+| Is the route **physically usable**? | Yes / No / Partly, with a reason |
+| Is it passable by **motorcycle** (มอเตอร์ไซค์)? | Yes / No / Seasonally, with a reason |
+| Is the **major road choice** what a local rider would take? | Yes / No / Acceptable alternative |
+| Is there an **obvious detour** — a materially longer path than the local one? | Yes / No, with the local alternative described |
+| Is the destination **actually accessible** by that final approach? | Yes / No — gate, one-way, no through road, wrong side of a canal |
+| Is the route **materially unreasonable** overall? | Yes / No — this is the §24.6 `impossible` verdict |
+
+Plus the §24.3 verdict: `RIDEABLE_AS_ROUTED` · `RIDEABLE_BUT_NOT_OPTIMAL` ·
+`NOT_RIDEABLE` · `WRONG_DESTINATION_APPROACH`, with a one-line reason.
+
+### 43.2 What Tier 2 does and does not give
+
+**It gives:** a defensible judgement on usability, motorcycle access, road
+choice, detours, accessibility and gross unreasonableness — which is exactly
+what §25.1's qualitative gates need.
+
+**It does not give distance accuracy at any fine resolution.** A person saying
+"about 6 km, that's roughly right" is not a measurement. Where a **distance**
+delta is needed, it must come from an odometer reading or a one-off GPS capture
+on a ridden route, recorded as such — and even then, odometer readings vary with
+tyre size and calibration, and a single GPS ride carries its own error. **Any
+distance-accuracy figure must state its measurement method**, and a Tier 2
+opinion must never be presented as one.
+
+### 43.3 Process integrity
+
+- **Blind where practical.** In a later Google-versus-OSRM run (§28), the
+  reviewer should not know which engine produced a route.
+- **One reviewer, recorded.** The reviewer's identity (by role, not personal
+  detail) and the review date are part of the record.
+- **Disagreement is data.** Where two reviewers differ, both verdicts are kept;
+  the route is flagged rather than averaged.
+- **Reviewer assignment is an owner decision** (§48, OD-3). No reviewer exists
+  today.
+
+---
+
+## 44. Fixture file format
+
+`PROPOSED` — **no fixture file is created by this document, because there is
+nothing to put in it** (§46).
+
+### 44.1 Where it belongs, and where it does not
+
+**Recommended location: `ai/RESEARCH/fixtures/` as CSV**, tracked in Git and
+reviewed like any other change.
+
+Deliberately **not**:
+
+- **not a migration** — this is research input, not schema;
+- **not a database table** — no `benchmark_fixtures` table, no column, no RLS
+  policy, no RPC. The database is locked (§10 working rules), and the benchmark
+  harness reads a file (§27);
+- **not `supabase/seed-dev/`** — that directory's convention is *privileged,
+  idempotent, id-namespaced SQL that provisions live rows in `banhao-dev`*
+  (`docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md` §1, F19). Benchmark fixtures
+  provision nothing and must never be inserted into the live project, where they
+  would immediately become indistinguishable from real catalog data.
+
+The repository has **no existing CSV or data-file convention** `VERIFIED`, so
+CSV is proposed on its merits: diffable in review, editable by a non-engineer
+doing field capture, and trivially readable by a throwaway harness.
+
+### 44.2 Fixture schema
+
+```text
+fixture_id
+fixture_type              ORIGIN | DESTINATION
+name
+latitude
+longitude
+locality
+coordinate_source         FIELD_GPS | OFFICIAL_PUBLIC_RECORD | PUBLIC_MAP_POI |
+                          LOCAL_KNOWLEDGE | PROVIDER_GEOCODED | SECONDARY_PUBLIC |
+                          SYNTHETIC_DEV_FIXTURE
+source_reference          URL, register name, or "field capture by <role>"
+retrieved_at              ISO-8601 date of retrieval or capture
+coordinate_confidence     HIGH | MEDIUM | LOW | SYNTHETIC
+public_poi                true | false        (false is only ever a rejection)
+poi_category              restaurant | market | school | temple | fuel | ...
+preliminary_geodesic_band A | B | C | D | E    — PRELIMINARY, planning only
+road_class                town road | village road | soi | highway | mixed
+status                    CANDIDATE | ACCEPTED | REJECTED
+rejection_reason          one of §41's reasons, or empty
+notes
+```
+
+### 44.3 Route matrix schema
+
+```text
+route_id
+origin_fixture_id
+destination_fixture_id
+route_type                RESTAURANT_TO_CUSTOMER | POINT_TO_POINT
+preliminary_band          PRELIMINARY GEODESIC CLASSIFICATION
+preliminary_geodesic_m
+ground_truth_tier         2 | none        (1 is unavailable — §43)
+benchmark_stratum         A | B | C | D | E | F | G
+purpose
+notes
+```
+
+**Road distance, duration and the final stratum are deliberately absent from
+both files.** They are outputs of a benchmark run and belong in the §22
+append-only result record, keyed by `benchmark_run_id` — never written back into
+the fixture file, where they would silently become inputs.
+
+### 44.4 Synthetic quarantine in the file
+
+If the three §37 clusters are ever listed in the fixture file for harness smoke
+testing, each row carries `coordinate_confidence = SYNTHETIC` and
+`notes = "SYNTHETIC — SMOKE TEST ONLY"`, and the harness must **refuse** to
+include a `SYNTHETIC` row in any metric computation. Enforcement in the harness,
+not in a comment.
+
+---
+
+## 45. Fixture acceptance rule
+
+`PROPOSED — REQUIRES OWNER APPROVAL`
+
+A fixture is eligible for the benchmark **only if all seven hold**:
+
+1. **Public and non-sensitive** — it is a public POI, not a residence, and
+   carries no personal information (§36.2).
+2. **Traceable to a source** — `coordinate_source`, `source_reference` and
+   `retrieved_at` are all recorded (§39.2).
+3. **Confidence acceptable for its intended use** — `HIGH` or `MEDIUM` for any
+   accuracy-bearing route; `LOW` is diagnostic only (§39).
+4. **Geographically valid** — passes every §41 validity check.
+5. **Category valid** — matches a §38 category, and the category matches
+   reality.
+6. **Contributes to a required stratum** — a fixture that duplicates coverage
+   already held adds cost and no evidence.
+7. **Not a duplicate** — distinct from every accepted fixture by more than the
+   minimum separation (§41).
+
+Failing any of the seven means `status = REJECTED` with the reason recorded, not
+deletion.
+
+---
+
+## 46. Missing fixtures — `FIXTURE ACQUISITION REQUIRED`
+
+`VERIFIED`
+
+**No real coordinate could be safely established from existing repository
+material.** The repository holds three clusters of self-declared invented
+coordinates (§37), one unsourced OSM administrative fact without coordinates,
+and one named anchor POI (ตลาดสดบุณฑริก) whose position is recorded nowhere.
+
+**Therefore: `FIXTURE ACQUISITION REQUIRED` for the entire population.**
+
+| Category | Target | Held today | Status |
+|---|---|---|---|
+| Anchor POI — ตลาดสดบุณฑริก | 1 | 0 (named only, no coordinate) | **FIXTURE ACQUISITION REQUIRED** |
+| Merchant-like origins | 5–10 | 0 | **FIXTURE ACQUISITION REQUIRED** |
+| Public destinations | 15–20 | 0 | **FIXTURE ACQUISITION REQUIRED** |
+| Village / rural destinations (band F feed) | ≥5 | 0 | **FIXTURE ACQUISITION REQUIRED** |
+| Outer-area destinations (bands D/E feed) | ≥3 | 0 | **FIXTURE ACQUISITION REQUIRED** |
+| Boundary case, inside polygon and >15 km road (B-012) | 1 | 0 | **BLOCKED** — also needs the service polygon (§40.3) |
+| Outside-polygon case (B-013) | 1 | 0 | **BLOCKED** — needs the service polygon |
+| Difficult / band G | ≤8, only if genuine | 0, and **unknown whether any exist** | **FIXTURE ACQUISITION REQUIRED — existence unverified.** Whether อำเภอบุณฑริก contains bridges, river crossings or disconnected road segments relevant to delivery **is not established anywhere in this repository**, and was not guessed at |
+| Ambiguous-location case (B-017) | 1 | 0 | **FIXTURE ACQUISITION REQUIRED** |
+
+> **No coordinate was fabricated to fill any row above, and none may be.** A
+> plausible-looking coordinate is worse than an empty cell: an empty cell blocks
+> the benchmark honestly, while a fabricated one produces a number that looks
+> like evidence.
+
+### 46.1 On using public web research to seed candidates
+
+`OPEN DECISION` — see §48, OD-5.
+
+Public web research (an OSM/Nominatim lookup, a public business listing, a
+government facility register) could produce **MEDIUM**-confidence candidate
+coordinates without any routing API call, and would shorten field work by
+telling the acquisition team where to go.
+
+**This document deliberately did not do that**, for three reasons:
+
+1. Under §39.1 such coordinates are capped at MEDIUM and still require on-site
+   confirmation before they can carry a distance-accuracy metric — so they
+   change the order of the field work, not its necessity.
+2. An unverified coordinate recorded in this document would very likely become
+   "the" anchor for everything downstream, and §37.1 shows exactly how an
+   unsourced anchor propagates unnoticed.
+3. Whether a POI is currently open, correctly categorised and correctly placed
+   (§41's `STALE_LOCATION`, `INVALID_CATEGORY`, `AMBIGUOUS_LOCATION` checks)
+   cannot be settled from a desk.
+
+**It remains available as an explicitly authorized follow-up.** If the owner
+wants a provisional candidate list to plan field work from, that is a separate
+task with a stated source policy — and its output would be `CANDIDATE` rows at
+`MEDIUM` confidence, never `ACCEPTED` fixtures.
+
+---
+
+## 47. Execution prerequisites
+
+`PROPOSED` — what must be true before Stage A (§30) can start, and before
+anything downstream of it can.
+
+| # | Prerequisite | Blocks | Owner or engineering |
+|---|---|---|---|
+| 1 | **A person on the ground in อำเภอบุณฑริก** with a GPS-capable phone | All acquisition | Operational |
+| 2 | **Local reviewer assigned** for Tier 2 verification (§43) | Every qualitative metric and every §25.1 gate | **Owner** (§48, OD-3) |
+| 3 | **Anchor coordinate for ตลาดสดบุณฑริก** | Band A/B shape, and the 3 km catchment | Field capture |
+| 4 | **Fixture file created and reviewed** at `ai/RESEARCH/fixtures/` | Stage A completion | Engineering |
+| 5 | **Service-zone polygon defined** | §26 cases 2 and 3; fixtures B-012 and B-013; Stage B | **Owner + engineering.** Still absent (§27, §40.3) |
+| 6 | **Owner approval of sample size and thresholds** | Turning a run into a verdict | **Owner** (§48) |
+| 7 | **Routing client, benchmark credential, budget cap and kill switch** | Stage C only | Engineering (§31) |
+| 8 | **Current Google pricing re-verified** | Any cost argument at D-16 | Engineering (DEC-061 open item) |
+
+Prerequisites 1–4 are the acquisition critical path and are **field work that
+cannot be done from this repository**. Prerequisite 5 is independent of
+acquisition and can proceed in parallel.
+
+---
+
+## 48. Owner decision items
+
+**Nothing below is decided here.** These are the items a later owner review must
+settle. **D-16 remains `OPEN`. D-17 remains `OPEN`.**
+
+| ID | Item | Notes |
+|---|---|---|
+| **OD-1** | **Final benchmark sample size** — 20–40 routes (§42.2) versus §18.4's earlier ~76 | §42.2 reconciles the two and proposes 20–40; the owner chooses |
+| **OD-2** | **Final acceptance thresholds** — §25.2's proposed numbers | None has approval; none may be cited as a requirement until it does |
+| **OD-3** | **Local reviewer assignment** — who performs Tier 2 verification | No reviewer exists. Without one, every qualitative gate in §25.1 is unevaluable |
+| **OD-4** | **Are public POIs sufficient?** — given §36.3's limitation that public POIs understate the final-approach problem | If not, the alternative involves customer addresses and is gated on OD-6 |
+| **OD-5** | **Public web research for candidate coordinates** — whether to run the §46.1 follow-up | Would produce `CANDIDATE`/`MEDIUM` rows only, never accepted fixtures |
+| **OD-6** | **Whether and when real delivery GPS may be used** | Gated on **Q-012**, **TQ-016**, **BQ-022**. Not an engineering call |
+| **OD-7** | **Minimum fixture separation** — §41 proposes 150 m | A tuning parameter, stated so it is not invented silently later |
+| **OD-8** | **Service-zone polygon definition** — a business boundary decision (§3), not an engineering one | Blocks §26 cases 2 and 3 and fixtures B-012/B-013 |
+
+---
+
+## 49. Part III conflicts with existing documents
+
+**One reconciliation, stated rather than applied silently:**
+
+- **§18.4's proposed ~76-route population is superseded by §42.2's 20–40.**
+  §18.4's stratum *shape* is retained; only its totals change, and the change is
+  driven by the fixture inventory (§37) and the Tier 2 ground-truth ceiling
+  (§43) — neither of which was known when §18.4 was written. **Final size is
+  OD-1.** §18.4's text is left in place and this section is the record of why it
+  no longer governs.
+
+**No other conflict was found.** `docs/TODO.md:99` already asks for the tracking
+prototype's simulated coordinates to be replaced with a real source before any
+real use, which this part reinforces rather than contradicts. No approved
+architecture document was modified, `docs/DECISIONS.md` is untouched, and the
+existing synthetic fixtures are preserved in place and quarantined by
+classification (§37.2) rather than deleted.
+
+---
+
+## 50. Sources
 
 - `ai/RESEARCH/MAPS_LOCATION.md` — provider capability and pricing research,
   checked 2026-08-09.
@@ -1540,3 +2232,12 @@ Two adjacent constraints are **reinforced**, not contradicted, by this design:
   exists.
 - `docs/OPEN_TECHNICAL_QUESTIONS.md` — **TQ-016** (rider location retention and
   access), gating Tier 1 ground truth with **Q-012**.
+- `design/tracking/tracking-map.html` (and its duplicate `docs/design/tracking-map.html`),
+  `docs/TODO.md:99` — the third synthetic coordinate cluster, self-labelled
+  `พิกัดโดยประมาณ, ข้อมูลจำลอง`.
+- `docs/BUSINESS_RULES.md:84,811`, `docs/RIDER_LIFECYCLE.md:30` — ตลาดสดบุณฑริก
+  as BANHAO's own designated launch centre and 3 km merchant catchment.
+- `docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md` §1 (F19, F20) — the repository's
+  existing conventions for privileged live fixture data and for read-only live
+  verification, and why benchmark fixtures belong in neither.
+- Repository state for Part III verified at `a0ac526c`.
