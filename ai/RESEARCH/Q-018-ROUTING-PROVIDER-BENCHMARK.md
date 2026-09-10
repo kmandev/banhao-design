@@ -2,7 +2,12 @@
 
 **Status:** `OPEN` · **Priority:** T1 · **Type:** research + decision preparation
 **Related decision:** **D-16 (distance provider/source) — `OPEN`**
-**Last updated:** 2026-09-10 (field benchmark design §17–§33; fixture acquisition plan §35–§49; first public-POI candidate acquisition pass §50–§59)
+**Last updated:** 2026-09-10 (field benchmark design §17–§33; fixture acquisition plan §35–§49; public-POI candidate acquisition pass §50–§59; **owner decision pack and readiness gate §60–§66**)
+
+> ## `Q-018 BENCHMARK READINESS: READY FOR OWNER DECISIONS`
+>
+> Six prerequisites block a controlled provider benchmark — see **§66**. The
+> owner decision matrix is **§61**.
 
 > **This document decides nothing.** It is the authoritative research and
 > decision-preparation record for **Q-018** (map/address accuracy) and
@@ -551,6 +556,8 @@ DEC-061 itself records.
 | **Fixture privacy rule** | **No customer address, name or phone number is a fixture.** Public POIs only; real customer routing data waits on Q-012, TQ-016 and BQ-022 (§36.2) |
 | **Owner decisions pending** | OD-1…OD-8 (§48; status table §51) — sample size, thresholds, local reviewer, POI sufficiency, web-research permission, delivery-GPS use, fixture separation, service polygon. **None is locked in `docs/DECISIONS.md`** |
 | **Candidate fixtures** | **29 `CANDIDATE`** from OpenStreetMap, 2026-09-10 — 6 origins, 23 destinations, **30 rejections recorded**, **0 `HIGH` confidence**, **none `VALIDATED`** (§50–§56). A **30-route** candidate matrix exists (§54), all bands **preliminary geodesic** |
+| **Readiness verdict** | **`READY FOR OWNER DECISIONS`** (§66) — **not** ready for a controlled provider benchmark. Six blockers: no local reviewer (OD-3), zero `HIGH` fixtures, no near-15 km accept-side case, five unapproved ODs, no routing client/credential/budget, no service polygon (OD-8) |
+| **Owner decision matrix** | **§61** — OD-1…OD-8 with proposed decision, evidence, risk, what it unlocks and the exact owner action. **None is locked** |
 | **What the candidates cannot yet support** | **No distance-accuracy metric** — that needs `HIGH` fixtures and an assigned local reviewer, and neither exists (§56.1). ตลาดสดบุณฑริก is still unlocated; band G is `NOT ESTABLISHED` |
 
 ---
@@ -558,10 +565,11 @@ DEC-061 itself records.
 ## 15. Scope of this document
 
 **Documentation, decision preparation, benchmark design, fixture-acquisition
-planning and public-POI candidate research only.** This applies to every
-revision of this document, including the §17–§33 field-benchmark design, the
-§35–§49 fixture acquisition plan and the §50–§59 candidate acquisition pass, all
-added 2026-09-10. While producing it, none of the following occurred and none is
+planning, public-POI candidate research and owner-decision preparation only.**
+This applies to every revision of this document, including the §17–§33
+field-benchmark design, the §35–§49 fixture acquisition plan, the §50–§59
+candidate acquisition pass and the §60–§66 owner decision pack, all added
+2026-09-10. While producing it, none of the following occurred and none is
 authorized by it:
 
 - no production routing code;
@@ -579,7 +587,11 @@ authorized by it:
 - no fixture, seed or database row created, mutated or deleted;
 - no coordinate fabricated;
 - no customer address, name, phone number or other personal data used;
-- no change to D-17.
+- no change to D-17;
+- no `DEC-` entry created, modified or proposed for insertion into
+  `docs/DECISIONS.md`;
+- no service-zone polygon, radius, geofence or derived operational boundary
+  created.
 
 ---
 
@@ -2263,6 +2275,11 @@ The statuses below reflect the owner's stated working direction for this task.
 **D-16 remains `OPEN`. D-17 remains `OPEN`.** Neither was changed by this pass,
 and no provider lock exists.
 
+> **Superseded as a status table by §61** (2026-09-10, same day). The statuses
+> are unchanged; §61 adds the proposed decision, evidence, risk, unlocks and
+> owner action for each item. This section is retained as the record of what was
+> true at the moment the candidates were acquired.
+
 ---
 
 ## 52. Acquisition method and sources
@@ -2655,7 +2672,250 @@ untouched. DEC-061 is unchanged. D-16 and D-17 both remain `OPEN`.**
 
 ---
 
-## 60. Sources
+## 60. Part V — Owner Decision Pack
+
+Prepared 2026-09-10 at `40d62532`. **This is a decision pack, not a decision.**
+Nothing in it is locked, nothing was written to `docs/DECISIONS.md`, and no
+provider was selected.
+
+**Relationship to §51.** §51 recorded OD status at the moment of the acquisition
+pass. **§61 below supersedes it as the current authoritative status table**;
+§51 is retained as the record of what was true when the candidates were
+acquired, and is not rewritten.
+
+**What was not done, again:** no routing API call of any kind, no Google Routes
+or OSRM implementation, no migration, no pricing change, no DEC-061 edit, no
+D-16 or D-17 lock, no reviewer invented, no polygon invented, no coordinate
+fabricated.
+
+---
+
+## 61. Owner decision matrix — OD-1…OD-8
+
+`VERIFIED` — `docs/DECISIONS.md` re-read at `40d62532` and is byte-identical to
+its state at `897c8b69`. **No `DEC-` entry locks any of OD-1…OD-8.** Nothing
+below may be cited as approved until the owner action column is completed.
+
+| OD | Status | Proposed decision | Evidence | Risk | Unlocks | Owner action |
+|---|---|---|---|---|---|---|
+| **OD-1** Benchmark sample size | `OWNER-APPROVAL REQUIRED` | **20–40 route cases, stratified not Cartesian.** Each origin in ~2–6 routes; each evaluated stratum ≥3 routes or explicitly reported not evaluated | §54: a 30-route matrix already satisfies this — 30 of 138 possible pairs, per-origin 6/6/6/4/4/4, all inside 2–6. §42.1 gives four reasons a Cartesian product is the wrong design | Too small a sample makes every p95 indicative rather than decisive; too large exceeds the Tier-2 review budget and the request cap. §24.4 already requires `N` to be published with every percentile | Stage C may run against a fixed, budget-bounded request set (§31). Settles the §18.4 versus §42.2 reconciliation | **Approve 20–40, or state a different number** |
+| **OD-2** Acceptance thresholds | `PROPOSED — REQUIRES OWNER APPROVAL` | Keep §25.2's **eight thresholds unchanged and unlocked**: aggregate success ≥98%; band F ≥95%; p95 absolute distance error ≤800 m; p95 percentage ≤15%; impossible-route ≤2%; **dangerous impossible-route 0**; p95 latency ≤1500 ms; repeat distance spread ≤100 m | **None is derived from measurement — no measurement exists.** The ≤800 m figure is anchored to D-08's ฿1.20/km (under ฿1 of rider-pay error); the rest are engineering judgement | Approving numbers before any measurement can set an unachievable bar, or a meaninglessly lax one. Approving *none* leaves the run unable to produce a verdict | A benchmark run can produce **PASS/FAIL**, not merely numbers. §25.1's five qualitative gates become checkable | **Approve, amend, or defer until after a first exploratory run** |
+| **OD-3** Local reviewer | **`BLOCKED — LOCAL REVIEWER NOT ASSIGNED`** | **Assign a named person with อำเภอบุณฑริก road knowledge**, available for ~30 route reviews | **No reviewer exists in this repository and none was invented.** §43.1 defines exactly what they are asked; §43.3 requires their role and review date be recorded | Without one, **Tier 2 is unavailable**, and Tier 1 is separately blocked by OD-6. The benchmark can then measure only what a machine can see | §24.3 small-road verdicts · §24.6 impossible-route classification · **all five §25.1 qualitative gates** · the ground-truth half of §24.4 | **Name a reviewer, or accept a machine-only benchmark that cannot satisfy §25.1** |
+| **OD-4** Public POI sufficiency | `OWNER-APPROVAL REQUIRED` | **Public POIs are sufficient for the Phase 1 benchmark population**, with a permanently visible limitation: **public POIs do not represent customer-house final approach, private ซอย, gates, or residence access** | §55.3, measured not assumed: of 59 named district elements, **20 are private houses**, and nearly every remaining public POI is a school, temple, health station or community hall on a village road | The benchmark systematically **understates the hardest part of real delivery routing** — the last 100 m. A pass on this population is not a pass on real deliveries | The 29 acquired candidates become a usable population; the field pass has a defined target | **Approve with the limitation recorded, or require residence-class fixtures — which requires OD-6** |
+| **OD-5** Web research permission | `OWNER-APPROVAL REQUIRED` | **Web research authorized for candidate acquisition.** Web-sourced = **`MEDIUM` maximum**; provider-derived = **`LOW` maximum**; all candidates stay **`CANDIDATE`** until validation | Already applied under the owner's working direction in §50–§56: 29 candidates from Nominatim and Overpass, **0 `HIGH`**, **none `VALIDATED`** | Retroactive disapproval would invalidate the entire acquired population. The MEDIUM cap is what keeps a desk-sourced coordinate out of a distance-accuracy metric (§21.1, §39) | Field work becomes targeted rather than exploratory; §50–§56 stands as legitimate input | **Ratify the pass already performed under this direction, or reject it and require field-first acquisition** |
+| **OD-6** Real delivery GPS | **`NOT AUTHORIZED`** | **Remain NOT AUTHORIZED** until the privacy prerequisites are satisfied | `VERIFIED` — **Q-012** `OPEN` and `LEGAL_REVIEW_REQUIRED` (PDPA lawful basis), **TQ-016** `OPEN` (rider location retention and access), **BQ-022** `LEGAL_REVIEW_REQUIRED` (contractor status; granular tracking is a classification factor). Separately, no GPS trace capability exists (§21 Tier 1) | Authorizing early is a legal exposure, not an engineering shortcut. It also builds tracking infrastructure before its retention rule is decided | Tier 1 ground truth · real distance-versus-actual comparison · the §29 Local Routing Intelligence direction | **No action available.** This is gated on legal review, not on an engineering decision |
+| **OD-7** Minimum fixture separation | `PROPOSED` | **150 m** between two fixtures of the same type | Applied in §56: it rejected three candidates and left **zero violations** among the 29 accepted. Not derived from measurement | Too large discards genuinely distinct nearby POIs; too small admits pairs that add a row and no information | A repeatable, reviewable acquisition rule for the field pass | **Approve 150 m, or state a different separation** |
+| **OD-8** Service-zone polygon | **`BLOCKER — SERVICE-ZONE POLYGON NOT DEFINED`** | **A service-zone polygon is required before production routing.** It is a business-boundary decision, not an engineering one | `VERIFIED` — no polygon column, table or seed exists; `service_areas`/`zones` deferred; `addresses.zone_id` has no FK (§27, §57). The district relation and bbox retrieved in §52 are **research evidence, not a boundary** | Deriving a polygon from the district boundary would silently commit BANHAO to serving points 24 km from town. Deriving a radius would contradict D-12, which is a **road-distance** limit, not a radius | §26 cases 2 and 3 · fixtures B-012 and B-013 · the free pre-routing cost control in §2 · production serviceability | **Define the polygon, or explicitly defer it and accept that the benchmark cannot test the polygon path** |
+
+**D-16 remains `OPEN`. D-17 remains `OPEN`.** No provider is selected, no Google
+lock exists, no OSRM lock exists, and no production routing decision was made.
+
+---
+
+## 62. Benchmark readiness checklist
+
+`PROPOSED` — what must be true before a controlled Google benchmark may run.
+
+### A. Owner decisions
+
+| Item | Required? | Status |
+|---|---|---|
+| **OD-1** sample size | Required | **NOT APPROVED** |
+| **OD-2** acceptance thresholds | Required to produce a verdict; a first exploratory run could proceed without them | **NOT APPROVED** |
+| **OD-3** local reviewer | **Required for any §25.1 gate** | **BLOCKED** |
+| **OD-4** public POI sufficiency | Required to legitimise the population | **NOT APPROVED** |
+| **OD-5** web research permission | Required to legitimise the acquired candidates retroactively | **NOT APPROVED** (applied as working direction only) |
+| **OD-7** minimum separation | Required as an acquisition rule | **NOT APPROVED** |
+| OD-6 delivery GPS | **Not required** for this benchmark — deliberately out of scope | NOT AUTHORIZED, and not needed |
+| OD-8 service polygon | Required **only** for the polygon path (§26 cases 2 and 3) | **BLOCKER** for those cases |
+
+### B. Geographic prerequisites
+
+| Item | Status |
+|---|---|
+| Sufficient fixture population (≥20 coordinates, ≥20 routes) | **MET** — 29 candidates, 30 routes |
+| `HIGH`-confidence anchors where accuracy is claimed | **NOT MET — zero `HIGH` fixtures exist** |
+| ตลาดสดบุณฑริก anchor coordinate | **NOT MET** — not in OSM, still unlocated (§52.3) |
+| Geographic coverage — all four quadrants plus centre | **PARTIAL** — all five represented, but no S/SW fixture between ~8 and 18 km, nothing due west, town centre thin (§56.2) |
+| **Near-15 km road-distance accept-side case** | **NOT MET** — see §63 |
+| Above-15 km road-distance cases | **MET** — 8 routes with geodesic separation >15 km are certain D-12 rejections |
+| Band G difficult cases | **`NOT ESTABLISHED`** — existence unverified, none invented |
+| Service-zone definition | **BLOCKED (OD-8)** — required only for the polygon path |
+
+### C. Ground-truth prerequisites
+
+The three tiers are **not interchangeable**, and each supports different metrics.
+
+| Tier | What it gives | Status |
+|---|---|---|
+| **Tier 1 — rider GPS trace** | Actual ridden path and distance | **UNAVAILABLE.** No trace capability exists: single foreground reading, `{lat,lng}`-only payload, latest-position-only storage (§21). Building it is **OD-6-blocked** |
+| **Tier 2 — local human verification** | Usability, motorcycle access, road choice, obvious detours, destination accessibility, gross unreasonableness | **BLOCKED (OD-3)** — no reviewer assigned |
+| **Odometer or one-off GPS ride trace** | **The only currently conceivable source of a distance delta** | **NOT PLANNED** — no ride has been performed, and no measurement method is recorded |
+
+> **Tier 2 cannot provide fine-grained distance accuracy, and must never be
+> presented as if it could.** A reviewer saying "about 6 km, that's roughly
+> right" is a judgement, not a measurement. §43.2 states this and it is restated
+> here because it is the single easiest error to make when reading a benchmark
+> report. Any distance-accuracy figure must name its measurement method, and
+> odometer readings vary with tyre size and calibration.
+
+**Consequence.** With Tier 1 unavailable, Tier 2 blocked and no ride trace
+planned, the current population can support **route success, rural coverage,
+impossible-route (machine-detectable subset only), latency and consistency** —
+and **no distance-delta or duration-delta metric at all.**
+
+### D. Provider test prerequisites — documentation only
+
+**No credential exists, none was created, and none may be committed** (CON-005).
+No provider API was called. The list below is what a later, separately
+authorized execution task must put in place.
+
+| Item | Requirement |
+|---|---|
+| Google credential | A **benchmark-scoped, restricted, independently revocable** key held outside the repository |
+| Quota | A hard per-day request ceiling in the harness **and** the provider's own quota cap |
+| Budget cap | A spend cap and billing alert configured **before the first request** |
+| Request limit | The fixture set is closed — the harness must refuse any pair not in the fixture file (§31) |
+| Current pricing re-verified | §11.1's figures date to 2026-08-09; DEC-061's own open items require re-verification |
+| Logging — per request | `benchmark_run_id`, `case_id`, provider, **API/SKU**, request timestamp, origin and destination **as sent**, road distance, duration, route status, latency, and the provider's request/trace id where one is returned (§22) |
+| Logging — integrity | **Append-only.** A re-run creates a new `benchmark_run_id`; results are never overwritten in place |
+| Route geometry | Stored **only** if the provider's terms permit — verify the terms first; this document asserts nothing about them |
+| Kill switch | One configuration value that halts the harness, plus a documented key-revocation path |
+| Isolation | Never on a customer, merchant or rider request path; no order priced, created or modified |
+
+---
+
+## 63. Critical gap — the D-12 accept-side boundary is not covered
+
+`VERIFIED`
+
+**The current fixture set does not establish a route plausibly near the 15 km
+road-distance accept boundary.**
+
+| Side of D-12 | Coverage | Evidence |
+|---|---|---|
+| **Above 15 km road distance** (reject side) | **Covered** — 8 routes | Road distance is always ≥ geodesic distance, so a geodesic separation above 15 km **guarantees** a road distance above 15 km. `BTK-R-23` is the tightest at 15.5 km geodesic |
+| **Safely below 15 km road distance** (accept side) | **NOT ESTABLISHED** | The two longest sub-15 km candidates, `BTK-R-15` and `BTK-R-16`, are ~10.4 km geodesic and **may land on either side once routed**. Nothing guarantees a route lands just under the limit |
+
+> **Geodesic distance must not be used to claim this gap is covered.** The
+> asymmetry is one-directional: geodesic >15 km proves road >15 km, but
+> geodesic <15 km proves **nothing** about road distance. Reading the 10.4 km
+> pairs as "safely inside" would be exactly the geodesic-as-D-12-evidence error
+> §40.1 forbids, and D-12 is a **road-distance** limit (DEC-061 D-12,
+> unchanged).
+
+**Follow-up requirement: `NEAR-D12 ACCEPT-SIDE FIXTURE REQUIRED`.**
+
+The eventual benchmark must contain cases testing **both** sides:
+
+- at least one route with a measured road distance **safely below 15 km** and
+  near it — close enough that the boundary is exercised, far enough that
+  measurement noise cannot flip it;
+- at least one route with a measured road distance **above 15 km**.
+
+**No such route is created now.** Identifying one requires routing evidence:
+either a first exploratory run that measures the existing 10.4 km pairs and
+finds where they land, or a local reviewer who can name a destination at
+roughly that road distance. Both are downstream of OD-3 or of Stage C.
+
+---
+
+## 64. OSM/OSRM provenance bias — strengthened
+
+`VERIFIED` — this extends §52.1 and §59, and **replaces neither**.
+
+**Every one of the 29 candidate coordinates was sourced from OpenStreetMap**
+(Nominatim and Overpass, §52). OSM is the dataset a future OSRM deployment would
+route on. The population therefore carries a **structural provenance bias toward
+the OSM/OSRM ecosystem.**
+
+What follows from that, precisely:
+
+1. **These fixtures are suitable for Google-first field testing.** Google's
+   routing is independent of OSM, so an OSM-sourced coordinate is not circular
+   against Google. The §39.1 circularity rule — which caps a provider's own
+   geocodes at `LOW` — is satisfied.
+2. **They must not later be treated as neutral evidence in a Google-versus-OSRM
+   comparison.** In that comparison OSRM is being scored on the same dataset the
+   test points came from, which favours it by construction: a point that exists
+   and is correctly placed in OSM is a point OSRM is most likely to route to
+   correctly.
+3. **A future cross-provider comparison must add independent coordinate
+   sources** where practical — field capture (`HIGH`), an official public
+   register, or a merchant-supplied coordinate. Failing that, the §28 protocol
+   must **state the bias explicitly in its results** rather than report a
+   like-for-like comparison it did not perform.
+4. **The bias is provenance, not measurement.** It says nothing about whether
+   OSM's road network in อำเภอบุณฑริก is good or bad — that is unmeasured and
+   is precisely what §8's field test exists to determine.
+
+**This warning must not be removed** when the §28 comparison is eventually run.
+It is the reason that comparison cannot be scored on this population alone.
+
+---
+
+## 65. Service-zone warning — explicit and binding
+
+**The district boundary is NOT the service-zone boundary.**
+
+`VERIFIED` — §52 retrieved อำเภอบุณฑริก as OSM relation `18929401` with a
+bounding box spanning roughly 64 km north–south. That is an **administrative
+fact**, and it is **research evidence only**.
+
+**Do not create, and do not derive, any of the following without explicit owner
+approval:**
+
+- a service-zone **polygon**;
+- a service **radius**;
+- a **geofence**;
+- any other derived **operational boundary**.
+
+Three reasons, each sufficient on its own:
+
+1. **A bounding box is a rectangle.** A service zone is a business boundary
+   (§3) that may follow roads, rivers and commercial judgement.
+2. **Using the district boundary would commit BANHAO to serving the whole
+   district**, including points 24 km from town — a commercial decision no
+   engineering task may make on the owner's behalf.
+3. **A radius would contradict D-12**, which is explicitly *not* a circular
+   radius, *not* straight-line and *not* geodesic (DEC-061 D-12, unchanged).
+
+**OD-8 remains `BLOCKER — SERVICE-ZONE POLYGON NOT DEFINED`.**
+
+---
+
+## 66. Q-018 benchmark readiness verdict
+
+> ## `Q-018 BENCHMARK READINESS: READY FOR OWNER DECISIONS`
+
+**Not `NOT READY`** — the methodology, metrics, acceptance framework, fixture
+population and route matrix all exist, and every open item is a decision or a
+field task rather than an unknown.
+
+**Not `READY FOR CONTROLLED PROVIDER BENCHMARK`** — six prerequisites are
+unsatisfied, and the first three are hard:
+
+| # | Blocking reason | Category |
+|---|---|---|
+| 1 | **OD-3 — no local reviewer assigned.** Tier 2 is the highest achievable ground truth and it is unavailable, so **all five §25.1 qualitative gates are unevaluable** | Ground truth |
+| 2 | **Zero `HIGH`-confidence fixtures.** 21 `MEDIUM` and 8 `LOW`, none field-confirmed, so **no distance-accuracy metric can be computed** under §21.1 | Geographic |
+| 3 | **No near-15 km accept-side case (§63).** D-12's accept side is untested, and geodesic distance cannot be used to claim otherwise | Geographic |
+| 4 | **OD-1, OD-2, OD-4, OD-5 and OD-7 are unapproved.** A run could produce numbers but not a verdict, and the acquired population is not yet ratified | Owner decision |
+| 5 | **No routing client, benchmark credential, quota, budget cap or kill switch exists** (§62 D), and Google pricing has not been re-verified since 2026-08-09 | Provider test |
+| 6 | **OD-8 — no service-zone polygon**, so §26 cases 2 and 3 and fixtures B-012/B-013 cannot be tested at all | Owner decision |
+
+**What a first exploratory run could still do**, if the owner authorizes it
+ahead of OD-2 and OD-3: measure route success, rural coverage, latency,
+consistency and machine-detectable impossible routes, and — usefully — settle
+where the 10.4 km pairs actually land relative to D-12 (§63). It could **not**
+produce a distance-accuracy figure, and it could **not** satisfy §25.1. That
+distinction must be stated in any such run's report.
+
+**Nothing above locks anything. D-16 remains `OPEN`. D-17 remains `OPEN`.**
+
+---
+
+## 67. Sources
 
 - `ai/RESEARCH/MAPS_LOCATION.md` — provider capability and pricing research,
   checked 2026-08-09.
