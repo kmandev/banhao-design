@@ -2,12 +2,14 @@
 
 **Status:** `OPEN` · **Priority:** T1 · **Type:** research + decision preparation
 **Related decision:** **D-16 (distance provider/source) — `OPEN`**
-**Last updated:** 2026-09-10 (field benchmark design §17–§33; fixture acquisition plan §35–§49; public-POI candidate acquisition pass §50–§59; **owner decision pack and readiness gate §60–§66**)
+**Last updated:** 2026-09-10 (field benchmark design §17–§33; fixture acquisition plan §35–§49; public-POI candidate acquisition pass §50–§59; owner decision pack and readiness gate §60–§66; **DEC-062 lock of OD-1…OD-8 §68**)
 
 > ## `Q-018 BENCHMARK READINESS: READY FOR OWNER DECISIONS`
 >
 > Six prerequisites block a controlled provider benchmark — see **§66**. The
-> owner decision matrix is **§61**.
+> owner decision matrix is **§61**, now **locked by `DEC-062`** (§68) as
+> Q-018 benchmark methodology — **not a provider selection**. Provider
+> selection, **D-16**, and **D-17** all remain `OPEN`.
 
 > **This document decides nothing.** It is the authoritative research and
 > decision-preparation record for **Q-018** (map/address accuracy) and
@@ -557,7 +559,7 @@ DEC-061 itself records.
 | **Owner decisions pending** | OD-1…OD-8 (§48; status table §51) — sample size, thresholds, local reviewer, POI sufficiency, web-research permission, delivery-GPS use, fixture separation, service polygon. **None is locked in `docs/DECISIONS.md`** |
 | **Candidate fixtures** | **29 `CANDIDATE`** from OpenStreetMap, 2026-09-10 — 6 origins, 23 destinations, **30 rejections recorded**, **0 `HIGH` confidence**, **none `VALIDATED`** (§50–§56). A **30-route** candidate matrix exists (§54), all bands **preliminary geodesic** |
 | **Readiness verdict** | **`READY FOR OWNER DECISIONS`** (§66) — **not** ready for a controlled provider benchmark. Six blockers: no local reviewer (OD-3), zero `HIGH` fixtures, no near-15 km accept-side case, five unapproved ODs, no routing client/credential/budget, no service polygon (OD-8) |
-| **Owner decision matrix** | **§61** — OD-1…OD-8 with proposed decision, evidence, risk, what it unlocks and the exact owner action. **None is locked** |
+| **Owner decision matrix** | **§61** — OD-1…OD-8 with proposed decision, evidence, risk, what it unlocks and the exact owner action. **Locked 2026-09-10 by `DEC-062`** (§68) as benchmark methodology — **not a provider selection**; provider selection, D-16 and D-17 remain `OPEN` |
 | **What the candidates cannot yet support** | **No distance-accuracy metric** — that needs `HIGH` fixtures and an assigned local reviewer, and neither exists (§56.1). ตลาดสดบุณฑริก is still unlocated; band G is `NOT ESTABLISHED` |
 
 ---
@@ -589,7 +591,9 @@ authorized by it:
 - no customer address, name, phone number or other personal data used;
 - no change to D-17;
 - no `DEC-` entry created, modified or proposed for insertion into
-  `docs/DECISIONS.md`;
+  `docs/DECISIONS.md` (true of Parts I–V; **Part VI, §68, records the single
+  exception** — `DEC-062`, created under explicit, cited owner authorization
+  to lock OD-1…OD-8 as benchmark methodology only);
 - no service-zone polygon, radius, geofence or derived operational boundary
   created.
 
@@ -2692,9 +2696,17 @@ fabricated.
 
 ## 61. Owner decision matrix — OD-1…OD-8
 
-`VERIFIED` — `docs/DECISIONS.md` re-read at `40d62532` and is byte-identical to
-its state at `897c8b69`. **No `DEC-` entry locks any of OD-1…OD-8.** Nothing
-below may be cited as approved until the owner action column is completed.
+`VERIFIED` — `docs/DECISIONS.md` re-read at `40d62532` and was byte-identical to
+its state at `897c8b69` **at the time this table was written.**
+
+> **Superseded 2026-09-10 — see §68.** The Product Owner has since explicitly
+> authorized OD-1…OD-8 exactly as proposed below, and `DEC-062` records that
+> lock in `docs/DECISIONS.md`. **The table below is retained unedited as the
+> proposal record** — every "Owner action" cell is what was asked for, and
+> §68 states plainly which of those actions is now done (a methodology lock)
+> versus still outstanding (naming a reviewer, defining a polygon). **DEC-062
+> locks benchmark methodology only — it is not a provider selection, and it
+> does not touch D-16 or D-17.**
 
 | OD | Status | Proposed decision | Evidence | Risk | Unlocks | Owner action |
 |---|---|---|---|---|---|---|
@@ -2904,6 +2916,14 @@ unsatisfied, and the first three are hard:
 | 5 | **No routing client, benchmark credential, quota, budget cap or kill switch exists** (§62 D), and Google pricing has not been re-verified since 2026-08-09 | Provider test |
 | 6 | **OD-8 — no service-zone polygon**, so §26 cases 2 and 3 and fixtures B-012/B-013 cannot be tested at all | Owner decision |
 
+> **Update 2026-09-10 — row 4 is superseded, the verdict is not.** OD-1, OD-2,
+> OD-4, OD-5 and OD-7 are now **locked by `DEC-062`** (§68) — they are no
+> longer *unapproved*. **Row 6 is unchanged**: OD-8 locks only that a polygon
+> is *required*, not that one exists. Because rows 1, 2, 3, 5 and 6 all still
+> hold, the verdict stays **`READY FOR OWNER DECISIONS`**, unchanged — locking
+> the methodology did not remove any of the operational or provider-test
+> blockers.
+
 **What a first exploratory run could still do**, if the owner authorizes it
 ahead of OD-2 and OD-3: measure route success, rural coverage, latency,
 consistency and machine-detectable impossible routes, and — usefully — settle
@@ -2915,7 +2935,99 @@ distinction must be stated in any such run's report.
 
 ---
 
-## 67. Sources
+## 68. Part VI — DEC-062: Q-018 owner decisions formally locked
+
+Recorded 2026-09-10, immediately following commit `09dda298` (Part V). **The Product Owner has explicitly
+authorized OD-1…OD-8 exactly as proposed in §61**, under the instruction
+"BANHAO — LOCK DEC-062: Q-018 OWNER DECISIONS OD-1…OD-8." That authorization is
+now recorded as **`DEC-062`** in `docs/DECISIONS.md` — the repository's
+decision log, per its own binding convention that every prior owner lock in
+this project (Q-001, Q-020, Q-002/DEC-061) was recorded there, not only in a
+research document.
+
+**What changed:** one file outside this document —
+`docs/DECISIONS.md` gained a new entry, `DEC-062`, plus index rows for
+`DEC-062` and for three-plus-one pre-existing entries (`DEC-057`, `DEC-058`,
+`DEC-059`, `DEC-061`) that had a decision body but no index row — a
+pre-existing gap unrelated to Q-018, repaired here because it was found during
+this recon. **Nothing else in `docs/DECISIONS.md` was touched.** DEC-061's
+body is byte-for-byte unchanged; D-01…D-14, D-12, D-15…D-19, DEC-057/058/059/060
+and every other entry are unchanged.
+
+### What is now locked, precisely
+
+| OD | Locked by DEC-062 as | Still outstanding |
+|---|---|---|
+| **OD-1** | 20–40 stratified routes; 2–6 per origin; ≥3 per evaluated stratum or reported not evaluated | Nothing — the existing 30-route matrix (§54) already conforms |
+| **OD-2** | The eight §25.2 thresholds, **scoped explicitly to Q-018 benchmark acceptance only** — never a product SLA, provider SLA, or production configuration | A benchmark run to evaluate against them |
+| **OD-3** | **That a local reviewer is required** for Tier 2 ground truth | **The reviewer themself.** No name is recorded. `BLOCKED — LOCAL REVIEWER NOT ASSIGNED` is unchanged as an operational fact |
+| **OD-4** | Public POIs are sufficient for Phase 1, **with the final-approach limitation mandatory in every report built on this population** | Nothing procedurally — the limitation is now a locked disclosure requirement, not merely a recommendation |
+| **OD-5** | Web research authorized; `MEDIUM` cap on web-sourced coordinates, `LOW` cap on provider-derived ones; no provider is its own ground truth | Nothing — the §50–§56 acquisition pass is now **ratified**, not merely performed under a working direction |
+| **OD-6** | **`NOT AUTHORIZED`** — stays exactly that | Q-012, TQ-016, BQ-022 — none is this entry's to resolve |
+| **OD-7** | 150 m minimum fixture separation, **as a fixture-quality rule only** — never a delivery radius, D-12, or a service-zone rule | Nothing — already applied in §56 |
+| **OD-8** | **That a service-zone polygon is required before production routing** | **The polygon itself.** `SERVICE-ZONE POLYGON NOT DEFINED` is unchanged as an operational fact. The district boundary is explicitly **not** the service zone |
+
+**In short: DEC-062 locks the rules of the benchmark, not its remaining
+prerequisites.** OD-3 and OD-8 were never proposals to *do* anything by
+themselves — they were proposals that a requirement *exists*. Locking a
+requirement's existence is not the same as satisfying it, and this entry does
+not pretend otherwise.
+
+### What DEC-062 explicitly does not do
+
+- **It does not select a routing provider.** Google is still only an
+  owner-approved *direction* (§1), pending field validation.
+- **It does not lock D-16 or D-17.** Both remain `OPEN`, exactly as before this
+  entry.
+- **It does not touch D-11…D-19, DEC-061, D-12, or any Q-020 decision**
+  (DEC-057, DEC-058, DEC-059, DEC-060). `docs/DECISIONS.md` was diffed to
+  confirm zero deletions and zero modifications to any existing line — only
+  additions (§69, Sources, records the exact verification).
+- **It creates no schema, migration, PostGIS object, polygon, radius,
+  geofence, API, credential, secret, or environment variable.** Nothing in
+  `apps/`, `packages/`, or `supabase/migrations/` was touched.
+- **It does not authorize customer or delivery GPS collection.** OD-6 stays
+  `NOT AUTHORIZED`, unchanged.
+
+### Effect on benchmark readiness
+
+**No change.** §66's verdict — `READY FOR OWNER DECISIONS`, not
+`READY FOR CONTROLLED PROVIDER BENCHMARK` — stands. Locking OD-1, OD-2, OD-4,
+OD-5 and OD-7 removes those five from the list of *undecided* items, but the
+readiness gate was never only about whether decisions existed — it is about
+whether the benchmark can actually run. Five of six blockers in §66's table
+are operational, not decisional, and none of them moved:
+
+- **still no local reviewer** (row 1, OD-3's outstanding half);
+- **still zero `HIGH`-confidence fixtures** (row 2);
+- **still no near-15 km accept-side case** (row 3);
+- **still no routing client, credential, quota, budget cap, or kill switch**,
+  and Google pricing is still unverified since 2026-08-09 (row 5);
+- **still no service-zone polygon** (row 6, OD-8's outstanding half).
+
+A methodology lock cannot manufacture a reviewer, a field-confirmed
+coordinate, or a polygon. Those remain field work and further owner action,
+tracked exactly where they were: §47 (execution prerequisites), §58 (what
+remains `FIXTURE ACQUISITION REQUIRED`), and the "Still outstanding" column
+above.
+
+### Non-scope, restated once more because it matters here specifically
+
+This section, and `DEC-062` itself, are **benchmark methodology and fixture
+acquisition authority**. They are not, and must never be read as:
+
+- a routing provider decision (that is **D-16**, still `OPEN`);
+- a distance-accuracy policy decision (that is **D-17**, still `OPEN`);
+- a production serviceability decision (that needs **OD-8's actual polygon**,
+  which does not exist);
+- a change to any locked economic decision (**D-01…D-14**, **DEC-061**,
+  unchanged);
+- authorization to build anything — no code, schema, or infrastructure change
+  is authorized by this entry.
+
+---
+
+## 69. Sources
 
 - `ai/RESEARCH/MAPS_LOCATION.md` — provider capability and pricing research,
   checked 2026-08-09.
@@ -2945,7 +3057,14 @@ distinction must be stated in any such run's report.
 - `docs/G7_1_FIXTURE_PROVISIONING_DESIGN.md` §1 (F19, F20) — the repository's
   existing conventions for privileged live fixture data and for read-only live
   verification, and why benchmark fixtures belong in neither.
-- Repository state for Part III verified at `a0ac526c`; Part IV at `1e10a25b`.
+- Repository state for Part III verified at `a0ac526c`; Part IV at `1e10a25b`;
+  Part V at `40d62532`.
+- `docs/DECISIONS.md` — **`DEC-062`** (Q-018 Owner Decision Lock: OD-1…OD-8,
+  2026-09-10, benchmark methodology only, not a provider selection); index
+  rows for `DEC-057`, `DEC-058`, `DEC-059` and `DEC-061` were added in the same
+  edit as a pre-existing, unrelated gap repair — their decision bodies are
+  unchanged. Diffed line-by-line against `40d62532` before commit: **zero
+  deletions, zero modifications, additions only.**
 - **OpenStreetMap**, © OpenStreetMap contributors, **ODbL 1.0**
   (`http://osm.org/copyright`) — every candidate coordinate in §53, retrieved
   2026-09-10 via `https://nominatim.openstreetmap.org/search` (district relation

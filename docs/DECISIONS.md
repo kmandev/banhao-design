@@ -67,6 +67,11 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-055** | **Q-001 resolved: Stripe is the Phase 1 payment provider (PromptPay / THB), behind the existing `PaymentProvider` abstraction, with no Stripe Connect in Phase 1** · **Addendum A (same day): the PromptPay presentation contract is locked — provider-neutral `QR_CODE`, `imageUrl` from `image_url_png`, no `expiresAt` on provider presentation** | **ACCEPTED — PROVIDER SELECTION / ARCHITECTURE · RUNTIME NOT IMPLEMENTED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md` § 0, § 2, § 3, DEC-015, Q-001 (resolved), `docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md` |
 | **DEC-056** | **Customer payment email: BANHAO-owned customer data, collected at payment time (never at phone-OTP signup), validated, persisted on `profiles`, read server-side, and failing closed when absent — never synthetic, never the Supabase Auth email** | **ACCEPTED — POLICY / DATA MODEL · RUNTIME NOT IMPLEMENTED · NO MIGRATION YET** | **2026-09-08** | `docs/STRIPE_CUSTOMER_EMAIL_SOURCE_RECON.md`, DEC-055 Addendum A-9, Q-012 (`OPEN`), Q-020 (`OPEN`) |
 | **DEC-060** | **Q-020 reconciliation schema: `reconciliation_cases.kind` gains six refund anomaly values (A–F) plus a partial unique index scoped to them only; case G stays in `payment_events.processing_error`, no new kind** | **ACCEPTED — SCHEMA / ARCHITECTURE · LOCKED · IMPLEMENTED — migration applied live to `banhao-dev`** | **2026-09-09** | `supabase/migrations/20260811000010_audit_notification_infra_domain.sql`, `apps/api/src/modules/admin/reconciliation-case.service.ts`, DEC-049, DEC-057, Q-020 |
+| **DEC-057** | **Q-020 Phase 1 refund mechanism: full-refund-only scope, hybrid finality, PromptPay state mapping, reconciliation as a production prerequisite** | **ACCEPTED — ARCHITECTURE / POLICY · LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md`, Q-020 Refund RECON, Q-020 Stripe Refund Sandbox Spike |
+| **DEC-058** | **Refund authority: actor boundaries for request, approval, execution, cancellation and override** | **ACCEPTED — POLICY · LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED** | **2026-09-08** | `apps/api/src/modules/ai-ops/command-catalog.ts`, DEC-040, DEC-032, Q-020 |
+| **DEC-059** | **Full refund accounting: which ledger components reverse, and which do not** | **ACCEPTED — POLICY · LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED** | **2026-09-08** | `apps/api/src/modules/payments/commission-pricing.ts`, DEC-043, Q-020 |
+| **DEC-061** | **Q-002 Owner Decision Lock: D-01…D-14 (commission, service fee, dynamic rider/delivery economics, contribution guardrail, operational distance, minimum order value, promotion funding)** | **LOCKED — ECONOMIC POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-09** | `docs/Q-002-OWNER-DECISION-PACK.md`, `docs/Q-002-ECONOMICS-ARCHITECTURE-SPEC.md` |
+| **DEC-062** | **Q-018 Owner Decision Lock: OD-1…OD-8 (benchmark methodology, fixture quality, ground-truth and acquisition authority) — not a provider selection** | **ACCEPTED — BENCHMARK METHODOLOGY · NOT A PROVIDER SELECTION** | **2026-09-10** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, Q-018, TQ-004, D-16 (unaffected, `OPEN`), D-17 (unaffected, `OPEN`) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -7897,3 +7902,166 @@ only**), DEC-044 (rider earning model, exclusions preserved), DEC-045 (with a
 future ledger redesign required). **Superseded by:** none.
 **Preserves:** DEC-046, DEC-047, DEC-048, DEC-049, DEC-059, and all of Q-020
 (DEC-057, DEC-058, DEC-060), each unchanged.
+
+---
+
+## DEC-062 — Q-018 Owner Decision Lock: OD-1…OD-8 (benchmark methodology, fixture quality, ground-truth and acquisition authority)
+
+**Status:** **ACCEPTED — BENCHMARK METHODOLOGY · NOT A PROVIDER SELECTION** · **Date:** 2026-09-10 · **Owner:** PRODUCT_OWNER
+
+### Owner-approved scope
+
+Locks the Q-018 benchmark-readiness owner decisions prepared and tracked in
+`ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md` (§60–§66) as **OD-1…OD-8**.
+**This entry locks Q-018 benchmark methodology, fixture quality and
+acquisition authority only.** It does not select a routing provider, does not
+authorize production routing, and does not touch D-11…D-19, DEC-061, or any
+Q-020 decision.
+
+### OD-1 — Benchmark population / route matrix
+
+**Locked:** the Q-018 benchmark uses **20–40 stratified route cases**, never a
+full Cartesian product. Each origin contributes **2–6 routes**. Each evaluated
+stratum must contain **≥3 cases**; a stratum below that must be **explicitly
+reported as not evaluated**, never padded or silently omitted.
+
+### OD-2 — Benchmark acceptance thresholds
+
+**Locked, for Q-018 benchmark acceptance only:**
+
+- aggregate route success ≥ 98%
+- Band F route success ≥ 95%
+- p95 absolute distance error ≤ 800 m
+- p95 percentage distance error ≤ 15%
+- impossible-route rate ≤ 2%
+- dangerous impossible-route rate = 0
+- p95 latency ≤ 1500 ms
+- identical-repeat distance spread ≤ 100 m
+
+> **SCOPE BOUNDARY — explicit and binding.** These thresholds are **Q-018
+> benchmark acceptance criteria only.** They are **not** production SLAs, not a
+> provider SLA, not a permanent routing-accuracy requirement, and not
+> production configuration. They must never be copied into a pricing engine,
+> a provider contract, or a runtime configuration value without a separate,
+> explicit decision.
+
+### OD-3 — Ground-truth reviewer
+
+**Locked:** a local reviewer with actual Buntharik road knowledge is
+**required** for the currently achievable (Tier 2) human ground-truth
+assessment. **Actual reviewer assignment remains `OUTSTANDING`.** No name is
+recorded by this entry, and none may be inferred from it. Every metric that
+depends on Tier 2 verification stays unevaluable until a reviewer is named.
+
+### OD-4 — Fixture source
+
+**Locked:** public POIs are **sufficient** for the Phase 1 benchmark
+population. **Mandatory limitation, to remain visible in every benchmark
+report built on this population:** public POIs sit on or near roads and
+systematically underrepresent the final approach to a customer's house down a
+ซอย — gates, private lanes and house-level access are not tested by this
+population. **This does not authorize collecting customer PII of any kind.**
+
+### OD-5 — Web-researched fixtures
+
+**Locked:** public web research is authorized for candidate fixture
+acquisition, under these caps:
+
+- a web-researched coordinate carries **`MEDIUM`** confidence at most;
+- a provider-derived coordinate (geocoded by a routing/mapping provider)
+  carries **`LOW`** confidence at most, and is diagnostic evidence only —
+  **never independent ground truth**;
+- every acquired coordinate remains **`CANDIDATE`** until field or on-site
+  validation promotes it;
+- **no routing provider may be treated as its own ground truth** — this
+  applies with particular force to any future Google-versus-OSRM comparison,
+  where an OSM-sourced coordinate is structurally biased toward OSRM.
+
+### OD-6 — Real customer/delivery GPS
+
+**Locked: `NOT AUTHORIZED`.** Real customer or delivery GPS data may not be
+collected, requested, or introduced for Q-018 at this stage. **Q-012**
+(`OPEN`), **TQ-016** (`OPEN`) and **BQ-022** (`LEGAL_REVIEW_REQUIRED`) remain
+the governing blockers, unchanged by this entry. No customer tracking or
+delivery-GPS collection mechanism is authorized, designed, or implemented by
+this decision.
+
+### OD-7 — Fixture separation
+
+**Locked:** minimum fixture separation for Q-018 fixture quality = **150
+metres**. This is **only** a benchmark fixture-quality rule. It is **not** a
+delivery radius, **not** D-12, **not** a service-zone definition, and **not** a
+geofence.
+
+### OD-8 — Service-zone polygon
+
+**Locked as a requirement, not as an artifact:** a service-zone polygon **is
+required before production routing or serviceability enforcement**. **No
+polygon is approved. No polygon is created by this entry or by anything it
+authorizes.** The district administrative boundary must **not** be treated as
+the service zone. This entry does not derive, imply, or invent a radius,
+polygon, or geofence of any kind.
+
+### Explicit non-scope
+
+This entry does **not**:
+
+- select Google, OSRM, or any other routing provider;
+- lock **D-16** or **D-17** — both remain `OPEN`;
+- change **DEC-061** or any of **D-01…D-14**;
+- change **D-12** (maximum operational road distance = 15 km, unchanged);
+- change pricing, economics, or any ledger treatment;
+- change any **Q-020** decision (DEC-057, DEC-058, DEC-059, DEC-060);
+- create a schema, migration, PostGIS object, API, service-zone polygon,
+  routing/geocoding dependency, credential, secret, or environment variable;
+- add customer/delivery GPS collection of any kind;
+- modify any application or runtime code.
+
+### Why
+
+The Q-018 field benchmark (§17–§59 of the authoritative research document)
+cannot proceed to execution without a settled methodology: what counts as
+enough fixtures, what a pass looks like, whose judgement counts as ground
+truth, whether public data is an adequate source, and what boundary a
+production zone eventually needs. Locking these as benchmark methodology —
+while explicitly withholding provider selection and D-16/D-17 — lets fixture
+acquisition and benchmark design proceed on a fixed basis without prejudging
+the provider question the benchmark exists to answer.
+
+### Consequences
+
+- The 30-route candidate matrix and 29 candidate fixtures already assembled
+  under the owner's working direction (§50–§59) are **ratified** as conforming
+  acquisition, not merely a preview of one.
+- OD-2's thresholds may now be cited as the **Q-018 benchmark's own** pass/fail
+  criteria once a run occurs — never as a product or provider requirement.
+- OD-3 and OD-8 remain **operational blockers**: this entry locks that a
+  reviewer and a polygon are *required*, not that either now *exists*.
+- **D-16 and D-17 remain `OPEN`.** No provider evidence has been produced, and
+  none is created by this entry.
+
+### Evidence
+
+Product Owner instruction, 2026-09-10 ("BANHAO — LOCK DEC-062: Q-018 OWNER
+DECISIONS OD-1…OD-8"), authorizing OD-1…OD-8 exactly as recorded above,
+following the Q-018 research and decision-preparation record in
+`ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md` (§50 Public POI candidate
+acquisition pass, §60–§66 Owner Decision Pack and readiness gate).
+
+### Related Requirements
+
+Q-018 (map/routing provider, `OPEN`) · TQ-004 (map/routing/geocoding
+provider, `OPEN`) · Q-012 (`OPEN`) · TQ-016 (`OPEN`) · BQ-022
+(`LEGAL_REVIEW_REQUIRED`, unchanged).
+
+### Related Architecture
+
+`ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md` — the sole implementation
+surface of this decision; no application or database module is touched.
+
+### Supersedes / Superseded By
+
+None / None. Does not supersede or modify DEC-061, D-01…D-14, D-12, DEC-057,
+DEC-058, DEC-059, or DEC-060, each of which stands unchanged. **Provider
+selection (D-16) and distance accuracy policy (D-17) remain `OPEN`** and are
+not addressed by this entry.
