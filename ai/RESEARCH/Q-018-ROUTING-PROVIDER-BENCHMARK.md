@@ -796,6 +796,12 @@ Where realistic BANHAO geography is available, prefer
 | `LOW` | Derived or inferred | Diagnostic only |
 | `SYNTHETIC` | Invented test data | **Never eligible** |
 
+> **Superseded 2026-09-10 — DEC-062 OD-5 controls.** "Personally known" alone,
+> with no site visit, does not qualify as `HIGH` under the locked rule.
+> **HIGH requires field or on-site validation** (DEC-062 OD-5; see the fuller
+> statement at §39). A location someone knows from memory, however reliably,
+> caps at `MEDIUM`.
+
 > **A benchmark cannot be more accurate than its coordinates.** Distance-delta
 > metrics computed against `LOW` or `SYNTHETIC` coordinates measure the fixture,
 > not the provider, and must not be reported as provider accuracy.
@@ -1768,6 +1774,19 @@ source is not a fixture** and must be rejected, however plausible it looks.
 | **MEDIUM** | Reputable public map/POI source, or local knowledge without a site visit | An OpenStreetMap node with a name and a sensible tag set · a public business listing · a place the local reviewer knows personally but has not re-visited | Eligible, **flagged in reporting**. Acceptable for route success, coverage and impossible-route metrics |
 | **LOW** | Secondary public source, or derived | A coordinate quoted in an article or directory with no primary reference · a coordinate inferred from a nearby feature | **Diagnostic only.** Never a distance-accuracy input |
 | **SYNTHETIC** | Invented test data | The three clusters in §37 | **Smoke test only** (§37.2) |
+
+> **Superseded 2026-09-10 — DEC-062 OD-5 controls.** The `HIGH` row above,
+> written while this section was `PROPOSED`, is superseded to the extent it
+> reads as permitting promotion from an official or authoritative public
+> record alone. **DEC-062 OD-5 is binding: every acquired coordinate stays
+> `CANDIDATE` until field or on-site validation promotes it.** An official
+> government facility register, a public authority listing, or any other
+> desk-sourced official record — however authoritative — caps a coordinate at
+> `MEDIUM`, same as any other web-researched source (§39.1). Promotion to
+> `HIGH` requires standing at the location (field capture) or the local
+> reviewer's on-site confirmation (§43). Nothing else. This is unchanged from
+> §39.1's own prose, which already stated it correctly — only the table row
+> above it was ambiguous.
 
 ### 39.1 The provider-geocoded trap
 
