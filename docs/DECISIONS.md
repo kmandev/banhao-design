@@ -3246,7 +3246,9 @@ message, and this entry is the mapping.
    `action = 'MerchantAvailabilityChanged'`, `actor_type = 'MERCHANT'` —
    never `SYSTEM`, never `OPERATOR` — carrying the before/after mode and busy
    minutes. An identical repeat request is a no-op: no UPDATE, no audit row
-   (AC-12).
+   (AC-12). **Audit-write failure semantics — locked 2026-09-14 (G-2), see
+   below: the audit insert is best effort and its failure does not
+   invalidate the mode change.**
 10. **Transitions are guarded conditional UPDATEs** (ADR-003). Resume always
     returns to NORMAL and never directly to BUSY; `PAUSED → BUSY` is two
     calls (**AV-D02**).
@@ -3274,6 +3276,88 @@ message, and this entry is the mapping.
 - **AC-04** — whether the estimate the customer was shown is persisted as
   order history. Answered separately by **DEC-042**; nothing in this entry
   decides it.
+
+### G-2 — Audit-write failure semantics (clarification, locked 2026-09-14)
+
+**Status:** ACCEPTED — CLARIFICATION OF ITEM 9 ABOVE · NOT A NEW CAPABILITY ·
+**Date:** 2026-09-14 · **Owner:** PRODUCT_OWNER
+
+Item 9 above establishes that a real availability mode change produces one
+`audit_logs` row. It did not originally state what happens when that insert
+cannot be persisted — the implementation (`RestaurantAvailabilityService`,
+`7ea20a65`) already made a choice, documented only in its own code comment
+and in one test, `restaurant-availability.service.spec.ts`'s *"a failed
+audit write never fails the caller — the mode change already committed."*
+This entry closes that governance gap by locking the existing behavior as an
+explicit, owner-approved decision — **M-AV G-2**, prepared and recorded here
+without introducing a new decision number, per this repository's convention
+that a clarification of an existing decision stays inside that decision.
+
+**Locked: audit-write failure = best effort.**
+
+1. One `audit_logs` row is **attempted** for each real availability mode
+   change (unchanged from item 9) — required when writable, not optional.
+2. The audit write is attempted **after** the state transition has already
+   committed, not before and not inside the same operation.
+3. If the audit insert fails, the failure is **logged and swallowed** —
+   never surfaced to the caller.
+4. **Audit-write failure does not cause the API request to fail.** The
+   availability mode change is reported as successful whenever the state
+   transition itself succeeded, regardless of the audit outcome.
+5. **Audit-write failure does not trigger a compensating update.** The
+   `restaurants` row is never reverted because the audit row could not be
+   written.
+6. **No transaction, RPC, migration, queue, new table, or other
+   infrastructure is introduced by this entry**, for G-2 or otherwise. The
+   architecture remains two separate PostgREST requests, exactly as built —
+   this entry does **not** claim they are atomic, and they are not.
+7. `restaurants.availability_mode` / `busy_prep_minutes` remain the sole
+   **authoritative** availability state. `audit_logs` is traceability and
+   observability of that state's history, never a second source of truth for
+   it, and never a precondition for the state change to count as successful.
+8. The system explicitly accepts that a real mode change's audit row may be
+   missing if the insert fails. This is a known, named trade-off, not an
+   unbounded one — see *Explicit non-scope* below for what it does not
+   extend to.
+9. **This is an intentional product/engineering decision, not an accidental
+   implementation detail.** Before this entry, the behavior was correct but
+   undocumented as a decision; after it, the same behavior is the
+   documented, owner-approved semantics.
+
+> **Clarification, stated explicitly because it is easy to misread this
+> entry as the opposite of what it says:** this does **not** mean "audit is
+> unimportant." It means **audit is required when successfully writable, but
+> audit-persistence failure does not make the availability-state transition
+> unsuccessful.** The live availability state has higher operational
+> priority than historical audit persistence for this one control action.
+
+### Explicit non-scope
+
+This entry does **not**:
+
+- authorize any restriction on which restaurant member role may change
+  availability — **R-6 / BQ-038 remains `OPEN`**, untouched;
+- authorize, imply, or relate to any Rider GPS work — **Q-012 stays entirely
+  separate**, unaffected in any respect;
+- affect Q-018 routing-provider work or the routing benchmark in any way;
+- affect D-17 or any other Q-002 economics decision in any way;
+- change items 1–8 or 10–13 above, the storage model, the transition guard,
+  the customer-facing estimate, or anything else DEC-041 already locked;
+- introduce a Postgres RPC, a new migration, a compensating transaction, a
+  new queue, a new audit table, or any new infrastructure component;
+- change `RestaurantAvailabilityService`, its controller, its validation,
+  the customer app, the merchant app, the database schema, any migration, any
+  SQL function, or any test. The existing behavior and the existing test
+  asserting it were both already correct; this entry documents them, it does
+  not modify them.
+
+### Review trigger — G-2
+
+If BANHAO later adopts durable, alerted observability (Sentry or equivalent,
+still absent per CLAUDE.md §9) such that a failed audit write can be paged on
+rather than only logged, that changes the *operational* cost of best-effort,
+not the decision itself — re-review would be product-initiated, not implied
+by this entry.
 
 ### Review trigger
 
