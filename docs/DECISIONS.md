@@ -73,6 +73,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-061** | **Q-002 Owner Decision Lock: D-01…D-14 (commission, service fee, dynamic rider/delivery economics, contribution guardrail, operational distance, minimum order value, promotion funding)** | **LOCKED — ECONOMIC POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-09** | `docs/Q-002-OWNER-DECISION-PACK.md`, `docs/Q-002-ECONOMICS-ARCHITECTURE-SPEC.md` |
 | **DEC-062** | **Q-018 Owner Decision Lock: OD-1…OD-8 (benchmark methodology, fixture quality, ground-truth and acquisition authority) — not a provider selection** | **ACCEPTED — BENCHMARK METHODOLOGY · NOT A PROVIDER SELECTION** | **2026-09-10** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, Q-018, TQ-004, D-16 (unaffected, `OPEN`), D-17 (unaffected, `OPEN`) |
 | **DEC-063** | **Q-018 ground truth source: the Rider performing a real customer delivery — actual delivery GPS trace as quantitative ground truth, Rider operational feedback as qualitative evidence. Supersedes DEC-062 OD-3 (separately appointed local reviewer) only** | **ACCEPTED — METHODOLOGY · NOT AN IMPLEMENTATION AUTHORIZATION** | **2026-09-14** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, DEC-062 (OD-3 superseded; OD-6 unchanged), Q-012, TQ-016, BQ-022, D-16 (`OPEN`), D-17 (`OPEN`) |
+| **DEC-064** | **Rider GPS owner policy: explicit Terms/Privacy acceptance as the access gate for location-dependent Rider functionality; active-delivery-only scope; no continuous tracking, surveillance or automated discipline; purpose limitation; refusal blocks only the gated functionality; no GPS pay input; customer live tracking out of scope** | **ACCEPTED — OWNER PRODUCT POLICY · NOT A LEGAL DETERMINATION · NOT AN IMPLEMENTATION AUTHORIZATION** | **2026-09-14** | `docs/Q-012-RIDER-GPS-COUNSEL-BRIEF.md`, `docs/Q-012-RIDER-GPS-OWNER-DECISION-PACK.md`, DEC-037, DEC-063, Q-012 (`OPEN`), TQ-016 (`OPEN`), BQ-022 (`OPEN`), OD-6 (`NOT AUTHORIZED`), D-17 (`OPEN`) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -8251,3 +8252,222 @@ decision's methodology record). No application or database module is touched.
 **Supersedes:** DEC-062 **OD-3 only**. **Superseded by:** none. **Preserves
 unchanged:** DEC-062 OD-1, OD-2, OD-4, OD-5, **OD-6**, OD-7, OD-8; DEC-061;
 D-01…D-14; D-12; D-11; all Q-020 decisions. **D-16 and D-17 remain `OPEN`.**
+
+---
+
+## DEC-064 — Rider GPS Owner Policy: acceptance gate, active-delivery scope, purpose limitation
+
+**Status:** **ACCEPTED — OWNER PRODUCT POLICY · NOT A LEGAL DETERMINATION · NOT AN IMPLEMENTATION AUTHORIZATION** · **Date:** 2026-09-14 · **Owner:** PRODUCT_OWNER
+
+> **This is a BANHAO product/owner policy and implementation constraint. It
+> does not constitute legal advice and does not by itself determine BANHAO's
+> legal obligations.** Rider acceptance of BANHAO's Terms or Privacy Notice
+> does **not** by itself make any form of GPS or location processing lawful,
+> and this entry does not select consent — or any other ground — as BANHAO's
+> PDPA lawful basis.
+
+### Scope
+
+Sets the owner's product policy for any BANHAO Rider functionality that
+requires GPS or location processing, so that product and engineering work can
+be planned against a fixed boundary while the scoped legal review prepared in
+`docs/Q-012-RIDER-GPS-COUNSEL-BRIEF.md` is outstanding. It **constrains** what
+may be built; it **authorizes** nothing to be built.
+
+### Definitions
+
+- **Rider location** — the geographic position of a person acting as a
+  BANHAO rider.
+- **Real GPS collection** — capturing, transmitting or storing the location of
+  a real rider, in any environment. Development and test fixtures in
+  `banhao-dev` are not real GPS collection. This definition covers two
+  distinct things, kept separate so this entry cannot be read as silently
+  invalidating DEC-037:
+  - **(A) The existing DEC-037 latest-position capture** — one foreground
+    reading per rider action ("go online", "refresh"), overwritten, with no
+    history, used for dispatch eligibility. **DEC-037 is not modified, not
+    redefined, and its existing semantics are unchanged** — it remains a
+    preserved existing capability. What this entry adds is a **gate on its use
+    by a real rider**: it must not be used by a real rider until the Q-012
+    legal review, the applicable acceptance gate (policy 1) with approved
+    notice text, and the required implementation authorization (see
+    *Relationship to Q-012 and the legal gate*) are all satisfied. Nothing
+    about the mechanism itself changes.
+  - **(B) New GPS tracking** — repeated, periodic, background, historical or
+    trace-based collection of rider location. This remains blocked in full;
+    see *Tracking* below and DEC-062 OD-6.
+- **Tracking** — repeated, periodic, background or historical collection of
+  rider location. A single foreground latest-position reading permitted by
+  DEC-037 is **not** "tracking" or "GPS tracking" for the purpose of this
+  policy: it is an isolated operational eligibility reading, is overwritten
+  rather than appended, and creates no historical trace. This does not weaken
+  the prohibition on periodic tracking, background tracking, historical GPS,
+  trace collection, or surveillance — those remain blocked regardless of
+  DEC-037.
+- **Active delivery** — the period in which a rider holds an assigned
+  delivery that has not reached a terminal state.
+
+### Policy
+
+**1 — Acceptance as the access gate.** A rider must explicitly accept the
+applicable Terms of Service, Privacy Notice and, where applicable, a
+GPS/location disclosure **before** using any Rider functionality that requires
+GPS or location processing. Acceptance must be an affirmative act — never
+deemed by signing in — and must be recorded so that BANHAO can show which
+version a rider accepted and when. Acceptance is a **product-access gate and
+a record of notice**; it is not a determination of lawful basis (see the
+statement above and counsel question Q3).
+
+**2 — Active-delivery scope.** GPS tracking, when eventually implemented, is
+intended to occur **only within an active delivery**. The exact technical
+start and stop events are **not locked** and remain a future implementation
+decision. For routing ground truth (DEC-063), the owner's intended window
+remains `picked_up_at → arrived_at`, with the trace-stop rule `NOT LOCKED`
+(`docs/Q-012-RIDER-GPS-COUNSEL-BRIEF.md` §3.2).
+
+**3 — No continuous tracking.** BANHAO must not intentionally track a rider
+while offline, while idle, before an active delivery, between deliveries, or
+after the applicable delivery tracking window. This does not alter the
+DEC-037 latest-position capture described under *Definitions*: a single
+foreground latest-position reading permitted by DEC-037 is not "continuous
+tracking" or "GPS tracking" under this principle, for the reason given in the
+*Tracking* definition — it is an isolated, overwritten eligibility reading
+with no historical trace. Periodic tracking, background tracking, historical
+GPS, trace collection and surveillance remain prohibited without
+qualification.
+
+**4 — No surveillance purpose.** GPS must not be designed or used as a
+general worker-surveillance mechanism.
+
+**5 — No automated discipline.** GPS data must not directly trigger automatic
+rider suspension, automatic penalties, automatic disciplinary action, or
+automatic performance scoring. A rider being ineligible for dispatch because
+no location is recorded (DEC-037) is an eligibility condition, not
+discipline, and is unchanged.
+
+**6 — Customer live tracking out of scope.** Customer-facing live rider GPS
+tracking is out of scope for this policy and this version, and must not be
+implemented under it.
+
+**7 — Purpose limitation.** Rider location may be used only for purposes an
+owner decision explicitly defines. The currently defined purposes are:
+
+| Purpose | Authority | Collection status |
+|---|---|---|
+| Dispatch eligibility — latest recorded position | DEC-037 | Implemented in code; development/test data only |
+| Routing ground truth and routing intelligence | DEC-063 | **Not authorized** (Stage 2; DEC-062 OD-6) |
+
+Any other use — including those listed in
+`docs/Q-012-RIDER-GPS-COUNSEL-BRIEF.md` §6 (performance or productivity
+scoring, discipline, route-deviation penalties, dispatch ranking, automated
+suspension, worker surveillance or behavioural analytics, continuous
+monitoring, individual rider pay) and any secondary use or disclosure under
+counsel question D-3 — is **not a defined purpose** and requires a new owner
+decision. GPS use must not silently expand into unrelated analytics or worker
+monitoring.
+
+**8 — Refusal behaviour.** If a rider does not accept the required Terms,
+Privacy Notice or GPS/location disclosure: the rider remains a BANHAO user
+wherever possible; only the functionality that requires that acceptance is
+blocked; and BANHAO must **not** collect rider location anyway. Because
+dispatch eligibility requires a recorded location (DEC-037), a rider who
+declines cannot go online for deliveries. This refusal model is owner policy
+and remains subject to counsel's answers to Q13, Q14 and Q16.
+
+**9 — Rider pay.** GPS data must not be used as a per-delivery or per-rider
+pay input. D-05…D-08 (DEC-061) are unchanged. **D-17 is not resolved by this
+entry and remains `OPEN`.** Whether aggregated, non-rider-specific
+ground-truth evidence may calibrate compensation parameters remains a
+separate owner decision (`OPEN`; RG-10B).
+
+### Relationship to Q-012 and the legal gate
+
+- **Q-012 remains `OPEN` · `LEGAL_REVIEW_REQUIRED`**, and is **required
+  before any real GPS collection**. It is not resolved, narrowed or waived by
+  this entry. TQ-016 (`OPEN`), BQ-022 (`OPEN` · `LEGAL_REVIEW_REQUIRED`
+  except its working-area half) and TQ-007 (`OPEN`) are likewise unchanged.
+- **DEC-062 OD-6 remains `NOT AUTHORIZED`.**
+- **DEC-037 itself is unchanged.** Using the existing DEC-037 latest-position
+  capture with a **real** rider (category A above) requires the scoped legal
+  review, this policy's acceptance gate (policy 1) with approved notice text,
+  and the required implementation authorization before it may go live for
+  real riders. **Any new GPS tracking capability** (category B — repeated,
+  periodic, background, historical or trace-based collection) additionally
+  requires the full sequence `LEGAL REVIEW → OWNER DECISION LOCK →
+  IMPLEMENTATION AUTHORIZATION → EXPLICIT MIGRATION AUTHORIZATION →
+  IMPLEMENTATION`.
+- Counsel's advice may require this policy to change. Where it does, a
+  superseding owner decision is required; this entry is not edited.
+
+### Relationship to the Owner Decision Pack (`docs/Q-012-RIDER-GPS-OWNER-DECISION-PACK.md`)
+
+| RG item | Effect of this entry |
+|---|---|
+| RG-2 tracking window | Outer boundary locked (policies 2–3). Exact window and trace-stop rule remain `NOT LOCKED` |
+| RG-3 purpose limitation | Locked as policies 4, 5 and 7 |
+| RG-4 participation/refusal | Owner policy set (policy 8); **still subject to counsel** |
+| RG-5, RG-6, RG-8, RG-9 | Unchanged — `WAITING FOR COUNSEL` |
+| RG-7 feedback design | Unchanged — `OWNER DECISION + LEGAL REVIEW REQUIRED` |
+| RG-10A per-rider pay input | Locked as policy 9 |
+| RG-10B aggregate calibration | Unchanged — `OPEN — OWNER DECISION` |
+
+### Explicit non-scope
+
+This entry does **not**:
+
+- authorize GPS collection, tracking, background location, location
+  permissions, GPS history, a trace store, or Stage 2 of DEC-063;
+- create a schema, migration, table, column, endpoint or application change;
+- implement the acceptance gate, or draft Terms of Service, Privacy Notice or
+  GPS disclosure text — none exists in the repository, and notice content
+  waits on counsel (RG-8);
+- change the customer app's sign-in wording or any customer-side terms;
+- integrate a routing provider or authorize third-party processing of rider
+  location (counsel question D-2);
+- change DEC-037, DEC-054, DEC-061 (D-05…D-08, D-11, D-12), DEC-062 or
+  DEC-063; resolve D-16 or D-17;
+- resolve any legal question or determine any legal obligation.
+
+### Why
+
+The owner wants a fixed product boundary for Rider GPS — acceptance before
+use, active-delivery scope only, no surveillance, no automated discipline, no
+pay input — so that design and unrelated engineering can proceed without
+waiting on counsel, while real GPS collection still cannot enter production
+without the legal review and the implementation gates.
+
+### Consequences
+
+- Product and engineering may plan against policies 1–9.
+- A Terms/Privacy acceptance gate is now a prerequisite for any real rider
+  using location-dependent functionality, including going online under
+  DEC-037. Building it needs its own implementation authorization (and a
+  migration instruction if it needs storage), and its notice text needs
+  counsel's input.
+- The counsel package handed to Thai counsel should be supplemented with this
+  entry, because policies 1 and 8 bear directly on Q3, Q13, Q14 and Q16.
+
+### Evidence
+
+Product Owner instruction, 2026-09-14 ("BANHAO — RIDER GPS POLICY / OWNER
+DECISION LOCK"), following the committed counsel package at `66598319`.
+
+### Related Requirements
+
+Q-012 (`OPEN` · `LEGAL_REVIEW_REQUIRED`) · TQ-016 (`OPEN`) · BQ-022 (`OPEN` ·
+`LEGAL_REVIEW_REQUIRED`, working-area half resolved by DEC-037) · TQ-007
+(`OPEN`) · D-16 (`OPEN`) · D-17 (`OPEN`) · DEC-062 OD-6 (`NOT AUTHORIZED`).
+
+### Related Architecture
+
+`apps/driver/src/lib/deviceLocation.ts` and
+`apps/api/src/modules/rider/rider-location.service.ts` (the DEC-037
+latest-position capture, unchanged) ·
+`docs/Q-012-RIDER-GPS-COUNSEL-BRIEF.md` ·
+`docs/Q-012-RIDER-GPS-OWNER-DECISION-PACK.md`.
+
+### Supersedes / Superseded By
+
+**Supersedes:** none. **Superseded by:** none. **Preserves unchanged:**
+DEC-037, DEC-054, DEC-061 (including D-05…D-08, D-11, D-12), DEC-062
+(including OD-6), DEC-063. **D-16 and D-17 remain `OPEN`.**
