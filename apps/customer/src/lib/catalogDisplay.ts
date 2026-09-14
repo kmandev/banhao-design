@@ -61,6 +61,14 @@ export function formatPrepEstimate(shop: {
 }
 
 /**
+ * M-13. The one established Pause label, reused verbatim everywhere the
+ * customer sees it (shop card badge, shop page badge, item-options add
+ * button) rather than restated per surface — see `shopCardBadge` below and
+ * G-1 of the M-AV final recon.
+ */
+export const PAUSED_LABEL = 'หยุดรับออเดอร์ชั่วคราว';
+
+/**
  * M-13. The shop-card badge — shared by `HomeScreen` and `SearchScreen` so the
  * two lists cannot disagree about what a card says.
  *
@@ -74,7 +82,7 @@ export function shopCardBadge(shop: {
   isOpen: boolean;
 }): { label: string; tone: 'success' | 'neutral' } {
   if (shop.availabilityMode === 'PAUSED') {
-    return { label: 'หยุดรับออเดอร์ชั่วคราว', tone: 'neutral' };
+    return { label: PAUSED_LABEL, tone: 'neutral' };
   }
   return { label: shop.isOpen ? 'เปิดอยู่' : 'ปิดอยู่', tone: shop.isOpen ? 'success' : 'neutral' };
 }

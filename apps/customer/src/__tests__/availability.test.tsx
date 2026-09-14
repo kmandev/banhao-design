@@ -1,11 +1,14 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { CartProvider } from '../hooks/useCart';
 import { AuthProvider } from '../hooks/useAuth';
 import { ShopScreen } from '../screens/ShopScreen';
 import { ItemOptionsScreen } from '../screens/ItemOptionsScreen';
 import { repositories } from '../repositories';
+import { PAUSED_LABEL } from '../lib/catalogDisplay';
 import type { MenuItem, Shop } from '../domain/catalog';
+import type { Cart } from '../domain/cart';
+import type { CartRepository } from '../repositories/types';
 
 /**
  * PC-Q-001 / C-8 — unavailable items and options.
@@ -14,10 +17,37 @@ import type { MenuItem, Shop } from '../domain/catalog';
  * cannot be ordered. These tests assert the *interaction* boundary, not the
  * styling: a greyed row that still navigates would pass a visual check and fail
  * the customer.
+ *
+ * The final describe block (G-1, M-AV final recon) reuses the same fixtures
+ * for the shop-wide Pause gate: a Paused restaurant blocks the add-to-cart
+ * *action*, never the ability to view the shop or the item.
  */
 
 const mockNavigate = jest.fn();
 const mockRouteParams: Record<string, unknown> = {};
+
+/**
+ * Session control for the G-1 "remains available" control cases only.
+ * Defaults to signed-out, matching every other test in this file — the real
+ * `AuthProvider` would resolve the same way against the jest-wide Supabase
+ * mock (`jest.setup.js`), so this mock changes nothing for the existing
+ * PC-Q-001/C-8 tests above and only needs to move for the two control cases
+ * that prove Busy/Normal actually complete an add.
+ */
+let mockUserId: string | null = null;
+
+jest.mock('../hooks/useAuth', () => {
+  const actual = jest.requireActual('../hooks/useAuth');
+  return {
+    ...actual,
+    useAuth: () => ({
+      initialising: false,
+      session: mockUserId ? { user: { id: mockUserId } } : null,
+      profile: null,
+      profileError: null,
+    }),
+  };
+});
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
@@ -338,4 +368,153 @@ describe('ItemOptionsScreen — the whole item can be unavailable (Step 8)', () 
     // No navigation to Cart happened — the only observable sign addLine ran.
     expect(mockNavigate).not.toHaveBeenCalledWith('Cart');
   });
+});
+
+describe('ItemOptionsScreen — Pause blocks the action, not the view (G-1)', () => {
+  // M-AV final recon G-1: server-side protection (cart validate's
+  // RESTAURANT_CLOSED, create_order()'s PAUSED refusal) already existed;
+  // this closes the matching client-side gap. Reuses `availabilityMode`,
+  // the same M-13 source of truth ShopScreen's own Paused banner already
+  // reads — never a second, independent Pause signal.
+
+  const PAUSED_SHOP: Shop = { ...SHOP, availabilityMode: 'PAUSED', busyPrepMinutes: null };
+  const BUSY_SHOP: Shop = { ...SHOP, availabilityMode: 'BUSY', busyPrepMinutes: 20 };
+
+  const AN_ITEM: MenuItem = { ...AVAILABLE_ITEM, id: 'item-plain', name: 'ข้าวผัดกุ้ง' };
+
+  beforeEach(() => {
+    mockRouteParams.shopId = 'shop-1';
+    mockRouteParams.itemId = 'item-plain';
+    mockCatalog.getMenuItem.mockResolvedValueOnce(AN_ITEM);
+  });
+
+  afterEach(() => {
+    mockUserId = null;
+  });
+
+  it('PAUSED: labels the CTA with the established Pause wording, never a new string', async () => {
+    mockCatalog.getShop.mockResolvedValueOnce(PAUSED_SHOP);
+    renderScreen(<ItemOptionsScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-item-options')).toBeTruthy());
+
+    expect(screen.getByTestId('button-add-to-cart').props.accessibilityLabel).toBe(PAUSED_LABEL);
+    // Not the sold-out wording — a Paused shop is a different fact from an
+    // out-of-stock item, and reusing วันนี้หมด would misreport why.
+    expect(screen.queryByText('วันนี้หมด')).toBeNull();
+  });
+
+  it('PAUSED: disables the CTA at the component level', async () => {
+    mockCatalog.getShop.mockResolvedValueOnce(PAUSED_SHOP);
+    renderScreen(<ItemOptionsScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-item-options')).toBeTruthy());
+
+    expect(
+      screen.getByTestId('button-add-to-cart').props.accessibilityState?.disabled,
+    ).toBe(true);
+  });
+
+  it('PAUSED: pressing the CTA never navigates to Cart', async () => {
+    mockCatalog.getShop.mockResolvedValueOnce(PAUSED_SHOP);
+    renderScreen(<ItemOptionsScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-item-options')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('button-add-to-cart'));
+
+    expect(mockNavigate).not.toHaveBeenCalledWith('Cart');
+  });
+
+  it('PAUSED: the item itself stays visible and inspectable', async () => {
+    // "Menu still browsable" (M-13 design § shop page) — Pause blocks the
+    // action, not navigation into the item or its price display.
+    mockCatalog.getShop.mockResolvedValueOnce(PAUSED_SHOP);
+    renderScreen(<ItemOptionsScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-item-options')).toBeTruthy());
+
+    expect(screen.getByText('ข้าวผัดกุ้ง')).toBeTruthy();
+    expect(screen.getByText('฿60')).toBeTruthy();
+  });
+
+  it('NORMAL: the CTA is never the Pause label (signed-out control)', async () => {
+    // `SHOP` (the file's default fixture) is NORMAL. Signed-out here, like
+    // every other test in this file, so the CTA reads the sign-in prompt —
+    // that branch is untouched by G-1. What this asserts is the one thing
+    // G-1 could regress: NORMAL must never show the Pause wording or the
+    // Pause-disabled state.
+    mockCatalog.getShop.mockResolvedValueOnce(SHOP);
+    renderScreen(<ItemOptionsScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-item-options')).toBeTruthy());
+
+    const button = screen.getByTestId('button-add-to-cart');
+    expect(button.props.accessibilityLabel).not.toBe(PAUSED_LABEL);
+    expect(button.props.accessibilityLabel).toBe('เข้าสู่ระบบเพื่อสั่ง');
+  });
+
+  it('BUSY: the CTA is never the Pause label (signed-out control)', async () => {
+    mockCatalog.getShop.mockResolvedValueOnce(BUSY_SHOP);
+    renderScreen(<ItemOptionsScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-item-options')).toBeTruthy());
+
+    const button = screen.getByTestId('button-add-to-cart');
+    expect(button.props.accessibilityLabel).not.toBe(PAUSED_LABEL);
+    expect(button.props.accessibilityLabel).toBe('เข้าสู่ระบบเพื่อสั่ง');
+  });
+
+  it('NORMAL, signed in: add-to-cart completes and navigates to Cart', async () => {
+    // The one end-to-end proof that G-1's guard is additive, not a second
+    // independent block: a genuinely purchasable item in a Normal shop still
+    // reaches the cart. Signs in and swaps `repositories.cart` for this one
+    // test only — every other test in this file stays on the lightweight
+    // signed-out path.
+    mockUserId = 'user-1';
+    mockCatalog.getShop.mockResolvedValueOnce(SHOP);
+
+    const emptyCart: Cart = { id: 'cart-1', shopId: 'shop-1', lines: [], unresolvedLineIds: [] };
+    const cartWithItem: Cart = {
+      ...emptyCart,
+      lines: [
+        {
+          id: 'ci-1',
+          menuItemId: AN_ITEM.id,
+          name: AN_ITEM.name,
+          basePriceSatang: AN_ITEM.priceSatang,
+          isAvailable: true,
+          quantity: 1,
+          note: '',
+          options: [],
+        },
+      ],
+    };
+    const mockCart: CartRepository = {
+      getCart: jest.fn().mockResolvedValue(emptyCart),
+      addItem: jest.fn().mockResolvedValue(cartWithItem),
+      setQuantity: jest.fn().mockResolvedValue(cartWithItem),
+      removeItem: jest.fn().mockResolvedValue(emptyCart),
+      clear: jest.fn().mockResolvedValue(undefined),
+    };
+    (repositories as unknown as { cart: CartRepository }).cart = mockCart;
+
+    renderScreen(<ItemOptionsScreen />);
+    await waitFor(() => expect(screen.getByTestId('screen-item-options')).toBeTruthy());
+
+    const button = screen.getByTestId('button-add-to-cart');
+    expect(button.props.accessibilityLabel).toBe('เพิ่มลงตะกร้า');
+    expect(button.props.accessibilityState?.disabled).toBeFalsy();
+
+    await act(async () => {
+      fireEvent.press(button);
+    });
+
+    expect(mockCart.addItem).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('Cart');
+  });
+
+  // Not duplicated here — already covered above and unaffected by this
+  // change, since `isPaused` is an additional guard alongside, never a
+  // replacement for, the existing checks:
+  //   - sold-out item: 'ItemOptionsScreen — the whole item can be
+  //     unavailable (Step 8)', which the !item.isAvailable check (evaluated
+  //     before isPaused) still owns entirely.
+  //   - signed-out behaviour: exercised by every test in this describe
+  //     block's default (mockUserId = null); the sign-in label is asserted
+  //     directly in the NORMAL/BUSY control cases above.
 });

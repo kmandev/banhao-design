@@ -22,7 +22,7 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { useCart } from '../hooks/useCart';
 import { repositories, MixedRestaurantError } from '../repositories';
 import { formatBaht } from '../lib/money';
-import { ITEM_PLACEHOLDER_GLYPH } from '../lib/catalogDisplay';
+import { ITEM_PLACEHOLDER_GLYPH, PAUSED_LABEL } from '../lib/catalogDisplay';
 import { presentLoadError } from '../lib/loadError';
 import { isRequiredGroup } from '../domain/catalog';
 import type { MenuOptionGroup } from '../domain/catalog';
@@ -61,13 +61,29 @@ export function ItemOptionsScreen() {
   const [note, setNote] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
 
+  // Loaded alongside the item, not derived from a nav param: this screen is
+  // reachable via a stale param, a deep link, or a search result (see the
+  // BottomBar comment below), so the Pause gate has to hold regardless of how
+  // the screen was reached — the same reasoning `item.isAvailable` already
+  // documents for itself.
   const load = useCallback(
-    () => repositories.catalog.getMenuItem(params.shopId, params.itemId),
+    async () => {
+      const [item, shop] = await Promise.all([
+        repositories.catalog.getMenuItem(params.shopId, params.itemId),
+        repositories.catalog.getShop(params.shopId),
+      ]);
+      return { item, shop };
+    },
     [params.shopId, params.itemId],
   );
 
   const state = useAsyncData(load, [params.shopId, params.itemId]);
-  const item = state.status === 'success' ? state.data : null;
+  const item = state.status === 'success' ? state.data.item : null;
+  // G-1 (M-AV final recon): a missing shop record (fetch failure unrelated to
+  // Pause) fails open here — the server-side refusal in create_order() and
+  // cart validation (RESTAURANT_CLOSED) is the actual safety backstop; this
+  // is presentation only.
+  const isPaused = state.status === 'success' && state.data.shop?.availabilityMode === 'PAUSED';
 
   const { chosenOptionIds, optionsDelta } = useMemo(() => {
     if (!item?.optionGroups) return { chosenOptionIds: [] as string[], optionsDelta: 0 };
@@ -136,7 +152,7 @@ export function ItemOptionsScreen() {
    * the live catalog so it can never show a price it captured earlier.
    */
   async function onAddToCart() {
-    if (!item || !item.isAvailable) return;
+    if (!item || !item.isAvailable || isPaused) return;
 
     try {
       await addItem({
@@ -176,15 +192,22 @@ export function ItemOptionsScreen() {
             // DEC-D-03: a signed-out customer has no cart to add to — every
             // cart policy keys on `auth.uid()` — so the action names what is
             // actually missing instead of failing on tap.
+            // G-1 (M-AV final recon): Paused blocks the *action*, not the
+            // *view* — the item stays visible and inspectable, only the
+            // button that would add it becomes unavailable, with the one
+            // established Pause label (never a new string, never the
+            // sold-out "วันนี้หมด", which would misreport why).
             label={
               !item.isAvailable
                 ? UNAVAILABLE_LABEL
-                : canModify
-                  ? 'เพิ่มลงตะกร้า'
-                  : 'เข้าสู่ระบบเพื่อสั่ง'
+                : isPaused
+                  ? PAUSED_LABEL
+                  : canModify
+                    ? 'เพิ่มลงตะกร้า'
+                    : 'เข้าสู่ระบบเพื่อสั่ง'
             }
-            trailing={item.isAvailable ? formatBaht(lineTotalSatang) : undefined}
-            disabled={!item.isAvailable || !canModify}
+            trailing={item.isAvailable && !isPaused ? formatBaht(lineTotalSatang) : undefined}
+            disabled={!item.isAvailable || isPaused || !canModify}
             onPress={() => void onAddToCart()}
             testID="button-add-to-cart"
           />

@@ -23,6 +23,7 @@ import {
   formatPrepEstimate,
   formatShopMeta,
   ITEM_PLACEHOLDER_GLYPH,
+  PAUSED_LABEL,
   SHOP_PLACEHOLDER_GLYPH,
 } from '../lib/catalogDisplay';
 import { formatNextOpening, windowsForDay } from '../lib/openingHours';
@@ -140,7 +141,7 @@ export function ShopScreen() {
             difference shows.
           */}
           {shop.availabilityMode === 'PAUSED' ? (
-            <Badge label="หยุดรับออเดอร์ชั่วคราว" tone="neutral" />
+            <Badge label={PAUSED_LABEL} tone="neutral" />
           ) : (
             <Badge label={shop.isOpen ? 'เปิดอยู่' : 'ปิดอยู่'} tone={shop.isOpen ? 'success' : 'neutral'} />
           )}
