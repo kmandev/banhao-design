@@ -72,6 +72,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-059** | **Full refund accounting: which ledger components reverse, and which do not** | **ACCEPTED — POLICY · LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED** | **2026-09-08** | `apps/api/src/modules/payments/commission-pricing.ts`, DEC-043, Q-020 |
 | **DEC-061** | **Q-002 Owner Decision Lock: D-01…D-14 (commission, service fee, dynamic rider/delivery economics, contribution guardrail, operational distance, minimum order value, promotion funding)** | **LOCKED — ECONOMIC POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-09** | `docs/Q-002-OWNER-DECISION-PACK.md`, `docs/Q-002-ECONOMICS-ARCHITECTURE-SPEC.md` |
 | **DEC-062** | **Q-018 Owner Decision Lock: OD-1…OD-8 (benchmark methodology, fixture quality, ground-truth and acquisition authority) — not a provider selection** | **ACCEPTED — BENCHMARK METHODOLOGY · NOT A PROVIDER SELECTION** | **2026-09-10** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, Q-018, TQ-004, D-16 (unaffected, `OPEN`), D-17 (unaffected, `OPEN`) |
+| **DEC-063** | **Q-018 ground truth source: the Rider performing a real customer delivery — actual delivery GPS trace as quantitative ground truth, Rider operational feedback as qualitative evidence. Supersedes DEC-062 OD-3 (separately appointed local reviewer) only** | **ACCEPTED — METHODOLOGY · NOT AN IMPLEMENTATION AUTHORIZATION** | **2026-09-14** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, DEC-062 (OD-3 superseded; OD-6 unchanged), Q-012, TQ-016, BQ-022, D-16 (`OPEN`), D-17 (`OPEN`) |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -8065,3 +8066,188 @@ None / None. Does not supersede or modify DEC-061, D-01…D-14, D-12, DEC-057,
 DEC-058, DEC-059, or DEC-060, each of which stands unchanged. **Provider
 selection (D-16) and distance accuracy policy (D-17) remain `OPEN`** and are
 not addressed by this entry.
+
+---
+
+## DEC-063 — Q-018 Ground Truth Source: Rider Operational Delivery
+
+**Status:** **ACCEPTED — METHODOLOGY · NOT AN IMPLEMENTATION AUTHORIZATION** · **Date:** 2026-09-14 · **Owner:** PRODUCT_OWNER
+
+### Scope
+
+**Supersedes DEC-062 OD-3 only.** DEC-062's body is not edited; per repository
+convention a locked decision is superseded, never rewritten. **OD-1, OD-2,
+OD-4, OD-5, OD-6, OD-7 and OD-8 stand exactly as locked by DEC-062.**
+
+### Previous direction
+
+DEC-062 OD-3 required a **separately appointed local reviewer** with Buntharik
+road knowledge for Tier 2 qualitative route-verdict ground truth. No reviewer
+was ever appointed.
+
+### New direction
+
+**No separate Local Reviewer is required, and none will be appointed.** There
+is no reviewer role, no reviewer assignment, no external reviewer, no manual
+review workflow, and no additional person required for Q-018 ground truth.
+
+Future Q-018 ground truth comes from **the Rider performing a real customer
+delivery**, as part of normal BANHAO operations:
+
+1. **Actual Rider delivery GPS trace** = **quantitative** operational ground
+   truth.
+2. **Rider operational feedback** from that same real delivery =
+   **qualitative** operational evidence.
+
+**The Rider is not a reviewer.** The Rider is the person performing the
+delivery. The evidence is a by-product of doing the job, not a separate review
+exercise, and no review task is assigned to anyone. This name is deliberate:
+the qualitative source is **Rider operational feedback** — never "Local
+Reviewer", "Rider Reviewer", "Human Reviewer", or a reviewer replacement.
+
+This promotes the Q-018 research document's **Tier 1** (actual rider-delivered
+route / GPS trace) from *unavailable* to the *intended* ground-truth source,
+and removes **Tier 2** (human reviewer verification) as a Q-018 prerequisite.
+
+### Rider operational feedback — what it may capture
+
+Operational facts observed on the real delivery, for example: the route was
+physically rideable or was not; a motorcycle could or could not use a road;
+an obvious detour occurred; the destination approach was inaccessible; a road
+was closed or blocked; the provider's route differed materially from the route
+actually used; the customer pin required correction; a road did not exist or
+was unsuitable; any other operational routing issue.
+
+Under this decision, the qualitative evaluator for the Q-018 research
+document's §25.1 gate 2 ("rural usability") and §24.3 small-road verdicts
+becomes **Rider operational feedback**, evaluated in Stage 3. The allowed
+verdict vocabulary is unchanged.
+
+### Source roles — kept separate
+
+| Source | Role | May it be ground truth? |
+|---|---|---|
+| **Google Routes** | Routing provider, used and evaluated | **No** — no provider is its own ground truth (DEC-062 OD-5) |
+| **Google Maps** | Map, reference, visual sanity check only | **No** — same vendor and data; using it to score Google Routes is not independent |
+| **Rider delivery trace + Rider operational feedback** | Future BANHAO ground truth | **Yes**, once validated (Stage 3) |
+
+**Google Maps must never be used as independent ground truth for evaluating
+Google Routes**, and must never appear in a distance-error or accuracy figure.
+
+### Methodology stages
+
+**Stage 1 — Provider behaviour.** Use the available fixtures to evaluate
+provider/API behaviour that does not require independent ground truth: route
+success, Band F success where applicable, latency, identical-repeat
+consistency, and other provider-output metrics that make **no claim of route
+accuracy against reality**.
+
+**Stage 2 — Real delivery data.** After every required legal, privacy and
+worker-tracking decision is resolved, BANHAO may **separately** implement
+collection of Rider delivery GPS traces **and** Rider operational feedback.
+**Stage 2 is not authorized by this decision.**
+
+**Stage 3 — Validated operational ground truth.** Quality-control Rider GPS
+traces and derive benchmark-eligible actual route data. **A raw GPS trace is
+not automatically valid ground truth** — only a trace that passes quality
+control is. Quality-control thresholds are `OPEN — FUTURE DECISION`.
+
+**Stage 4 — Routing intelligence.** Use the accumulated validated dataset for
+provider accuracy analysis, Google versus future OSRM comparison, rural and
+small-road analysis, near-D-12 analysis, and BANHAO Local Routing
+Intelligence. The same dataset is reusable across provider comparisons.
+
+### Legal and authorization boundary — explicit and binding
+
+> **OD-6 is preserved unchanged.** Real customer/delivery GPS collection
+> remains **`NOT AUTHORIZED`**. **Q-012** (PDPA lawful basis,
+> `LEGAL_REVIEW_REQUIRED`), **TQ-016** (rider location retention and access,
+> `OPEN`) and **BQ-022** (`LEGAL_REVIEW_REQUIRED`) remain the governing
+> blockers. Naming the Rider's trace as the intended ground-truth source
+> **does not authorize collecting it.**
+
+This decision authorizes **no** GPS collection, tracking, schema, migration,
+endpoint, background job, mobile tracking, telemetry, worker monitoring,
+feedback-collection mechanism, or retention-policy implementation. **Any
+future Rider tracking or feedback implementation requires a separate decision
+and a separate implementation authorization.**
+
+### Metrics
+
+**All eight DEC-062 OD-2 threshold values are unchanged**: aggregate route
+success ≥98% · Band F success ≥95% · p95 absolute distance error ≤800 m · p95
+percentage distance error ≤15% · impossible-route ≤2% · dangerous
+impossible-route = 0 · p95 latency ≤1500 ms · identical-repeat distance spread
+≤100 m. They remain Q-018 benchmark acceptance criteria only, never product or
+provider SLAs.
+
+Metrics requiring validated Rider ground truth — distance error, percentage
+distance error, duration comparison, and the dangerous-route determination —
+are **deferred until the necessary validated operational dataset exists**. The
+amount of validated data that counts as sufficient is **`OPEN — FUTURE
+DECISION`**; no minimum order count is set by this entry.
+
+### Explicit non-scope
+
+This decision does **not**:
+
+- select Google, OSRM, or any other routing provider;
+- lock **D-16** or **D-17** — both remain `OPEN`;
+- change **D-12** (maximum operational **road** distance = 15 km — not a
+  radius, not straight-line, not geodesic), **D-11**, **DEC-061**, or any of
+  **D-01…D-14**;
+- change pricing or economics;
+- change any **Q-020** decision (DEC-057, DEC-058, DEC-059, DEC-060);
+- create or modify a service-zone polygon or geofence — **DEC-062 OD-8
+  stands**, and this ground-truth methodology is independent of the polygon
+  decision;
+- execute the Q-018 benchmark;
+- modify any application, database, mobile or routing code.
+
+### Why
+
+A separately appointed reviewer adds a role BANHAO does not otherwise need,
+and a human opinion cannot supply the distance measurement that the
+accuracy metrics require. The Rider already travels every delivered route as
+part of the job, so the Rider's trace and feedback are the natural, scalable
+source — provided their collection is lawful. Staging the methodology keeps
+provider-behaviour evaluation moving now, while accuracy claims wait for real,
+validated data rather than being made without it.
+
+### Consequences
+
+- The Q-018 benchmark becomes staged. Stage 1 can proceed without any
+  ground truth; accuracy metrics wait for Stage 3.
+- **No independent numeric ground truth exists during Stage 1**, and BANHAO
+  must not claim formal provider accuracy until it does.
+- The 29 public-POI fixtures remain the Stage 1 provider-behaviour population.
+  Stage 3 ground-truth pairs come from real orders, so production coordinate
+  quality (`addresses.lat`/`lng` are optional and not geocoded) becomes a
+  future data-quality question — `OPEN — FUTURE DECISION`.
+- The near-D-12 accept-side gap is expected to be answerable from real
+  deliveries in Stage 3; it is not answered by this entry.
+
+### Evidence
+
+Product Owner instruction, 2026-09-14 ("BANHAO — DEC-063 + Q-018 Methodology
+Amendment"), selecting **Option (c) — Rider operational feedback** from the
+Q-018 ground-truth methodology decision-preparation report, and following the
+Owner's direction that BANHAO will not use a separate Local Reviewer.
+
+### Related Requirements
+
+Q-018 (`OPEN`) · TQ-004 (`OPEN`) · Q-012 (`LEGAL_REVIEW_REQUIRED`) · TQ-016
+(`OPEN`) · BQ-022 (`LEGAL_REVIEW_REQUIRED`) · DEC-054 (`deliveries.arrived_at`,
+the transit anchor for actual-duration measurement).
+
+### Related Architecture
+
+`ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md` — §21 (ground-truth tiers),
+§23.2 (time attribution), §29 (Local Routing Intelligence), and Part VII (this
+decision's methodology record). No application or database module is touched.
+
+### Supersedes / Superseded By
+
+**Supersedes:** DEC-062 **OD-3 only**. **Superseded by:** none. **Preserves
+unchanged:** DEC-062 OD-1, OD-2, OD-4, OD-5, **OD-6**, OD-7, OD-8; DEC-061;
+D-01…D-14; D-12; D-11; all Q-020 decisions. **D-16 and D-17 remain `OPEN`.**

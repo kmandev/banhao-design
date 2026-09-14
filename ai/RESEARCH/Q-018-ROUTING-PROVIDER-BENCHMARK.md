@@ -2,7 +2,7 @@
 
 **Status:** `OPEN` · **Priority:** T1 · **Type:** research + decision preparation
 **Related decision:** **D-16 (distance provider/source) — `OPEN`**
-**Last updated:** 2026-09-10 (field benchmark design §17–§33; fixture acquisition plan §35–§49; public-POI candidate acquisition pass §50–§59; owner decision pack and readiness gate §60–§66; **DEC-062 lock of OD-1…OD-8 §68**)
+**Last updated:** 2026-09-10 (field benchmark design §17–§33; fixture acquisition plan §35–§49; public-POI candidate acquisition pass §50–§59; owner decision pack and readiness gate §60–§66; DEC-062 lock of OD-1…OD-8 §68; **DEC-063 rider operational ground truth, OD-3 superseded §69**)
 
 > ## `Q-018 BENCHMARK READINESS: READY FOR OWNER DECISIONS`
 >
@@ -10,6 +10,11 @@
 > owner decision matrix is **§61**, now **locked by `DEC-062`** (§68) as
 > Q-018 benchmark methodology — **not a provider selection**. Provider
 > selection, **D-16**, and **D-17** all remain `OPEN`.
+>
+> **OD-3 is superseded by `DEC-063`** (§69): **no Local Reviewer.** Future
+> ground truth is the **Rider performing a real delivery** — the delivery GPS
+> trace (quantitative) and **Rider operational feedback** (qualitative).
+> **Collection is not authorized** — OD-6 stands.
 
 > **This document decides nothing.** It is the authoritative research and
 > decision-preparation record for **Q-018** (map/address accuracy) and
@@ -560,6 +565,7 @@ DEC-061 itself records.
 | **Candidate fixtures** | **29 `CANDIDATE`** from OpenStreetMap, 2026-09-10 — 6 origins, 23 destinations, **30 rejections recorded**, **0 `HIGH` confidence**, **none `VALIDATED`** (§50–§56). A **30-route** candidate matrix exists (§54), all bands **preliminary geodesic** |
 | **Readiness verdict** | **`READY FOR OWNER DECISIONS`** (§66) — **not** ready for a controlled provider benchmark. Six blockers: no local reviewer (OD-3), zero `HIGH` fixtures, no near-15 km accept-side case, five unapproved ODs, no routing client/credential/budget, no service polygon (OD-8) |
 | **Owner decision matrix** | **§61** — OD-1…OD-8 with proposed decision, evidence, risk, what it unlocks and the exact owner action. **Locked 2026-09-10 by `DEC-062`** (§68) as benchmark methodology — **not a provider selection**; provider selection, D-16 and D-17 remain `OPEN` |
+| **Ground-truth source** | **`DEC-063`** (§69) — the Rider performing a real delivery: delivery GPS trace = quantitative, **Rider operational feedback** = qualitative. **No Local Reviewer.** Supersedes OD-3 only. Staged: Stage 1 provider behaviour now; Stage 2 collection **not authorized** (OD-6, Q-012, TQ-016, BQ-022) |
 | **What the candidates cannot yet support** | **No distance-accuracy metric** — that needs `HIGH` fixtures and an assigned local reviewer, and neither exists (§56.1). ตลาดสดบุณฑริก is still unlocated; band G is `NOT ESTABLISHED` |
 
 ---
@@ -935,6 +941,13 @@ with tyre size and calibration.
 **This is the highest tier currently achievable**, and it is the practical
 ground truth for the first benchmark run.
 
+> **Superseded 2026-09-14 by `DEC-063` — see §69.** Tier 2 is **no longer a
+> Q-018 prerequisite**, and no reviewer will be appointed. **Tier 1 above is
+> now the intended ground-truth source** — the Rider's actual delivery trace,
+> with **Rider operational feedback** from the same delivery as qualitative
+> evidence. Tier 1's own blocker is unchanged: collection remains
+> **`NOT AUTHORIZED`** (DEC-062 OD-6).
+
 ### Tier 3 — independent provider comparison
 
 Route the same pair through a second provider and compare.
@@ -1280,6 +1293,11 @@ locked regardless of how good the other figures look:
    of routing riders onto impassable or unsafe roads.
 5. **Economically safe distance output** — no systematic bias that would
    consistently underpay riders or consistently breach D-11.
+
+> **Gate 2 amended 2026-09-14 by `DEC-063` — see §69.** "Judged rideable by a
+> person with local knowledge" is now evaluated from **Rider operational
+> feedback** attached to real deliveries, in **Stage 3**. No reviewer is
+> appointed. Gates 2 and 4 cannot be evaluated in Stage 1.
 
 ### 25.2 Candidate numeric thresholds
 
@@ -1977,6 +1995,12 @@ the wrong design for four independent reasons:
 ## 43. Tier 2 ground truth — the local reviewer process
 
 `PROPOSED`
+
+> **Superseded 2026-09-14 by `DEC-063` — see §69.** This section is retained
+> as the historical proposal record. **No Local Reviewer will be appointed.**
+> The six questions and four verdicts in §43.1 describe *what* qualitative
+> evidence is wanted; under DEC-063 that evidence comes from **Rider
+> operational feedback** on real deliveries, not from a separate review.
 
 **Tier 1 (rider GPS trace) is unavailable and is not introduced here.**
 `VERIFIED` — location capture is a single foreground reading with a `{lat,lng}`
@@ -2738,6 +2762,9 @@ its state at `897c8b69` **at the time this table was written.**
 | **OD-7** Minimum fixture separation | `PROPOSED` | **150 m** between two fixtures of the same type | Applied in §56: it rejected three candidates and left **zero violations** among the 29 accepted. Not derived from measurement | Too large discards genuinely distinct nearby POIs; too small admits pairs that add a row and no information | A repeatable, reviewable acquisition rule for the field pass | **Approve 150 m, or state a different separation** |
 | **OD-8** Service-zone polygon | **`BLOCKER — SERVICE-ZONE POLYGON NOT DEFINED`** | **A service-zone polygon is required before production routing.** It is a business-boundary decision, not an engineering one | `VERIFIED` — no polygon column, table or seed exists; `service_areas`/`zones` deferred; `addresses.zone_id` has no FK (§27, §57). The district relation and bbox retrieved in §52 are **research evidence, not a boundary** | Deriving a polygon from the district boundary would silently commit BANHAO to serving points 24 km from town. Deriving a radius would contradict D-12, which is a **road-distance** limit, not a radius | §26 cases 2 and 3 · fixtures B-012 and B-013 · the free pre-routing cost control in §2 · production serviceability | **Define the polygon, or explicitly defer it and accept that the benchmark cannot test the polygon path** |
 
+> **OD-3 row superseded 2026-09-14 by `DEC-063` — see §69.** No reviewer
+> will be named; the requirement itself is withdrawn.
+
 **D-16 remains `OPEN`. D-17 remains `OPEN`.** No provider is selected, no Google
 lock exists, no OSRM lock exists, and no production routing decision was made.
 
@@ -2935,6 +2962,14 @@ unsatisfied, and the first three are hard:
 | 5 | **No routing client, benchmark credential, quota, budget cap or kill switch exists** (§62 D), and Google pricing has not been re-verified since 2026-08-09 | Provider test |
 | 6 | **OD-8 — no service-zone polygon**, so §26 cases 2 and 3 and fixtures B-012/B-013 cannot be tested at all | Owner decision |
 
+> **Update 2026-09-14 — row 1 is superseded by `DEC-063` (§69).** No
+> reviewer is required, so row 1 no longer blocks. Rows 2 and 3 gated
+> *distance-accuracy* evidence, which DEC-063 moves to **Stage 3**; they no
+> longer block **Stage 1**. **For Stage 1 execution, row 5** (no routing
+> client, credential, quota, budget cap or kill switch) **is the remaining
+> hard stop**, with row 6 blocking only the polygon-path cases. The verdict
+> label is not recomputed by this amendment.
+
 > **Update 2026-09-10 — row 4 is superseded, the verdict is not.** OD-1, OD-2,
 > OD-4, OD-5 and OD-7 are now **locked by `DEC-062`** (§68) — they are no
 > longer *unapproved*. **Row 6 is unchanged**: OD-8 locks only that a polygon
@@ -2985,6 +3020,10 @@ and every other entry are unchanged.
 | **OD-6** | **`NOT AUTHORIZED`** — stays exactly that | Q-012, TQ-016, BQ-022 — none is this entry's to resolve |
 | **OD-7** | 150 m minimum fixture separation, **as a fixture-quality rule only** — never a delivery radius, D-12, or a service-zone rule | Nothing — already applied in §56 |
 | **OD-8** | **That a service-zone polygon is required before production routing** | **The polygon itself.** `SERVICE-ZONE POLYGON NOT DEFINED` is unchanged as an operational fact. The district boundary is explicitly **not** the service zone |
+
+> **OD-3 row superseded 2026-09-14 by `DEC-063` — see §69.** The requirement
+> for a local reviewer is withdrawn, not satisfied. The table is retained
+> unedited as the record of what DEC-062 locked.
 
 **In short: DEC-062 locks the rules of the benchmark, not its remaining
 prerequisites.** OD-3 and OD-8 were never proposals to *do* anything by
@@ -3046,7 +3085,215 @@ acquisition authority**. They are not, and must never be read as:
 
 ---
 
-## 69. Sources
+## 69. Part VII — DEC-063: ground truth from Rider operational delivery
+
+Recorded 2026-09-14. **`DEC-063` supersedes DEC-062 OD-3 only.** The Product
+Owner has decided that BANHAO **will not use a separate Local Reviewer**, and
+has selected **Rider operational feedback** as the qualitative evidence
+source. This section is the Q-018 methodology record of that decision.
+DEC-062's body is unchanged; OD-1, OD-2, OD-4, OD-5, **OD-6**, OD-7 and OD-8
+stand exactly as locked.
+
+### 69.1 The ground-truth source
+
+**The Rider performing a real customer delivery is the operational
+ground-truth collector.** From that one real delivery:
+
+| Evidence | Kind | Role |
+|---|---|---|
+| **Actual Rider delivery GPS trace** | Quantitative | Measured route, distance and transit time |
+| **Rider operational feedback** | Qualitative | Whether the route was rideable, blocked, detoured, inaccessible, or wrong at the destination |
+
+**There is no Local Reviewer** — no appointed reviewer, no assignment, no
+external reviewer, no manual review workflow, no additional person. **The
+Rider is not a reviewer**: the Rider is the person doing the delivery, and the
+evidence is a by-product of normal operations. The qualitative source is
+named **Rider operational feedback** throughout this document, and must never
+be renamed "Local Reviewer", "Rider Reviewer", "Human Reviewer", or a
+reviewer replacement.
+
+This is **§21 Tier 1**, promoted from *unavailable* to the *intended* source.
+**§21 Tier 2 is no longer a Q-018 prerequisite.** Much of the required model
+already exists and is reused, not rewritten: **§29** (the planned/actual
+conceptual record, including rider feedback and customer pin correction) and
+**§23.2** (time attribution, with `deliveries.arrived_at` as the transit
+anchor per DEC-054).
+
+**Rider operational feedback may capture** operational facts such as: the
+route was or was not physically rideable; a motorcycle could or could not use
+a road; an obvious detour occurred; the destination approach was
+inaccessible; a road was closed or blocked; the provider route differed
+materially from the route actually used; the customer pin needed correction;
+a road did not exist or was unsuitable; any other operational routing issue.
+The §43.1 questions and the four §24.3 verdicts (`RIDEABLE_AS_ROUTED`,
+`RIDEABLE_BUT_NOT_OPTIMAL`, `NOT_RIDEABLE`, `WRONG_DESTINATION_APPROACH`)
+remain the vocabulary; only their source changes.
+
+### 69.2 Three sources, kept separate
+
+| Source | Role | Ground truth? |
+|---|---|---|
+| **Google Routes** | Routing provider — used and evaluated | **No** |
+| **Google Maps** | Map, reference, visual sanity check only | **No** |
+| **Rider trace + Rider operational feedback** | Future BANHAO ground truth | **Yes, once validated** |
+
+```text
+Google Maps → "ground truth" → Google Routes accuracy     ✗ NOT INDEPENDENT
+```
+
+Same vendor, same underlying data. Google Maps may help confirm that a place
+exists or let someone eyeball a route. **It must never appear in a
+distance-error or accuracy figure for Google Routes.** This extends DEC-062
+OD-5's rule ("no routing provider may be treated as its own ground truth")
+from geocoding to map reference.
+
+### 69.3 The staged methodology
+
+```text
+Stage 1   Provider behaviour, without independent ground truth       ← can proceed
+Stage 2   Real BANHAO delivery → Rider GPS + Rider operational feedback  ← NOT AUTHORIZED
+Stage 3   Quality-controlled Rider data → validated ground truth
+Stage 4   Provider comparison + BANHAO Local Routing Intelligence
+```
+
+- **Stage 1** uses the 29 public-POI fixtures and 30 routes (§53–§54) to
+  measure provider behaviour — route success, Band F success, latency,
+  identical-repeat consistency. **It makes no claim of route accuracy against
+  reality**, because no independent numeric ground truth exists.
+- **Stage 2** is **separately gated and not currently authorized.** It
+  requires the legal, privacy and worker-tracking decisions in §69.6 and its
+  own implementation decision. DEC-063 does not authorize it.
+- **Stage 3** turns raw traces into validated ground truth (§69.4).
+- **Stage 4** reuses the same validated dataset for provider accuracy,
+  Google versus future OSRM, rural and small-road analysis, near-D-12
+  analysis, and BANHAO Local Routing Intelligence (§5, §29).
+
+### 69.4 Raw trace versus validated ground truth
+
+```text
+Real delivery → Rider GPS trace → Raw Operational Trace
+             → Quality Control → Validated Ground Truth → Benchmark Dataset
+```
+
+**A raw trace is what the device reported. Validated ground truth is what
+survived quality control. No trace is automatically valid.**
+
+Minimum conceptual fields — **illustrative, no schema proposed, no
+migration**: order id · origin and destination as sent to the provider ·
+provider route distance and duration · provider, API/SKU, route timestamp and
+version metadata (§12, §22) · raw trace · actual measured distance · actual
+**transit** time (`picked_up_at` → `arrived_at`, §23.2 — never total elapsed
+time) · per-sample GPS accuracy/quality · timestamps · Rider operational
+feedback · validation status (`RAW` / `VALIDATED` / `REJECTED`) · rejection
+reason, never silently dropped.
+
+Note the current capture carries **no accuracy field at all** — the rider
+location payload is `{lat,lng}` only (§21) — so per-sample quality data would
+itself be new capability, inside the Stage 2 gate.
+
+**Quality-control categories to consider:** poor GPS accuracy · GPS jumps ·
+missing or large trace gaps · abnormal positioning or stationary drift ·
+non-delivery activity mid-route · fuel stop or personal detour (rider
+behaviour, not routing error, per §23.2) · road closure or diversion (flag,
+don't reject blindly) · incomplete delivery · wrong destination reached ·
+insufficient trace coverage.
+
+**Every numeric threshold for these is `OPEN — FUTURE DECISION`.** No
+accuracy radius, gap duration, sampling rate, coverage percentage or
+deviation tolerance exists in any BANHAO decision, and none is set here.
+
+### 69.5 Metrics — now versus later
+
+**All eight DEC-062 OD-2 threshold values are unchanged.** Only when each can
+be evaluated changes.
+
+| Metric | Threshold | When |
+|---|---|---|
+| §24.1 aggregate route success | ≥98% | **Stage 1** |
+| §24.2 Band F success | ≥95% | **Stage 1** |
+| §24.7 p95 latency | ≤1500 ms | **Stage 1** |
+| §24.8 identical-repeat distance spread | ≤100 m | **Stage 1** |
+| §24.10 economic simulation | — | **Stage 1** — simulation on provider output, not accuracy |
+| §24.6 impossible-route rate | ≤2% | **Split** — machine-detectable subset (no route, implausible distance) in Stage 1; full evaluation in Stage 3 |
+| §24.4 p95 absolute distance error | ≤800 m | `DEFERRED UNTIL SUFFICIENT VALIDATED RIDER GROUND TRUTH EXISTS` |
+| §24.4 p95 percentage distance error | ≤15% | `DEFERRED UNTIL SUFFICIENT VALIDATED RIDER GROUND TRUTH EXISTS` |
+| §24.5 duration delta | — | `DEFERRED UNTIL SUFFICIENT VALIDATED RIDER GROUND TRUTH EXISTS` |
+| §24.6 dangerous impossible-route | = 0 | `DEFERRED UNTIL SUFFICIENT VALIDATED RIDER GROUND TRUTH EXISTS` |
+| §24.3 small-road verdicts | — | Quantitative final-approach check in Stage 1; qualitative verdict from **Rider operational feedback** in Stage 3 |
+| §25.1 gate 2 — rural usability | — | **Stage 3**, from Rider operational feedback |
+
+**What counts as "sufficient" validated data is `OPEN — FUTURE DECISION`.**
+No minimum order count is set.
+
+Two further consequences, recorded rather than resolved:
+
+- **The fixture field-validation campaign leaves the critical path.** §21.1
+  allowed distance-delta metrics against Tier 1 or Tier 2; with Tier 2
+  removed, they rest on **validated Rider traces only**. Stage 3's pairs are
+  real orders, not the 29 fixtures — so promoting fixtures to `HIGH` (§39,
+  OD-5) is no longer a prerequisite for the accuracy metrics. The fixtures
+  remain the Stage 1 population, where `MEDIUM` is sufficient.
+- **Production coordinate quality becomes the new accuracy input.**
+  `addresses.lat`/`lng` are optional and not geocoded (§7). Stage 3 accuracy
+  depends on them. `OPEN — FUTURE DECISION`.
+
+The near-D-12 accept-side gap (§63) is expected to become answerable from
+real deliveries in Stage 3. It is not answered now.
+
+### 69.6 Legal and authorization boundary
+
+> **DEC-062 OD-6 is unchanged. Real customer/delivery GPS collection remains
+> `NOT AUTHORIZED`.** The governing blockers are **Q-012** (PDPA lawful
+> basis, `LEGAL_REVIEW_REQUIRED`), **TQ-016** (rider location retention and
+> access, `OPEN`) and **BQ-022** (`LEGAL_REVIEW_REQUIRED` — granular tracking
+> is a worker-classification factor). **Naming the Rider's trace as the
+> intended ground-truth source does not authorize collecting it.**
+
+DEC-063 authorizes **no** GPS collection, tracking, schema, migration,
+endpoint, background job, mobile tracking, telemetry, worker monitoring,
+feedback-collection mechanism or retention-policy implementation. Rider
+operational feedback sits **inside the same Stage 2 gate** — it is data
+collected from a worker during work, and may reference customer location.
+Any future implementation of either requires its own decision and its own
+authorization.
+
+### 69.7 Reconciliation — every other reviewer-dependent passage
+
+Pointer notes were added at §21, §25.1, §43, §61, §66 and §68. The passages
+below also depended on the reviewer and are reconciled here, rather than
+each edited:
+
+| Passage | Previous reading | Under DEC-063 |
+|---|---|---|
+| §14 "Readiness verdict" row | Blocker: no local reviewer (OD-3) | That blocker is withdrawn, not satisfied |
+| §21.1 tier assignment rule | Distance delta against Tier 1 **or** Tier 2 | **Validated Tier 1 only** — Tier 2 no longer exists as a source |
+| §24.3 qualitative verdict | "a person with local knowledge" | **Rider operational feedback**, Stage 3 |
+| §24.6 "inconsistent with local reality" | Reviewer judgement | Rider trace and feedback, Stage 3 |
+| §43.3 "Reviewer assignment is an owner decision" | Assignment pending | **No assignment will occur** |
+| §47 prerequisite 2 | "Local reviewer assigned" | Withdrawn |
+| §56.1 consequence | No reviewer, so no distance-accuracy metric | Distance accuracy now waits on **validated Rider traces**, Stage 3 |
+| §58 "Local reviewer — OD-3 BLOCKED" | Blocked | Withdrawn |
+| §62 A — OD-3 row | "Required for any §25.1 gate — BLOCKED" | Withdrawn; gate 2 moves to Stage 3 |
+| §62 C — Tier 2 row | "BLOCKED (OD-3)" | Not a source; Tier 1 is the source, and is OD-6-gated |
+| §63 accept-side paths | "downstream of OD-3 or of Stage C" | Reviewer path withdrawn; Stage 3 real deliveries, or Stage C measurement |
+
+Nothing in those passages is deleted. They remain the record of the
+methodology DEC-062 locked.
+
+### 69.8 Explicit non-scope
+
+This part and DEC-063 do **not**: select a routing provider · lock **D-16**
+or **D-17** (both `OPEN`) · change **D-12** (maximum operational **road**
+distance 15 km — not a radius, not straight-line, not geodesic), **D-11**,
+**DEC-061** or **D-01…D-14** · change pricing or economics · change any
+**Q-020** decision · create or modify a service-zone polygon or geofence
+(**OD-8 stands**, and this methodology is independent of it) · execute the
+benchmark · create a reviewer workflow of any kind · add any code, schema,
+migration, endpoint, job, telemetry or credential.
+
+---
+
+## 70. Sources
 
 - `ai/RESEARCH/MAPS_LOCATION.md` — provider capability and pricing research,
   checked 2026-08-09.
@@ -3090,3 +3337,6 @@ acquisition authority**. They are not, and must never be read as:
   18929401) and `https://overpass-api.de/api/interpreter` (three bounded
   `area(3618929401)` queries). **No routing, distance or duration request was
   made to any provider.**
+- `docs/DECISIONS.md` — **`DEC-063`** (2026-09-14): ground truth from the Rider
+  performing a real delivery; supersedes DEC-062 OD-3 only; OD-6 unchanged.
+  Recorded in Part VII (§69).
