@@ -8012,14 +8012,179 @@ being economically finalized by a snapshot-unaware application worker.
 or authorized by this entry — future implementation authorization may
 evaluate candidate mechanisms separately.
 
+#### D-01-ARCH-1 — Legacy unpaid state: `PAYMENT_EXPIRED`
+
+**LOCKED. Option B.** The frozen/legacy state for a pre-cutover unpaid order
+with no commission snapshot is **`PAYMENT_EXPIRED`** — already present in
+`orders.state`'s CHECK vocabulary (`20260811000005_order_domain.sql:29`) but
+written by zero application code today. **This decision formally promotes
+`PAYMENT_EXPIRED` from a `PROPOSED`, not-yet-approved exception-state name to
+an approved application state**, for this use only. `CANCELLED` (Option A)
+was considered and rejected: it is already actively written by the
+customer/operator cancel path and reusing it for a platform-initiated
+cutover freeze would conflate two different real-world meanings under one
+state, misleading anyone reading `order_status_history` or any future
+customer-facing status copy into thinking the customer or operator chose to
+stop the order. A wholly new state (Option C) was considered and rejected:
+it would require modifying `orders.state`'s CHECK constraint vocabulary
+itself — heavier than promoting an already-present name.
+
+- **Semantic meaning:** the order's payment window closed without payment
+  ever having a chance to complete under snapshot-aware processing — a
+  platform/cutover fact, not a customer or operator choice.
+- **Compatibility with the current `PAID` guard:** identical to `CANCELLED`
+  or any other non-`PENDING_PAYMENT` state — the guarded `UPDATE ... WHERE
+  state='PENDING_PAYMENT'` (`payment-event-processing.service.ts:508`)
+  already cannot match a `PAYMENT_EXPIRED` order. No change to that guard is
+  needed or authorized.
+- **Late-payment behavior:** unchanged from D-01-ARCH-8 below — falls
+  through to the existing `LATE_PAYMENT` reconciliation path, verified safe
+  by existing code.
+- **Customer/operator cancellation distinction:** preserved, not
+  conflated — `CANCELLED` continues to mean "a person chose to stop this,"
+  `PAYMENT_EXPIRED` means "the platform's payment window closed." Actor type
+  on the resulting `order_status_history` row must be `SYSTEM`, matching the
+  `CREATED` row's own precedent (`order_creation_function.sql:416-420`), not
+  `CUSTOMER` or `OPERATOR`.
+- **Order-status UI implications:** the Customer app currently has no
+  rendering path for `PAYMENT_EXPIRED` since nothing writes it today — a
+  UI/copy addition is required at implementation time. Not designed here.
+  Flagged in §B below as an implementation-open item, not an owner decision.
+- **Terminal for this use case:** yes — once an order reaches
+  `PAYMENT_EXPIRED` under this freeze, it must never resume progress toward
+  payment, consistent with D-01-CUTOVER-1's "must not be allowed to complete
+  payment." Whether an operator may later take some separate action on such
+  an order (e.g., for customer support) is not decided here.
+
+#### D-01-ARCH-2 — Freeze execution: new `/internal/tick` phase
+
+**LOCKED.** A new tick phase, following `PaymentAttemptExpiryService`'s
+exact proven shape (`payment-attempt-expiry.service.ts:52-120`): a single
+guarded `UPDATE` with no prior `SELECT`, a bounded batch size, `service_role`
+execution via the existing `SupabaseService.admin` pattern, natural
+idempotency (a re-run UPDATE against an already-`PAYMENT_EXPIRED` order
+matches zero rows), and self-healing on the next tick if a run is
+interrupted. **The freeze must complete before a legacy order can receive
+payment confirmation** — this is the entry's whole purpose, restated as an
+explicit invariant, not merely a nice property.
+
+**Still open, not resolved by this entry:** the exact tick cadence, and the
+race window it implies — a legacy order's `payment_attempts` row can still
+be within its own 10-minute TTL, or freshly regenerated
+(`REGENERABLE_PAYMENT_STATES`, `payments.service.ts:79`), at the moment the
+freeze phase's batch query runs. Sizing that cadence against
+`PAYMENT_ATTEMPT_TTL_MS` to make the race negligible (or otherwise handling
+it) is an implementation-authorization-stage design question, not decided
+here.
+
+#### D-01-ARCH-3 — Snapshot storage shape
+
+**LOCKED** as a conceptual shape, not final SQL. A dedicated, service-role-
+only table — working name `order_commission_snapshots` — enforcing exactly
+zero or one immutable snapshot per order:
+
+- `id uuid` primary key
+- `order_id uuid not null references orders(id) on delete restrict`
+- `commission_satang bigint not null` (D-01-S1's already-locked canonical
+  representation — no rate column)
+- `created_at timestamptz not null`
+- `unique (order_id)` — the idempotency/one-per-order invariant
+- client access revoked (`anon`, `authenticated`), RLS enabled, **no client
+  policies** — matching `order_number_counters`' "RLS enabled, zero
+  policies" shape and `payments`' "no client SELECT at all" precedent
+  (`payments_order_id_key`, `revoke all on public.payments from anon,
+  authenticated`, `20260811000006_payment_domain.sql:47,97`)
+- insert only, `service_role`, append-only/immutable after creation —
+  closer to the `reject_mutation()` pattern already used by
+  `ledger_entries`/`payment_transactions`/`payment_events` than to
+  `payments`' own mutable-`state` shape, since a commission snapshot has no
+  legitimate lifecycle state to track after creation
+
+Exact SQL, indexes beyond the stated unique constraint, and migration file
+are explicitly not finalized here.
+
+#### D-01-ARCH-4 — Snapshot creation timing: inside `create_order()`, fail-closed
+
+**LOCKED.** The commission snapshot is created **inside the existing
+`create_order()` transaction** (`20260819000001_order_creation_function.sql:114`),
+alongside every other order-time-immutable fact it already writes — not as a
+separate post-creation step. **Snapshot-creation failure aborts the entire
+order creation** — fail-closed, no order may exist that is supposed to carry
+a snapshot but does not. This matches `create_order()`'s own existing
+atomicity guarantee ("there is no window in which an order exists without
+its items," `:99-106`) and this codebase's own established fail-closed
+convention for money-adjacent configuration (DEC-061 §"Configuration
+principles for future implementation," items 8–9: "Invalid configuration
+must fail closed. Missing configuration must fail closed.").
+
+#### D-01-ARCH-5 — Legacy discriminator: snapshot presence alone, no separate cutover timestamp
+
+**LOCKED.** Snapshot-row presence is the sole, authoritative discriminator:
+snapshot exists → snapshot-bearing order; snapshot absent → legacy order.
+Never infer a historical commission rate by recomputation; never backfill
+using the current rate as a substitute for a historical fact — both already
+locked above, restated here as the operative rule for this discriminator.
+
+**A separate cutover timestamp is NOT required, including for freeze
+candidate selection.** Because D-01-ARCH-4 makes snapshot creation
+fail-closed and atomic with `create_order()`, **every order created from the
+moment the snapshot mechanism is live carries a snapshot, with no
+exception** — so "snapshot absent" and "created before cutover" are the same
+fact by construction, not two facts that happen to coincide. The freeze
+tick phase (D-01-ARCH-2) can therefore select its candidates directly —
+orders in `CREATED`/`PENDING_PAYMENT` with no snapshot row — without
+consulting any separate timestamp column or marker.
+
+#### D-01-ARCH-6 — Mixed-version gating: invariant + recommended deployment model
+
+**LOCKED as an invariant**, restating and formalizing D-01-S4/D-01-ROLLOUT-1
+for this specific mechanism: snapshot-unaware code **must fail closed** and
+**must not** finalize commission for a snapshot-bearing order. **No
+permanent live-rate fallback for snapshot-bearing orders is authorized.**
+
+**Recommended deployment model, locked as guidance, not as deployment
+automation:** (1) migration first, (2) compatible application version
+deployed, (3) processor compatibility verified, (4) snapshot creation
+enabled, (5) only then are snapshot-bearing orders allowed to exist. The
+exact claim-time guard implementation that enforces "fail closed" at
+runtime remains an implementation-authorization-stage detail, not decided
+here.
+
+#### D-01-ARCH-7 — Rollback: phase-boundary restatement
+
+**LOCKED**, restating D-01-S5/D-01-ROLLBACK-1 against the deployment phases
+this entry now names explicitly: rollback remains possible **before** the
+first snapshot-bearing order exists; **once** the first snapshot-bearing
+order exists, rollback to a snapshot-unaware version is prohibited, and
+recovery must be roll-forward to a compatible version. If deployment must
+stop, it must stop **before** snapshot-bearing orders can be created — not
+at any later phase. Deployment automation is not designed here.
+
+#### D-01-ARCH-8 — Freeze / late-payment: confirmed existing safe behavior
+
+**CONFIRMED, not a new decision** — restated explicitly to close any
+ambiguity for a future implementer. If a frozen (`PAYMENT_EXPIRED`) legacy
+order later receives a `payment.succeeded` event: the existing guarded
+`PAID` transition (`.eq('state', 'PENDING_PAYMENT')`,
+`payment-event-processing.service.ts:508`) does not match; the event becomes
+a `LATE_PAYMENT` reconciliation case (`:554-559`); **no**
+`CUSTOMER_PAYMENT`, **no** `MERCHANT_COMMISSION`, and **no** service-fee
+ledger entry is posted — confirmed directly from the class's own doc comment
+("a payment that never (or no longer) genuinely settles this order commits
+no commission, funds nothing, and earns no service-fee revenue," `:133-135`)
+and from the code path itself. Reconciliation/operator handling remains the
+existing `reconciliation_cases` path, unchanged. **No new money path is
+introduced by this entry.**
+
 #### Explicitly not resolved by this entry
 
-Exact snapshot table name · exact column names beyond the conceptual
-`commission_satang` · exact schema/index design · exact RPC signature ·
-exact migration file · exact freeze/expiry state · exact freeze/expiry job ·
-exact mixed-version rollout gating mechanism · exact rollback procedure ·
-D-15 · D-16 · D-17 · D-18 · D-19. Also not resolved: exact database schema,
-RLS policy, or deployment configuration of any kind.
+Exact snapshot table/column SQL and migration file (D-01-ARCH-3's shape is
+conceptual, not final) · the freeze tick phase's exact cadence and its race
+window against `PAYMENT_ATTEMPT_TTL_MS` (D-01-ARCH-2) · the exact claim-time
+guard implementation (D-01-ARCH-6) · exact rollback/deployment automation
+(D-01-ARCH-7) · Customer app UI/copy for `PAYMENT_EXPIRED` · D-15 · D-16 ·
+D-17 · D-18 · D-19. Also not resolved: exact database schema, RLS policy, or
+deployment configuration of any kind.
 
 **Implementation is NOT authorized by this entry** — schema, migration,
 application code, tests, fixtures, RPC changes, RLS policy changes, and
@@ -8047,12 +8212,19 @@ Pre-Cutover Compatibility Owner Decision Pack" recon of
 (`20260811000005_order_domain.sql`), which established that unpaid-order
 lifetime is repository-provably unbounded and that a `LATE_PAYMENT`
 reconciliation case, not a money post, is the existing, verified outcome of
-a late webhook arriving for an order no longer `PENDING_PAYMENT`.
+a late webhook arriving for an order no longer `PENDING_PAYMENT`; then
+**Product Owner instruction, 2026-09-15 ("BANHAO — D-01 ARCHITECTURE OWNER
+DECISION LOCK")**, following the "D-01 Commission Snapshot Architecture
+Recon" of `payments`/`payment_attempts`/`payment_events`/
+`payment_transactions` (`20260811000006_payment_domain.sql`),
+`reject_mutation()`/`reject_delete()` (`20260811000001_identity_domain.sql`),
+and `order_number_counters`' zero-policy pattern
+(`20260819000001_order_creation_function.sql`).
 
-**Related:** D-01 (both this entry and the timing clarification above),
-D-02. Does not touch D-03…D-19 (each of which stays exactly as OPEN or
-locked as it already was), DEC-062, DEC-063, DEC-064, M-AV, Q-012, or Q-018.
-Does not resolve DBQ-015 generally.
+**Related:** D-01 (this entry, the timing clarification, and the
+architecture recon above), D-02. Does not touch D-03…D-19 (each stays
+exactly as OPEN or locked as it already was), DEC-062, DEC-063, DEC-064,
+M-AV, Q-012, or Q-018. Does not resolve DBQ-015 generally.
 
 ### D-02 — Commission rounding
 
