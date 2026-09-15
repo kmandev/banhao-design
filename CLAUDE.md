@@ -7,7 +7,16 @@ A-1) after the Application Architecture V1.1 approval; reconciled 2026-08-30
 reconciled 2026-09-09 at `1981972d` after DEC-057/058/059/060 and Q-020
 Slices 1–4B (refund initiation, Stripe refund adapter, webhook finality,
 ledger reversal, reconciliation schema, reconciliation detector) landed on
-this branch — see §9/§10.
+this branch — see §9/§10. Reconciled again 2026-09-15 at `ab3efec3` after
+**DEC-061** (Q-002 economics: D-01…D-14 locked, runtime **not implemented**),
+**DEC-062/DEC-063** (Q-018 routing: Google Compute Routes adopted as an
+**owner-approved direction pending field validation**, not a locked provider
+— D-16/TQ-004 stay `OPEN`), **DEC-064** (Q-012 rider GPS: policy direction
+locked, Q-012 itself stays `OPEN`/`LEGAL_REVIEW_REQUIRED`, no GPS collection
+built), and **M-AV G-1/G-2 closed** (G-3 device verification still
+`BLOCKED`, R-6/BQ-038 still `OPEN`) — see §9/§10/§11. **A decision lock is not
+an implementation authorization** — treat these as decided-but-unbuilt unless
+this file says otherwise.
 
 > **Authoritative for application implementation:**
 > [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
@@ -368,7 +377,7 @@ this file summarises it.
 | **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | `NullPaymentProvider` module implemented (service, controller, webhook simulator, attempt-expiry, event processing) in the API; ledger-balances-to-zero property not independently re-verified in this update |
 | **G** | Rider & delivery — depends on E, **not** F | Substantial implementation: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, and the G7 proof-of-delivery flow (driver capture → compressed/EXIF-stripped upload → private R2 storage → signed download → customer read UI), all with test coverage (EVENT-023). Full-phase completion not independently re-verified in this update |
 | **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
-| **I** | Admin operations | **Started 2026-09-03 — the Human Supervisor half.** Exception inbox, case detail and case closure are built end to end (API + console + boundary tests). The financial half (payments, refunds, reconciliation, ledger, settlement) is **partially built**: refund initiation, the Stripe refund adapter, webhook finality, ledger reversal, the reconciliation schema and the reconciliation detector (Q-020, Slices 1–4B, `1981972d`) exist at the API layer, and operator/admin reconciliation-case visibility/resolution already covers the six Q-020 refund kinds through the existing `SupervisorController` path. **Settlement and payout remain unbuilt.** Q-001, Q-002 and Q-032 still gate the rest (Q-010/BQ-028's commission rate is resolved — **DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht; Q-001/payment-provider selection is resolved — **DEC-055** — runtime enablement status is tracked in §10, not restated here). Two design artifacts govern the phase and `docs/HUMAN_SUPERVISOR_CONTRACT.md` says which one governs what. See §13 |
+| **I** | Admin operations | **Started 2026-09-03 — the Human Supervisor half.** Exception inbox, case detail and case closure are built end to end (API + console + boundary tests). The financial half (payments, refunds, reconciliation, ledger, settlement) is **partially built**: refund initiation, the Stripe refund adapter, webhook finality, ledger reversal, the reconciliation schema and the reconciliation detector (Q-020, Slices 1–4B, `1981972d`) exist at the API layer, and operator/admin reconciliation-case visibility/resolution already covers the six Q-020 refund kinds through the existing `SupervisorController` path. **Settlement and payout remain unbuilt.** Q-001, Q-002 and Q-032 still gate the rest (Q-010/BQ-028's commission rate is resolved — **DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht, its rate further superseded-but-unbuilt by **DEC-061** D-01 (10%), 2026-09-09; Q-001/payment-provider selection is resolved — **DEC-055** — runtime enablement status is tracked in §10, not restated here). **Q-002 is two separate things now: the legal/settlement-model question stays `OPEN`, while the Q-002-labelled economics numbers (D-01…D-14) are locked by DEC-061 and unbuilt — see §10.** Two design artifacts govern the phase and `docs/HUMAN_SUPERVISOR_CONTRACT.md` says which one governs what. See §13 |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
 | **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION STARTED 2026-09-03, two playbooks built (§12).** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4` and **applied and verified live 2026-09-03**, see §7). Read DEC-040 — including its *Implementation status* section — before any Phase J work |
 
@@ -384,7 +393,7 @@ API integration tests → **only then** Cloud Run.
 
 Running alongside, not blocking:
 
-1. **Answer the remaining 5 P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
+1. **Answer the remaining P0 items in `docs/OPEN_BUSINESS_QUESTIONS.md`** —
    Q-001, Q-002, BQ-015, BQ-027 (**refundability only** —
    the amount is decided), BQ-030 (**stacking only** — the funder model is
    decided). Q-010/BQ-028 (commission rate) left this list 2026-09-05
@@ -395,12 +404,21 @@ Running alongside, not blocking:
    is no longer an open decision and no longer belongs on this list —
    Slices 1–4B implementing it are merged (`1981972d`, see §10) — the Q-020
    End-to-End Acceptance Audit is what remains, not a business-decision
-   gap. Every structural question is answered; what is left is
-   numbers, the provider, legal, and a stacking rule. **These block F′
+   gap. **The Q-002 economics numbers (D-01…D-14) also left `OPEN` status
+   2026-09-09 — DEC-061 — but stay off this "answered" framing in one sense:
+   they are decided and simultaneously `RUNTIME NOT IMPLEMENTED`, gated
+   further on D-15…D-19 (all still `OPEN`) — see §10.** Q-018 (routing
+   provider) and Q-012 (rider GPS) similarly moved from undirected-`OPEN` to
+   **owner-approved-direction-but-still-`OPEN`** via DEC-062/063/064,
+   2026-09-10/14 — see §10. Every structural question is answered; what is
+   left is numbers, the provider, legal, and a stacking rule, now joined by
+   the distance/config questions D-15…D-19. **These block F′
    only** — DEC-APP-007 keeps them off the critical path for the other
    eight phases.
 2. Commission the Thai legal/compliance review (Q-002, Q-012, Q-015, Q-017) —
-   external lead time, gates real-money work.
+   external lead time, gates real-money work. Q-012's owner-approved GPS
+   policy direction (DEC-064) does not shorten this — the legal review is
+   still what closes Q-012, not the policy lock.
 3. Verify on an Android emulator — per-weight Thai font families are untested and
    are the single most likely rendering failure.
 4. Verify the search **results** list and keyboard avoidance on a device that
@@ -444,16 +462,39 @@ migration explicitly instructed for the current phase — see §10.
 - Do not add a text style, dependency, or migration without a stated reason.
 - **Implement only rules tagged `ACCEPTED`.** `PROPOSED` is analysis awaiting
   approval; `OPEN` means it is undecided and guessing is forbidden.
-- Sample figures are not rules: the 10% commission and the ฿10 `BANHAO7` coupon
-  are illustrative. **DEC-025 says so explicitly of the 10%.** The **fee**
-  figures are no longer samples — delivery is a flat **฿10 / 1000 satang**
-  (DEC-035) and service a fixed **฿5 / 500 satang** (DEC-036). **Commission is
-  no longer a sample either — it is 8% of the food subtotal, rounded to whole
-  baht (DEC-043, 2026-09-05). The old 10% figure is not retroactively treated
-  as an approximation of 8% — they are different numbers.** Note the
-  divergence: `apps/customer/src/mocks/pricing.ts` still holds
-  `SAMPLE_DELIVERY_FEE_SATANG = 1500`, which is **not** the approved amount and
-  must never be copied into backend code.
+- Sample figures are not rules: the 10% commission sample and the ฿10
+  `BANHAO7` coupon are illustrative (DEC-025 says so of the old 10% sample).
+  **Two generations of real (non-sample) figures now exist, and they are not
+  interchangeable:**
+  - **What the running code implements today:** flat delivery **฿10 / 1000
+    satang** (DEC-035), fixed service **฿5 / 500 satang** (DEC-036), **8%**
+    commission of the food subtotal rounded to whole baht (DEC-043,
+    2026-09-05). This is still what `commission-pricing.ts` and
+    `rider-earning-pricing.ts` actually compute.
+  - **What is locked but NOT yet built:** **DEC-061** (2026-09-09) supersedes
+    DEC-035 in full, DEC-036 in full, and DEC-043/044/045 partially, with
+    **D-01…D-14** — commission **10%** (D-01, rate only; base and rounding
+    unchanged), service fee **5% of food subtotal, ฿5 floor, ฿15 cap**
+    (D-03/D-04), dynamic rider/delivery economics (D-05…D-10: 80% rider
+    share, ฿12 rider floor, ฿8 rider base, +฿1.20/operational-road-km, ฿15
+    delivery-fee minimum, ฿35 maximum), a ฿5 minimum-safe-contribution
+    pre-acceptance guardrail (D-11), a 15 km maximum **road-distance** service
+    limit (D-12, never straight-line/geodesic), no Phase 1 minimum order
+    value (D-13), and a configurable per-promotion funder defaulting to
+    MERCHANT (D-14). **DEC-061's own status is `RUNTIME NOT IMPLEMENTED`** —
+    no pricing engine, config infrastructure, or migration exists for it, and
+    building it needs its own separate implementation authorization, not just
+    this decision lock. **Do not implement D-01…D-14 against this entry
+    alone.** The distance-dependent parts (D-08, D-12, and D-09/D-10 which
+    derive from the rider-share/floor pair) additionally stay blocked on
+    **D-16** (routing/distance provider) and **D-17** (distance accuracy
+    policy), both still `OPEN` — see the DEC-062/063/064 paragraph below.
+  - **Never treat the DEC-061 figures as already live**, and never treat the
+    DEC-035/036/043 figures as the final target model — cite whichever
+    generation the task actually needs and say which one it is.
+  - `apps/customer/src/mocks/pricing.ts` still holds
+    `SAMPLE_DELIVERY_FEE_SATANG = 1500`, which was never the approved amount
+    under either generation and must never be copied into backend code.
 - Do not enable cash payment (DEC-016) — and do not delete the cash model either.
 - **Three preparation-time values exist and none substitutes for another.**
   `restaurants.avg_prep_minutes` / `busy_prep_minutes` are live catalogue
@@ -514,11 +555,37 @@ Q-002 stays unprejudiced). **Runtime is not implemented** —
 prerequisites before Stripe events may be enabled: the payment-event starvation
 fix and a PromptPay QR sandbox spike. **Q-010
 (platform fee) is resolved** — **DEC-043**, 2026-09-05, 8% of the food
-subtotal, round to whole baht. Under **DEC-APP-007** the remaining item gates
+subtotal, round to whole baht — **and its rate only is further superseded by
+DEC-061 (2026-09-09, 10%), runtime still on the DEC-043 8% figure, see §10's
+sample-figures entry above.** Under **DEC-APP-007** the remaining item gates
 **Phase F′ only**; build the whole
 order → delivery flow against `NullPaymentProvider`. The
 schema stores **amounts, never rates**, so the open numbers can be set later
 without a migration — **do not invent a default anywhere in the application.**
+
+**The wider Q-002 economics policy set is now locked, still unbuilt, and
+partially gated:** **DEC-061** locks **D-01…D-14** (see above). **D-15**
+(settlement cadence), **D-16** (routing/distance provider), **D-17**
+(distance accuracy policy), **D-18** (configuration activation authority) and
+**D-19** (mid-checkout configuration-version behaviour) remain **`OPEN`** and
+are explicitly **not** locked by DEC-061 — do not infer them from D-01…D-14.
+**Q-018 (routing provider selection)** has an **owner-approved Phase 1
+direction** — PostGIS service-zone polygon as a free pre-check, then **Google
+Compute Routes** as the intended authoritative road-routing engine (**DEC-062,
+DEC-063**, 2026-09-10/14) — but this is **"pending field validation, not a
+lock"** in the decision's own words; **D-16 and TQ-004 stay `OPEN`** until the
+Buntharik field benchmark (now staged on real rider delivery data per
+DEC-063, superseding the DEC-062 OD-3 reviewer plan) produces evidence. Do not
+build or wire a routing provider against this direction alone. **Q-012
+(rider GPS)** has an **owner-locked policy direction** — acceptance gate,
+active-delivery-only scope, purpose limitation (**DEC-064**, 2026-09-14) —
+but **Q-012 itself stays `OPEN` / `LEGAL_REVIEW_REQUIRED`**; building the
+Terms/Privacy acceptance gate or any GPS collection needs its own
+implementation authorization plus counsel's notice-text input, neither of
+which this entry grants. **No rider GPS is collected today**, and customer
+live GPS stays out of scope. **A decision lock (DEC-061/062/063/064) is a
+separate gate from an implementation authorization — never treat one as the
+other.**
 
 **Known gaps:** Android is **UNVERIFIED** (no SDK on this machine, and it is the
 platform most likely to differ on per-weight fonts). A physical iOS device, real
@@ -566,6 +633,37 @@ the work already uses (`AV-Q01…Q04`, `AV-D01…D04`, `AV-T1…T5`, `AV-E5`);
 design states map `M-13.A/B/C → M-AV.A/B/C`. The two UX-SPEC slots keep their
 meanings, no availability item is added to the merchant roadmap, and Git
 history is not rewritten — commit `7ea20a65` keeps its message.
+
+### M-AV verification gates — G-1…G-3, R-6
+
+Tracked separately from the build-scope table below, closed/opened by their
+own owner or verification action, not by code landing:
+
+- **G-1: CLOSED.** The paused-restaurant add-to-cart gap is fixed
+  (`a31abdd1`) — disabled CTA, correct copy, no navigation to Cart, no item
+  added, existing cart untouched.
+- **G-2: CLOSED — OWNER DECISION LOCKED / BEST EFFORT AUDIT.** `ab3efec3`
+  locks the `audit_logs` write for a real availability-mode change as
+  **best effort**: attempted after the state transition commits, failure
+  logged and swallowed, never fails the API request, never triggers a
+  compensating update. This is a **clarification of DEC-041 item 9, not a
+  new decision number** — codifies already-tested behavior
+  (`restaurant-availability.service.spec.ts`), no schema/migration/runtime
+  change. **Do not reopen this by "fixing" the swallowed-failure path** —
+  that would contradict the locked semantics.
+- **G-3: BLOCKED — DEVICE RUNTIME VERIFICATION.** Two separate sessions
+  failed the iOS Simulator health check before completing the B (NORMAL) / C
+  (BUSY) / D (SIGNED-OUT) regression checklist — `screenshot` returns
+  `captureFailed`, `inspect` has no fallback. **This is an
+  environment/device blocker, not a BANHAO code defect** — no code change was
+  made or is authorized in response to it. The PAUSED path *was* verified
+  live against `banhao-dev` in an earlier session and may be cited as
+  evidence, but it does not close the incomplete checklist.
+- **R-6 / BQ-038: OPEN — OWNER DECISION.** Which role(s) may change
+  availability mode, and what admin-authority/audit model applies — P2,
+  unrelated to G-1/G-2/G-3, not closed by any of them.
+- **M-AV CORE IMPLEMENTATION: COMPLETE**, independent of G-3/R-6's status —
+  the build-scope table below is unaffected by either.
 
 ### What is built
 
