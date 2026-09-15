@@ -7853,6 +7853,142 @@ prepared earlier in this session.
 **Related:** D-01, D-02 (both preserved unchanged above). Does not touch
 D-03…D-19, DEC-062, DEC-063, DEC-064, M-AV, Q-012, or Q-018.
 
+### D-01 — Commission snapshot architecture and cutover semantics (clarification, locked 2026-09-15)
+
+**Status:** ACCEPTED — CLARIFICATION OF D-01 ABOVE · IMPLEMENTATION NOT
+AUTHORIZED · **Date:** 2026-09-15 · **Owner:** PRODUCT_OWNER
+
+Follows the D-01 commission-timing clarification directly above (order-time
+snapshot, Option B) and the "D-01 Commission Snapshot Implementation
+Authorization Pack" prepared earlier in this session. That pack surfaced five
+architecture/cutover questions the timing decision alone did not answer. This
+entry locks the four that are independently supported and leaves the fifth
+explicitly `OPEN` per this repository's "do not manufacture an owner
+decision" convention.
+
+#### D-01-S1 — Snapshot canonical representation: resolved amount
+
+**LOCKED.** The commission snapshot's canonical representation is the
+**resolved commission amount in satang**, not a rate. The stored amount is
+the authoritative order-time commission fact. A future implementation must
+**not** derive the historical commission again from the current rate or the
+current rounding implementation — the amount is final the instant it is
+written, matching the same principle already governing
+`delivery_fee_satang`/`service_fee_satang`.
+
+**Why not also lock a rate field:** the recon's own rounding analysis showed
+a stored rate alone remains dependent on the rounding implementation never
+changing meaning for a previously-stored rate — a guarantee this codebase has
+no mechanism to make today. No additional historical-rate field is locked
+here; one may be proposed separately, with its own justification, if a
+future need for it is identified.
+
+#### D-01-S2 — Snapshot storage isolated from customer/merchant/rider-readable `orders`
+
+**LOCKED.** The canonical order-time commission fact is stored in a
+**service-role-only persistence boundary**, not as a plain column on the
+customer/merchant/rider-readable `orders` row. Reason: `orders` currently
+grants full-row `SELECT` to `authenticated`, scoped only by row-ownership
+policies (`orders_select_customer`, `orders_select_merchant`,
+`orders_select_rider`) — not by column — so a plain `orders` column would be
+directly PostgREST-readable by the rider, and this repository already has an
+explicit test (`riderOrderView.test.ts`) asserting the rider path must never
+surface a money-shaped field including commission. The new storage is the
+immutable order-time commission **input/fact** consumed by the payment
+ledger-posting path — it is **not** a second accounting ledger;
+`ledger_entries` remains the accounting source of truth after posting,
+unchanged.
+
+**Explicitly not locked:** the exact table name, schema, indexes, uniqueness
+mechanism, or RPC shape. These are implementation details for a future,
+separate implementation authorization. **This decision does not resolve
+DBQ-015 generally** — it applies only to D-01 commission snapshot storage,
+not to any other `orders`-adjacent column-visibility question.
+
+#### D-01-S3 — Migration sequencing: additive, migration-first
+
+**LOCKED.** D-01 deployment uses additive, migration-first sequencing: (1)
+deploy the additive persistence structure, (2) verify the migration, (3)
+deploy the application that writes/reads the snapshot, (4) verify webhook
+behavior, (5) retire the old application version. The migration must not
+make an existing old-application call fail, and a non-null snapshot must not
+be required before every writer has been upgraded — matching the precedent
+`create_order()`'s own `p_delivery_fee_satang`/`p_service_fee_satang`
+parameters already set (additive, explicit-value-forcing, never silently
+defaulted). **This decision does not itself change order creation
+behavior.**
+
+#### D-01-S4 — Mixed-version webhook risk: identified, not solved
+
+**LOCKED as an identified fact, not as a mechanism.** During D-01 rollout,
+old/new webhook mixed-version processing is a real deployment risk: existing
+commission idempotency (`group_key` uniqueness) prevents a *duplicate*
+ledger post, but whichever version's webhook handler posts *first* during
+the overlap window determines the recognized amount. **The final
+implementation/deployment plan must ensure a snapshot-bearing order cannot be
+economically finalized by an old webhook implementation once the snapshot
+feature is authoritative.** No queue, lock, or other new infrastructure is
+introduced or authorized by this entry. This is not resolved through
+D-15…D-19. The gating mechanism itself is left to a future implementation
+authorization pack.
+
+#### D-01-S5 — Rollback invariant: unsafe past snapshot-bearing orders
+
+**LOCKED as an invariant, not a procedure.** Once snapshot-bearing orders
+exist and can reach payment confirmation, rolling back to an application
+version that ignores the commission snapshot is **not economically safe** —
+old code would recompute from its own live rate rather than reading the
+snapshot, reintroducing exactly the ambiguity D-01's timing clarification
+exists to close. No arbitrary rollback time window is locked. A future
+deployment plan must either prevent such a rollback, roll forward with a
+compatible version, or provide an explicitly authorized compatibility
+mechanism — none of which is designed here.
+
+#### Pre-cutover unpaid-order compatibility — OPEN, not locked
+
+**Left explicitly `OPEN`.** The recon presented four options (backfill,
+fallback-to-current-rate, freeze/expire legacy orders, transitional dual
+behavior) with trade-offs, but **no explicit owner selection was made** in
+the instruction that produced this entry — only conditional templates for
+what to record *if* one is chosen later. Per this repository's own
+convention against manufacturing an owner decision, none is selected here.
+**Backfilling a historical rate is specifically not a safe default**: no
+historical per-order commission rate is recoverable from anything in this
+repository, so any backfill could only ever write "whatever the rate is on
+migration day" dressed up as a historical fact. Whether D-01's order-time
+guarantee applies retroactively to pre-cutover orders remains an open
+question for a future owner decision.
+
+#### Explicitly not resolved by this entry
+
+Exact snapshot table name · exact column names beyond the conceptual
+`commission_satang` · exact schema/index design · exact RPC signature ·
+exact migration file · exact legacy-order compatibility implementation ·
+exact mixed-version rollout mechanism · exact rollback procedure · D-15 ·
+D-16 · D-17 · D-18 · D-19.
+
+**Implementation is NOT authorized by this entry** — schema, migration,
+application code, tests, fixtures, RPC changes, RLS policy changes, and
+deployment changes all remain gated on a future, separate implementation
+authorization, exactly as the D-01 timing clarification above already
+establishes.
+
+**Evidence:** Product Owner instruction, 2026-09-15 ("BANHAO — D-01
+COMMISSION SNAPSHOT ARCHITECTURE + CUTOVER OWNER DECISION LOCK"), following
+the "D-01 Commission Snapshot Implementation Authorization Pack" recon of
+`orders` RLS/grants (`20260811000011_rls_policies.sql`),
+`orders_enforce_immutable_columns()` and `create_order()`
+(`20260811000005_order_domain.sql`, `20260819000001_order_creation_function.sql`),
+`ledger_entry_groups`/`ledger_entries` (`20260811000007_ledger_domain.sql`),
+`merchants.commission_bps` (`20260811000002_merchant_domain.sql`), and
+`riderOrderView.test.ts`'s money-field exclusion test, prepared earlier in
+this session.
+
+**Related:** D-01 (both this entry and the timing clarification above),
+D-02. Does not touch D-03…D-19 (each of which stays exactly as OPEN or
+locked as it already was), DEC-062, DEC-063, DEC-064, M-AV, Q-012, or Q-018.
+Does not resolve DBQ-015 generally.
+
 ### D-02 — Commission rounding
 
 **Preserve the existing whole-baht commission rounding rule**, unchanged. No new
