@@ -8176,15 +8176,81 @@ and from the code path itself. Reconciliation/operator handling remains the
 existing `reconciliation_cases` path, unchanged. **No new money path is
 introduced by this entry.**
 
+#### D-01-ARCH-9 — Missing-snapshot PAID order: `COMMISSION_SNAPSHOT_MISSING`
+
+**LOCKED.** Closes the one genuine architecture gap the "D-01 Implementation
+Authorization Recon" identified: a legacy order that legitimately reaches
+`PAID` (the guarded transition's `WHERE state = 'PENDING_PAYMENT'` genuinely
+matches) before the freeze mechanism (D-01-ARCH-2) catches it, and which
+therefore has no `order_commission_snapshots` row. **This is not
+`LATE_PAYMENT`** — D-01-ARCH-8 already locks that kind's meaning as "the
+`PAID` guard did not match"; here it did.
+
+**Locked:** a new reconciliation case kind, **`COMMISSION_SNAPSHOT_MISSING`**
+— an order reached `PAID` but its required order-time commission snapshot is
+missing. On detecting this: **no** live-rate calculation, **no**
+`MERCHANT_COMMISSION` ledger entry is posted, a `COMMISSION_SNAPSHOT_MISSING`
+case is opened for operator resolution. `CUSTOMER_PAYMENT` and
+`SERVICE_FEE_REVENUE` continue to post normally and independently — the
+three groups are already independent, never zero-summed against each other
+(DEC-049) — so a withheld `MERCHANT_COMMISSION` group alongside two posted
+groups is an incomplete-but-valid state, not a CON-003 violation (zero
+entries for a component is balanced by absence). `orders.state` remains
+`PAID` — the transition was genuine; this entry does not invent a new order
+or ledger accounting state, and does not touch `orders.state`'s CHECK
+vocabulary.
+
+**Every existing `reconciliation_cases.kind` value was evaluated and
+rejected as semantically unsafe for this case**: `LATE_PAYMENT` (contradicts
+its own already-locked D-01-ARCH-8 meaning) · `SURPLUS_PAYMENT` (a
+transaction-duplication phenomenon, unrelated) · `AMOUNT_MISMATCH` (a
+payment-amount reconciliation phenomenon, unrelated, would misdirect an
+operator) · `UNMATCHED_EVENT` (this order/payment pair is fully matched;
+only the commission fact is absent) · the six Q-020 refund kinds (wrong
+domain entirely).
+
+**Every deterministic-legacy-amount alternative was evaluated and rejected**,
+directly per the already-locked D-01-CUTOVER-2 ("no permanent legacy
+commission fallback"): the current 10% rate and the old 8% rate are both
+live-rate calculations — the exact thing prohibited; a recomputed historical
+amount cannot exist honestly, since no historical per-order commission fact
+is recoverable from anything in this repository (already established);
+zero commission is not a neutral placeholder but an invented fact
+misstating that BANHAO earned nothing on a genuinely fulfilled order; a
+merchant-specific configured amount does not exist, since
+`merchants.commission_bps` is read by zero application code and `NULL` for
+every merchant today.
+
+**A genuine idempotency gap is recorded, not closed, by this entry.**
+`reconciliation_cases` has no unique constraint beyond its primary key
+(`20260811000010_*.sql:141-168`) — every *existing* `openCase()` call site
+is naturally deduplicated only because it runs from a `payment_events` row
+claimed exactly once. This new condition can legitimately be revisited by
+the already-`PAID` self-heal branch of `handleResolvedEvent` on a genuine
+duplicate event delivery, which currently re-attempts commission posting
+unconditionally on every such visit — without an added dedup step, this
+would open a duplicate `COMMISSION_SNAPSHOT_MISSING` case per revisit. **This
+entry does not resolve that gap** — a future implementation must add
+existence-checking or a schema-level uniqueness constraint before this can
+be built safely; not designed or authorized here.
+
+**Explicitly not decided by this entry:** how a `COMMISSION_SNAPSHOT_MISSING`
+case is eventually resolved (what an operator or a future system action does
+to post the withheld commission) — only that posting is blocked pending
+resolution.
+
 #### Explicitly not resolved by this entry
 
 Exact snapshot table/column SQL and migration file (D-01-ARCH-3's shape is
 conceptual, not final) · the freeze tick phase's exact cadence and its race
 window against `PAYMENT_ATTEMPT_TTL_MS` (D-01-ARCH-2) · the exact claim-time
 guard implementation (D-01-ARCH-6) · exact rollback/deployment automation
-(D-01-ARCH-7) · Customer app UI/copy for `PAYMENT_EXPIRED` · D-15 · D-16 ·
-D-17 · D-18 · D-19. Also not resolved: exact database schema, RLS policy, or
-deployment configuration of any kind.
+(D-01-ARCH-7) · Customer app UI/copy for `PAYMENT_EXPIRED` · the exact
+`COMMISSION_SNAPSHOT_MISSING` migration, TypeScript allowlist update, and
+duplicate-case dedup mechanism (D-01-ARCH-9) · how a
+`COMMISSION_SNAPSHOT_MISSING` case is resolved · D-15 · D-16 · D-17 · D-18 ·
+D-19. Also not resolved: exact database schema, RLS policy, or deployment
+configuration of any kind.
 
 **Implementation is NOT authorized by this entry** — schema, migration,
 application code, tests, fixtures, RPC changes, RLS policy changes, and
@@ -8219,7 +8285,15 @@ Recon" of `payments`/`payment_attempts`/`payment_events`/
 `payment_transactions` (`20260811000006_payment_domain.sql`),
 `reject_mutation()`/`reject_delete()` (`20260811000001_identity_domain.sql`),
 and `order_number_counters`' zero-policy pattern
-(`20260819000001_order_creation_function.sql`).
+(`20260819000001_order_creation_function.sql`); then **Product Owner
+instruction, 2026-09-15 ("BANHAO — D-01 MISSING COMMISSION SNAPSHOT
+RECONCILIATION DECISION LOCK")**, following the "D-01 Implementation
+Authorization Recon"'s own identified gap and this entry's analysis of
+`reconciliation_cases`' full schema and its absent unique constraint
+(`20260811000010_*.sql:141-168`), every existing `openCase()` call site
+(`payment-event-processing.service.ts:241,257,294,434,455,554,1024-1038`),
+and `reconciliation-case.service.ts`'s generic `kind` handling
+(`:24,45-49,79-90`).
 
 **Related:** D-01 (this entry, the timing clarification, and the
 architecture recon above), D-02. Does not touch D-03…D-19 (each stays
