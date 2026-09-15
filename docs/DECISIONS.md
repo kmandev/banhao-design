@@ -7944,28 +7944,82 @@ deployment plan must either prevent such a rollback, roll forward with a
 compatible version, or provide an explicitly authorized compatibility
 mechanism — none of which is designed here.
 
-#### Pre-cutover unpaid-order compatibility — OPEN, not locked
+#### D-01-CUTOVER-1 — Pre-cutover unpaid-order policy: Option B (expire/freeze)
 
-**Left explicitly `OPEN`.** The recon presented four options (backfill,
-fallback-to-current-rate, freeze/expire legacy orders, transitional dual
-behavior) with trade-offs, but **no explicit owner selection was made** in
-the instruction that produced this entry — only conditional templates for
-what to record *if* one is chosen later. Per this repository's own
-convention against manufacturing an owner decision, none is selected here.
-**Backfilling a historical rate is specifically not a safe default**: no
-historical per-order commission rate is recoverable from anything in this
-repository, so any backfill could only ever write "whatever the rate is on
-migration day" dressed up as a historical fact. Whether D-01's order-time
-guarantee applies retroactively to pre-cutover orders remains an open
-question for a future owner decision.
+**LOCKED.** An order created before D-01 snapshot capability becomes
+authoritative, and which has no commission snapshot, **must not be allowed
+to complete payment under the new D-01 economic regime.** The
+implementation must establish a controlled cutover behavior so that legacy
+unpaid orders are resolved or frozen before they can create a post-cutover
+commission ambiguity — superseding this entry's own prior "Left explicitly
+`OPEN`" status for this question.
+
+**Explicitly recorded, per the prepared "D-01 Pre-Cutover Compatibility
+Owner Decision Pack":**
+
+- **True historical grandfathering is impossible for pre-cutover unpaid
+  orders**, because no historical per-order commission fact exists anywhere
+  in this repository — `orders` has never stored a rate or resolved
+  commission amount, and the only record of what applied to a given order is
+  whatever `ledger_entries` row was posted after payment confirmed, which
+  does not exist for an order that has not paid.
+- **Backfilling with the current rate is NOT considered historical
+  grandfathering and is not authorized.** A backfill could only ever write
+  "whatever the rate is on migration day" dressed up as a historical fact —
+  rejected as a default, consistent with this entry's own prior finding.
+
+**Explicitly not locked by this entry:** the exact order state used to
+represent a frozen/expired legacy order (this entry does **not** select
+`PAYMENT_EXPIRED` merely because the schema already contains it as an
+unused, `PROPOSED` exception state) · the expiry/freeze job or mechanism ·
+any change to payment or order application code. All remain
+implementation-authorization-stage questions.
+
+#### D-01-CUTOVER-2 — No permanent legacy commission fallback
+
+**LOCKED.** D-01 implementation must **not** create a permanent legacy
+commission fallback path. Reason: the repository-proven fact that unpaid
+orders can remain unresolved indefinitely under the current architecture (no
+automatic order-level expiry exists — only the payment *attempt*'s 10-minute
+QR TTL does, and attempts are unboundedly regenerable) means a rule of the
+shape *"snapshot exists → use snapshot; otherwise → current rate"*, left in
+place indefinitely, would let the legacy population become an indefinite
+economic exception — precisely what D-01-CUTOVER-1 exists to prevent. **Any
+temporary compatibility behavior, if technically required during
+deployment, must be narrowly bounded and separately authorized during
+implementation planning** — none is authorized by this entry.
+
+#### D-01-ROLLBACK-1 — Rollback prohibited after snapshot-bearing orders exist
+
+**LOCKED**, as an operational corollary of the already-locked **D-01-S5**
+invariant above. After the first snapshot-bearing order can reach payment
+confirmation, rollback to an application version that does not
+understand/use the commission snapshot **is not allowed.** This is an
+economic safety invariant, not an operational preference. The future
+implementation/deployment plan must instead support either **rolling
+forward** to a compatible version, or **stopping deployment** before any
+snapshot-bearing order can exist. **No compatibility bridge, rollback
+tooling, or time-based rollback window is designed or authorized by this
+entry** — the exact operational procedure remains `OPEN`.
+
+#### D-01-ROLLOUT-1 — Mixed-version rollout gating is required
+
+**LOCKED**, as an explicit requirement extending the already-locked
+**D-01-S4** identified risk above. D-01 implementation **must** include an
+explicit rollout gating mechanism preventing a snapshot-bearing order from
+being economically finalized by a snapshot-unaware application worker.
+**The gating mechanism itself remains `OPEN`** and is not designed, chosen,
+or authorized by this entry — future implementation authorization may
+evaluate candidate mechanisms separately.
 
 #### Explicitly not resolved by this entry
 
 Exact snapshot table name · exact column names beyond the conceptual
 `commission_satang` · exact schema/index design · exact RPC signature ·
-exact migration file · exact legacy-order compatibility implementation ·
-exact mixed-version rollout mechanism · exact rollback procedure · D-15 ·
-D-16 · D-17 · D-18 · D-19.
+exact migration file · exact freeze/expiry state · exact freeze/expiry job ·
+exact mixed-version rollout gating mechanism · exact rollback procedure ·
+D-15 · D-16 · D-17 · D-18 · D-19. Also not resolved: exact database schema,
+RLS policy, or deployment configuration of any kind.
 
 **Implementation is NOT authorized by this entry** — schema, migration,
 application code, tests, fixtures, RPC changes, RLS policy changes, and
@@ -7982,7 +8036,18 @@ the "D-01 Commission Snapshot Implementation Authorization Pack" recon of
 `ledger_entry_groups`/`ledger_entries` (`20260811000007_ledger_domain.sql`),
 `merchants.commission_bps` (`20260811000002_merchant_domain.sql`), and
 `riderOrderView.test.ts`'s money-field exclusion test, prepared earlier in
-this session.
+this session; then **Product Owner instruction, 2026-09-15 ("BANHAO — D-01
+PRE-CUTOVER + ROLLBACK OWNER DECISION LOCK")**, following the "D-01
+Pre-Cutover Compatibility Owner Decision Pack" recon of
+`payment-attempt-expiry.service.ts`, `payments.service.ts`
+(`PAYMENT_ATTEMPT_TTL_MS`, `REGENERABLE_PAYMENT_STATES`),
+`payment-event-processing.service.ts` (`LATE_PAYMENT` handling),
+`orders.service.ts` (`CUSTOMER_CANCELLABLE_STATES`,
+`OPERATOR_CANCELLABLE_STATES`), and `orders.state`'s CHECK vocabulary
+(`20260811000005_order_domain.sql`), which established that unpaid-order
+lifetime is repository-provably unbounded and that a `LATE_PAYMENT`
+reconciliation case, not a money post, is the existing, verified outcome of
+a late webhook arriving for an order no longer `PENDING_PAYMENT`.
 
 **Related:** D-01 (both this entry and the timing clarification above),
 D-02. Does not touch D-03…D-19 (each of which stays exactly as OPEN or
