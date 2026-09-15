@@ -7768,6 +7768,91 @@ subtotal** (delivery fee and service fee stay excluded), and the whole-baht
 rounding rule is unchanged. Historical orders remain immutable and their already
 recognised commission is **never recomputed**.
 
+### D-01 — Commission timing semantics (clarification, locked 2026-09-15)
+
+**Status:** ACCEPTED — CLARIFICATION OF D-01 ABOVE · NOT IMPLEMENTATION
+AUTHORIZATION · **Date:** 2026-09-15 · **Owner:** PRODUCT_OWNER
+
+The D-01 entry above locks the commission **rate** (10% of food subtotal). It
+did not state **when** that rate applies to a given order. The current
+runtime resolves commission at payment-confirmation time, re-reading
+`orders.subtotal_satang` against whichever rate constant is live in the
+running code at that moment (`PaymentEventProcessingService.postCommissionLedger`
+→ `calculateFoodSubtotalCommissionSatang`) — unlike `delivery_fee_satang` and
+`service_fee_satang`, which `orders_enforce_immutable_columns()` locks at
+order creation. This entry closes that gap with an explicit, owner-approved
+**Option B — order-time commission snapshot**, per the prepared "D-01
+Commission Timing Owner Decision Pack" comparing live-rate-at-confirmation
+(Option A) against order-time snapshot (Option B).
+
+**Locked semantics:**
+
+1. **Commission applicability is determined at order creation time.** The
+   commission economics that apply to an order are fixed at the moment the
+   order is created, not at the moment payment confirms.
+2. **A later commission-rate change must not alter the commission economics
+   of an already-created order.** This aligns commission with the same
+   principle already governing every other order money column: *"the order
+   stores AMOUNTS, never rates: a rate changing later must not be able to
+   rewrite what the customer was actually charged"* (`orders` table comment,
+   `20260811000005_order_domain.sql`).
+3. **Payment confirmation/webhook processing must eventually use the order's
+   stored order-time commission fact**, not re-evaluate the live commission
+   rate at confirmation time.
+4. **Already-posted `MERCHANT_COMMISSION` ledger entries remain authoritative
+   for refund/reversal.** `RefundLedgerReversalService.readOriginalCommission`
+   already reads the original posted `ledger_entries` row rather than
+   recomputing (DEC-059 clause C) — this entry changes nothing about that
+   path and requires no change to it.
+5. **D-01's commercial rate remains 10%.** This entry does not alter, raise,
+   lower, or re-open the rate itself.
+6. **D-02's rounding rule is unchanged.** The existing round-half-up-to-
+   whole-baht algorithm stands exactly as D-02 locked it.
+
+**Why Option A was rejected:** Option A — resolving commission from the live
+rate at payment-confirmation time — would let the commission payable on a
+given order depend on when its payment webhook happens to arrive relative to
+a deployment that changes the rate, rather than on the economics in effect
+when the order was placed. An order created before a rate change could be
+recognized at the new rate simply because its payment confirmed after the
+new code deployed. This creates an in-flight-order economic ambiguity with
+no existing rule to resolve it, and is inconsistent with how every other
+order money field in this schema already behaves.
+
+**Explicitly NOT decided by this entry** — left as implementation/design and
+compatibility decisions for a future, separate implementation authorization:
+
+- **Snapshot representation.** Whether the order stores the **rate** applied
+  or the **resolved commission amount** (or another representation) is not
+  decided here.
+- **Pre-cutover unpaid-order compatibility.** How an order created before any
+  snapshot mechanism exists — and so has no stored commission fact — is
+  handled at payment confirmation (backfill, a fallback rule, or something
+  else) is not decided here.
+
+**This entry does not authorize any schema change, migration, or code
+change.** It is a decision lock only, exactly as DEC-061 itself is a decision
+lock only — the same "decision lock ≠ implementation authorization" boundary
+that governs DEC-061, DEC-062, DEC-063 and DEC-064 applies here without
+exception. A future implementation-authorization instruction, issued
+separately, is required before any of `orders.service.ts`,
+`order-pricing.service.ts`, `commission-pricing.ts`,
+`payment-event-processing.service.ts`, or a migration may be touched for
+this purpose.
+
+**Evidence:** Product Owner instruction, 2026-09-15 ("BANHAO — LOCK D-01
+COMMISSION ORDER-TIME SNAPSHOT DECISION"), following the "D-01 Commission
+Timing Owner Decision Pack" analysis of `OrdersService.create`,
+`OrderPricingService.resolveOrderFees`,
+`calculateFoodSubtotalCommissionSatang`,
+`PaymentEventProcessingService.postCommissionLedger`,
+`RefundLedgerReversalService.postReversals`/`readOriginalCommission`, and
+`orders_enforce_immutable_columns()` (`20260811000005_order_domain.sql`)
+prepared earlier in this session.
+
+**Related:** D-01, D-02 (both preserved unchanged above). Does not touch
+D-03…D-19, DEC-062, DEC-063, DEC-064, M-AV, Q-012, or Q-018.
+
 ### D-02 — Commission rounding
 
 **Preserve the existing whole-baht commission rounding rule**, unchanged. No new
