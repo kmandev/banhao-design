@@ -9,6 +9,7 @@ import { RefundEventProcessingService } from './refund-event-processing.service'
 import { RefundLedgerReversalService } from './refund-ledger-reversal.service';
 import { RefundReconciliationDetectorService } from './refund-reconciliation-detector.service';
 import { PaymentAttemptExpiryService } from './payment-attempt-expiry.service';
+import { LegacyPaymentExpiryService } from './legacy-payment-expiry.service';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
 
 /**
@@ -54,6 +55,10 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
  * — see that class's own doc comment for the six anomalies it detects and
  * why case F's self-heal reuses `RefundLedgerReversalService.postReversals`
  * rather than writing a ledger row itself.
+ *
+ * `LegacyPaymentExpiryService` (D-01-CUTOVER-1) is the D-01 legacy freeze,
+ * consumed by `TickModule` as the FIRST tick phase — ahead of
+ * `PaymentEventProcessingService` — see its own doc comment.
  */
 @Module({
   controllers: [PaymentsController],
@@ -66,6 +71,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     RefundEventProcessingService,
     RefundReconciliationDetectorService,
     PaymentAttemptExpiryService,
+    LegacyPaymentExpiryService,
     PaymentReconciliationService,
   ],
   exports: [
@@ -74,6 +80,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     RefundEventProcessingService,
     RefundReconciliationDetectorService,
     PaymentAttemptExpiryService,
+    LegacyPaymentExpiryService,
     PaymentReconciliationService,
   ],
 })

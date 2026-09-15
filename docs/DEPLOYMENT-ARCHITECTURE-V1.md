@@ -232,9 +232,19 @@ After the first Cloud Run deploy produces a real URL, update `apps/tick-worker/w
 
 ### 15.8 Rollback (manual — nothing here is automated)
 
-- **Cloud Run:** `gcloud run services update-traffic <CLOUD_RUN_SERVICE> --region=<GCP_REGION> --to-revisions=<previous-revision>=100`. Revisions are retained by Cloud Run automatically; no rebuild needed.
+- **Cloud Run:** `gcloud run services update-traffic <CLOUD_RUN_SERVICE> --region=<GCP_REGION> --to-revisions=<previous-revision>=100`. Revisions are retained by Cloud Run automatically; no rebuild needed. **Exception, D-01 (§15.9):** once the first order with a commission snapshot exists, never route traffic back to a revision older than the D-01 release. Roll forward instead (D-01-ROLLBACK-1).
 - **Cloudflare Pages:** every deploy is a retained, named deployment — roll back from the Pages dashboard's deployment history with one click, or `wrangler pages deployment list` / re-promote a prior deployment.
 - **Tick Worker:** redeploy the previous commit — `git checkout <previous-sha> -- apps/tick-worker && pnpm exec wrangler deploy` (from `apps/tick-worker`), or re-run `deploy-worker.yml` against an older commit manually.
+
+### 15.9 D-01 commission snapshot rollout (one-time)
+
+`20260915000001_d01_order_commission_snapshot.sql` and the API release that uses it follow the locked D-01 sequence (`docs/DECISIONS.md`, D-01-S3/S4/S5, D-01-ROLLOUT-1, D-01-ROLLBACK-1, D-01-ARCH-6/7):
+
+1. **Migration first.** Apply the migration before deploying the API. It is additive. The pre-D-01 `create_order()` overload is kept, so the previous API release keeps working during the rollout window. Orders it creates carry no commission snapshot and are handled as legacy orders.
+2. **Deploy the D-01 API release.** Its first tick phase freezes legacy unpaid orders to `PAYMENT_EXPIRED` before payment processing runs. A legacy order paid before the freeze reaches it gets `COMMISSION_SNAPSHOT_MISSING`, and no commission is posted for it.
+3. **Mixed versions are guarded by the database.** While old and new revisions overlap, a pre-D-01 revision cannot post a live-rate commission for a snapshot-bearing order. `enforce_merchant_commission_snapshot()` refuses the entry, the event is retried, and a D-01 revision finalizes it with the stored amount.
+4. **No rollback past the first snapshot-bearing order.** From then on, recovery is roll-forward only. If the deployment has to stop, stop before any D-01 revision creates an order.
+5. **T7 — required follow-up.** Once no pre-D-01 API revision is serving anywhere, apply a separate migration that runs `drop function public.create_order(uuid, uuid, text, bigint, bigint, bigint, int, int, uuid)`. This closes the snapshot-unaware order-creation path. It must not be combined with the D-01 migration, because that would break the previous release during step 1.
 
 ---
 

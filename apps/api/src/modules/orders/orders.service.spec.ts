@@ -3,7 +3,8 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { SupabaseService } from '../../supabase/supabase.service';
 import type { CartService, CartValidationResult } from '../cart/cart.service';
 import type { AddressesService, Address } from '../users/addresses.service';
-import type { OrderPricingService } from './order-pricing.service';
+import type { OrderPricingService, OrderCommission } from './order-pricing.service';
+import { calculateFoodSubtotalCommissionSatang } from '../payments/commission-pricing';
 import type { AuthenticatedUser } from '../../common/types';
 
 /**
@@ -92,6 +93,7 @@ function buildService(options?: {
   cartResult?: CartValidationResult | (() => Promise<CartValidationResult>);
   addressResult?: Address | null;
   fees?: typeof FEES | (() => typeof FEES);
+  commission?: (foodSubtotalSatang: number) => OrderCommission;
   rpcResult?: { data: unknown; error: { message: string } | null };
 }) {
   const cartValidate = jest.fn().mockImplementation(async () => {
@@ -105,6 +107,15 @@ function buildService(options?: {
     const fees = options?.fees ?? FEES;
     return typeof fees === 'function' ? fees() : fees;
   });
+  // Defaults to the real canonical D-01 calculation, so the create_order
+  // contract assertions below prove the actual 10% amount reaches the RPC.
+  const commissionResolve = jest.fn().mockImplementation(
+    options?.commission ??
+      ((foodSubtotalSatang: number): OrderCommission => ({
+        commissionSatang: calculateFoodSubtotalCommissionSatang(foodSubtotalSatang),
+        foodSubtotalSatang,
+      })),
+  );
   const rpc = jest.fn().mockResolvedValue(
     options?.rpcResult ?? {
       data: [{ order_id: 'order-1', order_number: 'BH-20260819-0001', state: 'CREATED' }],
@@ -116,11 +127,14 @@ function buildService(options?: {
   const supabase = { admin: { rpc, from: fromSpy } } as unknown as SupabaseService;
   const cart = { validate: cartValidate } as unknown as CartService;
   const addresses = { getOwned: addressesGetOwned } as unknown as AddressesService;
-  const pricing = { resolveOrderFees: pricingResolve } as unknown as OrderPricingService;
+  const pricing = {
+    resolveOrderFees: pricingResolve,
+    resolveOrderCommission: commissionResolve,
+  } as unknown as OrderPricingService;
 
   const subject = new OrdersService(supabase, cart, addresses, pricing);
 
-  return { subject, cartValidate, addressesGetOwned, pricingResolve, rpc, fromSpy, fromCalls };
+  return { subject, cartValidate, addressesGetOwned, pricingResolve, commissionResolve, rpc, fromSpy, fromCalls };
 }
 
 describe('OrdersService.create — cart', () => {
@@ -266,6 +280,10 @@ describe('OrdersService.create — create_order call contract', () => {
       p_payment_method: 'ONLINE',
       p_delivery_fee_satang: FEES.deliveryFeeSatang,
       p_service_fee_satang: FEES.serviceFeeSatang,
+      // D-01: ฿120 food subtotal × 10% = ฿12 (1200 satang), resolved against
+      // exactly that subtotal, never the client's injected subtotalSatang: 1.
+      p_commission_satang: 1200,
+      p_commission_base_satang: VALID_CART.subtotalSatang,
       p_correlation_id: null,
     });
   });
@@ -301,6 +319,58 @@ describe('OrdersService.create — create_order call contract', () => {
     const result = await subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' });
 
     expect(result).toEqual({ orderId: 'order-42', orderNumber: 'BH-20260819-0042', state: 'CREATED' });
+  });
+});
+
+describe('OrdersService.create — D-01 order-time commission snapshot', () => {
+  it('resolves the commission exactly once, from the validated food subtotal, after cart and address passed', async () => {
+    const { subject, commissionResolve } = buildService();
+
+    await subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' });
+
+    expect(commissionResolve).toHaveBeenCalledTimes(1);
+    expect(commissionResolve).toHaveBeenCalledWith(VALID_CART.subtotalSatang);
+  });
+
+  it('passes the resolved amount and its base to create_order as required parameters — D-02 rounding preserved', async () => {
+    // ฿125 subtotal × 10% = ฿12.50 → round-half-up ฿13 (1300 satang).
+    const { subject, rpc } = buildService({ cartResult: { ...VALID_CART, subtotalSatang: 12500 } });
+
+    await subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' });
+
+    expect(rpc).toHaveBeenCalledWith(
+      'create_order',
+      expect.objectContaining({ p_commission_satang: 1300, p_commission_base_satang: 12500 }),
+    );
+  });
+
+  it('fails closed: a commission-resolution failure never reaches create_order, so no order exists', async () => {
+    const { subject, rpc } = buildService({
+      commission: () => {
+        throw new Error('food subtotal must be a non-negative integer satang amount, got NaN');
+      },
+    });
+
+    await expect(
+      subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' }),
+    ).rejects.toThrow(/non-negative integer/);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('maps create_order\'s commission-base mismatch (cart repriced after validation) to PRICE_CHANGED — nothing written', async () => {
+    const { subject } = buildService({
+      rpcResult: {
+        data: null,
+        error: {
+          message:
+            "create_order: commission was resolved against a food subtotal of 12000 satang, but this order's authoritative food subtotal is 12500 satang",
+        },
+      },
+    });
+
+    await expect(
+      subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' }),
+    ).rejects.toMatchObject({ code: 'PRICE_CHANGED' });
   });
 });
 
@@ -1371,7 +1441,10 @@ describe('OrdersService — H-3 outbox events', () => {
     const supabase = { admin: { rpc, from } } as unknown as SupabaseService;
     const cart = { validate: jest.fn().mockResolvedValue(VALID_CART) } as unknown as CartService;
     const addresses = { getOwned: jest.fn().mockResolvedValue(OWNED_ADDRESS) } as unknown as AddressesService;
-    const pricing = { resolveOrderFees: jest.fn().mockReturnValue(FEES) } as unknown as OrderPricingService;
+    const pricing = {
+      resolveOrderFees: jest.fn().mockReturnValue(FEES),
+      resolveOrderCommission: jest.fn().mockReturnValue({ commissionSatang: 1200, foodSubtotalSatang: 12000 }),
+    } as unknown as OrderPricingService;
     const subject = new OrdersService(supabase, cart, addresses, pricing);
 
     await subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' });

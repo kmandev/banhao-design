@@ -32,6 +32,15 @@ import { z } from 'zod';
  * is the complete, exact set the live CHECK constraint now accepts —
  * `ReconciliationCaseService`'s own filter validation must never drift from
  * it in either direction.
+ *
+ * ## D-01 (`20260915000001_d01_order_commission_snapshot.sql`)
+ *
+ * `COMMISSION_SNAPSHOT_MISSING` (D-01-ARCH-9) — an order that legitimately
+ * reached `PAID` with no order-time commission snapshot. It always carries
+ * `order_id`, `MERCHANT_COMMISSION` posting is withheld pending operator
+ * resolution, and it is deduplicated per order while `OPEN`/`IN_PROGRESS` by
+ * `reconciliation_cases_commission_snapshot_missing_open_key`. Added here in
+ * the same change that widens the CHECK, per this file's own rule.
  */
 
 export const RECONCILIATION_CASE_KINDS = [
@@ -46,6 +55,7 @@ export const RECONCILIATION_CASE_KINDS = [
   'MISSING_PROVIDER_REFUND_ID',
   'MISSING_PROVIDER_EVENT',
   'REFUNDED_LEDGER_INCOMPLETE',
+  'COMMISSION_SNAPSHOT_MISSING',
 ] as const;
 
 export type ReconciliationCaseKind = (typeof RECONCILIATION_CASE_KINDS)[number];

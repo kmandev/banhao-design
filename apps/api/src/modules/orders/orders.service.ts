@@ -131,6 +131,12 @@ const OPERATOR_CANCELLABLE_STATES = [
  * its normal position in the flow. DEC-E-01 still governs: no fee value ever
  * comes from `request`, and a future change to either amount is a change to
  * `OrderPricingService` alone — nothing here does.
+ *
+ * `OrderPricingService.resolveOrderCommission` resolves the D-01 merchant
+ * commission once, from the same validated food subtotal. It is passed to
+ * `create_order()`, which freezes it into `order_commission_snapshots`
+ * atomically with the order (D-01 order-time snapshot). Nothing re-derives
+ * it afterwards.
  */
 @Injectable()
 export class OrdersService {
@@ -184,6 +190,17 @@ export class OrdersService {
     const fees = this.pricing.resolveOrderFees(restaurantId, validation.subtotalSatang);
 
     // ---------------------------------------------------------------------
+    // Commission — D-01 order-time snapshot. Resolved exactly once, here,
+    // from the same validated food subtotal, by the canonical D-02
+    // implementation. create_order() writes it into order_commission_snapshots
+    // in the same transaction as the order, and refuses the call unless
+    // `foodSubtotalSatang` equals the subtotal it stores. A throw here is
+    // before the RPC, so no order exists (fail closed).
+    // ---------------------------------------------------------------------
+
+    const commission = this.pricing.resolveOrderCommission(validation.subtotalSatang);
+
+    // ---------------------------------------------------------------------
     // The one write. Everything above resolved trusted, server-side values;
     // nothing from `request` reaches this call except `addressId` (already
     // ownership-checked) and `paymentMethod` (already schema-restricted to
@@ -199,6 +216,11 @@ export class OrdersService {
       p_payment_method: request.paymentMethod,
       p_delivery_fee_satang: fees.deliveryFeeSatang,
       p_service_fee_satang: fees.serviceFeeSatang,
+      // D-01: both required by the snapshot-bearing create_order() overload.
+      // Supplying them is also what makes PostgREST resolve that overload
+      // rather than the pre-D-01 one retained only for the rollout window.
+      p_commission_satang: commission.commissionSatang,
+      p_commission_base_satang: commission.foodSubtotalSatang,
       // create_order's p_correlation_id column is uuid — a correlation id is
       // only ever a random UUID (see correlation.ts's own generator) unless a
       // client supplied a non-UUID trace id under the module's own looser
@@ -254,7 +276,10 @@ export class OrdersService {
   // Only the nine ACCEPTED transitions plus customer/operator CANCELLED are
   // implemented (DEC-APP-006). PAYMENT_FAILED, PAYMENT_EXPIRED,
   // MERCHANT_REJECTED, DELIVERY_FAILED and merchant-initiated cancellation
-  // during PREPARING (BQ-013, still OPEN) are deliberately absent.
+  // during PREPARING (BQ-013, still OPEN) are deliberately absent from this
+  // service. PAYMENT_EXPIRED is written by exactly one other path: the D-01
+  // legacy freeze (`expire_legacy_unpaid_orders()`, D-01-ARCH-1/2), never by
+  // an actor command.
   //
   // Known gap, not an oversight: V1.1 §6/§7 describes `MERCHANT_ACCEPTED`
   // also creating a `deliveries` row and starting rider search (DEC-020).
@@ -991,6 +1016,13 @@ export class OrdersService {
     }
     if (message.includes('not a usable address')) {
       throw new DomainError('NOT_FOUND', { message: 'Address not found' });
+    }
+    // D-01: the cart was repriced between CartService.validate and
+    // create_order(), so the commission was resolved against a subtotal this
+    // order would not carry. Nothing was written. This is the same race the
+    // client already handles as PRICE_CHANGED, and re-validating resolves it.
+    if (message.includes('commission was resolved against a food subtotal')) {
+      throw new DomainError('PRICE_CHANGED');
     }
 
     throw new DomainError('INTERNAL_ERROR', { message: 'Order creation failed' });

@@ -1,9 +1,22 @@
 import { Injectable } from '@nestjs/common';
+import { calculateFoodSubtotalCommissionSatang } from '../payments/commission-pricing';
 
 /** The two fee amounts `create_order()` requires, in integer satang (CON-003). */
 export interface OrderFees {
   deliveryFeeSatang: number;
   serviceFeeSatang: number;
+}
+
+/**
+ * D-01: the order-time commission snapshot inputs `create_order()` requires.
+ * `commissionSatang` is the resolved amount, never a rate (D-01-S1).
+ * `foodSubtotalSatang` is the exact base it was resolved against.
+ * `create_order()` refuses the call unless that base equals the food subtotal
+ * it stores on the order.
+ */
+export interface OrderCommission {
+  commissionSatang: number;
+  foodSubtotalSatang: number;
 }
 
 /**
@@ -65,6 +78,25 @@ export class OrderPricingService {
     return {
       deliveryFeeSatang: DELIVERY_FEE_SATANG,
       serviceFeeSatang: SERVICE_FEE_SATANG,
+    };
+  }
+
+  /**
+   * D-01: resolves the merchant commission for a new order, once, from its
+   * food subtotal, using the canonical `calculateFoodSubtotalCommissionSatang`
+   * (10%, D-02 whole-baht round-half-up). No second implementation exists
+   * anywhere, and nothing re-derives it later: `create_order()` freezes the
+   * result into `order_commission_snapshots`, and payment confirmation reads
+   * the stored amount.
+   *
+   * An invalid subtotal throws. The caller has not yet called
+   * `create_order()`, so a resolution failure fails closed and no order is
+   * created.
+   */
+  resolveOrderCommission(foodSubtotalSatang: number): OrderCommission {
+    return {
+      commissionSatang: calculateFoodSubtotalCommissionSatang(foodSubtotalSatang),
+      foodSubtotalSatang,
     };
   }
 }

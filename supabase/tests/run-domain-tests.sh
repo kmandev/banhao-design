@@ -370,4 +370,68 @@ if grep -q "FAIL" /tmp/banhao-reconciliation-concurrency-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY VERIFICATION PASSED"
+echo "==> Running D-01 order-time commission snapshot assertions (20260915000001)"
+docker cp "$REPO_ROOT/supabase/tests/d01_commission_snapshot_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/d01_commission_snapshot_test.sql 2>&1 | tee /tmp/banhao-d01-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> D-01 commission snapshot verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-d01-out.log; then
+  echo "==> D-01 commission snapshot verification FAILED"
+  exit 1
+fi
+
+# D-01 freeze vs the PAID transition — proven with two REAL concurrent
+# connections, the same standard the rider race (TQ-012) is held to.
+d01_sql() {
+  docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 -tAc "$1" | tr -d '[:space:]'
+}
+
+echo ""
+echo "==> D-01 race 1: the PAID transition holds the order's row lock first"
+RACE1_ORDER="$(d01_sql "select d01_legacy_order()")"
+d01_sql "update public.orders set state = 'PENDING_PAYMENT' where id = '$RACE1_ORDER'" >/dev/null
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 -tAc \
+  "begin; update public.orders set state = 'PAID', paid_at = now() where id = '$RACE1_ORDER' and state = 'PENDING_PAYMENT'; select pg_sleep(6); commit;" \
+  > /tmp/banhao-d01-race1-a.out 2>&1 &
+RACE1_A_PID=$!
+sleep 1.5
+RACE1_START="$(date +%s)"
+RACE1_FROZEN="$(d01_sql "select count(*) from public.expire_legacy_unpaid_orders(1000) where order_id = '$RACE1_ORDER'")"
+RACE1_ELAPSED=$(( $(date +%s) - RACE1_START ))
+wait "$RACE1_A_PID"
+RACE1_FINAL="$(d01_sql "select state from public.orders where id = '$RACE1_ORDER'")"
+echo "    freeze froze it: $RACE1_FROZEN · freeze took ~${RACE1_ELAPSED}s · final state: $RACE1_FINAL"
+if [[ "$RACE1_FROZEN" != "0" || "$RACE1_FINAL" != "PAID" ]]; then
+  echo "==> D-01 race 1 FAILED: the freeze must skip a row the PAID transition holds, and that order must end PAID"
+  exit 1
+fi
+if (( RACE1_ELAPSED > 3 )); then
+  echo "==> D-01 race 1 FAILED: the freeze blocked on the locked row instead of skipping it (FOR UPDATE SKIP LOCKED)"
+  exit 1
+fi
+echo "    PASS  the freeze skipped the locked row without waiting; the order is PAID (COMMISSION_SNAPSHOT_MISSING territory)."
+
+echo ""
+echo "==> D-01 race 2: the freeze holds the order's row lock first"
+RACE2_ORDER="$(d01_sql "select d01_legacy_order()")"
+d01_sql "update public.orders set state = 'PENDING_PAYMENT' where id = '$RACE2_ORDER'" >/dev/null
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 -tAc \
+  "begin; select count(*) from public.expire_legacy_unpaid_orders(1000); select pg_sleep(4); commit;" \
+  > /tmp/banhao-d01-race2-a.out 2>&1 &
+RACE2_A_PID=$!
+sleep 1.5
+RACE2_PAID_ROWS="$(d01_sql "with paid as (update public.orders set state = 'PAID', paid_at = now() where id = '$RACE2_ORDER' and state = 'PENDING_PAYMENT' returning id) select count(*) from paid")"
+wait "$RACE2_A_PID"
+RACE2_FINAL="$(d01_sql "select state from public.orders where id = '$RACE2_ORDER'")"
+echo "    PAID transition matched: $RACE2_PAID_ROWS row(s) · final state: $RACE2_FINAL"
+if [[ "$RACE2_PAID_ROWS" != "0" || "$RACE2_FINAL" != "PAYMENT_EXPIRED" ]]; then
+  echo "==> D-01 race 2 FAILED: a PAID transition racing a committed freeze must match 0 rows (LATE_PAYMENT, no money)"
+  exit 1
+fi
+echo "    PASS  the PAID transition waited, re-checked, and matched 0 rows; the order stayed PAYMENT_EXPIRED."
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY + D-01 COMMISSION SNAPSHOT + D-01 FREEZE RACE VERIFICATION PASSED"

@@ -6,6 +6,7 @@ import type {
   RefundReconciliationRunResult,
 } from '../payments/refund-reconciliation-detector.service';
 import type { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
+import type { LegacyPaymentExpiryService } from '../payments/legacy-payment-expiry.service';
 import type { DispatchService } from '../rider/dispatch.service';
 import type { NoRiderEscalationService } from '../rider/no-rider-escalation.service';
 import type { ArrivalTimeoutEscalationService } from '../rider/arrival-timeout-escalation.service';
@@ -93,6 +94,8 @@ describe('TickController', () => {
     const aiOps = { run: runAiOps } as unknown as MerchantAcceptanceTimeoutService;
     const runAiOpsNoRider = jest.fn().mockResolvedValue(aiOpsNoRiderResult);
     const aiOpsNoRider = { run: runAiOpsNoRider } as unknown as NoRiderTriageService;
+    const expireLegacyUnpaidOrders = jest.fn().mockResolvedValue({ expired: 0, failed: false });
+    const legacyPaymentExpiry = { expireLegacyUnpaidOrders } as unknown as LegacyPaymentExpiryService;
     const controller = new TickController(
       paymentEvents,
       refundEvents,
@@ -105,9 +108,11 @@ describe('TickController', () => {
       outboxDispatch,
       aiOps,
       aiOpsNoRider,
+      legacyPaymentExpiry,
     );
     return {
       controller,
+      expireLegacyUnpaidOrders,
       processPendingEvents,
       processRefundEvents,
       runRefundReconciliation,
@@ -130,6 +135,7 @@ describe('TickController', () => {
     expect(processPendingEvents).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       accepted: true,
+      legacyPaymentExpiry: { expired: 0, failed: false },
       paymentEvents: { processed: 2, skipped: 1 },
       refundEvents: { processed: 0, skipped: 0 },
       refundReconciliation: EMPTY_REFUND_RECONCILIATION_RESULT,
@@ -255,6 +261,8 @@ describe('TickController', () => {
     expect(result.accepted).toBe(true);
     expect(Object.keys(result)).toEqual([
       'accepted',
+      // D-01-CUTOVER-1 — the legacy freeze, first, ahead of paymentEvents.
+      'legacyPaymentExpiry',
       'paymentEvents',
       'refundEvents',
       'refundReconciliation',
@@ -432,5 +440,60 @@ describe('TickController', () => {
     // events it writes, and never replaces it.
     expect(runNoRiderEscalation).toHaveBeenCalledTimes(1);
     expect(result.noRiderEscalation).toBeDefined();
+  });
+  it('D-01: runs the legacy freeze exactly once per tick and reports it, additive to the response shape', async () => {
+    const { controller, expireLegacyUnpaidOrders } = build();
+    expireLegacyUnpaidOrders.mockResolvedValue({ expired: 3, failed: false });
+
+    const result = await controller.handle();
+
+    expect(expireLegacyUnpaidOrders).toHaveBeenCalledTimes(1);
+    expect(expireLegacyUnpaidOrders).toHaveBeenCalledWith();
+    expect(result.legacyPaymentExpiry).toEqual({ expired: 3, failed: false });
+  });
+
+  /**
+   * D-01-ARCH-2 / D-01-CUTOVER-1: a legacy unpaid order must be frozen before
+   * payment confirmation can process it. Pinned so no future edit can move
+   * the freeze below paymentEvents (or anything else) without this failing.
+   */
+  it('D-01: runs the legacy freeze FIRST — before paymentEvents and before every other phase', async () => {
+    const order: string[] = [];
+    const { controller, expireLegacyUnpaidOrders, processPendingEvents, processRefundEvents, processExpiredAttempts } =
+      build();
+
+    expireLegacyUnpaidOrders.mockImplementation(async () => {
+      order.push('legacyPaymentExpiry');
+      return { expired: 0, failed: false };
+    });
+    processPendingEvents.mockImplementation(async () => {
+      order.push('paymentEvents');
+      return { processed: 0, skipped: 0 };
+    });
+    processRefundEvents.mockImplementation(async () => {
+      order.push('refundEvents');
+      return { processed: 0, skipped: 0 };
+    });
+    processExpiredAttempts.mockImplementation(async () => {
+      order.push('paymentAttemptExpiry');
+      return { expired: 0, skipped: 0 };
+    });
+
+    await controller.handle();
+
+    expect(order[0]).toBe('legacyPaymentExpiry');
+    expect(order.indexOf('legacyPaymentExpiry')).toBeLessThan(order.indexOf('paymentEvents'));
+    expect(order).toEqual(['legacyPaymentExpiry', 'paymentEvents', 'refundEvents', 'paymentAttemptExpiry']);
+  });
+
+  it('D-01: a freeze pass that could not run still lets payment processing run — reported, never thrown', async () => {
+    const { controller, expireLegacyUnpaidOrders, processPendingEvents } = build();
+    expireLegacyUnpaidOrders.mockResolvedValue({ expired: 0, failed: true });
+
+    const result = await controller.handle();
+
+    expect(result.legacyPaymentExpiry).toEqual({ expired: 0, failed: true });
+    expect(processPendingEvents).toHaveBeenCalledTimes(1);
+    expect(result.accepted).toBe(true);
   });
 });

@@ -1,11 +1,32 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { calculateFoodSubtotalCommissionSatang } from './commission-pricing';
 
 /** How many unprocessed `payment_events` one tick claims work from at most. */
 export const BATCH_SIZE = 25;
 
-type ReconciliationKind = 'UNMATCHED_EVENT' | 'AMOUNT_MISMATCH' | 'LATE_PAYMENT' | 'SURPLUS_PAYMENT';
+type ReconciliationKind =
+  | 'UNMATCHED_EVENT'
+  | 'AMOUNT_MISMATCH'
+  | 'LATE_PAYMENT'
+  | 'SURPLUS_PAYMENT'
+  | 'COMMISSION_SNAPSHOT_MISSING';
+
+/** `ledger_entries`, the columns the commission self-heal verifies. */
+interface CommissionLedgerEntryRow {
+  account: string;
+  party_type: string | null;
+  party_id: string | null;
+  amount_satang: number;
+}
+
+/**
+ * An existing `MERCHANT_COMMISSION` group whose identity or entries disagree
+ * with the order-time commission snapshot. Thrown, never swallowed. The claim
+ * is released by `processOne` and the event is retried, and no historical
+ * append-only row is ever "fixed" (the same stance as
+ * `RefundLedgerReversalService`'s `LedgerReversalAnomaly`).
+ */
+class CommissionLedgerAnomaly extends Error {}
 
 /** `payment_events`, the columns a claimed row needs for processing. */
 interface ClaimedEventRow {
@@ -56,7 +77,7 @@ interface PaymentAttemptRow {
  * and simply skips it. If the claimed row's processing throws an *unexpected*
  * error, the claim is explicitly released (`processed_at` set back to
  * `null`, `processing_error` recorded) so the next tick retries it — a
- * definitively classified outcome (success, one of the four reconciliation
+ * definitively classified outcome (success, one of the reconciliation
  * kinds below, or an unsupported event type — see `markUnsupportedEventType`)
  * is never released, because none of them needs to be reprocessed.
  *
@@ -103,10 +124,14 @@ interface PaymentAttemptRow {
  * `docs/SETTLEMENT_MODEL.md` § 3.1 and, for the service fee, § 3.2 (DEC-047):
  *
  * - `MERCHANT_COMMISSION` — `Merchant → commission → BANHAO` (DEC-025's
- *   direction, DEC-043's 8%-of-food-subtotal rate): `MERCHANT_PAYABLE`
- *   debited and `PLATFORM_REVENUE` credited by the same commission amount,
- *   so the group sums to zero on its own (DEC-034 — the group is the unit
- *   the zero-sum assertion runs over). See `postCommissionLedger`.
+ *   direction): `MERCHANT_PAYABLE` debited and `PLATFORM_REVENUE` credited by
+ *   the same commission amount, so the group sums to zero on its own
+ *   (DEC-034 — the group is the unit the zero-sum assertion runs over). The
+ *   amount is the order's own D-01 order-time snapshot
+ *   (`order_commission_snapshots.commission_satang`), never a rate evaluated
+ *   here. An order that reached `PAID` without a snapshot posts no
+ *   commission and opens `COMMISSION_SNAPSHOT_MISSING` (D-01-ARCH-9). See
+ *   `postCommissionLedger`.
  * - `CUSTOMER_PAYMENT` (this design's own group, `kind: 'CUSTOMER_PAYMENT'`)
  *   — a single `CUSTOMER_PAYMENT +payment.amount_satang` entry, the
  *   platform's total inbound funding for the order. This group is
@@ -515,7 +540,7 @@ export class PaymentEventProcessingService {
 
     if (transitionedOrder) {
       await this.writeOrderHistory(payment.order_id);
-      await this.postCommissionLedger(payment, providerTransactionId);
+      await this.postCommissionLedger(payment, providerTransactionId, eventId);
       await this.postCustomerPaymentLedger(payment, providerTransactionId);
       await this.postServiceFeeLedger(payment, providerTransactionId);
       // H-3 — fires only on the guarded-UPDATE winner (this branch), so a
@@ -545,7 +570,7 @@ export class PaymentEventProcessingService {
       // deliberately not added here, no migration), so existence is
       // checked first, narrowly, only on this already-rare self-heal path.
       await this.ensureOrderHistoryRecorded(payment.order_id);
-      await this.postCommissionLedger(payment, providerTransactionId);
+      await this.postCommissionLedger(payment, providerTransactionId, eventId);
       await this.postCustomerPaymentLedger(payment, providerTransactionId);
       await this.postServiceFeeLedger(payment, providerTransactionId);
       return;
@@ -609,30 +634,78 @@ export class PaymentEventProcessingService {
   }
 
   /**
-   * DEC-043 — posts the `Merchant → commission → BANHAO` ledger group for a
-   * confirmed `PAID` order: `MERCHANT_PAYABLE` debited and `PLATFORM_REVENUE`
-   * credited by the same 8%-of-food-subtotal commission amount, so the group
-   * sums to zero on its own. Commission is derived from `orders.subtotal_satang`
-   * — the food subtotal only, never delivery fee, service fee, discount or
-   * the grand total — read fresh from the (immutable) order row, never from
-   * the client or from `payment.amount_satang`.
+   * D-01: posts the `Merchant → commission → BANHAO` ledger group for a
+   * confirmed `PAID` order. `MERCHANT_PAYABLE` is debited and
+   * `PLATFORM_REVENUE` credited by the same amount, so the group sums to zero
+   * on its own.
    *
-   * Anchored on `commission:<paymentId>:<providerTransactionId>` — the same
-   * event identity `payment_transactions.provider_transaction_id` already
-   * uses for DEC-030 — via `ledger_entry_groups.group_key`'s own unique
-   * constraint (`20260811000007_ledger_domain.sql`), so a duplicate delivery
-   * of the same event, or a retry of a partially-completed one, can never
-   * post the group twice. No `RIDER_PAYABLE` here — the delivery fee's
-   * rider side is posted separately by `delivery-completion.service.ts`
-   * (DEC-044/045). `CUSTOMER_PAYMENT` is posted independently, in its own
-   * group, by {@link postCustomerPaymentLedger}.
+   * ## The amount is the order-time snapshot, never a rate evaluated here
+   *
+   * The commission was resolved once, at order creation, from the order's
+   * food subtotal (10%, D-02 whole-baht rounding) and frozen into
+   * `order_commission_snapshots` in the same transaction as the order
+   * (D-01-ARCH-4). This method reads that stored amount and posts it as-is.
+   * It has no access to a commission rate, so a later rate change, or this
+   * code running long after the order was placed, cannot alter what an
+   * already-created order owes (D-01 timing clarification, D-01-S1).
+   *
+   * ## No snapshot
+   *
+   * See {@link handleMissingCommissionSnapshot}. No live rate, old rate, zero,
+   * merchant configuration or reconstructed amount is ever posted
+   * (D-01-CUTOVER-2, D-01-ARCH-9).
+   *
+   * ## Idempotency and mixed versions
+   *
+   * Anchored on `commission:<paymentId>:<providerTransactionId>` (the DEC-030
+   * event identity) via `ledger_entry_groups.group_key`'s unique constraint,
+   * so a duplicate delivery or a retry can never post the group twice. On
+   * that conflict, {@link ensureCommissionEntriesRecorded} verifies the
+   * existing entries against the snapshot amount rather than merely checking
+   * that some exist. Independently, the database refuses any original
+   * `MERCHANT_COMMISSION` entry for a snapshot-bearing order whose amount is
+   * not the snapshot (`enforce_merchant_commission_snapshot()`,
+   * 20260915000001). That is what stops a snapshot-unaware application
+   * version, whether a mixed-version peer or a forbidden rollback, from
+   * finalizing a live-rate commission (D-01-ROLLOUT-1, D-01-ROLLBACK-1).
+   *
+   * No `RIDER_PAYABLE` here — the delivery fee's rider side is posted by
+   * `delivery-completion.service.ts` (DEC-044/045). `CUSTOMER_PAYMENT` and
+   * `SERVICE_FEE_REVENUE` are posted independently, in their own groups, and
+   * are unaffected by anything this method decides.
    */
-  private async postCommissionLedger(payment: PaymentRow, providerTransactionId: string): Promise<void> {
+  private async postCommissionLedger(
+    payment: PaymentRow,
+    providerTransactionId: string,
+    eventId: string,
+  ): Promise<void> {
+    const { data: snapshot, error: snapshotError } = await this.supabase.admin
+      .from('order_commission_snapshots')
+      .select('commission_satang')
+      .eq('order_id', payment.order_id)
+      .maybeSingle<{ commission_satang: number }>();
+
+    if (snapshotError) {
+      throw new Error(`order_commission_snapshots read failed: ${snapshotError.message}`);
+    }
+
+    if (!snapshot) {
+      await this.handleMissingCommissionSnapshot(payment, eventId);
+      return;
+    }
+
+    const commissionSatang = snapshot.commission_satang;
+    if (!Number.isInteger(commissionSatang) || commissionSatang < 0) {
+      throw new CommissionLedgerAnomaly(
+        `order ${payment.order_id}: order_commission_snapshots.commission_satang is not a non-negative integer (${String(commissionSatang)}) — refusing to post.`,
+      );
+    }
+
     const { data: order, error: orderError } = await this.supabase.admin
       .from('orders')
-      .select('id, restaurant_id, subtotal_satang')
+      .select('id, restaurant_id')
       .eq('id', payment.order_id)
-      .maybeSingle<{ id: string; restaurant_id: string; subtotal_satang: number }>();
+      .maybeSingle<{ id: string; restaurant_id: string }>();
 
     if (orderError) {
       throw new Error(`orders read for commission ledger failed: ${orderError.message}`);
@@ -654,7 +727,6 @@ export class PaymentEventProcessingService {
       throw new Error(`restaurants read for commission ledger found no row for ${order.restaurant_id}`);
     }
 
-    const commissionSatang = calculateFoodSubtotalCommissionSatang(order.subtotal_satang);
     const groupKey = `commission:${payment.id}:${providerTransactionId}`;
 
     const { data: group, error: groupError } = await this.supabase.admin
@@ -668,12 +740,13 @@ export class PaymentEventProcessingService {
         throw new Error(`ledger_entry_groups insert failed: ${groupError.message}`);
       }
 
-      // Already posted by an earlier run of this same event (self-heal), OR
-      // the group committed but the entries insert below did not (the same
-      // class of narrow crash window `ensureOrderHistoryRecorded` already
-      // handles for order_status_history) — told apart, and completed if
-      // needed, by ensureCommissionEntriesRecorded.
-      await this.ensureCommissionEntriesRecorded(groupKey, restaurant.merchant_id, commissionSatang);
+      // Already posted by an earlier run of this same event (self-heal); OR
+      // the group committed but the entries insert did not (the crash window
+      // `ensureOrderHistoryRecorded` handles for history); OR a
+      // snapshot-unaware worker created the group and the database refused
+      // its live-rate entries. All three are told apart, and completed or
+      // rejected, by ensureCommissionEntriesRecorded.
+      await this.ensureCommissionEntriesRecorded(groupKey, order.id, restaurant.merchant_id, commissionSatang);
       return;
     }
 
@@ -684,16 +757,131 @@ export class PaymentEventProcessingService {
     await this.insertCommissionEntries(group.id, restaurant.merchant_id, commissionSatang);
   }
 
+  /**
+   * D-01-ARCH-9 — an order in `PAID` with no order-time commission snapshot.
+   *
+   * Two cases, told apart by the ledger, which remains authoritative for
+   * whatever it already holds:
+   *
+   * - **Already recognized.** A pre-D-01 order whose `MERCHANT_COMMISSION`
+   *   group and entries were posted by the snapshot-unaware release that
+   *   originally paid it. That posted fact stands as-is: nothing is
+   *   recomputed, verified against a rate, or flagged. This path is reached
+   *   only by a retry of that same event after an unrelated later step
+   *   failed.
+   * - **Not recognized.** A legacy order that legitimately reached `PAID`
+   *   before the freeze caught it (D-01-CUTOVER-1). No commission is
+   *   calculated and no `MERCHANT_COMMISSION` entry is posted. One
+   *   `COMMISSION_SNAPSHOT_MISSING` case is opened for an operator. The
+   *   order stays `PAID`. `CUSTOMER_PAYMENT` and `SERVICE_FEE_REVENUE` still
+   *   post, in their own independent groups. This returns rather than throws,
+   *   so the event stays definitively processed and is not retried.
+   */
+  private async handleMissingCommissionSnapshot(payment: PaymentRow, eventId: string): Promise<void> {
+    if (await this.hasRecognizedOriginalCommission(payment.order_id)) {
+      return;
+    }
+
+    this.logger.warn(
+      `order ${payment.order_id} reached PAID with no order-time commission snapshot — ` +
+        `MERCHANT_COMMISSION withheld, COMMISSION_SNAPSHOT_MISSING opened (D-01-ARCH-9)`,
+    );
+
+    await this.openCommissionSnapshotMissingCase(eventId, payment);
+  }
+
+  /** Whether this order already carries an original (non-refund) `MERCHANT_COMMISSION` group with posted entries. */
+  private async hasRecognizedOriginalCommission(orderId: string): Promise<boolean> {
+    const { data: group, error: groupError } = await this.supabase.admin
+      .from('ledger_entry_groups')
+      .select('id')
+      .eq('order_id', orderId)
+      .eq('kind', 'MERCHANT_COMMISSION')
+      .is('refund_id', null)
+      .order('occurred_at', { ascending: true })
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+
+    if (groupError) {
+      throw new Error(`original MERCHANT_COMMISSION group read failed for order ${orderId}: ${groupError.message}`);
+    }
+    if (!group) {
+      return false;
+    }
+
+    const { data: entries, error: entriesError } = await this.supabase.admin
+      .from('ledger_entries')
+      .select('id')
+      .eq('group_id', group.id)
+      .returns<{ id: string }[]>();
+
+    if (entriesError) {
+      throw new Error(`original MERCHANT_COMMISSION entries read failed for order ${orderId}: ${entriesError.message}`);
+    }
+
+    return (entries ?? []).length > 0;
+  }
+
+  /**
+   * Opens the one `COMMISSION_SNAPSHOT_MISSING` case for this order.
+   * Insert-first. A `23505` against
+   * `reconciliation_cases_commission_snapshot_missing_open_key` means an
+   * `OPEN`/`IN_PROGRESS` case for this order already exists, for example
+   * from an earlier run of this same event whose later ledger step failed.
+   * That is treated as already recorded, not an error. The unique index is
+   * the dedup authority, not a prior read (DEC-060 §4's precedent).
+   */
+  private async openCommissionSnapshotMissingCase(eventId: string, payment: PaymentRow): Promise<void> {
+    const { error } = await this.supabase.admin.from('reconciliation_cases').insert({
+      kind: 'COMMISSION_SNAPSHOT_MISSING',
+      payment_event_id: eventId,
+      payment_id: payment.id,
+      order_id: payment.order_id,
+    });
+
+    if (!error) {
+      return;
+    }
+
+    if (isUniqueViolation(error)) {
+      this.logger.log(
+        `COMMISSION_SNAPSHOT_MISSING already open for order ${payment.order_id} — not duplicated`,
+      );
+      return;
+    }
+
+    throw new Error(`reconciliation_cases insert failed (COMMISSION_SNAPSHOT_MISSING): ${error.message}`);
+  }
+
+  /**
+   * The commission group already exists. Reads it back and reconciles it
+   * against the order-time snapshot, mirroring
+   * `RefundLedgerReversalService.reconcileExistingGroup`'s verify-don't-assume
+   * shape:
+   *
+   * - The group's identity must be this order's original
+   *   `MERCHANT_COMMISSION` (not a refund group). Anything else is an anomaly.
+   * - No entries: the group was created but its entries were not, either
+   *   through the crash window or because the database refused a
+   *   snapshot-unaware worker's live-rate entries. The snapshot amount is
+   *   inserted now.
+   * - Entries present: they must be exactly `MERCHANT_PAYABLE` /
+   *   `MERCHANT` / merchant / `-commission` and `PLATFORM_REVENUE` /
+   *   `PLATFORM` / null / `+commission`. Any other shape or amount throws. An
+   *   incorrect commission is never silently accepted and never "fixed" by
+   *   touching an append-only row.
+   */
   private async ensureCommissionEntriesRecorded(
     groupKey: string,
+    orderId: string,
     merchantId: string,
     commissionSatang: number,
   ): Promise<void> {
     const { data: existingGroup, error: groupReadError } = await this.supabase.admin
       .from('ledger_entry_groups')
-      .select('id')
+      .select('id, order_id, kind, refund_id')
       .eq('group_key', groupKey)
-      .maybeSingle<{ id: string }>();
+      .maybeSingle<{ id: string; order_id: string | null; kind: string; refund_id: string | null }>();
 
     if (groupReadError) {
       throw new Error(`ledger_entry_groups read failed: ${groupReadError.message}`);
@@ -702,20 +890,60 @@ export class PaymentEventProcessingService {
       throw new Error(`ledger_entry_groups read found no row for group_key ${groupKey}`);
     }
 
+    if (
+      existingGroup.order_id !== orderId ||
+      existingGroup.kind !== 'MERCHANT_COMMISSION' ||
+      existingGroup.refund_id !== null
+    ) {
+      throw new CommissionLedgerAnomaly(
+        `ledger_entry_groups ${groupKey} exists with conflicting identity ` +
+          `(order_id=${existingGroup.order_id ?? 'null'}, kind=${existingGroup.kind}, refund_id=${existingGroup.refund_id ?? 'null'}) ` +
+          `— expected order_id=${orderId}, kind=MERCHANT_COMMISSION, refund_id=null. No mutation performed.`,
+      );
+    }
+
     const { data: existingEntries, error: entriesReadError } = await this.supabase.admin
       .from('ledger_entries')
-      .select('id')
+      .select('account, party_type, party_id, amount_satang')
       .eq('group_id', existingGroup.id)
-      .returns<{ id: string }[]>();
+      .returns<CommissionLedgerEntryRow[]>();
 
     if (entriesReadError) {
-      throw new Error(`ledger_entries existence check failed: ${entriesReadError.message}`);
+      throw new Error(`ledger_entries read failed for ${groupKey}: ${entriesReadError.message}`);
     }
-    if (existingEntries && existingEntries.length > 0) {
+
+    const entries = existingEntries ?? [];
+
+    if (entries.length === 0) {
+      await this.insertCommissionEntries(existingGroup.id, merchantId, commissionSatang);
       return;
     }
 
-    await this.insertCommissionEntries(existingGroup.id, merchantId, commissionSatang);
+    const payable = entries.filter((entry) => entry.account === 'MERCHANT_PAYABLE');
+    const revenue = entries.filter((entry) => entry.account === 'PLATFORM_REVENUE');
+    const [payableEntry] = payable;
+    const [revenueEntry] = revenue;
+
+    const matches =
+      entries.length === 2 &&
+      payable.length === 1 &&
+      revenue.length === 1 &&
+      payableEntry !== undefined &&
+      revenueEntry !== undefined &&
+      payableEntry.party_type === 'MERCHANT' &&
+      payableEntry.party_id === merchantId &&
+      Number(payableEntry.amount_satang) === -commissionSatang &&
+      revenueEntry.party_type === 'PLATFORM' &&
+      revenueEntry.party_id === null &&
+      Number(revenueEntry.amount_satang) === commissionSatang;
+
+    if (!matches) {
+      throw new CommissionLedgerAnomaly(
+        `order ${orderId}: existing MERCHANT_COMMISSION entries for ${groupKey} do not match the order-time ` +
+          `commission snapshot of ${commissionSatang} satang (found ${JSON.stringify(entries)}). ` +
+          `Refusing to accept them; no mutation performed.`,
+      );
+    }
   }
 
   /** `MERCHANT_PAYABLE` debited, `PLATFORM_REVENUE` credited, by the same amount — sums to zero (DEC-034). */

@@ -162,3 +162,21 @@ it('omits the status badge for a state the design has no approved wording for', 
   // §10: "No state name, cause code, or error code is ever rendered to a user."
   expect(screen.queryByText('PAYMENT_FAILED')).toBeNull();
 });
+
+it('D-01 freeze: a PAYMENT_EXPIRED order renders neutrally, leaks no identifier, and opens C-19 — never live tracking', async () => {
+  // A legacy unpaid order frozen by the D-01 cutover (D-01-CUTOVER-1) is
+  // terminal. It must not look like an order still awaiting payment, must not
+  // open C-14 (the in-flight tracking screen), and has no approved Thai
+  // wording yet (DESIGN_QUESTION), so no status text is invented for it.
+  mockListOrders.mockResolvedValue([{ ...DELIVERED_ORDER, state: 'PAYMENT_EXPIRED' }]);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId(`order-card-${ORDER_ID}`)).toBeTruthy());
+  expect(screen.queryByText('PAYMENT_EXPIRED')).toBeNull();
+  // Not presented as still awaiting payment.
+  expect(screen.queryByText('รอชำระเงิน')).toBeNull();
+
+  fireEvent.press(screen.getByTestId(`order-card-${ORDER_ID}`));
+  expect(mockNavigate).toHaveBeenCalledWith('OrderDetail', { orderId: ORDER_ID });
+  expect(mockNavigate).not.toHaveBeenCalledWith('OrderTracking', expect.anything());
+});

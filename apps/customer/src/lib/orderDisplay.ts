@@ -25,9 +25,14 @@ import type { OrderPaymentMethod, OrderState } from '../domain/order';
  * `CANCELLED`; nothing else is implemented in V1 (DEC-APP-006)."* The four
  * exception states the database CHECK constraint still permits
  * (`PAYMENT_FAILED`, `PAYMENT_EXPIRED`, `MERCHANT_REJECTED`,
- * `DELIVERY_FAILED`) are deliberately absent — they remain PROPOSED in
- * `docs/ORDER_LIFECYCLE.md` §3 and have no approved customer wording anywhere
- * in the design.
+ * `DELIVERY_FAILED`) are deliberately absent: none has approved customer
+ * wording anywhere in the design.
+ *
+ * `PAYMENT_EXPIRED` is now live data. D-01-ARCH-1 approves it for the D-01
+ * legacy freeze, which moves pre-cutover unpaid orders into it. Its customer
+ * wording is still an open DESIGN_QUESTION (UX-SPEC lists its screen as
+ * LATER), so it stays unmapped here. It renders with no status text and a
+ * neutral tone, and is never shown as PENDING_PAYMENT's `รอชำระเงิน`.
  *
  * `CREATED` is listed by §10 as *"(transient — no screen)"* with no copy, so
  * it is absent here too.
@@ -50,9 +55,9 @@ const ORDER_STATE_LABEL: Partial<Record<OrderState, string>> = {
  *
  * `null` is a real answer, not a failure: a caller must then render no status
  * rather than an English identifier (§10's "no state name is ever rendered")
- * or an invented phrase. In V1 this cannot arise from live data — `CREATED` is
- * the only state anything writes today, and the four exception states are
- * unimplemented (DEC-APP-006).
+ * or an invented phrase. It arises from live data for `CREATED` and for
+ * `PAYMENT_EXPIRED` (the D-01 legacy freeze). The other three exception states
+ * are unimplemented (DEC-APP-006).
  */
 export function orderStateLabel(state: OrderState): string | null {
   return ORDER_STATE_LABEL[state] ?? null;

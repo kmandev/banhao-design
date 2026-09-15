@@ -9,6 +9,10 @@ import {
   type RefundReconciliationRunResult,
 } from '../payments/refund-reconciliation-detector.service';
 import { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
+import {
+  LegacyPaymentExpiryService,
+  type LegacyPaymentExpiryResult,
+} from '../payments/legacy-payment-expiry.service';
 import { DispatchService, type DispatchRoundResult } from '../rider/dispatch.service';
 import {
   NoRiderEscalationService,
@@ -32,6 +36,8 @@ import type { AiOpsRunResult } from '../ai-ops/ai-ops.types';
 
 export interface TickAcceptedResponse {
   accepted: true;
+  /** D-01-CUTOVER-1 — how many legacy unpaid orders (no commission snapshot) this tick froze to `PAYMENT_EXPIRED`. Runs first. */
+  legacyPaymentExpiry: LegacyPaymentExpiryResult;
   /** F-2b — how many `payment_events` rows this tick claimed and processed. */
   paymentEvents: { processed: number; skipped: number };
   /** Q-020 Slice 2 (DEC-057 §5) — how many refund-domain `payment_events` rows this tick claimed and processed. */
@@ -151,6 +157,19 @@ export interface TickAcceptedResponse {
  * point into a durable `audit_logs` escalation for a supervisor. It has no
  * command at all, so it can only escalate — never cancel, never fail a
  * delivery, never message a customer. See `NoRiderTriageService`'s own header.
+ *
+ * `legacyPaymentExpiry` (D-01-CUTOVER-1, D-01-ARCH-2) runs FIRST, ahead of
+ * `paymentEvents`, and its position is load-bearing. D-01 requires a legacy
+ * unpaid order (no commission snapshot) to be frozen before payment
+ * confirmation can process it. Running this phase first means every legacy
+ * order it can lock this tick is `PAYMENT_EXPIRED` before any
+ * `payment_events` row is claimed, so a late success for it becomes
+ * `LATE_PAYMENT` and posts no money. Anything it cannot reach (a row locked by
+ * a concurrent tick, or beyond its batch bound) and that is paid first is
+ * handled fail-closed by `COMMISSION_SNAPSHOT_MISSING`. It follows the same
+ * never-throws contract as every phase here, which matters more for this one
+ * because a throw would stop every phase behind it. Do not move it below
+ * `paymentEvents`.
  */
 @Controller('internal/tick')
 export class TickController {
@@ -166,6 +185,7 @@ export class TickController {
     private readonly outboxDispatch: OutboxDispatchService,
     private readonly aiOps: MerchantAcceptanceTimeoutService,
     private readonly aiOpsNoRider: NoRiderTriageService,
+    private readonly legacyPaymentExpiry: LegacyPaymentExpiryService,
   ) {}
 
   @Public()
@@ -174,6 +194,8 @@ export class TickController {
   @HttpCode(200)
   @ApiExcludeEndpoint() // Internal-only; not part of the public OpenAPI surface.
   async handle(): Promise<TickAcceptedResponse> {
+    // D-01: must precede paymentEvents. See the class doc comment.
+    const legacyPaymentExpiry = await this.legacyPaymentExpiry.expireLegacyUnpaidOrders();
     const paymentEvents = await this.paymentEvents.processPendingEvents();
     const refundEvents = await this.refundEvents.processPendingEvents();
     const refundReconciliation = await this.refundReconciliation.run();
@@ -187,6 +209,7 @@ export class TickController {
     const aiOpsNoRider = await this.aiOpsNoRider.run();
     return {
       accepted: true,
+      legacyPaymentExpiry,
       paymentEvents,
       refundEvents,
       refundReconciliation,

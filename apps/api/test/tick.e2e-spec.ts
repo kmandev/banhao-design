@@ -23,6 +23,7 @@ import { PaymentEventProcessingService } from '../src/modules/payments/payment-e
 import { RefundEventProcessingService } from '../src/modules/payments/refund-event-processing.service';
 import { RefundReconciliationDetectorService } from '../src/modules/payments/refund-reconciliation-detector.service';
 import { PaymentAttemptExpiryService } from '../src/modules/payments/payment-attempt-expiry.service';
+import { LegacyPaymentExpiryService } from '../src/modules/payments/legacy-payment-expiry.service';
 import { DispatchService } from '../src/modules/rider/dispatch.service';
 import { NoRiderEscalationService } from '../src/modules/rider/no-rider-escalation.service';
 import { ArrivalTimeoutEscalationService } from '../src/modules/rider/arrival-timeout-escalation.service';
@@ -50,6 +51,7 @@ const TICK_SECRET = 'e2e-test-tick-secret';
 const EMPTY_REFUND_RECONCILIATION_PHASE = { examined: 0, opened: 0, reused: 0, resolved: 0 } as const;
 
 const PHASE_RESULTS = {
+  legacyPaymentExpiry: { expired: 0, failed: false },
   paymentEvents: { processed: 0, skipped: 0 },
   refundEvents: { processed: 0, skipped: 0 },
   refundReconciliation: {
@@ -161,6 +163,8 @@ describe('POST /internal/tick (integration)', () => {
         { provide: APP_GUARD, useClass: RejectingGuard },
       ],
     })
+      .overrideProvider(LegacyPaymentExpiryService)
+      .useValue({ expireLegacyUnpaidOrders: async () => PHASE_RESULTS.legacyPaymentExpiry })
       .overrideProvider(PaymentEventProcessingService)
       .useValue({ processPendingEvents: async () => PHASE_RESULTS.paymentEvents })
       .overrideProvider(RefundEventProcessingService)

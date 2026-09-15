@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { BATCH_SIZE, PaymentEventProcessingService } from './payment-event-processing.service';
 import type { SupabaseService } from '../../supabase/supabase.service';
 
@@ -105,28 +107,51 @@ function paymentRow(overrides: { state?: string; amount_satang?: number } = {}) 
 const ATTEMPT_ROW = { id: ATTEMPT_ID, state: 'PENDING' };
 
 /**
- * DEC-043 commission-ledger fixtures. `SUBTOTAL_SATANG` is the order's food
- * subtotal (deliberately different from `AMOUNT`, the payment's grand total,
- * to prove the commission is derived from the former, never the latter):
- * ฿120 (12000 satang) × 8% = ฿9.60 → rounds to ฿10 (1000 satang).
+ * D-01 commission-ledger fixtures. The commission is no longer computed at
+ * payment time: `postCommissionLedger` reads the order's own order-time
+ * snapshot (`order_commission_snapshots.commission_satang`) and posts it
+ * verbatim. `COMMISSION_SATANG` is that stored snapshot. For realism it is
+ * what order creation resolves for `SUBTOTAL_SATANG` (฿120 × 10% = ฿12,
+ * 1200 satang), but nothing in the payment path derives it. The dedicated
+ * D-01 tests below use a snapshot that is deliberately NOT 10% of the
+ * subtotal, to prove it is read, not recomputed.
  */
 const RESTAURANT_ID = 'restaurant-1';
 const MERCHANT_ID = 'merchant-1';
 const SUBTOTAL_SATANG = 12000;
-const COMMISSION_SATANG = 1000;
+const COMMISSION_SATANG = 1200;
 const LEDGER_GROUP_ID = 'ledger-group-1';
 
+const COMMISSION_SNAPSHOT_ROW = { commission_satang: COMMISSION_SATANG };
 const COMMISSION_ORDER_ROW = { id: ORDER_ID, restaurant_id: RESTAURANT_ID, subtotal_satang: SUBTOTAL_SATANG };
 const COMMISSION_RESTAURANT_ROW = { merchant_id: MERCHANT_ID };
 
-/**
- * The four stub results `postCommissionLedger` consumes on a fresh post:
- * orders select, restaurants select, `ledger_entry_groups` insert (succeeds),
- * `ledger_entries` insert. Spread into a test's result queue at the point
- * `completeSuccessSideEffects` reaches the ledger step.
- */
-function freshCommissionLedgerStubs(): Result[] {
+/** The original MERCHANT_COMMISSION group's identity, as the self-heal read-back sees it. */
+const COMMISSION_GROUP_IDENTITY = {
+  id: LEDGER_GROUP_ID,
+  order_id: ORDER_ID,
+  kind: 'MERCHANT_COMMISSION',
+  refund_id: null,
+};
+
+/** Exactly the two entries `insertCommissionEntries` writes for `amount`. */
+function commissionEntryRows(amount: number = COMMISSION_SATANG) {
   return [
+    { account: 'MERCHANT_PAYABLE', party_type: 'MERCHANT', party_id: MERCHANT_ID, amount_satang: -amount },
+    { account: 'PLATFORM_REVENUE', party_type: 'PLATFORM', party_id: null, amount_satang: amount },
+  ];
+}
+
+/**
+ * The five stub results `postCommissionLedger` consumes on a fresh post:
+ * the order-time snapshot read, orders select, restaurants select,
+ * `ledger_entry_groups` insert (succeeds), `ledger_entries` insert. Spread
+ * into a test's result queue at the point `completeSuccessSideEffects`
+ * reaches the ledger step.
+ */
+function freshCommissionLedgerStubs(snapshotSatang: number = COMMISSION_SATANG): Result[] {
+  return [
+    { data: { commission_satang: snapshotSatang }, error: null },
     { data: COMMISSION_ORDER_ROW, error: null },
     { data: COMMISSION_RESTAURANT_ROW, error: null },
     { data: { id: LEDGER_GROUP_ID }, error: null },
@@ -135,19 +160,21 @@ function freshCommissionLedgerStubs(): Result[] {
 }
 
 /**
- * The five stub results `postCommissionLedger` consumes when the group was
- * already posted by an earlier run: orders select, restaurants select,
- * `ledger_entry_groups` insert (conflicts — group already exists), the
- * self-heal re-select of that group, and the entries-existence check (finds
- * the entries already there, so `ledger_entries` is never inserted again).
+ * The six stub results `postCommissionLedger` consumes when the group was
+ * already posted by an earlier run: snapshot read, orders select,
+ * restaurants select, `ledger_entry_groups` insert (conflicts), the
+ * self-heal identity read-back of that group, and the entries read. The
+ * entries exactly match the snapshot, so they are verified and accepted, and
+ * `ledger_entries` is never inserted again.
  */
 function alreadyPostedCommissionLedgerStubs(): Result[] {
   return [
+    { data: COMMISSION_SNAPSHOT_ROW, error: null },
     { data: COMMISSION_ORDER_ROW, error: null },
     { data: COMMISSION_RESTAURANT_ROW, error: null },
     { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } },
-    { data: { id: LEDGER_GROUP_ID }, error: null },
-    { data: [{ id: 'entry-1' }, { id: 'entry-2' }], error: null },
+    { data: COMMISSION_GROUP_IDENTITY, error: null },
+    { data: commissionEntryRows(), error: null },
   ];
 }
 
@@ -1196,12 +1223,11 @@ describe('PaymentEventProcessingService — H-3 PaymentSucceeded outbox event', 
   });
 });
 
-describe('PaymentEventProcessingService — commission ledger (DEC-043)', () => {
-  it('derives commission from the order food subtotal, never from the payment amount (grand total)', async () => {
-    // AMOUNT (payment.amount_satang, the grand total) is 7500. SUBTOTAL_SATANG
-    // (the order's food subtotal, what DEC-043's base actually is) is 12000 —
-    // deliberately different and even larger, so a commission computed from
-    // the wrong base could not accidentally match the right answer.
+describe('PaymentEventProcessingService — commission ledger (D-01 order-time snapshot)', () => {
+  it('posts the order-time snapshot amount, never anything derived from the payment amount (grand total)', async () => {
+    // AMOUNT (payment.amount_satang, the grand total) is 7500. The posted
+    // commission is the order's stored snapshot (COMMISSION_SATANG), read from
+    // order_commission_snapshots — never a percentage of anything here.
     const { supabase, calls } = supabaseStub([
       { data: claimedEvent(), error: null },
       { data: paymentRow(), error: null },
@@ -1228,11 +1254,13 @@ describe('PaymentEventProcessingService — commission ledger (DEC-043)', () => 
     const merchantEntry = entries.find((e) => e.account === 'MERCHANT_PAYABLE');
     const platformEntry = entries.find((e) => e.account === 'PLATFORM_REVENUE');
 
-    // 12000 (subtotal) × 8% = 960 → rounds to 1000 (COMMISSION_SATANG) —
-    // not 7500 × 8% = 600, which is what a wrong-base bug would produce.
+    const snapshotRead = calls.find((c) => c.table === 'order_commission_snapshots');
+    expect(snapshotRead?.op).toBe('select');
+    expect(snapshotRead?.eq).toMatchObject({ order_id: ORDER_ID });
+
     expect(merchantEntry?.amount_satang).toBe(-COMMISSION_SATANG);
     expect(platformEntry?.amount_satang).toBe(COMMISSION_SATANG);
-    expect(Math.abs(merchantEntry?.amount_satang as number)).not.toBe(Math.round(AMOUNT * 0.08));
+    expect(Math.abs(merchantEntry?.amount_satang as number)).not.toBe(Math.round(AMOUNT * 0.1));
   });
 
   it('never runs for a SURPLUS_PAYMENT — a payment that never settles this order commits no commission', async () => {
@@ -1770,8 +1798,8 @@ describe('PaymentEventProcessingService — SERVICE_FEE_REVENUE ledger (DEC-047)
     const merchantEntry = commissionEntries.find((e) => e.account === 'MERCHANT_PAYABLE');
     const platformEntry = commissionEntries.find((e) => e.account === 'PLATFORM_REVENUE');
 
-    // Unchanged from the commission-only fixtures: 8% of SUBTOTAL_SATANG
-    // (12000), never inflated by SERVICE_FEE_SATANG (500).
+    // Unchanged from the commission-only fixtures: the stored snapshot
+    // (COMMISSION_SATANG), never inflated by SERVICE_FEE_SATANG (500).
     expect(merchantEntry?.amount_satang).toBe(-COMMISSION_SATANG);
     expect(platformEntry?.amount_satang).toBe(COMMISSION_SATANG);
 
@@ -1779,5 +1807,325 @@ describe('PaymentEventProcessingService — SERVICE_FEE_REVENUE ledger (DEC-047)
     // ledger_entries insert never contains a group_id matching the
     // service-fee group.
     expect(commissionEntries.every((e) => e.group_id !== SERVICE_FEE_LEDGER_GROUP_ID)).toBe(true);
+  });
+});
+
+
+/**
+ * D-01 — the order-time commission snapshot, the missing-snapshot
+ * reconciliation (D-01-ARCH-9), amount-verified self-heal, and the frozen
+ * legacy order's late payment (D-01-ARCH-8).
+ */
+function freshPaidPrefix(): Result[] {
+  return [
+    { data: claimedEvent(), error: null }, // claim
+    { data: paymentRow(), error: null }, // payments select
+    { data: null, error: null }, // payment_events.payment_id backfill
+    { data: ATTEMPT_ROW, error: null }, // payment_attempts select
+    { data: { id: 'txn-1' }, error: null }, // payment_transactions insert
+    { data: null, error: null }, // payments -> SUCCESS
+    { data: null, error: null }, // payment_attempts -> SUCCESS
+    { data: { id: ORDER_ID }, error: null }, // orders -> PAID (guarded, matched)
+    { data: null, error: null }, // order_status_history insert
+  ];
+}
+
+/** A retry of this same event after an earlier run already moved the order to PAID (the self-heal branch). */
+function selfHealPaidPrefix(): Result[] {
+  return [
+    { data: claimedEvent(), error: null },
+    { data: paymentRow({ state: 'SUCCESS' }), error: null },
+    { data: null, error: null }, // backfill
+    { data: ATTEMPT_ROW, error: null },
+    { data: null, error: { message: 'duplicate key value violates unique constraint', code: '23505' } }, // tx already recorded
+    { data: { provider_transaction_id: PROVIDER_EVENT_ID }, error: null }, // earliest tx is this event's own
+    { data: null, error: null }, // payments update -> 0 rows
+    { data: null, error: null }, // payment_attempts update -> 0 rows
+    { data: null, error: null }, // orders guarded update -> 0 rows (already PAID)
+    { data: { id: ORDER_ID, state: 'PAID' }, error: null }, // currentOrder read
+    { data: { id: 'history-1' }, error: null }, // history already recorded
+  ];
+}
+
+const DUPLICATE_KEY = { message: 'duplicate key value violates unique constraint', code: '23505' };
+
+function released(calls: Recorded[]) {
+  return calls.some(
+    (c) =>
+      c.table === 'payment_events' &&
+      c.op === 'update' &&
+      c.payload !== undefined &&
+      'processed_at' in c.payload &&
+      c.payload.processed_at === null,
+  );
+}
+
+describe('PaymentEventProcessingService — D-01 order-time commission snapshot', () => {
+  it('posts the stored snapshot verbatim — a snapshot that is not 10% of the current subtotal proves nothing is recomputed', async () => {
+    // 1300 is deliberately not 10% of SUBTOTAL_SATANG (1200) and not 8% (1000).
+    // The payment path has no rate at all, so a later commission-rate change
+    // cannot alter what an already-created order owes.
+    const { supabase, calls } = supabaseStub([
+      ...freshPaidPrefix(),
+      ...freshCommissionLedgerStubs(1300),
+      ...freshCustomerPaymentLedgerStubs(),
+      ...freshServiceFeeLedgerStubs(),
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    expect(await service.processOne(EVENT_ID)).toBe('processed');
+
+    const entries = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert')
+      ?.payload as unknown as Array<Record<string, unknown>>;
+    expect(entries.find((e) => e.account === 'MERCHANT_PAYABLE')?.amount_satang).toBe(-1300);
+    expect(entries.find((e) => e.account === 'PLATFORM_REVENUE')?.amount_satang).toBe(1300);
+  });
+
+  it('the payment path never computes a commission — the service source has no commission-rate function at all', () => {
+    const source = readFileSync(join(__dirname, 'payment-event-processing.service.ts'), 'utf8');
+
+    expect(source).not.toMatch(/commission-pricing/);
+    expect(source).not.toMatch(/calculateFoodSubtotalCommissionSatang\s*\(/);
+  });
+
+  describe('missing snapshot on a legitimate PAID transition — COMMISSION_SNAPSHOT_MISSING (D-01-ARCH-9)', () => {
+    it('keeps the order PAID, posts no MERCHANT_COMMISSION, opens one case, and leaves CUSTOMER_PAYMENT/SERVICE_FEE_REVENUE intact', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...freshPaidPrefix(),
+        { data: null, error: null }, // order_commission_snapshots: none — a legacy order
+        { data: null, error: null }, // original MERCHANT_COMMISSION group: none
+        { data: null, error: null }, // reconciliation_cases insert
+        ...freshCustomerPaymentLedgerStubs(),
+        ...freshServiceFeeLedgerStubs(),
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      const result = await service.processOne(EVENT_ID);
+
+      // Definitively classified — never released for retry.
+      expect(result).toBe('processed');
+      expect(released(calls)).toBe(false);
+
+      const groupInserts = calls.filter((c) => c.table === 'ledger_entry_groups' && c.op === 'insert');
+      expect(groupInserts.some((c) => c.payload?.kind === 'MERCHANT_COMMISSION')).toBe(false);
+      expect(groupInserts.some((c) => c.payload?.kind === 'CUSTOMER_PAYMENT')).toBe(true);
+      expect(groupInserts.some((c) => c.payload?.kind === 'SERVICE_FEE_REVENUE')).toBe(true);
+
+      const entryInserts = calls.filter((c) => c.table === 'ledger_entries' && c.op === 'insert');
+      const allEntries = entryInserts.flatMap((c) => c.payload as unknown as Array<Record<string, unknown>>);
+      expect(allEntries.some((e) => e.account === 'MERCHANT_PAYABLE')).toBe(false);
+
+      const caseInserts = calls.filter((c) => c.table === 'reconciliation_cases' && c.op === 'insert');
+      expect(caseInserts).toHaveLength(1);
+      expect(caseInserts[0]?.payload).toEqual({
+        kind: 'COMMISSION_SNAPSHOT_MISSING',
+        payment_event_id: EVENT_ID,
+        payment_id: PAYMENT_ID,
+        order_id: ORDER_ID,
+      });
+
+      // The order stays PAID: the only orders write is the guarded PAID transition.
+      const orderUpdates = calls.filter((c) => c.table === 'orders' && c.op === 'update');
+      expect(orderUpdates).toHaveLength(1);
+      expect(orderUpdates[0]?.payload).toMatchObject({ state: 'PAID' });
+    });
+
+    it('a retry after a later step failed does not duplicate the case — the unique index conflict is treated as already open', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...selfHealPaidPrefix(),
+        { data: null, error: null }, // snapshot: none
+        { data: null, error: null }, // original commission group: none
+        { data: null, error: DUPLICATE_KEY }, // reconciliation_cases insert: already OPEN for this order
+        ...alreadyPostedCustomerPaymentLedgerStubs(),
+        ...alreadyPostedServiceFeeLedgerStubs(),
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      const result = await service.processOne(EVENT_ID);
+
+      expect(result).toBe('processed');
+      expect(released(calls)).toBe(false);
+      expect(calls.filter((c) => c.table === 'reconciliation_cases' && c.op === 'insert')).toHaveLength(1);
+      expect(calls.some((c) => c.table === 'ledger_entry_groups' && c.payload?.kind === 'MERCHANT_COMMISSION')).toBe(
+        false,
+      );
+    });
+
+    it('a pre-D-01 order whose commission was already posted keeps that ledger fact — no case, nothing recomputed', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...selfHealPaidPrefix(),
+        { data: null, error: null }, // snapshot: none (created before D-01)
+        { data: { id: 'legacy-commission-group' }, error: null }, // original MERCHANT_COMMISSION group exists
+        { data: [{ id: 'legacy-entry-1' }, { id: 'legacy-entry-2' }], error: null }, // and has its entries
+        ...alreadyPostedCustomerPaymentLedgerStubs(),
+        ...alreadyPostedServiceFeeLedgerStubs(),
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      expect(await service.processOne(EVENT_ID)).toBe('processed');
+
+      expect(calls.some((c) => c.table === 'reconciliation_cases')).toBe(false);
+      expect(calls.some((c) => c.table === 'ledger_entries' && c.op === 'insert')).toBe(false);
+      expect(
+        calls.some(
+          (c) => c.table === 'ledger_entry_groups' && c.op === 'insert' && c.payload?.kind === 'MERCHANT_COMMISSION',
+        ),
+      ).toBe(false);
+    });
+
+    it('a legacy commission group with no entries is not a recognized commission — the case is opened, nothing posted', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...selfHealPaidPrefix(),
+        { data: null, error: null }, // snapshot: none
+        { data: { id: 'legacy-commission-group' }, error: null }, // group exists...
+        { data: [], error: null }, // ...but was never completed
+        { data: null, error: null }, // reconciliation_cases insert
+        ...alreadyPostedCustomerPaymentLedgerStubs(),
+        ...alreadyPostedServiceFeeLedgerStubs(),
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      expect(await service.processOne(EVENT_ID)).toBe('processed');
+
+      const caseInsert = calls.find((c) => c.table === 'reconciliation_cases' && c.op === 'insert');
+      expect(caseInsert?.payload).toMatchObject({ kind: 'COMMISSION_SNAPSHOT_MISSING', order_id: ORDER_ID });
+      expect(calls.some((c) => c.table === 'ledger_entries' && c.op === 'insert')).toBe(false);
+    });
+
+    it('never borrows an existing reconciliation meaning — only COMMISSION_SNAPSHOT_MISSING is opened', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...freshPaidPrefix(),
+        { data: null, error: null },
+        { data: null, error: null },
+        { data: null, error: null },
+        ...freshCustomerPaymentLedgerStubs(),
+        ...freshServiceFeeLedgerStubs(),
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      await service.processOne(EVENT_ID);
+
+      const kinds = calls
+        .filter((c) => c.table === 'reconciliation_cases' && c.op === 'insert')
+        .map((c) => c.payload?.kind);
+      expect(kinds).toEqual(['COMMISSION_SNAPSHOT_MISSING']);
+    });
+  });
+
+  describe('amount-verified self-heal (existing MERCHANT_COMMISSION group)', () => {
+    it('accepts existing entries that exactly match the snapshot, and inserts nothing', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...selfHealPaidPrefix(),
+        ...alreadyPostedCommissionLedgerStubs(),
+        ...alreadyPostedCustomerPaymentLedgerStubs(),
+        ...alreadyPostedServiceFeeLedgerStubs(),
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      expect(await service.processOne(EVENT_ID)).toBe('processed');
+      expect(calls.some((c) => c.table === 'ledger_entries' && c.op === 'insert')).toBe(false);
+      expect(released(calls)).toBe(false);
+    });
+
+    it('rejects existing entries whose amount does not match the snapshot (e.g. posted at a live 8%) — fail loudly, no mutation', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...selfHealPaidPrefix(),
+        { data: COMMISSION_SNAPSHOT_ROW, error: null }, // snapshot says 1200
+        { data: COMMISSION_ORDER_ROW, error: null },
+        { data: COMMISSION_RESTAURANT_ROW, error: null },
+        { data: null, error: DUPLICATE_KEY }, // group already exists
+        { data: COMMISSION_GROUP_IDENTITY, error: null },
+        { data: commissionEntryRows(1000), error: null }, // ...but its entries say 1000
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      const result = await service.processOne(EVENT_ID);
+
+      expect(result).toBe('skipped');
+      expect(released(calls)).toBe(true);
+      const release = calls.find(
+        (c) => c.table === 'payment_events' && c.op === 'update' && c.payload?.processed_at === null,
+      );
+      expect(String(release?.payload?.processing_error)).toMatch(/do not match the order-time commission snapshot/);
+      expect(calls.some((c) => c.table === 'ledger_entries' && c.op === 'insert')).toBe(false);
+    });
+
+    it('rejects an existing group whose identity is not this order\'s original MERCHANT_COMMISSION', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...selfHealPaidPrefix(),
+        { data: COMMISSION_SNAPSHOT_ROW, error: null },
+        { data: COMMISSION_ORDER_ROW, error: null },
+        { data: COMMISSION_RESTAURANT_ROW, error: null },
+        { data: null, error: DUPLICATE_KEY },
+        { data: { ...COMMISSION_GROUP_IDENTITY, order_id: 'some-other-order' }, error: null },
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      expect(await service.processOne(EVENT_ID)).toBe('skipped');
+      expect(released(calls)).toBe(true);
+      expect(calls.some((c) => c.table === 'ledger_entries' && c.op === 'insert')).toBe(false);
+    });
+
+    it('completes a group that has no entries (crash window, or a snapshot-unaware worker\'s live-rate entries refused by the database) with the snapshot amount', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...selfHealPaidPrefix(),
+        { data: COMMISSION_SNAPSHOT_ROW, error: null },
+        { data: COMMISSION_ORDER_ROW, error: null },
+        { data: COMMISSION_RESTAURANT_ROW, error: null },
+        { data: null, error: DUPLICATE_KEY },
+        { data: COMMISSION_GROUP_IDENTITY, error: null },
+        { data: [], error: null }, // no entries yet
+        { data: null, error: null }, // ledger_entries insert
+        ...alreadyPostedCustomerPaymentLedgerStubs(),
+        ...alreadyPostedServiceFeeLedgerStubs(),
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      expect(await service.processOne(EVENT_ID)).toBe('processed');
+
+      const entries = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert')
+        ?.payload as unknown as Array<Record<string, unknown>>;
+      expect(entries).toEqual([
+        { group_id: LEDGER_GROUP_ID, account: 'MERCHANT_PAYABLE', party_type: 'MERCHANT', party_id: MERCHANT_ID, amount_satang: -COMMISSION_SATANG },
+        { group_id: LEDGER_GROUP_ID, account: 'PLATFORM_REVENUE', party_type: 'PLATFORM', party_id: null, amount_satang: COMMISSION_SATANG },
+      ]);
+    });
+
+    it('a snapshot read failure fails closed — the claim is released and nothing is posted', async () => {
+      const { supabase, calls } = supabaseStub([
+        ...freshPaidPrefix(),
+        { data: null, error: { message: 'relation "order_commission_snapshots" does not exist' } },
+      ]);
+      const service = new PaymentEventProcessingService(supabase);
+
+      expect(await service.processOne(EVENT_ID)).toBe('skipped');
+      expect(released(calls)).toBe(true);
+      expect(calls.some((c) => c.table === 'ledger_entry_groups')).toBe(false);
+      expect(calls.some((c) => c.table === 'reconciliation_cases')).toBe(false);
+    });
+  });
+
+  it('D-01-ARCH-8: a late payment for a frozen PAYMENT_EXPIRED order is LATE_PAYMENT — no customer payment, commission or service-fee ledger', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent(), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null },
+      { data: ATTEMPT_ROW, error: null },
+      { data: { id: 'txn-1' }, error: null },
+      { data: null, error: null },
+      { data: null, error: null },
+      { data: null, error: null }, // orders guarded PAID update: 0 rows — it is PAYMENT_EXPIRED
+      { data: { id: ORDER_ID, state: 'PAYMENT_EXPIRED' }, error: null }, // current-state read
+      { data: null, error: null }, // reconciliation_cases insert
+    ]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    expect(await service.processOne(EVENT_ID)).toBe('processed');
+
+    const caseInsert = calls.find((c) => c.table === 'reconciliation_cases' && c.op === 'insert');
+    expect(caseInsert?.payload).toMatchObject({ kind: 'LATE_PAYMENT', order_id: ORDER_ID });
+    expect(calls.some((c) => c.table === 'ledger_entry_groups')).toBe(false);
+    expect(calls.some((c) => c.table === 'ledger_entries')).toBe(false);
+    expect(calls.some((c) => c.table === 'order_commission_snapshots')).toBe(false);
   });
 });

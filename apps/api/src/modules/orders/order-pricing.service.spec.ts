@@ -183,3 +183,38 @@ describe('OrderPricingService.resolveOrderFees — server-side authority', () =>
     expect(second).not.toBe(first);
   });
 });
+
+describe('OrderPricingService.resolveOrderCommission — D-01 (10% of food subtotal), D-02 rounding', () => {
+  it('resolves 10% of the food subtotal as a resolved amount, and returns the exact base it used', () => {
+    const subject = new OrderPricingService();
+
+    // ฿120 × 10% = ฿12 exactly.
+    expect(subject.resolveOrderCommission(12000)).toEqual({ commissionSatang: 1200, foodSubtotalSatang: 12000 });
+  });
+
+  it('preserves whole-baht round-half-up exactly as the canonical function does', () => {
+    const subject = new OrderPricingService();
+
+    // ฿125 × 10% = ฿12.50 → ฿13; ฿184 × 10% = ฿18.40 → ฿18; ฿5 × 10% = ฿0.50 → ฿1.
+    expect(subject.resolveOrderCommission(12500).commissionSatang).toBe(1300);
+    expect(subject.resolveOrderCommission(18400).commissionSatang).toBe(1800);
+    expect(subject.resolveOrderCommission(500).commissionSatang).toBe(100);
+  });
+
+  it('is independent of the delivery and service fees — they are never part of the commission base', () => {
+    const subject = new OrderPricingService();
+    const fees = subject.resolveOrderFees('restaurant-1', 12000);
+
+    expect(subject.resolveOrderCommission(12000).commissionSatang).toBe(1200);
+    expect(subject.resolveOrderCommission(12000 + fees.deliveryFeeSatang + fees.serviceFeeSatang).commissionSatang).not.toBe(
+      1200,
+    );
+  });
+
+  it('throws on an invalid subtotal — commission resolution fails closed before any order is created', () => {
+    const subject = new OrderPricingService();
+
+    expect(() => subject.resolveOrderCommission(-1)).toThrow(/non-negative integer/);
+    expect(() => subject.resolveOrderCommission(120.5)).toThrow(/non-negative integer/);
+  });
+});

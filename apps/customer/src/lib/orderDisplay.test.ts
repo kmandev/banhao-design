@@ -39,13 +39,24 @@ describe('orderStateLabel — UX-SPEC §10 customer vocabulary', () => {
   });
 
   it.each(['PAYMENT_FAILED', 'PAYMENT_EXPIRED', 'MERCHANT_REJECTED', 'DELIVERY_FAILED'] as OrderState[])(
-    'returns null for the unimplemented exception state %s rather than leaking the identifier',
+    'returns null for the exception state %s rather than leaking the identifier',
     (state) => {
       // §10: "No state name, cause code, or error code is ever rendered to a
-      // user." These four remain PROPOSED and DEC-APP-006 leaves them out of V1.
+      // user." None of the four has approved customer wording in the design.
       expect(orderStateLabel(state)).toBeNull();
     },
   );
+
+  it('PAYMENT_EXPIRED (the D-01 legacy freeze) has no invented copy and a neutral tone', () => {
+    // D-01-ARCH-1 approves PAYMENT_EXPIRED as a state the D-01 cutover
+    // writes, but no approved Thai wording for it exists in any design
+    // artifact (UX-SPEC lists its screen as LATER). That is a DESIGN_QUESTION,
+    // not something this file may author. Until it is answered the state must
+    // stay silent and neutral, never shown with PENDING_PAYMENT's
+    // warning-toned "รอชำระเงิน".
+    expect(orderStateLabel('PAYMENT_EXPIRED')).toBeNull();
+    expect(orderStateTone('PAYMENT_EXPIRED')).toBe('neutral');
+  });
 
   it('never returns an English identifier for any state the schema permits', () => {
     const everyState: OrderState[] = [
