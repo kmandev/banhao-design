@@ -208,6 +208,7 @@ jobs:
             INTERNAL_TICK_SECRET=INTERNAL_TICK_SECRET:latest
             R2_ACCESS_KEY_ID=R2_ACCESS_KEY_ID:latest
             R2_SECRET_ACCESS_KEY=R2_SECRET_ACCESS_KEY:latest
+            STRIPE_SECRET_KEY=STRIPE_SECRET_KEY:latest
           env_vars: |
             NODE_ENV=production
             SUPABASE_URL=${{ vars.SUPABASE_URL }}
