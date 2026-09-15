@@ -872,7 +872,14 @@ describe('MenuOverview — item reorder (M-11 §17 addendum)', () => {
     fireEvent.click(screen.getByTestId('reorder-save'));
 
     await waitFor(() => expect(screen.queryByTestId('reorder-row-ข้าวผัดกุ้ง')).toBeNull());
-    expect(screen.getByTestId('edit-item-ข้าวผัดกุ้ง')).toBeInTheDocument();
+    // `saveItemOrder`'s success path calls `menu.reload()` before exiting
+    // reorder mode. `reload()` sets menu state back to `loading` and only
+    // returns to `ready` once its refetch resolves, so exiting reorder mode
+    // and the item row reappearing are two separate async events — waiting
+    // for the first does not guarantee the second has happened yet. `findBy*`
+    // (not `getBy*`) waits for it, closing the exact race that made this test
+    // flaky under load.
+    expect(await screen.findByTestId('edit-item-ข้าวผัดกุ้ง')).toBeInTheDocument();
   });
 
   it('a failed save stays in reorder mode with the draft intact, and offers retry', async () => {
