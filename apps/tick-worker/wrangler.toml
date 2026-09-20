@@ -16,11 +16,11 @@ compatibility_date = "2026-08-01"
 crons = ["* * * * *"]
 
 [vars]
-# Non-secret: the Cloud Run URL the tick is sent to. Empty until the API's
-# first production deploy exists — see docs/DEPLOYMENT-ARCHITECTURE-V1.md
-# "Operational sequence". Update this and redeploy the Worker once known;
-# nothing here discovers it automatically.
-API_URL = ""
+# Non-secret: the Cloud Run URL the tick is sent to. Set to the
+# banhao-api-staging Cloud Run service (asia-southeast3), verified live via
+# `gcloud run services describe` — see docs/DEPLOYMENT-ARCHITECTURE-V1.md
+# "Operational sequence".
+API_URL = "https://banhao-api-staging-35nrbljg5a-eu.a.run.app"
 
 # INTERNAL_TICK_SECRET is NOT declared here. It is a Wrangler *secret*, set
 # with:
