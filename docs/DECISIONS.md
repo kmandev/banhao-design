@@ -9100,3 +9100,91 @@ latest-position capture, unchanged) ·
 **Supersedes:** none. **Superseded by:** none. **Preserves unchanged:**
 DEC-037, DEC-054, DEC-061 (including D-05…D-08, D-11, D-12), DEC-062
 (including OD-6), DEC-063. **D-16 and D-17 remain `OPEN`.**
+
+## DEC-065 — Phase 13 Owner Decision Lock: AI Ops dedup and T7 hardening authorized for future implementation only
+
+**Status:** **ACCEPTED — IMPLEMENTATION AUTHORIZATION FOR A FUTURE PHASE ONLY · NOT ITSELF AN IMPLEMENTATION** · **Date:** 2026-09-21 · **Owner:** PRODUCT_OWNER
+
+### Scope
+
+Two independent technical-hardening items, both `AUTHORIZATION = NO` as of
+Phase 10, are flipped to **`AUTHORIZE`** here — for a **future implementation
+phase**, not this one. This entry records the authorization only; no code,
+migration, or schema changed as part of it. No product/policy decision is
+touched: Q-002, D-15, D-16/Q-018, D-17, D-18, D-19, Q-012, BQ-013, UX-Q-006,
+OD-04, BQ-015, Q-032, BQ-024, BQ-027, BQ-030, R-6/BQ-038,
+M-06/M-09/M-13(earnings)/M-14 design commissioning, and D-02…D-14 all remain
+exactly `DEFER`/`OPEN`, unchanged by this entry.
+
+### 1. AI Ops dedup — authorized scope
+
+`AiAuditService.alreadyHandled()` (`apps/api/src/modules/ai-ops/ai-audit.service.ts`)
+still does a `SELECT` for an existing `audit_logs` row before a later
+`INSERT` — a genuine concurrency gap for two genuinely simultaneous tick
+executions. **Authorized, for a future implementation phase only:**
+
+1. scoped uniqueness protection for AI audit actions;
+2. conflict-safe / insert-first service behavior;
+3. **preserve DEC-040's command catalog exactly as-is** — no new command, no
+   financial or state-changing entry;
+4. **preserve the existing financial/domain-mutation exclusion** — nothing
+   in Phase J gains database-write authority beyond the existing dispatcher;
+5. no AI Ops capability expansion of any kind;
+6. no unrelated redesign of `audit_logs` beyond the scoped uniqueness
+   mechanism itself.
+
+**This authorization does not authorize implementation in the current
+(documentation) phase.** No migration is created and no service file is
+touched by this entry.
+
+### 2. T7 — authorized scope
+
+Removal of the obsolete pre-D-01 `create_order()` overload (the 9-argument
+signature named at `20260915000001_d01_order_commission_snapshot.sql:57`,
+retained alongside D-01's 11-argument overload for the rollout window,
+D-01-ARCH-6). **Authorized, for a future implementation phase only:**
+dropping that one obsolete overload — no other schema cleanup.
+
+**Mandatory prerequisite, not yet satisfied:** a **formal confirmation**
+that no snapshot-unaware application version remains deployed must be
+recorded before T7's implementation/drop migration proceeds. Phase 12
+gathered **circumstantial technical evidence** — a single live Cloud Run
+revision (`banhao-api-staging-00008-4zw`), created after D-01's
+implementation commit, serving 100% of traffic — but this entry explicitly
+**does not treat that evidence as the formal confirmation itself**. The
+prerequisite remains outstanding.
+
+### Consequences
+
+- Engineering may scope and design both changes against the boundaries
+  above, ahead of a future implementation-phase authorization.
+- Neither change may begin — no migration, no service edit — until that
+  separate future implementation-phase authorization exists, and, for T7,
+  until the formal prerequisite confirmation is itself recorded.
+- No other decision, open or closed, changes state as a result of this
+  entry.
+
+### Evidence
+
+Product Owner instruction, 2026-09-21 ("BANHAO — PHASE 13 OWNER DECISION
+LOCK"), following the Phase 12 Next-Work Planning / Owner Decision
+Preparation Pack's technical-hardening findings.
+
+### Related Requirements
+
+None resolved by this entry — it authorizes future work on two already-known
+technical gaps, it does not answer a `BQ-`/`D-`/`Q-` item.
+
+### Related Architecture
+
+`apps/api/src/modules/ai-ops/ai-audit.service.ts` (AI Ops dedup gap,
+unchanged by this entry) · `supabase/migrations/20260915000001_d01_order_commission_snapshot.sql`
+(T7's target overload, retained, unchanged by this entry).
+
+### Supersedes / Superseded By
+
+**Supersedes:** the Phase 10 `AUTHORIZATION = NO` state for these two items
+only. **Superseded by:** none. **Preserves unchanged:** DEC-040 (all ten
+constraints), D-01 (all ARCH/S/ROLLOUT/ROLLBACK/CUTOVER clauses), every
+other `DEC-0xx`/`D-xx` entry, and every still-`OPEN`/`DEFER` item listed in
+`CLAUDE.md` §9/§10/§12.
