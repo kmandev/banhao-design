@@ -8300,6 +8300,19 @@ architecture recon above), D-02. Does not touch D-03…D-19 (each stays
 exactly as OPEN or locked as it already was), DEC-062, DEC-063, DEC-064,
 M-AV, Q-012, or Q-018. Does not resolve DBQ-015 generally.
 
+#### D-01 follow-up note — deployment status (factual only, no decision change)
+
+The implementation commit for this decision (`0fd13887`, "feat(economics):
+implement D-01 commission snapshot") stated **"The migration is not applied
+to banhao-dev"** — true at authoring time, 2026-09-15. It has since been
+applied and exercised live: `order_commission_snapshots` holds live rows on
+`banhao-dev`, and the freeze mechanism this decision locks
+(`expire_legacy_unpaid_orders()`, D-01-ARCH-2) ran as the first tick phase of
+the accepted First Manual Tick (2026-09-20T06:31:07 UTC), moving 4 legacy
+orders to `PAYMENT_EXPIRED` with one `order_status_history` row each. This
+note records the deployment fact only — it changes no D-01-ARCH/-S/-ROLLOUT/
+-ROLLBACK/-CUTOVER clause above, and D-02…D-19 are untouched by it.
+
 ### D-02 — Commission rounding
 
 **Preserve the existing whole-baht commission rounding rule**, unchanged. No new

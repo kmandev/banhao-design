@@ -16,7 +16,22 @@ locked, Q-012 itself stays `OPEN`/`LEGAL_REVIEW_REQUIRED`, no GPS collection
 built), and **M-AV G-1/G-2 closed** (G-3 device verification still
 `BLOCKED`, R-6/BQ-038 still `OPEN`) — see §9/§10/§11. **A decision lock is not
 an implementation authorization** — treat these as decided-but-unbuilt unless
-this file says otherwise.
+this file says otherwise. Reconciled again 2026-09-21 at `49296520`: **D-01
+runtime is implemented and accepted** (not merely locked) — `commission-pricing.ts`'s
+rate constant itself now computes **10%**, matching DEC-061's D-01, not
+DEC-043's 8%, and migration `20260915000001` is applied and exercised live.
+**D-02…D-14 remain locked but unbuilt** — this does not change. The **First
+Manual Tick** ran 2026-09-20T06:31:01–12 UTC and is **accepted**; the
+**Tick Worker** has been deployed to Cloudflare since 2026-08-16 (cron
+`* * * * *`) and is kept **functionally fail-closed by owner decision** —
+`INTERNAL_TICK_SECRET` is intentionally unset on the Worker side, so
+recurring execution stays disabled even though the schedule itself is live.
+The **migration count is corrected to 31** (not 26 — see §6/§7/§10). The
+**payment-provider binding is corrected**: `PAYMENT_PROVIDER` resolves to
+`StripePaymentProvider` unconditionally (`apps/api/src/modules/payments/payments.module.ts`,
+since `593c65e9`, 2026-09-08), not `NullPaymentProvider` as this file
+previously stated — see §5/§10. **AI Ops dedup remains deferred**, unchanged
+by this reconciliation.
 
 > **Authoritative for application implementation:**
 > [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
@@ -69,7 +84,7 @@ simple, avoid unnecessary abstraction, and make every change reviewable in Git.
 | Admin | Next.js | DEC-012 |
 | Monorepo | pnpm workspaces + Turborepo | DEC-013 |
 | Financial truth | PostgreSQL is the system of record | DEC-014 |
-| Payments | Abstraction only (DEC-015) — provider **selected 2026-09-08: Stripe**, not implemented | DEC-015, DEC-055 |
+| Payments | Abstraction (DEC-015) — provider **selected 2026-09-08: Stripe** (DEC-055), **bound unconditionally in code** since `593c65e9` | DEC-015, DEC-055 |
 
 Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 `@expo-google-fonts/ibm-plex-sans-thai` (no runtime fetch).
@@ -137,6 +152,7 @@ explicit instruction" rule.
 | EVENT-033 | **M-10 restaurant profile and M-AV merchant availability built.** M-10 (`20044391`) from its own design artifact. **M-AV** — Normal / Busy / Paused (`7ea20a65`, historically labelled M-13 in its design package) — one additive migration (`20260904000001`), a single guarded mode-change endpoint, cart/order-creation integration reusing `RESTAURANT_CLOSED`, and the customer-facing estimate. Recorded as **DEC-041**, which also fixes the identifier: the availability work is **M-AV**, and UX-SPEC M-13 (earnings) / M-14 (settings) keep their meanings |
 | EVENT-034 | **AC-04 answered — the customer-quoted preparation estimate is persisted** (**DEC-042**). One additive migration (**26 total**), `orders.customer_quoted_prep_minutes`: captured by `create_order()` alone, never client-supplied, immutable afterwards, NULL for every pre-existing order. Distinct from `orders.prep_minutes` (M-05's merchant answer at accept time) and from `orders.quoted_eta_minutes` (a delivery-arrival estimate), and excluded from ETA arithmetic. 16 SQL assertions plus customer-app coverage; C-14 renders one caption in one slot. **Both this migration and M-AV's were applied and verified on `banhao-dev` 2026-09-04**; a browser-level UI walkthrough of both features is still outstanding |
 | EVENT-030 | **AI-01 locked, then Phase J authorized.** One additive migration (**24 total**) widening `audit_logs.actor_type` to accept `'AI'` — every existing actor type, the append-only trigger, the DEC-032 operator-reason CHECK, RLS and grants all preserved, proven by 6 assertions in the domain suite (`95cc0dc4`). Then **DEC-040** added AI Operations + Human Supervisor to the roadmap as **Phase J, after Phase I — authorized, not started**: architecture direction only, no implementation code, no open business policy answered |
+| EVENT-035 | **D-01 commission snapshot implemented and accepted, Tick Worker deployed, First Manual Tick accepted.** D-01 (`0fd13887`, migration `20260915000001`, **31st** migration): merchant commission resolved once at order creation and frozen as an order-time fact; `commission-pricing.ts`'s rate constant itself now computes **10%** (D-01), not DEC-043's 8%; live-verified via `order_commission_snapshots` rows on `banhao-dev`. D-02…D-14 remain unbuilt. Separately: the Cloudflare Tick Worker (`apps/tick-worker`, deployed since 2026-08-16) had its `API_URL` wired to the real `banhao-api-staging` Cloud Run URL (`49296520`); the **First Manual Tick** ran 2026-09-20T06:31:01–12 UTC and is **accepted** (4 legacy orders frozen to `PAYMENT_EXPIRED`, 36 stale rider-assignment offers expired, 7 outbox events dispatched, AI Ops audit rows bounded); the owner decision is **DO NOT ENABLE recurring Tick** — the Worker-side `INTERNAL_TICK_SECRET` stays unset, so the live `* * * * *` cron schedule remains functionally fail-closed. Also corrected in this reconciliation: the payment-provider binding (`PAYMENT_PROVIDER` → `StripePaymentProvider` unconditionally, since `593c65e9`, not `NullPaymentProvider`), and the migration count (26 → 31 — five previously uncounted: `20260907000001`, `20260907000002`, `20260908000001`, `20260909000001`, `20260915000001`). AI Ops dedup remains deferred — unchanged |
 
 ## 5. Current implementation status
 
@@ -153,7 +169,7 @@ explicit instruction" rule.
 | Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
 | Admin app | **Human Supervisor console built** (Next.js) — phone-OTP login, `platform_staff` gate, operations inbox (S-02), case detail with live domain state and append-only timeline (S-03), close-case-with-reason (S-06). The Admin design package's financial screens (A-16…A-22) are **not built** and are blocked on the money decisions. See §13 |
 | Orders | Implemented in the API (creation, pricing, controller/service) and consumed by the Customer app. Since DEC-042 an order also snapshots `customer_quoted_prep_minutes` — what the customer was told before paying — captured by `create_order()` and immutable — not the full nine-state lifecycle claimed complete, see Phase table in §9 |
-| Payments | `NullPaymentProvider` implemented (service, controller, webhook simulator, attempt-expiry, event processing) — no real provider (still blocked, see §10) |
+| Payments | `PAYMENT_PROVIDER` is bound to `StripePaymentProvider` unconditionally (`payments.module.ts`, since `593c65e9`, 2026-09-08) — service, controller, webhook simulator, attempt-expiry, and event processing all exist; `NullPaymentProvider` is retained only for tests/dev, no longer the production binding. Staging runs with a Stripe **test-mode** secret (see §10) |
 | Dispatch / delivery | Implemented in the API's rider module (broadcast dispatch, pickup/en-route/arrival/completion transitions, release + reconciliation) and the Driver app's delivery flow |
 | Proof of delivery (G7) | Implemented end-to-end: driver camera capture → client-side compression + EXIF strip → presigned upload to a private R2 bucket → server-side 2 MB size enforcement → signed download URL → Customer app proof read API and viewer. Retention/purge mechanism exists, **default OFF**. See §9/§10 for phase status |
 | Settlement | **Not started** — still hard-locked, see §9/§10 |
@@ -255,7 +271,7 @@ apps/driver/                  Status/availability, offer inbox, active delivery,
 apps/merchant/                Next.js: order board, menu management (M-11),
                                opening hours (M-12); see §11
 apps/admin/                   Still a shell — see §5
-supabase/migrations/          26 migration files (16 at the `e471ec1d` checkpoint + 10 since)
+supabase/migrations/          31 migration files (16 at the `e471ec1d` checkpoint + 15 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -285,7 +301,7 @@ docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-0
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
 docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          26 migrations (16 at checkpoint + 10 since) — do not
+supabase/migrations/*.sql          31 migrations (16 at checkpoint + 15 since) — do not
                                     edit an existing file; do not add a new one without
                                     an explicit instruction (see §10)
 ```
@@ -301,7 +317,7 @@ supabase/migrations/*.sql          26 migrations (16 at checkpoint + 10 since) �
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
-| Migrations | **26 in the repository · 26 applied live · 0 pending** (16 at the `e471ec1d` V1.1 checkpoint + 10 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV and AC-04). The last two, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` shows all 26 with a matching Remote entry, and direct schema reads confirm `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body is byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
+| Migrations | **31 in the repository** (16 at the `e471ec1d` V1.1 checkpoint + 15 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04, delivery-arrival/contact-attempts, customer email, Q-020 reconciliation refund-kinds, and D-01). **26 of the 31 were verified applied live as of 2026-09-03/04** (see below, unchanged from the prior reconciliation). Of the **5 added since** (`20260907000001` delivery_customer_arrival, `20260907000002` delivery_contact_attempts, `20260908000001` profiles_customer_email, `20260909000001` reconciliation_cases_refund_kinds, `20260915000001` d01_order_commission_snapshot), **`20260915000001` is confirmed applied and live-exercised** — `order_commission_snapshots` holds live rows and the First Manual Tick's `expire_legacy_unpaid_orders()` freeze phase ran against it 2026-09-20 (see the D-01/Tick reconciliation above). **The other 4 are not independently re-verified as applied in this reconciliation pass** — treat as likely-applied (this is an actively used dev/staging project) but unconfirmed by direct schema read; do not assert live status for them without checking. The last two verified as of the prior pass, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` showed all 26 (then-current) with a matching Remote entry, and direct schema reads confirmed `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body was byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -467,28 +483,34 @@ migration explicitly instructed for the current phase — see §10.
   **Two generations of real (non-sample) figures now exist, and they are not
   interchangeable:**
   - **What the running code implements today:** flat delivery **฿10 / 1000
-    satang** (DEC-035), fixed service **฿5 / 500 satang** (DEC-036), **8%**
-    commission of the food subtotal rounded to whole baht (DEC-043,
-    2026-09-05). This is still what `commission-pricing.ts` and
-    `rider-earning-pricing.ts` actually compute.
-  - **What is locked but NOT yet built:** **DEC-061** (2026-09-09) supersedes
-    DEC-035 in full, DEC-036 in full, and DEC-043/044/045 partially, with
-    **D-01…D-14** — commission **10%** (D-01, rate only; base and rounding
-    unchanged), service fee **5% of food subtotal, ฿5 floor, ฿15 cap**
+    satang** (DEC-035), fixed service **฿5 / 500 satang** (DEC-036). Commission
+    is **no longer DEC-043's 8%** — as of D-01 (`0fd13887`, 2026-09-15,
+    migration `20260915000001`), `commission-pricing.ts`'s rate constant
+    itself computes **10%** (`COMMISSION_RATE_NUMERATOR = 10`), matching
+    DEC-061's D-01, resolved once at order creation and frozen as an
+    immutable `order_commission_snapshots` row — see the D-01 reconciliation
+    above and §9 Phase I. `rider-earning-pricing.ts` is unchanged by D-01 and
+    still computes DEC-044's flat ฿12.
+  - **What is locked but NOT yet built (D-02…D-14, excluding D-01):**
+    **DEC-061** (2026-09-09) supersedes DEC-035 in full, DEC-036 in full, and
+    DEC-043/044/045 partially, with **D-01…D-14** — **D-01 (commission rate)
+    is now implemented and accepted, see above; D-02…D-14 remain unbuilt:**
+    service fee **5% of food subtotal, ฿5 floor, ฿15 cap**
     (D-03/D-04), dynamic rider/delivery economics (D-05…D-10: 80% rider
     share, ฿12 rider floor, ฿8 rider base, +฿1.20/operational-road-km, ฿15
     delivery-fee minimum, ฿35 maximum), a ฿5 minimum-safe-contribution
     pre-acceptance guardrail (D-11), a 15 km maximum **road-distance** service
     limit (D-12, never straight-line/geodesic), no Phase 1 minimum order
     value (D-13), and a configurable per-promotion funder defaulting to
-    MERCHANT (D-14). **DEC-061's own status is `RUNTIME NOT IMPLEMENTED`** —
-    no pricing engine, config infrastructure, or migration exists for it, and
-    building it needs its own separate implementation authorization, not just
-    this decision lock. **Do not implement D-01…D-14 against this entry
-    alone.** The distance-dependent parts (D-08, D-12, and D-09/D-10 which
-    derive from the rider-share/floor pair) additionally stay blocked on
-    **D-16** (routing/distance provider) and **D-17** (distance accuracy
-    policy), both still `OPEN` — see the DEC-062/063/064 paragraph below.
+    MERCHANT (D-14). **DEC-061's overall status is `RUNTIME NOT IMPLEMENTED`
+    for D-02…D-14** — no pricing engine or config infrastructure exists for
+    them, and building them needs their own separate implementation
+    authorization, not just this decision lock. **Do not implement D-02…D-14
+    against this entry alone.** The distance-dependent parts (D-08, D-12, and
+    D-09/D-10 which derive from the rider-share/floor pair) additionally stay
+    blocked on **D-16** (routing/distance provider) and **D-17** (distance
+    accuracy policy), both still `OPEN` — see the DEC-062/063/064 paragraph
+    below.
   - **Never treat the DEC-061 figures as already live**, and never treat the
     DEC-035/036/043 figures as the final target model — cite whichever
     generation the task actually needs and say which one it is.
@@ -515,10 +537,14 @@ migration explicitly instructed for the current phase — see §10.
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **26 migrations are merged and all 26 are applied live** (16 reviewed at the
-  `e471ec1d` V1.1 checkpoint, plus 10 since for Phase C/E/G, M-05, M-10,
-  M-11/M-12, AI-01, M-AV and AC-04 — see §3/§7; the last two were applied and
-  verified on `banhao-dev` 2026-09-04). Read
+- **31 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 15 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04,
+  delivery-arrival/contact-attempts, customer email, Q-020 reconciliation
+  refund-kinds, and D-01 — see §3/§7). **26 of the 31 are confirmed applied
+  live** (verified 2026-09-03/04); of the 5 added since, **D-01's
+  (`20260915000001`) is confirmed applied and live-exercised** by the First
+  Manual Tick; the other 4 are not independently re-verified as applied in
+  this reconciliation — see §7 for the exact evidence boundary. Read
   `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
   edit an existing migration, and do not add a table, view, RLS policy, RPC, or
   new migration, and never run `supabase db push` or `supabase link`, without
@@ -550,10 +576,21 @@ What Q-020 still gates is the **Q-020 End-to-End Acceptance Audit**
 undecided business question. **Q-001 (payment provider)
 is resolved** — **DEC-055**, 2026-09-08: **Stripe**, PromptPay/THB, behind the
 existing `PaymentProvider` abstraction, **no Stripe Connect in Phase 1** (so
-Q-002 stays unprejudiced). **Runtime is not implemented** —
-`NullPaymentProvider` is still bound, and DEC-055 records two engineering
-prerequisites before Stripe events may be enabled: the payment-event starvation
-fix and a PromptPay QR sandbox spike. **Q-010
+Q-002 stays unprejudiced). **Runtime is implemented and bound** —
+`PAYMENT_PROVIDER` resolves to `StripePaymentProvider` unconditionally
+(`apps/api/src/modules/payments/payments.module.ts`, since `593c65e9`,
+2026-09-08; staging carries a Stripe **test-mode** secret). `NullPaymentProvider`
+is retained only as the dev/test provider, not the production binding. This
+corrects this file's prior claim that `NullPaymentProvider` was still bound.
+DEC-055 named two engineering prerequisites before Stripe events may be
+enabled — the payment-event starvation fix and a PromptPay QR sandbox spike —
+this reconciliation did not independently re-verify their completion status;
+do not assume live-traffic readiness from the binding alone. **The Stripe
+PromptPay payment-presentation contract is closed**: sandbox spike →
+follow-up recon → decision lock → implementation (`docs/STRIPE_PROMPTPAY_SANDBOX_SPIKE.md`,
+`docs/STRIPE_PRESENTATION_CONTRACT_RECON.md`, `docs/STRIPE_PRESENTATION_CONTRACT_FOLLOWUP_RECON.md`,
+then locked and implemented) — this file previously omitted this thread
+entirely; treat it as done, not open. **Q-010
 (platform fee) is resolved** — **DEC-043**, 2026-09-05, 8% of the food
 subtotal, round to whole baht — **and its rate only is further superseded by
 DEC-061 (2026-09-09, 10%), runtime still on the DEC-043 8% figure, see §10's

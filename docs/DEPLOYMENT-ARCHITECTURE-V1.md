@@ -246,6 +246,15 @@ After the first Cloud Run deploy produces a real URL, update `apps/tick-worker/w
 4. **No rollback past the first snapshot-bearing order.** From then on, recovery is roll-forward only. If the deployment has to stop, stop before any D-01 revision creates an order.
 5. **T7 — required follow-up.** Once no pre-D-01 API revision is serving anywhere, apply a separate migration that runs `drop function public.create_order(uuid, uuid, text, bigint, bigint, bigint, int, int, uuid)`. This closes the snapshot-unaware order-creation path. It must not be combined with the D-01 migration, because that would break the previous release during step 1.
 
+### 15.10 Incident record — staging deploy boot crashes (factual, resolved)
+
+Two boot-time crashes occurred on `banhao-api-staging` during the deploys that followed §15.3's Secret Manager provisioning, both already fixed. Recorded here for the operational history this section otherwise lacks — neither changes any decision or target architecture above.
+
+1. **R2 storage config missing (commit `71c05907`).** `StorageService`'s constructor validates five R2 environment variables at boot and throws if any are missing — deliberate fail-at-startup design. `deploy-api.yml` never supplied them, so the container crashed before `app.listen()` on every deploy since R2 storage was added, surfacing only as Cloud Run's generic "failed to listen on PORT=8080." Confirmed via revision `banhao-api-staging-00006-8cb`'s runtime logs (`"Cloudflare R2 storage is not configured"`, then `exit(1)`, ~600ms before Cloud Run's health-check timeout). Fixed by wiring the two credential-pair values through Secret Manager (matching the `SUPABASE_SERVICE_ROLE_KEY` pattern) and the three non-secret values through GitHub Environment vars (matching the `SUPABASE_URL` pattern). `R2_PRIVATE_BUCKET` was deliberately left unprovisioned — DEC-038 keeps it that way pending the Q-012 legal review, and `StorageService` only requires it lazily, at the first private-bucket (POD) operation.
+2. **Stripe secret missing (commit `9e5d40b5`).** `StripePaymentProvider`'s constructor requires `STRIPE_SECRET_KEY` and throws without it (DEC-055 clause 13). `PAYMENT_PROVIDER` is bound to `StripePaymentProvider` unconditionally, so Nest constructs it during bootstrap, before `app.listen()` — `deploy-api.yml` never supplied the key, so every deploy attempt crashed at that point. Confirmed via revision `banhao-api-staging-00007-vxs`'s runtime logs (R2 initialised successfully, then `"Stripe is not configured. Missing: STRIPE_SECRET_KEY"`, then `exit(1)`). Fixed by wiring the Secret Manager reference, matching the existing pattern. `STRIPE_WEBHOOK_SECRET` was not added — `StripePaymentProvider` checks it lazily, inside `verifyWebhookSignature`, not at construction.
+
+Both fixes are deploy-configuration changes only (`deploy-api.yml` + Secret Manager references) — no application code, schema, or decision changed as part of either fix.
+
 ---
 
 *Supersedes nothing. Extends V1.1 §12/§15/§19 with the implementation-level choices those sections left open. Any future change to a `DEC-APP` decision cited here takes precedence over this document.*
