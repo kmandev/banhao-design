@@ -1,0 +1,98 @@
+-- BANHAO — DEC-065 §1: scoped uniqueness protection for AI-operations audit
+-- actions
+--
+-- DEC-065 (docs/DECISIONS.md) authorized exactly one thing for Phase J's
+-- deduplication: scoped uniqueness protection plus conflict-safe service
+-- behaviour. This migration implements the database half — one partial unique
+-- index, nothing else.
+--
+-- ---------------------------------------------------------------------------
+-- The gap this closes, stated precisely
+-- ---------------------------------------------------------------------------
+--
+-- `AiAuditService.alreadyHandled()` reads `audit_logs` for an existing
+-- `(action, entity_id)` row and only then inserts. The service's own comment
+-- has documented the bound honestly since Phase J shipped, and CLAUDE.md §12
+-- repeats it: a sequential re-run is suppressed, two genuinely concurrent
+-- ticks are not, because nothing in the database enforced the key. This index
+-- makes the database — not the application's prior SELECT — the concurrency
+-- authority, which is ADR-003's rule applied to an INSERT.
+--
+-- What it closes completely, today: every production-reachable AI-operations
+-- outcome is an `audit_logs` row and nothing else. J-01's policy resolves
+-- `MISSING` (BQ-013 is OPEN) and escalates before the agent is ever reached,
+-- and J-02 has no command authority at all, so no command is dispatched and
+-- the audit row IS the whole effect. Preventing a duplicate row therefore
+-- prevents a duplicate action.
+--
+-- What it deliberately does NOT change: the pipeline's ordering. When a
+-- command becomes reachable (BQ-013 answered), the dispatcher still runs
+-- before stage 9's audit write, so at that point a claim-before-act ordering
+-- becomes a real question. That is a pipeline redesign, explicitly outside
+-- DEC-065's authorized scope, and it is left alone rather than changed
+-- quietly here.
+--
+-- ---------------------------------------------------------------------------
+-- Why PARTIAL, scoped to actor_type = 'AI'
+-- ---------------------------------------------------------------------------
+--
+-- `audit_logs` is shared: CUSTOMER, MERCHANT, RIDER, OPERATOR, SYSTEM and
+-- WEBHOOK rows live in the same table and have never been deduplicated on
+-- `(action, entity_id)`. Several legitimately repeat that pair — the AI-01
+-- regression test itself (`supabase/tests/audit_logs_ai_actor_test.sql`)
+-- inserts five non-AI rows sharing one `('test.noop', entity_id)` pair by
+-- design. An unscoped unique index would break that existing behaviour for
+-- five actor types to fix one, which DEC-065 §6 forbids as an "unrelated
+-- audit-log redesign".
+--
+-- Scoping a unique index to the one value that needs it is the shape
+-- `20260909000001_reconciliation_cases_refund_kinds.sql` already established
+-- for `reconciliation_cases_refund_open_key` (DEC-060 §4), for exactly this
+-- reason: never change the older values' long-standing behaviour as a side
+-- effect of constraining the new one.
+--
+-- ---------------------------------------------------------------------------
+-- Existing rows — checked, not assumed
+-- ---------------------------------------------------------------------------
+--
+-- `CREATE UNIQUE INDEX` revalidates every existing row, so a pre-existing
+-- duplicate would fail this migration. Every `actor_type = 'AI'` row on
+-- `banhao-dev` was read before this file was written: 13 rows
+-- (4 `AI_OPS_MERCHANT_ACCEPTANCE_TIMEOUT` + 7 `AI_OPS_NO_RIDER_TRIAGE` from
+-- 2026-09-08, plus 2 more from the accepted First Manual Tick), with zero
+-- duplicate `(action, entity_id)` pairs. Re-verify before applying anywhere:
+--
+--   select action, entity_id, count(*)
+--     from public.audit_logs
+--    where actor_type = 'AI'
+--    group by action, entity_id
+--   having count(*) > 1;
+--
+-- Deliberately no `if not exists`: this must fail loudly if it is ever run
+-- against a database that already has the index under a different definition,
+-- matching the same discipline `20260909000001` documents for its own DDL.
+--
+-- ---------------------------------------------------------------------------
+-- What this migration does NOT do
+-- ---------------------------------------------------------------------------
+--
+--   * no column, table, view, RPC or RLS policy is added or altered
+--   * `audit_logs_reject_mutation` (append-only) is untouched — ON CONFLICT
+--     DO NOTHING and a caught unique_violation both avoid UPDATE and DELETE
+--     entirely, so the trigger never fires and append-only is preserved
+--   * `audit_logs_actor_type_check` (AI-01) and
+--     `audit_logs_operator_reason_check` (DEC-032) are untouched
+--   * grants and RLS are untouched (`revoke all from anon, authenticated`,
+--     RLS enabled with no policies — service_role only)
+--   * the DEC-040 command catalog is untouched; no AI capability is added
+--   * no financial or domain mutation path is touched
+--   * T7 is NOT performed: both `create_order()` overloads are left exactly
+--     as they are (DEC-065 §2 gates that on a formal prerequisite that does
+--     not yet exist)
+
+create unique index audit_logs_ai_action_entity_key
+  on public.audit_logs (action, entity_id)
+  where actor_type = 'AI';
+
+comment on index public.audit_logs_ai_action_entity_key is
+  'DEC-065 §1 — at most one audit_logs row per (action, entity_id) for actor_type = ''AI''. One AI operation per playbook per aggregate, enforced by the database rather than by AiAuditService''s prior SELECT (ADR-003). Scoped to AI rows only: CUSTOMER/MERCHANT/RIDER/OPERATOR/SYSTEM/WEBHOOK rows keep their existing, never-deduplicated behaviour and several legitimately repeat the same (action, entity_id). Also serves the dedupe read, which no existing index covered.';

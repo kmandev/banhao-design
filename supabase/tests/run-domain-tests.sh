@@ -434,4 +434,64 @@ fi
 echo "    PASS  the PAID transition waited, re-checked, and matched 0 rows; the order stayed PAYMENT_EXPIRED."
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY + D-01 COMMISSION SNAPSHOT + D-01 FREEZE RACE VERIFICATION PASSED"
+echo "==> Running DEC-065 §1 AI-operations audit dedup assertions (20260921000001)"
+docker cp "$REPO_ROOT/supabase/tests/ai_ops_audit_dedup_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/ai_ops_audit_dedup_test.sql 2>&1 | tee /tmp/banhao-ai-dedup-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> DEC-065 AI audit dedup verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-ai-dedup-out.log; then
+  echo "==> DEC-065 AI audit dedup verification FAILED"
+  exit 1
+fi
+
+# The case AiAuditService's prior SELECT can never win: two genuinely
+# concurrent connections, both reading "not handled", both inserting. Held to
+# the same two-real-connections standard as the rider race (TQ-012) and the
+# Q-020 Slice 4B reconciliation-case race.
+echo ""
+echo "==> Launching TWO CONCURRENT AI audit inserts for the SAME (action, entity_id)"
+echo "    (both racing for AI_OPS_DEDUP_RACE / b5000000-...-000000ff)"
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc \
+  "select test_attempt_ai_audit_insert('AI_OPS_DEDUP_RACE', 'b5000000-0000-4000-8000-0000000000ff'::uuid)" \
+  > /tmp/banhao-ai-dedup-race-a.out 2>&1 &
+AI_RACE_A_PID=$!
+docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc \
+  "select test_attempt_ai_audit_insert('AI_OPS_DEDUP_RACE', 'b5000000-0000-4000-8000-0000000000ff'::uuid)" \
+  > /tmp/banhao-ai-dedup-race-b.out 2>&1 &
+AI_RACE_B_PID=$!
+wait "$AI_RACE_A_PID" "$AI_RACE_B_PID"
+
+AI_RACE_A_RESULT="$(cat /tmp/banhao-ai-dedup-race-a.out | tr -d '[:space:]')"
+AI_RACE_B_RESULT="$(cat /tmp/banhao-ai-dedup-race-b.out | tr -d '[:space:]')"
+echo "    Attempt A result: $AI_RACE_A_RESULT"
+echo "    Attempt B result: $AI_RACE_B_RESULT"
+
+if [[ "$AI_RACE_A_RESULT" == "t" && "$AI_RACE_B_RESULT" == "t" ]]; then
+  echo "==> CRITICAL FAILURE: both concurrent AI audit inserts report success. audit_logs_ai_action_entity_key did NOT hold."
+  exit 1
+fi
+if [[ "$AI_RACE_A_RESULT" != "t" && "$AI_RACE_B_RESULT" != "t" ]]; then
+  echo "==> FAILURE: neither concurrent AI audit insert succeeded — something else is wrong."
+  exit 1
+fi
+echo "    Exactly one concurrent insert won, as required (DEC-065 §1)."
+
+echo ""
+echo "==> Running DEC-065 §1 AI audit dedup concurrency assertions"
+docker cp "$REPO_ROOT/supabase/tests/ai_ops_audit_dedup_concurrency_assertions.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/ai_ops_audit_dedup_concurrency_assertions.sql 2>&1 | tee /tmp/banhao-ai-dedup-concurrency-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> DEC-065 AI audit dedup concurrency verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-ai-dedup-concurrency-out.log; then
+  echo "==> DEC-065 AI audit dedup concurrency verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY + D-01 COMMISSION SNAPSHOT + D-01 FREEZE RACE + DEC-065 AI AUDIT DEDUP VERIFICATION PASSED"

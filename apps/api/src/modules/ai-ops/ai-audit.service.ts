@@ -58,15 +58,18 @@ export class AiAuditService {
    * Has this operational event already been handled?
    *
    * `audit_logs` is the dedupe record because no AI-operations table exists
-   * and this slice adds none. The guarantee is honest and bounded: a
-   * sequential re-run of the same tick, or a redelivery of the same outbox
-   * row, is suppressed. Two genuinely concurrent ticks are not — `audit_logs`
-   * carries no unique constraint on `(action, entity_id)` and adding one is a
-   * migration this slice must not make. That is the same read-then-write
-   * limitation `NoRiderEscalationService` documents for its own outbox
-   * existence check, accepted here for the same reason: DEC-APP-010 fixes a
-   * single 60-second cron as the only scheduler, and the worst case is one
-   * duplicate notification with no money and no state change behind it.
+   * and this slice adds none.
+   *
+   * This read is now a **fast path, not the concurrency authority**. Since
+   * DEC-065 §1 the authority is `audit_logs_ai_action_entity_key`
+   * (`20260921000001`), a partial unique index on `(action, entity_id)` where
+   * `actor_type = 'AI'`, and {@link insert} is insert-first against it. This
+   * check still earns its place: it settles an already-handled aggregate
+   * before the pipeline does any work at all — no projection read, and for
+   * J-01 no agent call — which is the difference between a cheap skip and a
+   * wasted model invocation. What it no longer has to be is correct under
+   * concurrency; the index covers that case even when this read loses the
+   * race.
    *
    * Fail-closed on error: if the check itself fails, the event is reported as
    * already handled, so a database problem produces silence rather than a
@@ -160,11 +163,40 @@ export class AiAuditService {
       source: 'worker',
     });
 
-    if (error) {
-      // Never throws: an audit write failing must not turn one tick phase's
-      // problem into every later phase's problem, matching the never-throws
-      // contract every other tick phase documents on itself.
-      this.logger.error(`audit_logs write failed for ${params.action}/${params.entityId}: ${error.message}`);
+    if (!error) {
+      return;
     }
+
+    if (isUniqueViolation(error)) {
+      // DEC-065 §1. `audit_logs_ai_action_entity_key` refused a second row for
+      // this (action, entity_id) — the dedupe worked, at the one layer that
+      // holds under concurrency. Not an error: this is the designed outcome,
+      // and it is exactly the case the prior `alreadyHandled()` read cannot
+      // catch when two ticks race. Logged as a warning rather than swallowed
+      // silently because DEC-APP-010 fixes a single 60-second cron as the only
+      // scheduler, so a genuine concurrent tick is itself worth seeing.
+      this.logger.warn(
+        `audit_logs dedupe held for ${params.action}/${params.entityId}: a row already exists, no duplicate written`,
+      );
+      return;
+    }
+
+    // Never throws: an audit write failing must not turn one tick phase's
+    // problem into every later phase's problem, matching the never-throws
+    // contract every other tick phase documents on itself.
+    this.logger.error(`audit_logs write failed for ${params.action}/${params.entityId}: ${error.message}`);
   }
+}
+
+/**
+ * A `23505` from the insert above means `audit_logs_ai_action_entity_key`
+ * held (DEC-065 §1), never a caller error.
+ *
+ * Module-local rather than shared, matching the identical helpers in
+ * `refund-reconciliation-detector.service.ts` and
+ * `payment-event-processing.service.ts` — this codebase keeps one copy per
+ * module that needs it instead of introducing a cross-module utility.
+ */
+function isUniqueViolation(error: { code?: string; message: string }): boolean {
+  return error.code === '23505' || error.message.includes('duplicate key');
 }
