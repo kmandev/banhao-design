@@ -249,7 +249,7 @@ staging.
 
 | Component | State |
 |---|---|
-| API | `banhao-api-staging`, revision `00010-jdx` (2026-11-02, adds `STRIPE_WEBHOOK_SECRET`; `00009-z62` is an identical earlier copy), same image as `00008-4zw` (2026-09-15). **The image predates `36d99edd`.** `/health` answers `status: ok`, database `ok`, after the restore |
+| API | `banhao-api-staging`, revision `00012-sn6` (2026-11-02): image built from `4599bccb` by `deploy-api.yml` (includes `36d99edd`), plus `STRIPE_WEBHOOK_SECRET` and `R2_PRIVATE_BUCKET` (DEC-066). `/health` `ok` |
 | Database | `banhao-dev`, `ACTIVE_HEALTHY` after a restore from pause on 2026-11-02 |
 | Tick Worker | Deployed. Recurring tick on staging authorized by DEC-066; still fail-closed until the Worker-side `INTERNAL_TICK_SECRET` is set |
 | Admin | `deploy-web.yml` last succeeded 2026-09-21; the live site was not checked |
