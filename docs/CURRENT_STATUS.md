@@ -177,11 +177,14 @@ SQL suites, both Docker-based and both now run by CI:
 
 ## 10. Database
 
-32 migration files. 16 are the `e471ec1d` checkpoint V1.1 was reviewed against;
-16 have been merged since, each additive and each under an explicit
-instruction. **All 32 are applied to `banhao-dev`**: `supabase migration list
+33 migration files. 16 are the `e471ec1d` checkpoint V1.1 was reviewed against;
+17 have been merged since, each additive and each under an explicit
+instruction. **All 33 are applied to `banhao-dev`**: `supabase migration list
 --linked`, run 2026-11-02 after the project was restored from a pause, shows a
-matching Remote entry for every local version.
+matching Remote entry for every local version. The 33rd,
+`20261102000001` (DEC-068 A1, `payment_events.payment_id` write-once), was
+applied the same day with `supabase db push --linked` under the owner's A1
+choice.
 
 - `20260921000001` (AI Ops dedup) is applied even though its own commit says it
   was not. Nothing in Git records who applied it. A direct read confirms
@@ -285,8 +288,8 @@ effort alone.
 | 0c | ~~No operator exists~~ | **Resolved on staging** | `+66899999999` granted `ADMIN` in `platform_staff` on `banhao-dev` (DEC-066); `/admin/supervisor/me` answers 200 `ADMIN` |
 | 0d | Customer notifications show raw event names (`OrderDelivered`), no body | Product decision | A per-event title/body convention |
 | 0e | **Refunds fail at Stripe** on staging | **Owner action** | Refund events are now subscribed on the staging endpoint (DEC-067 S5). But a staff refund of a cancelled paid order (`BH-20261102-0003`) failed: PromptPay refunds make Stripe email the customer for bank details, and BANHAO's Stripe account cannot send email until its email is verified or the account application is submitted. Then retry the refund. See [`Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md`](Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md) §9 |
-| 0g | **`payment_events.payment_id` is never filled in** (defect) | Engineering + owner choice | The backfill in the payment and refund event processors is refused by the `payment_events` immutability trigger, so the column stays null. Payment confirmation is unaffected, but refund reconciliation anomalies A and C cannot see Stripe evidence. Proposed fix: an additive write-once migration. See [`PHASE-1-OWNER-QUESTIONS.md`](PHASE-1-OWNER-QUESTIONS.md) A1 |
-| 0f | **Money flow (Q-002 / DEC-067 S1)** | Owner decision + Stripe sales | Research done: Stripe Connect direct charges are the only path found that keeps BANHAO from holding restaurants' money. Three questions must go to Stripe Thailand sales first. See [`Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md`](Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md) |
+| 0g | ~~`payment_events.payment_id` is never filled in~~ **Resolved 2026-11-02** (DEC-068 A1) | — | Migration `20261102000001` makes `payment_id` write-once (null → value once, never changed after); 18 SQL assertions in `run-domain-tests.sh`; **applied to `banhao-dev`** and its function body confirmed by schema dump. The refund event processor now links an event only after its provider payment identity matches. Events received before the fix (orders `BH-20261102-0001…0003`) stay unlinked; nothing back-fills them |
+| 0f | **Money flow (Q-002 / DEC-067 S1)** | **Owner action** + Stripe sales | Research done: Stripe Connect direct charges are the only path found that keeps BANHAO from holding restaurants' money. The owner chose to ask Stripe, Opn and 2C2P (DEC-068 B1); drafts are in [`Q-002-PROVIDER-EMAIL-DRAFTS.md`](Q-002-PROVIDER-EMAIL-DRAFTS.md), to be sent by the owner. If Connect is confirmed, the restaurant pays the Stripe fee (B2) and riders are paid weekly by bank transfer (B3). See [`Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md`](Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md) |
 | 0b | ~~Recurring Tick~~ | **Running on staging since 2026-11-02 08:51 UTC** (DEC-066) | Production stays DO NOT ENABLE |
 | 1 | The Admin app's financial half — A-16 through A-22 (payments, refunds, reconciliation, ledger, settlement) | **Business decision** | Q-002 and Q-032. Q-001 (DEC-055) and Q-020 (DEC-057…060) are resolved. The screens are fully designed in `BANHAO ADMIN - Operations - Phase I.dc.html`. **The exception half — the Human Supervisor console — is built**, since the AI Operations package § 09 designs it and it needs none of those decisions |
 | 1b | Phase I's operational commands from a case (cancel, release, redispatch, pause) | **Business decision** | BQ-013, UX-Q-006, OD-04, BQ-015, Q-032. Each case detail names the specific decision blocking it rather than rendering a control the platform cannot back |

@@ -1,8 +1,13 @@
 # Phase 1 — owner questions, set 2
 
 ```
-DECISION PREPARATION — NOTHING HERE IS LOCKED
+ANSWERED 2026-11-02 — LOCKED AS DEC-068 — every answer was the recommended option
 ```
+
+A1 and E2 are done (migration `20261102000001`; `docs/legal/` drafts). B1
+drafts are in `Q-002-PROVIDER-EMAIL-DRAFTS.md`. C1, C3 and D1 await an
+implementation instruction. B2 and B3 apply only if S1 locks to Stripe
+Connect. The text below is the question set as it was asked.
 
 Prepared 2026-11-02 while the owner was away, after DEC-066/067 and the
 marketplace research. Each question lists a recommended answer first.

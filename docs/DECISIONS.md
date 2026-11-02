@@ -74,6 +74,10 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-062** | **Q-018 Owner Decision Lock: OD-1…OD-8 (benchmark methodology, fixture quality, ground-truth and acquisition authority) — not a provider selection** | **ACCEPTED — BENCHMARK METHODOLOGY · NOT A PROVIDER SELECTION** | **2026-09-10** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, Q-018, TQ-004, D-16 (unaffected, `OPEN`), D-17 (unaffected, `OPEN`) |
 | **DEC-063** | **Q-018 ground truth source: the Rider performing a real customer delivery — actual delivery GPS trace as quantitative ground truth, Rider operational feedback as qualitative evidence. Supersedes DEC-062 OD-3 (separately appointed local reviewer) only** | **ACCEPTED — METHODOLOGY · NOT AN IMPLEMENTATION AUTHORIZATION** | **2026-09-14** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, DEC-062 (OD-3 superseded; OD-6 unchanged), Q-012, TQ-016, BQ-022, D-16 (`OPEN`), D-17 (`OPEN`) |
 | **DEC-064** | **Rider GPS owner policy: explicit Terms/Privacy acceptance as the access gate for location-dependent Rider functionality; active-delivery-only scope; no continuous tracking, surveillance or automated discipline; purpose limitation; refusal blocks only the gated functionality; no GPS pay input; customer live tracking out of scope** | **ACCEPTED — OWNER PRODUCT POLICY · NOT A LEGAL DETERMINATION · NOT AN IMPLEMENTATION AUTHORIZATION** | **2026-09-14** | `docs/Q-012-RIDER-GPS-COUNSEL-BRIEF.md`, `docs/Q-012-RIDER-GPS-OWNER-DECISION-PACK.md`, DEC-037, DEC-063, Q-012 (`OPEN`), TQ-016 (`OPEN`), BQ-022 (`OPEN`), OD-6 (`NOT AUTHORIZED`), D-17 (`OPEN`) |
+| **DEC-065** | **Phase 13 Owner Decision Lock: AI Ops dedup and T7 hardening authorized for future implementation only** | **ACCEPTED — IMPLEMENTATION AUTHORIZATION FOR A FUTURE PHASE ONLY · NOT ITSELF AN IMPLEMENTATION** | **2026-09-21** | DEC-040, `CLAUDE.md` §12 |
+| **DEC-066** | **Staging-only enablement: proof-of-delivery bucket, recurring tick, first staff member** | **ACCEPTED — STAGING (`banhao-dev` / `banhao-api-staging`) ONLY** | **2026-11-02** | `docs/E2E_RUN_2026-11-02.md`, DEC-038, DEC-039, DEC-055, Q-012 (`OPEN`) |
+| **DEC-067** | **Settlement question set 1: cycle, refund events, rider compensation, tax, statements** | **ACCEPTED — DECISION ONLY, NOT IMPLEMENTED** (S2–S4 provisional on S1) | **2026-11-02** | `docs/SETTLEMENT_MODEL.md`, `docs/Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md`, DEC-055, BQ-024, BQ-032 |
+| **DEC-068** | **Phase 1 owner question set 2: payment_events fix, order-flow policy, money-flow follow-ups, notifications, pilot scope** (C3-A amends DEC-041 G-2 in part) | **ACCEPTED** (A1 and E2 authorized; C1, C3, D1 decision only; B2/B3 conditional on S1) | **2026-11-02** | `docs/PHASE-1-OWNER-QUESTIONS.md`, `docs/Q-002-PROVIDER-EMAIL-DRAFTS.md`, `docs/legal/`, DEC-041, DEC-053, DEC-058, BQ-013, BQ-038 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -3281,6 +3285,14 @@ message, and this entry is the mapping.
 
 **Status:** ACCEPTED — CLARIFICATION OF ITEM 9 ABOVE · NOT A NEW CAPABILITY ·
 **Date:** 2026-09-14 · **Owner:** PRODUCT_OWNER
+
+> **Amended in part by DEC-068 C3-A (2026-11-02), by the Product Owner.** For
+> availability-mode changes, the audit write is now **fail-closed and atomic
+> with the mode change**; items 2–6 and 8 below no longer describe the target
+> behavior, and item 7's last clause no longer holds. The text below is kept
+> **unchanged** as the record of what was decided on 2026-09-14 and of what
+> the code at `7ea20a65` still does until C3-A is implemented. See DEC-068
+> C3-A for the exact scope and precedence.
 
 Item 9 above establishes that a real availability mode change produces one
 `audit_logs` row. It did not originally state what happens when that insert
@@ -9321,3 +9333,185 @@ Transfer method, failed-transfer recovery, negative-balance recovery (BQ-034).
 **Supersedes:** DEC-055 clause 7's refund-event exclusion, for staging only;
 BQ-024's open amount. **Superseded by:** none. **Preserves unchanged:**
 DEC-026, DEC-044, DEC-045, DEC-053, DEC-055 (all other clauses), DEC-057…060.
+
+## DEC-068 — Phase 1 owner question set 2: payment_events fix, order-flow policy, money-flow follow-ups, notifications, pilot scope
+
+**Status:** **ACCEPTED** (A1 and E2 authorized for implementation; C1, C3 and D1 decision only; B2 and B3 conditional on Stripe's answers) · **Date:** 2026-11-02 · **Owner:** PRODUCT_OWNER
+
+### Context
+
+Question set 2 (`docs/PHASE-1-OWNER-QUESTIONS.md`), prepared after DEC-066/067
+and the marketplace research (`docs/Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md`),
+answered one by one by the owner in session. Every answer was the recommended
+option.
+
+### Decisions
+
+**A1 — `payment_events.payment_id` defect: additive write-once migration.**
+`payment_id` may change from null to a value once and never again; every other
+immutable column stays immutable. The owner's choice includes testing it
+against real Postgres and applying it to `banhao-dev`. This is the explicit
+migration instruction CLAUDE.md §10 requires, for this one migration only.
+
+**B1 — Send the marketplace questions** (research §8) to Stripe Thailand sales
+as the primary path, and to Opn and 2C2P as a fallback. The owner sends them;
+Claude drafts them.
+
+**B2 — If Stripe Connect is confirmed, the restaurant pays the Stripe
+processing fee** (Stripe-handled pricing, Stripe's default). BANHAO's
+application fee stays commission + service fee + delivery fee. Conditional on
+S1 locking to Stripe Connect.
+
+**B3 — If restaurants are paid by Stripe, riders are paid by weekly bank
+transfer from BANHAO's own account**, under DEC-067 S2–S4 (Monday, Sunday
+23:59 Asia/Bangkok cutoff, ฿100 minimum). Conditional on S1 as B2.
+
+**C1 — Merchant acceptance timeout (BQ-013, deadline and escalation only):
+5 minutes, then alert an operator. No auto-cancel.**
+
+- The clock starts when payment is confirmed (order `PAID`) and runs 5 minutes.
+- If the restaurant has not accepted by then, an AI Ops alert is raised for
+  Admin (the J-01 path, which has been failing closed for want of this
+  deadline). The system may also send the restaurant a reminder notification
+  (J-01's existing L2 notification command; nothing new).
+- **No automatic cancellation.** The operator contacts the restaurant and
+  decides. Any cancellation and refund follows DEC-058 (operator/admin
+  executes; AI excluded).
+- The alert is idempotent: at most one per order (DEC-065's
+  `audit_logs_ai_action_entity_key`), so a re-run of the tick raises no second
+  alert.
+- The times involved (payment confirmed, deadline, alert raised) are recorded
+  for audit in the alert's audit row.
+- **Merchant auto-pause thresholds remain undecided**, and **BQ-013 as a whole
+  stays `OPEN`** (DEC-053 records the Product Owner declining to close it
+  merely to unblock other work; this answer does not do that). DEC-APP-006's
+  gate on `MERCHANT_REJECTED` and the other exception states is unchanged.
+
+**C2 — No safe drop-off in the pilot (UX-Q-006 / OD-04).** DEC-053's
+operator-declared failure after 2 contact attempts and 5 minutes stands
+unchanged.
+
+**C3 — Availability mode authority (R-6 / BQ-038): active, authorized
+restaurant members, plus BANHAO staff with role `ADMIN` or `OPERATOR`.**
+(Audit-failure handling: see C3-A below.)
+
+- May change the M-AV operating mode (`NORMAL` / `BUSY` / `PAUSED`).
+  Today's member behaviour is unchanged; staff authority is new and unbuilt,
+  and is limited to the scope of each staff role.
+- Every change is audited, recording actor, role, restaurant, old mode, new
+  mode, timestamp and source.
+- **A change made by staff must carry a reason** (consistent with DEC-032's
+  operator-reason rule).
+- Operating mode is not the restaurant's status and is not a temporary close:
+  changing the mode must not touch the existing restaurant status, and the
+  two must not be conflated (M12-Q-03/Q-04 temporary close stays out of
+  scope).
+- The audit-failure handling is settled by **C3-A** below, which the Product
+  Owner decided after the tension with M-AV G-2 was reported.
+
+**C3-A — Audit failure is fail-closed for operating-mode changes
+(Product Owner decision, 2026-11-02).** Amends M-AV G-2 in part.
+
+1. Every successful `NORMAL` / `BUSY` / `PAUSED` change has a corresponding
+   audit record. There is no successful change without one.
+2. If the audit record cannot be persisted, **the mode change fails** and is
+   reported as failed. An audit persistence error is never swallowed while the
+   change proceeds.
+3. The mode change and its audit record are **atomic** — one database
+   transaction, or an equivalent mechanism that guarantees the same
+   consistency. If atomic consistency cannot be guaranteed, the change is
+   rejected.
+4. The record keeps the fields C3 already specifies: actor, role, restaurant,
+   old mode, new mode, timestamp, source. Staff `ADMIN` / `OPERATOR` changes
+   carry a reason.
+5. **Scope: only the `NORMAL` / `BUSY` / `PAUSED` operating mode.** It is not
+   a general audit policy, and does not touch restaurant status, temporary
+   closure, or any other audit write in the system.
+
+*Exactly which wording this overrides.* DEC-041's G-2 section, locked
+2026-09-14: item 2 (audit attempted after the transition commits), item 3
+(failure logged and swallowed), item 4 (failure does not fail the request),
+item 5 (no compensating update — moot once the two writes are atomic), item 6
+(no transaction/RPC/migration, "not atomic"), item 8 (a missing audit row is
+accepted), and the closing clause of item 7 (audit "never a precondition").
+Retained: item 1 (a row for each real change), item 7's first clause
+(`restaurants.availability_mode` remains the authoritative state), and DEC-041
+item 9's rule that an identical repeat request is a no-op with no UPDATE and
+no audit row.
+
+*Precedence.* C3-A is a later, explicit Product Owner decision on this one
+behavior, so it prevails over G-2 for operating-mode changes. G-2 is not
+deleted or rewritten: it is annotated as amended in part, and it stays the
+accurate description of the code until C3-A is built. This is a **narrow
+amendment of G-2**, not an exception recorded beside it — a second, silent
+semantics for the same control action would leave the repository with two
+conflicting rules, which is the failure the amendment avoids.
+
+*Also touched, stated so it is not discovered later.*
+
+- DEC-041 item 9 says staff-originated audit is "never `OPERATOR`" and item 8
+  says "no new actor". Staff authority (C3) makes both inapplicable to
+  staff-originated changes: those rows use the existing `OPERATOR` actor type
+  (and DEC-032's operator-reason rule). Member-originated changes stay
+  `MERCHANT`. No new actor type is introduced.
+- G-2's non-scope bullet that R-6 / BQ-038 "remains OPEN" was accurate when
+  written; C3 resolves it.
+- The G-2 "Review trigger" (durable, alerted observability) was not the
+  trigger. This is a product-initiated decision.
+
+*Not implemented, and not authorized by this record.* Today's service makes
+two separate PostgREST requests. Atomicity needs a database-side change (for
+example a transactional function) and therefore a migration, which needs its
+own explicit instruction (CLAUDE.md §10). The implementation must also decide
+how a staff request is authenticated and routed, and the merchant UI must
+handle a new failure outcome. None of that is settled here, no code or
+schema changed, and C3 stays unbuilt. Existing audit rows are not backfilled.
+
+**D1 — Customer notification texts: the nine Thai title/body pairs in
+`PHASE-1-OWNER-QUESTIONS.md` §D1, used as drafted and unedited.** The nine
+events are `PaymentSucceeded`, `MerchantAcceptedOrder`, `RiderSearchStarted`,
+`RiderAssigned`, `OrderReady`, `OrderPickedUp`, `OrderDelivered`,
+`OrderNoRiderFound` and `OrderDeliveryFailed` (all nine are emitted by the
+API today; verified in code 2026-11-02).
+
+- Every notification carries its `orderId`, so the app can open the right
+  order. Delivery-sourced events carry none today.
+- A notification is sent only when its real event occurs, is not duplicated by
+  a webhook retry or re-processing, and never states a status that has no
+  confirming evidence.
+- No event and no wording beyond these nine is authorized.
+- Implementation note, for whoever builds it: the wording is customer-facing,
+  but some of these events also have merchant recipients (for example
+  `OrderDeliveryFailed` goes to customer and merchant). The decision says
+  nothing about merchant or rider wording; the implementation must not show
+  these customer texts to other recipients, and must ask rather than invent
+  theirs.
+
+**E1 — Pilot scope confirmed:** today's fixed fees (delivery ฿10, service ฿5,
+commission 10%, rider ฿12); no promotions; no distance pricing or routing;
+latest rider position only. DEC-061 D-02…D-14 stay locked and unbuilt for the
+pilot.
+
+**E2 — Claude drafts a Thai Privacy Policy and Terms of Service** from what
+the system actually collects, for the owner to review. Not legal advice.
+
+### Consequences
+
+- A1 and E2 proceed now.
+- C1, C3 and D1 each need an implementation instruction before code changes.
+  C3 additionally needs an explicit migration instruction (C3-A atomicity).
+- B2 and B3 take effect only if S1 locks to Stripe Connect.
+- BQ-013's acceptance deadline and escalation, BQ-038, UX-Q-006/OD-04's
+  safe-drop-off question and the notification title convention are no longer
+  open. BQ-013's auto-pause thresholds are.
+
+### Supersedes / Superseded By
+
+**Supersedes:** BQ-013's open deadline and escalation (auto-pause thresholds
+stay open); BQ-038; the safe-drop-off half of OD-04. **Amends in part:**
+DEC-041's G-2 audit-failure semantics, via C3-A, for operating-mode changes
+only (and DEC-041 item 9's actor-type wording for staff-originated changes).
+**Superseded by:** none.
+**Preserves unchanged:** DEC-022, DEC-032, DEC-040, DEC-041 (everything except
+what C3-A names), DEC-053, DEC-055, DEC-058, DEC-061, DEC-065, DEC-066,
+DEC-067, DEC-APP-006.

@@ -14,7 +14,7 @@ this branch — see §9/§10. Reconciled again 2026-09-15 at `ab3efec3` after
 — D-16/TQ-004 stay `OPEN`), **DEC-064** (Q-012 rider GPS: policy direction
 locked, Q-012 itself stays `OPEN`/`LEGAL_REVIEW_REQUIRED`, no GPS collection
 built), and **M-AV G-1/G-2 closed** (G-3 device verification still
-`BLOCKED`, R-6/BQ-038 still `OPEN`) — see §9/§10/§11. **A decision lock is not
+`BLOCKED`; R-6/BQ-038 was `OPEN` then and was decided 2026-11-02, DEC-068 C3) — see §9/§10/§11. **A decision lock is not
 an implementation authorization** — treat these as decided-but-unbuilt unless
 this file says otherwise. Reconciled again 2026-09-21 at `49296520`: **D-01
 runtime is implemented and accepted** (not merely locked) — `commission-pricing.ts`'s
@@ -47,7 +47,12 @@ is now live there too, with the Stripe webhook secret and, under **DEC-066**
 (`+66899999999`) and the **recurring tick, now running on staging** (production
 stays DO NOT ENABLE). A full order then went cart → `DELIVERED` on staging with
 Stripe's own webhook (`docs/E2E_RUN_2026-11-02.md`).
-T7 is authorized by DEC-065 and **not done**. See §7.
+T7 is authorized by DEC-065 and **not done**. See §7. **Also 2026-11-02,
+DEC-068 A1 added a 33rd migration**, `20261102000001`
+(`payment_events.payment_id` write-once), tested by `run-domain-tests.sh` and
+applied to `banhao-dev`; all 33 show as applied. DEC-068 also recorded the
+owner's C1/C3/D1 answers (decided, unbuilt); its C3-A amends M-AV G-2 in part
+(§11).
 
 > **Authoritative for application implementation:**
 > [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
@@ -290,7 +295,7 @@ apps/driver/                  Status/availability, offer inbox, active delivery,
 apps/merchant/                Next.js: order board, menu management (M-11),
                                opening hours (M-12); see §11
 apps/admin/                   Still a shell — see §5
-supabase/migrations/          32 migration files (16 at the `e471ec1d` checkpoint + 16 since)
+supabase/migrations/          33 migration files (16 at the `e471ec1d` checkpoint + 17 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -320,7 +325,7 @@ docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-0
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
 docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          32 migrations (16 at checkpoint + 16 since) — do not
+supabase/migrations/*.sql          33 migrations (16 at checkpoint + 17 since) — do not
                                     edit an existing file; do not add a new one without
                                     an explicit instruction (see §10)
 ```
@@ -337,7 +342,7 @@ supabase/migrations/*.sql          32 migrations (16 at checkpoint + 16 since) �
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
 | Project state | `ACTIVE_HEALTHY`. Found `INACTIVE` (paused) on 2026-11-02 and restored the same day from the Dashboard by the owner. A free-tier project pauses itself when idle, so expect this again after long gaps |
-| Migrations | **32 in the repository, all 32 applied** — `supabase migration list --linked`, 2026-11-02, shows a matching Remote entry for every local version (16 at the `e471ec1d` V1.1 checkpoint + 16 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04, delivery-arrival/contact-attempts, customer email, Q-020 reconciliation refund-kinds, D-01, and AI Ops dedup). This settles the four previously unconfirmed (`20260907000001`, `20260907000002`, `20260908000001`, `20260909000001`) and `20260921000001`, whose own commit (`36d99edd`) said "not applied"; a direct read confirms its index `audit_logs_ai_action_entity_key` exists with the designed `WHERE actor_type = 'AI'` predicate. The four were confirmed by the migration list only, not by direct schema read. `20260915000001` is additionally live-exercised — `order_commission_snapshots` holds live rows and the First Manual Tick ran against it 2026-09-20. The last two verified as of the prior pass, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` showed all 26 (then-current) with a matching Remote entry, and direct schema reads confirmed `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body was byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
+| Migrations | **33 in the repository, all 33 applied** (the 33rd, `20261102000001`, DEC-068 A1, applied 2026-11-02 by `supabase db push --linked`) — `supabase migration list --linked`, 2026-11-02, shows a matching Remote entry for every local version (16 at the `e471ec1d` V1.1 checkpoint + 17 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04, delivery-arrival/contact-attempts, customer email, Q-020 reconciliation refund-kinds, D-01, AI Ops dedup, and payment_events write-once). This settles the four previously unconfirmed (`20260907000001`, `20260907000002`, `20260908000001`, `20260909000001`) and `20260921000001`, whose own commit (`36d99edd`) said "not applied"; a direct read confirms its index `audit_logs_ai_action_entity_key` exists with the designed `WHERE actor_type = 'AI'` predicate. The four were confirmed by the migration list only, not by direct schema read. `20260915000001` is additionally live-exercised — `order_commission_snapshots` holds live rows and the First Manual Tick ran against it 2026-09-20. The last two verified as of the prior pass, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` showed all 26 (then-current) with a matching Remote entry, and direct schema reads confirmed `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body was byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -557,13 +562,14 @@ migration explicitly instructed for the current phase — see §10.
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **32 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
-  plus 16 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04,
+- **33 migrations are merged** (the 33rd is DEC-068 A1's `20261102000001`; 16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 17 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04,
   delivery-arrival/contact-attempts, customer email, Q-020 reconciliation
-  refund-kinds, D-01, and AI Ops dedup — see §3/§7). **26 are confirmed applied
-  live** (verified 2026-09-03/04); of the 6 added since, **D-01's
+  refund-kinds, D-01, AI Ops dedup, and payment_events write-once — see
+  §3/§7). **26 are confirmed applied
+  live** (verified 2026-09-03/04); of the 7 added since, **D-01's
   (`20260915000001`) is confirmed applied and live-exercised** by the First
-  Manual Tick, and **all 6 show as applied** in `supabase migration list
+  Manual Tick, and **all 7 show as applied** in `supabase migration list
   --linked` (2026-11-02) — see §7 for the exact evidence boundary. Read
   `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
   edit an existing migration, and do not add a table, view, RLS policy, RPC, or
@@ -698,15 +704,19 @@ own owner or verification action, not by code landing:
 - **G-1: CLOSED.** The paused-restaurant add-to-cart gap is fixed
   (`a31abdd1`) — disabled CTA, correct copy, no navigation to Cart, no item
   added, existing cart untouched.
-- **G-2: CLOSED — OWNER DECISION LOCKED / BEST EFFORT AUDIT.** `ab3efec3`
+- **G-2: CLOSED — OWNER DECISION LOCKED / BEST EFFORT AUDIT. Amended in part
+  2026-11-02 by DEC-068 C3-A: the target is now fail-closed and atomic (an
+  audit failure fails the mode change). Not yet implemented — until it is, the
+  code still does what this bullet describes; do not change it without a
+  separate implementation instruction (it needs a migration).** `ab3efec3`
   locks the `audit_logs` write for a real availability-mode change as
   **best effort**: attempted after the state transition commits, failure
   logged and swallowed, never fails the API request, never triggers a
   compensating update. This is a **clarification of DEC-041 item 9, not a
   new decision number** — codifies already-tested behavior
   (`restaurant-availability.service.spec.ts`), no schema/migration/runtime
-  change. **Do not reopen this by "fixing" the swallowed-failure path** —
-  that would contradict the locked semantics.
+  change. **Do not "fix" the swallowed-failure path on your own** — the change
+  is owned by C3-A's implementation task, not by a drive-by edit.
 - **G-3: BLOCKED — DEVICE RUNTIME VERIFICATION.** Two separate sessions
   failed the iOS Simulator health check before completing the B (NORMAL) / C
   (BUSY) / D (SIGNED-OUT) regression checklist — `screenshot` returns
@@ -715,9 +725,9 @@ own owner or verification action, not by code landing:
   made or is authorized in response to it. The PAUSED path *was* verified
   live against `banhao-dev` in an earlier session and may be cited as
   evidence, but it does not close the incomplete checklist.
-- **R-6 / BQ-038: OPEN — OWNER DECISION.** Which role(s) may change
-  availability mode, and what admin-authority/audit model applies — P2,
-  unrelated to G-1/G-2/G-3, not closed by any of them.
+- **R-6 / BQ-038: DECIDED 2026-11-02 (DEC-068 C3), NOT BUILT.** Active
+  restaurant members plus BANHAO staff `ADMIN` / `OPERATOR` may change the
+  mode; staff must give a reason; C3-A makes the audit fail-closed.
 - **M-AV CORE IMPLEMENTATION: COMPLETE**, independent of G-3/R-6's status —
   the build-scope table below is unaffected by either.
 
