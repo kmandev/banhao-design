@@ -41,7 +41,7 @@ applied**, including `20260921000001`, and the index
 `audit_logs_ai_action_entity_key` exists live. That contradicts its own
 commit's "not applied" note: it was applied after that commit, by an action
 with no record in Git. Staging `/health` reports `ok`. The live API revision
-(`banhao-api-staging-00009-z62`, 2026-11-02, which adds the Stripe webhook
+(`banhao-api-staging-00010-jdx`, 2026-11-02, which adds the Stripe webhook
 secret to the 2026-09-15 image) still **predates the dedup
 code**, so the index is live but the conflict-safe insert is not deployed.
 T7 is authorized by DEC-065 and **not done**. See §7.
