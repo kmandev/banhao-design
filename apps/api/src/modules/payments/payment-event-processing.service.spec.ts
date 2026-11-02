@@ -56,6 +56,10 @@ function supabaseStub(results: Result[]) {
           call.eq[`${column}__is`] = value;
           return builder;
         },
+        not(column: string, operator: string, value: unknown) {
+          call.eq[`${column}__not_${operator}`] = value;
+          return builder;
+        },
         order: () => builder,
         limit: () => builder,
         maybeSingle: () => Promise.resolve(nextResult()),
@@ -1123,6 +1127,25 @@ describe('PaymentEventProcessingService.processOne — unexpected failure / retr
 });
 
 describe('PaymentEventProcessingService.processPendingEvents', () => {
+  it('never lists refund-domain events — those belong to RefundEventProcessingService', async () => {
+    const { supabase, calls } = supabaseStub([{ data: [], error: null }]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    await service.processPendingEvents();
+
+    expect(calls[0]!.table).toBe('payment_events');
+    expect(calls[0]!.eq).toMatchObject({ processed_at__is: null, event_type__not_like: 'refund.%' });
+  });
+
+  it('never claims a refund-domain event, even when handed its id directly', async () => {
+    const { supabase, calls } = supabaseStub([{ data: null, error: null }]);
+    const service = new PaymentEventProcessingService(supabase);
+
+    await expect(service.processOne(EVENT_ID)).resolves.toBe('skipped');
+    expect(calls[0]!.op).toBe('update');
+    expect(calls[0]!.eq).toMatchObject({ id: EVENT_ID, processed_at__is: null, event_type__not_like: 'refund.%' });
+  });
+
   it('processes each pending event id in order and aggregates processed/skipped counts', async () => {
     const { supabase } = supabaseStub([{ data: [{ id: 'e1' }, { id: 'e2' }, { id: 'e3' }], error: null }]);
     const service = new PaymentEventProcessingService(supabase);

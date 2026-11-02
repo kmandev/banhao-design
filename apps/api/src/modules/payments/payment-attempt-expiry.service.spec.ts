@@ -61,6 +61,10 @@ function supabaseStub(results: Result[]) {
           call.eq[`${column}__is`] = value;
           return builder;
         },
+        not(column: string, operator: string, value: unknown) {
+          call.eq[`${column}__not_${operator}`] = value;
+          return builder;
+        },
         order: () => builder,
         limit: () => builder,
         maybeSingle: () => Promise.resolve(nextResult()),

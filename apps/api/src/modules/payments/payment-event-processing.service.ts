@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 
 /** How many unprocessed `payment_events` one tick claims work from at most. */
+/** Refund-domain event names, owned by `RefundEventProcessingService` (it filters `LIKE` the same pattern). */
+export const REFUND_EVENT_TYPE_PATTERN = 'refund.%';
+
 export const BATCH_SIZE = 25;
 
 type ReconciliationKind =
@@ -117,6 +120,16 @@ interface PaymentAttemptRow {
  * is immutable and `processing_error` records exactly what happened, so this
  * stays fully auditable without ever re-entering the queue.
  *
+ * ## Refund-domain events belong to `RefundEventProcessingService`
+ *
+ * Both services claim from the same `payment_events` table, and the tick runs
+ * this one first. Without a filter, this loop claimed every `refund.%` row and
+ * marked it unsupported before the refund loop could see it, so no refund
+ * could ever reach finality (found on staging 2026-11-03, the first run with
+ * refund events subscribed under DEC-067 S5). Both the batch `SELECT` and the
+ * claim `UPDATE` therefore exclude `refund.%`: the claim too, so a refund
+ * event handed to `processOne` directly is skipped rather than consumed.
+ *
  * ## Ledger posting — DEC-043, and CUSTOMER_PAYMENT (SETTLEMENT_MODEL.md § 3.1)
  *
  * A confirmed `PAID` order posts three independent ledger groups, each
@@ -189,6 +202,7 @@ export class PaymentEventProcessingService {
       .from('payment_events')
       .select('id')
       .is('processed_at', null)
+      .not('event_type', 'like', REFUND_EVENT_TYPE_PATTERN)
       .order('received_at', { ascending: true })
       .limit(BATCH_SIZE)
       .returns<{ id: string }[]>();
@@ -225,6 +239,7 @@ export class PaymentEventProcessingService {
       .update({ processed_at: new Date().toISOString() })
       .eq('id', eventId)
       .is('processed_at', null)
+      .not('event_type', 'like', REFUND_EVENT_TYPE_PATTERN)
       .select('id, provider, provider_event_id, event_type, raw_payload')
       .maybeSingle<ClaimedEventRow>();
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
-import { BATCH_SIZE } from './payment-event-processing.service';
+import { BATCH_SIZE, REFUND_EVENT_TYPE_PATTERN } from './payment-event-processing.service';
 import { RefundLedgerReversalService } from './refund-ledger-reversal.service';
 
 /** `refunds.state` values the ledger must never reverse against — a transition into `REFUNDED` is blocked from either of these by `transitionRefund`'s own guard, so a refund already in one of them before this event must never trigger a reversal either. */
@@ -56,8 +56,10 @@ const STATE_BY_PROVIDER_STATUS: Record<string, string> = {
  *
  * ## A second consumer of the same table, not a second architecture
  *
- * `PaymentEventProcessingService` is not modified by this slice — zero lines
- * changed, verified by this session's own diff audit. Refund events instead
+ * `PaymentEventProcessingService` was not modified by this slice. It now
+ * excludes `REFUND_EVENT_TYPE_PATTERN` from its own batch and claim, which
+ * this split always relied on: without it, the tick's earlier payment loop
+ * consumed refund events first (see that service's doc comment). Refund events instead
  * get their own claim loop over the identical `payment_events` table,
  * filtered to `event_type LIKE 'refund.%'`, using the exact same guarded
  * `UPDATE … WHERE id = … AND processed_at IS NULL` claim `processOne` already
@@ -184,7 +186,7 @@ export class RefundEventProcessingService {
       .from('payment_events')
       .select('id')
       .is('processed_at', null)
-      .like('event_type', 'refund.%')
+      .like('event_type', REFUND_EVENT_TYPE_PATTERN)
       .order('received_at', { ascending: true })
       .limit(BATCH_SIZE)
       .returns<{ id: string }[]>();
