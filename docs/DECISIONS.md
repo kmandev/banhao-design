@@ -9245,3 +9245,79 @@ staging choices), following the E2E report.
 only; the §15.10 hold on `R2_PRIVATE_BUCKET`, for staging only.
 **Superseded by:** none. **Preserves unchanged:** DEC-038, DEC-039, DEC-055,
 DEC-058, and Q-012's `OPEN` status.
+
+---
+
+## DEC-067 — Settlement question set 1: cycle, refund events, rider compensation, tax, statements
+
+**Status:** **ACCEPTED — DECISION ONLY, NOT IMPLEMENTED** (S2–S4 provisional on S1) · **Date:** 2026-11-02 · **Owner:** PRODUCT_OWNER
+
+### Context
+
+First settlement question set prepared from `docs/SETTLEMENT_MODEL.md` and
+`docs/OPEN_BUSINESS_QUESTIONS.md` (BQ-024, BQ-032), answered by the owner in
+session.
+
+### Decisions
+
+**S1 — Money flow (Q-002): NOT LOCKED, research ordered.** The owner wants a
+payment provider that supports a **marketplace model in Thailand**, so each
+merchant receives the money from its own transactions and BANHAO receives its
+commission, rather than BANHAO holding merchants' money. Before any
+architecture is locked, research must establish:
+
+- Stripe Connect's capability in Thailand, including PromptPay;
+- how funds are split and paid out to merchants;
+- Bank of Thailand requirements and related law;
+- cost and development complexity.
+
+Owner's reason: avoid BANHAO holding money on merchants' behalf without need,
+and avoid building something that must be rebuilt for production. DEC-055's
+"no Stripe Connect in Phase 1" stands until this research produces a decision.
+
+**S2 — Cadence (BQ-032): weekly, on Monday.** Provisional: if the S1 provider
+pays merchants on its own schedule, this governs only what BANHAO still pays.
+
+**S3 — Cutoff: orders `DELIVERED` by Sunday 23:59 Asia/Bangkok** enter that
+Monday's round. Provisional on S1, as S2.
+
+**S4 — Minimum payout: ฿100 (10000 satang).** A balance below it rolls into
+the next round; nothing is forfeited. Provisional on S1, as S2.
+
+**S5 — Refund events: subscribe, starting on staging.** Supersedes DEC-055
+clause 7's "refund events are NOT enabled" **for staging only**:
+`refund.created`, `refund.updated` and `charge.refunded` may be added to the
+staging webhook endpoint, which DEC-057 needs for refund finality. Production
+needs its own instruction.
+
+**S6 — Rider compensation (BQ-024): ฿12 (1200 satang), flat.** Paid when the
+rider has reached the merchant and the order is then cancelled, or the delivery
+fails, through no fault of the rider. BANHAO bears it. It is its own ledger
+line (`RIDER_COMPENSATION`, `SETTLEMENT_MODEL.md` §8), never folded into
+delivery earnings. Resolves BQ-024's amount; who decides fault follows
+DEC-053.
+
+**S7 — Tax: consult an accountant before the pilot.** No withholding or VAT
+figure is built or assumed until that advice exists. Statements must be able
+to carry tax lines later.
+
+**S8 — Statements: both.** System-generated statements sent by the operator
+(LINE or email) for the pilot, then in-app screens (merchant earnings, rider
+earnings) before production. The in-app screens still need design artifacts.
+
+### Deferred until S1 research
+
+Transfer method, failed-transfer recovery, negative-balance recovery (BQ-034).
+
+### Consequences
+
+- Nothing here is implemented. The settlement engine, compensation posting and
+  statements each need their own implementation authorization.
+- S5 can proceed on staging now: adding the three events to endpoint
+  `we_1UXG7eARZ0Fu9Rq0GSa6HM96`.
+
+### Supersedes / Superseded By
+
+**Supersedes:** DEC-055 clause 7's refund-event exclusion, for staging only;
+BQ-024's open amount. **Superseded by:** none. **Preserves unchanged:**
+DEC-026, DEC-044, DEC-045, DEC-053, DEC-055 (all other clauses), DEC-057…060.
