@@ -71,6 +71,7 @@ These have been, by execution:
 | Phone OTP → profile read under RLS → `display_name` write → session survives restart → logout persists | 2026-08-10 (EVENT-011) | `supabase/tests/live-rls-check.mjs`, 14/14 |
 | Merchant M-05 accept: one `POST /orders/:id/accept` → 200, `MERCHANT_ACCEPTED` with `prep_minutes`, exactly one `deliveries` / `order_status_history` / outbox row, board updated by Realtime | 2026-09-01 (EVENT-026) | `CLAUDE.md` §11; fixture `M05-VERIFY-0005` |
 | D-01 commission snapshot rows and the First Manual Tick (accepted) | 2026-09-20 | `CLAUDE.md` EVENT-035 |
+| **Full order happy path**: cart → order → Stripe test payment → webhook → `PAID` → accept → dispatch → pickup → proof photo → `DELIVERED`, with the expected ledger. Local API against `banhao-dev`, API-level, manual ticks | 2026-11-02 | [`E2E_RUN_2026-11-02.md`](E2E_RUN_2026-11-02.md) |
 | M-AV PAUSED customer path on iOS Simulator (G-3 Test A); the rest of G-3 is `BLOCKED` | 2026-09, after `ab3efec3` | `CLAUDE.md` §11 |
 
 Everything else is unit- and integration-tested against fixtures, or against a
@@ -280,6 +281,9 @@ effort alone.
 
 | # | Blocked | Class | What would unblock it |
 |---|---|---|---|
+| 0a | **Staging cannot take an order end to end** | Configuration | No `STRIPE_WEBHOOK_SECRET` on Cloud Run and zero Stripe webhook endpoints, so no payment confirms; no `R2_PRIVATE_BUCKET`, so no delivery completes. See [`E2E_RUN_2026-11-02.md`](E2E_RUN_2026-11-02.md) |
+| 0c | **No operator exists** | Data / owner action | `platform_staff` is empty, so refunds, case handling and delivery failure cannot be performed by anyone |
+| 0d | Customer notifications show raw event names (`OrderDelivered`), no body | Product decision | A per-event title/body convention |
 | 0b | **Recurring Tick**: order expiry, outbox dispatch and escalations do not run on their own | **Owner decision** | Currently DO NOT ENABLE. Set the Worker-side `INTERNAL_TICK_SECRET` when the owner decides |
 | 1 | The Admin app's financial half — A-16 through A-22 (payments, refunds, reconciliation, ledger, settlement) | **Business decision** | Q-002 and Q-032. Q-001 (DEC-055) and Q-020 (DEC-057…060) are resolved. The screens are fully designed in `BANHAO ADMIN - Operations - Phase I.dc.html`. **The exception half — the Human Supervisor console — is built**, since the AI Operations package § 09 designs it and it needs none of those decisions |
 | 1b | Phase I's operational commands from a case (cancel, release, redispatch, pause) | **Business decision** | BQ-013, UX-Q-006, OD-04, BQ-015, Q-032. Each case detail names the specific decision blocking it rather than rendering a control the platform cannot back |
