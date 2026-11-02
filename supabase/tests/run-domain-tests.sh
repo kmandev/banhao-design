@@ -494,4 +494,18 @@ if grep -q "FAIL" /tmp/banhao-ai-dedup-concurrency-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY + D-01 COMMISSION SNAPSHOT + D-01 FREEZE RACE + DEC-065 AI AUDIT DEDUP VERIFICATION PASSED"
+echo "==> Running DEC-068 A1 payment_events.payment_id write-once assertions (20261102000001)"
+docker cp "$REPO_ROOT/supabase/tests/payment_events_payment_id_write_once_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/payment_events_payment_id_write_once_test.sql 2>&1 | tee /tmp/banhao-payment-events-wo-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> DEC-068 A1 payment_events write-once verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-payment-events-wo-out.log; then
+  echo "==> DEC-068 A1 payment_events write-once verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY + D-01 COMMISSION SNAPSHOT + D-01 FREEZE RACE + DEC-065 AI AUDIT DEDUP + DEC-068 PAYMENT_EVENTS WRITE-ONCE VERIFICATION PASSED"

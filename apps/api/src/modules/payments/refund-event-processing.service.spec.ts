@@ -242,7 +242,6 @@ describe('RefundEventProcessingService — matching (Step 7)', () => {
       { data: claimedEvent(), error: null },
       { data: refundRow(), error: null },
       { data: paymentRow({ provider_payment_id: 'pi_someone_else' }), error: null },
-      { data: null, error: null }, // payment_id backfill
       { data: null, error: null }, // markAnomaly write
     ]);
     const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
@@ -253,6 +252,37 @@ describe('RefundEventProcessingService — matching (Step 7)', () => {
     expect(calls.some((c) => c.table === 'refunds' && c.op === 'update')).toBe(false);
     const anomalyWrite = calls[calls.length - 1]!;
     expect(anomalyWrite.payload?.processing_error).toContain('provider payment identity conflicts');
+  });
+
+  it('a conflicting payment association never links the event to that payment (the link is write-once, DEC-068 A1)', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent(), error: null },
+      { data: refundRow(), error: null },
+      { data: paymentRow({ provider_payment_id: 'pi_someone_else' }), error: null },
+      { data: null, error: null }, // markAnomaly write
+    ]);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
+
+    await service.processOne(EVENT_ID);
+
+    expect(calls.some((c) => c.table === 'payment_events' && c.payload && 'payment_id' in c.payload)).toBe(false);
+  });
+
+  it('a matching payment association links the event to its payment', async () => {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedEvent(), error: null },
+      { data: refundRow(), error: null },
+      { data: paymentRow(), error: null },
+      { data: null, error: null }, // payment_id link
+      { data: null, error: null }, // refunds transition
+    ]);
+    const service = new RefundEventProcessingService(supabase, fakeLedgerReversal());
+
+    await service.processOne(EVENT_ID);
+
+    const link = calls.find((c) => c.table === 'payment_events' && c.payload && 'payment_id' in c.payload);
+    expect(link?.payload).toEqual({ payment_id: PAYMENT_ID });
+    expect(link?.eq).toMatchObject({ id: EVENT_ID });
   });
 });
 

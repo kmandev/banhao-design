@@ -314,17 +314,6 @@ export class RefundEventProcessingService {
       return;
     }
 
-    // Best-effort audit metadata — never the concurrency or matching
-    // authority for anything above or below, same precedent
-    // `PaymentEventProcessingService.handleClaimedEvent` already sets.
-    const { error: linkError } = await this.supabase.admin
-      .from('payment_events')
-      .update({ payment_id: payment.id })
-      .eq('id', event.id);
-    if (linkError) {
-      this.logger.error(`payment_events.payment_id backfill failed for ${event.id}: ${linkError.message}`);
-    }
-
     const eventProviderPaymentId = readString(event.raw_payload, 'providerPaymentId');
     if (!eventProviderPaymentId || eventProviderPaymentId !== payment.provider_payment_id) {
       await this.markAnomaly(
@@ -333,6 +322,21 @@ export class RefundEventProcessingService {
           `"${payment.provider_payment_id ?? 'null'}", event carried "${eventProviderPaymentId ?? 'null'}". No state transition.`,
       );
       return;
+    }
+
+    // Best-effort audit metadata — never the concurrency or matching
+    // authority for anything above or below, same precedent
+    // `PaymentEventProcessingService.handleClaimedEvent` already sets. Linked
+    // only once the event's provider payment identity matches: the link is
+    // write-once (DEC-068 A1), and the reconciliation detector reads refund
+    // evidence through it, so an event that names a different payment must
+    // never be attached to this one.
+    const { error: linkError } = await this.supabase.admin
+      .from('payment_events')
+      .update({ payment_id: payment.id })
+      .eq('id', event.id);
+    if (linkError) {
+      this.logger.error(`payment_events.payment_id backfill failed for ${event.id}: ${linkError.message}`);
     }
 
     const eventAmountSatang = readAmount(event.raw_payload, 'amountSatang');
