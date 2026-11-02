@@ -21,7 +21,7 @@ staging state as of 2026-11-02; there is no production deployment — see
 |---|---|---|
 | `apps/api` | Google Cloud Run, `asia-southeast3` | Staging only: `banhao-api-staging`, revision `00012-sn6` (2026-11-02), image from `main` @ `4599bccb`, with `STRIPE_WEBHOOK_SECRET` and `R2_PRIVATE_BUCKET` (DEC-066). `/health` `ok` |
 | `apps/admin` | Cloudflare Pages, static export | `deploy-web.yml` last succeeded 2026-09-21; live site not checked |
-| `apps/tick-worker` | Cloudflare Worker (cron) | Deployed; fail-closed by owner decision, Worker-side `INTERNAL_TICK_SECRET` unset |
+| `apps/tick-worker` | Cloudflare Worker (cron) | Deployed; `INTERNAL_TICK_SECRET` set 2026-11-02, ticking staging every minute (DEC-066) |
 | `apps/customer`, `apps/driver` | Expo/EAS → App Store, Google Play | Separate track, not part of this document |
 | `apps/merchant` | Cloudflare Pages, **after** DEC-APP-003 conversion to Next.js | Next.js conversion done, but **no deploy target**: `deploy-web.yml` builds `apps/admin` only |
 | GCP auth | Workload Identity Federation | Configured for staging |

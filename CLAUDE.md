@@ -44,7 +44,9 @@ with no record in Git. Staging `/health` reports `ok`. Later that day staging
 was redeployed from `main` (`banhao-api-staging-00012-sn6`), so the dedup code
 is now live there too, with the Stripe webhook secret and, under **DEC-066**
 (staging only), the private POD bucket, a first `ADMIN` staff member
-(`+66899999999`) and authorization to run the recurring tick on staging.
+(`+66899999999`) and the **recurring tick, now running on staging** (production
+stays DO NOT ENABLE). A full order then went cart → `DELIVERED` on staging with
+Stripe's own webhook (`docs/E2E_RUN_2026-11-02.md`).
 T7 is authorized by DEC-065 and **not done**. See §7.
 
 > **Authoritative for application implementation:**
