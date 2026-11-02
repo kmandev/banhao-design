@@ -251,7 +251,7 @@ staging.
 |---|---|
 | API | `banhao-api-staging`, revision `00010-jdx` (2026-11-02, adds `STRIPE_WEBHOOK_SECRET`; `00009-z62` is an identical earlier copy), same image as `00008-4zw` (2026-09-15). **The image predates `36d99edd`.** `/health` answers `status: ok`, database `ok`, after the restore |
 | Database | `banhao-dev`, `ACTIVE_HEALTHY` after a restore from pause on 2026-11-02 |
-| Tick Worker | Deployed, fail-closed by owner decision |
+| Tick Worker | Deployed. Recurring tick on staging authorized by DEC-066; still fail-closed until the Worker-side `INTERNAL_TICK_SECRET` is set |
 | Admin | `deploy-web.yml` last succeeded 2026-09-21; the live site was not checked |
 | Merchant | **No deploy target.** `deploy-web.yml` builds `apps/admin` only, and its comment calling merchant an Expo shell is stale |
 | Customer, Driver | No store or EAS release recorded |
@@ -281,10 +281,10 @@ effort alone.
 
 | # | Blocked | Class | What would unblock it |
 |---|---|---|---|
-| 0a | **Staging cannot take an order end to end** | Configuration | **Webhook half fixed 2026-11-02:** Stripe test endpoint `we_1UXG7eARZ0Fu9Rq0GSa6HM96` (the three DEC-055 clause 7 events only) and `STRIPE_WEBHOOK_SECRET` on revision `00010-jdx`. A real delivery to staging has not been observed yet, and confirmation still needs a tick. Still open: no `R2_PRIVATE_BUCKET`, so no delivery completes. See [`E2E_RUN_2026-11-02.md`](E2E_RUN_2026-11-02.md) |
-| 0c | **No operator exists** | Data / owner action | `platform_staff` is empty, so refunds, case handling and delivery failure cannot be performed by anyone |
+| 0a | **Staging cannot take an order end to end** | Configuration | **Webhook half fixed 2026-11-02:** Stripe test endpoint `we_1UXG7eARZ0Fu9Rq0GSa6HM96` (the three DEC-055 clause 7 events only) and `STRIPE_WEBHOOK_SECRET` on staging. A real delivery to staging has not been observed yet. `R2_PRIVATE_BUCKET` is now set (DEC-066), **but the staging R2 token gets `403` on that bucket**: its bucket scope must be extended in Cloudflare. See [`E2E_RUN_2026-11-02.md`](E2E_RUN_2026-11-02.md) |
+| 0c | ~~No operator exists~~ | **Resolved on staging** | `+66899999999` granted `ADMIN` in `platform_staff` on `banhao-dev` (DEC-066) |
 | 0d | Customer notifications show raw event names (`OrderDelivered`), no body | Product decision | A per-event title/body convention |
-| 0b | **Recurring Tick**: order expiry, outbox dispatch and escalations do not run on their own | **Owner decision** | Currently DO NOT ENABLE. Set the Worker-side `INTERNAL_TICK_SECRET` when the owner decides |
+| 0b | **Recurring Tick**: order expiry, outbox dispatch and escalations do not run on their own | **Operator action** | Authorized for staging (DEC-066), still DO NOT ENABLE for production. Set the Worker-side `INTERNAL_TICK_SECRET` with `wrangler secret put` (needs a Cloudflare login) |
 | 1 | The Admin app's financial half — A-16 through A-22 (payments, refunds, reconciliation, ledger, settlement) | **Business decision** | Q-002 and Q-032. Q-001 (DEC-055) and Q-020 (DEC-057…060) are resolved. The screens are fully designed in `BANHAO ADMIN - Operations - Phase I.dc.html`. **The exception half — the Human Supervisor console — is built**, since the AI Operations package § 09 designs it and it needs none of those decisions |
 | 1b | Phase I's operational commands from a case (cancel, release, redispatch, pause) | **Business decision** | BQ-013, UX-Q-006, OD-04, BQ-015, Q-032. Each case detail names the specific decision blocking it rather than rendering a control the platform cannot back |
 | 2 | Merchant M-06, M-09 (`SHOULD`), UX-SPEC M-13 earnings, M-14 settings (`LATER`) | Missing design artifact | Same. None is launch-critical, and M-13 earnings is additionally money-blocked (Q-032 — settlement-cycle parameters a payout screen would need; BQ-029 itself is resolved, **DEC-044**). **M-10 and M-AV are no longer on this list — both are built**, each from its own committed artifact |

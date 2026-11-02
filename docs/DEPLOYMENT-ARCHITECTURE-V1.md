@@ -19,7 +19,7 @@ staging state as of 2026-11-02; there is no production deployment — see
 
 | Component | Target | Status |
 |---|---|---|
-| `apps/api` | Google Cloud Run, `asia-southeast3` | Staging only: `banhao-api-staging`, revision `00010-jdx` (2026-11-02), image unchanged since 2026-09-15. `/health` `ok` on 2026-11-02, after `banhao-dev` was restored from a pause |
+| `apps/api` | Google Cloud Run, `asia-southeast3` | Staging only: `banhao-api-staging`, revision `00012-sn6` (2026-11-02), image from `main` @ `4599bccb`, with `STRIPE_WEBHOOK_SECRET` and `R2_PRIVATE_BUCKET` (DEC-066). `/health` `ok` |
 | `apps/admin` | Cloudflare Pages, static export | `deploy-web.yml` last succeeded 2026-09-21; live site not checked |
 | `apps/tick-worker` | Cloudflare Worker (cron) | Deployed; fail-closed by owner decision, Worker-side `INTERNAL_TICK_SECRET` unset |
 | `apps/customer`, `apps/driver` | Expo/EAS → App Store, Google Play | Separate track, not part of this document |

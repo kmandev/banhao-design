@@ -40,10 +40,11 @@ the restore, **`supabase migration list --linked` shows all 32 migrations
 applied**, including `20260921000001`, and the index
 `audit_logs_ai_action_entity_key` exists live. That contradicts its own
 commit's "not applied" note: it was applied after that commit, by an action
-with no record in Git. Staging `/health` reports `ok`. The live API revision
-(`banhao-api-staging-00010-jdx`, 2026-11-02, which adds the Stripe webhook
-secret to the 2026-09-15 image) still **predates the dedup
-code**, so the index is live but the conflict-safe insert is not deployed.
+with no record in Git. Staging `/health` reports `ok`. Later that day staging
+was redeployed from `main` (`banhao-api-staging-00012-sn6`), so the dedup code
+is now live there too, with the Stripe webhook secret and, under **DEC-066**
+(staging only), the private POD bucket, a first `ADMIN` staff member
+(`+66899999999`) and authorization to run the recurring tick on staging.
 T7 is authorized by DEC-065 and **not done**. See §7.
 
 > **Authoritative for application implementation:**

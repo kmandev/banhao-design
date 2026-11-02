@@ -9188,3 +9188,60 @@ only. **Superseded by:** none. **Preserves unchanged:** DEC-040 (all ten
 constraints), D-01 (all ARCH/S/ROLLOUT/ROLLBACK/CUTOVER clauses), every
 other `DEC-0xx`/`D-xx` entry, and every still-`OPEN`/`DEFER` item listed in
 `CLAUDE.md` §9/§10/§12.
+
+---
+
+## DEC-066 — Staging-only enablement: proof-of-delivery bucket, recurring tick, first staff member
+
+**Status:** **ACCEPTED — STAGING (`banhao-dev` / `banhao-api-staging`) ONLY** · **Date:** 2026-11-02 · **Owner:** PRODUCT_OWNER
+
+### Context
+
+The 2026-11-02 end-to-end run (`docs/E2E_RUN_2026-11-02.md`) showed staging
+could not complete an order: no proof-of-delivery bucket, no recurring tick,
+and no `platform_staff` member to handle a refund or a case. The same day the
+owner cancelled the step of commissioning a Thai legal review. The private
+bucket had been held back pending Q-012 (`DEPLOYMENT-ARCHITECTURE-V1.md`
+§15.10), and the recurring tick was held fail-closed by the owner after the
+First Manual Tick.
+
+### Decision
+
+1. **Proof-of-delivery bucket on staging.** `R2_PRIVATE_BUCKET =
+   banhao-dev-pod-private` is provisioned for `banhao-api-staging`. DEC-038's
+   design is unchanged: a separate private bucket, signed-URL reads only.
+2. **Recurring tick on staging.** The Cloudflare Worker's
+   `INTERNAL_TICK_SECRET` is set, so the existing `* * * * *` schedule runs
+   against staging. This supersedes the "DO NOT ENABLE recurring Tick" owner
+   decision **for staging only**.
+3. **First staff member.** The `banhao-dev` Test OTP account `+66899999999`
+   is granted `platform_staff.staff_role = 'ADMIN'`.
+
+### Not decided here
+
+- **Q-012 stays `OPEN`.** The photo retention period and PDPA lawful basis are
+  unanswered; cancelling the counsel review does not answer them. Retention
+  purge stays default OFF (DEC-039).
+- **Production** gets none of this automatically. A production bucket,
+  recurring tick and staff list each need their own instruction.
+- Refund events stay unsubscribed (DEC-055 clause 7).
+
+### Consequences
+
+- Ticks act on all pending `banhao-dev` data, including old fixtures: offer
+  expiry, no-rider escalations and AI Ops escalations will appear for them.
+- The staging R2 API token was scoped to the public bucket only (verified
+  2026-11-02: `403` on the private bucket). The token's bucket scope must be
+  extended in Cloudflare before proof uploads work on staging.
+
+### Evidence
+
+Owner answers in session, 2026-11-02 ("ทำระยะ 0 ต่อเลย", then the three
+staging choices), following the E2E report.
+
+### Supersedes / Superseded By
+
+**Supersedes:** the owner's DO NOT ENABLE recurring Tick decision, for staging
+only; the §15.10 hold on `R2_PRIVATE_BUCKET`, for staging only.
+**Superseded by:** none. **Preserves unchanged:** DEC-038, DEC-039, DEC-055,
+DEC-058, and Q-012's `OPEN` status.
