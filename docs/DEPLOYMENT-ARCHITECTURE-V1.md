@@ -19,7 +19,7 @@ staging state as of 2026-11-02; there is no production deployment — see
 
 | Component | Target | Status |
 |---|---|---|
-| `apps/api` | Google Cloud Run, `asia-southeast3` | Staging only: `banhao-api-staging`, revision `00008-4zw` (2026-09-15). `/health` `ok` on 2026-11-02, after `banhao-dev` was restored from a pause |
+| `apps/api` | Google Cloud Run, `asia-southeast3` | Staging only: `banhao-api-staging`, revision `00009-z62` (2026-11-02), image unchanged since 2026-09-15. `/health` `ok` on 2026-11-02, after `banhao-dev` was restored from a pause |
 | `apps/admin` | Cloudflare Pages, static export | `deploy-web.yml` last succeeded 2026-09-21; live site not checked |
 | `apps/tick-worker` | Cloudflare Worker (cron) | Deployed; fail-closed by owner decision, Worker-side `INTERNAL_TICK_SECRET` unset |
 | `apps/customer`, `apps/driver` | Expo/EAS → App Store, Google Play | Separate track, not part of this document |
@@ -253,8 +253,9 @@ Two boot-time crashes occurred on `banhao-api-staging` during the deploys that f
 
 1. **R2 storage config missing (commit `71c05907`).** `StorageService`'s constructor validates five R2 environment variables at boot and throws if any are missing — deliberate fail-at-startup design. `deploy-api.yml` never supplied them, so the container crashed before `app.listen()` on every deploy since R2 storage was added, surfacing only as Cloud Run's generic "failed to listen on PORT=8080." Confirmed via revision `banhao-api-staging-00006-8cb`'s runtime logs (`"Cloudflare R2 storage is not configured"`, then `exit(1)`, ~600ms before Cloud Run's health-check timeout). Fixed by wiring the two credential-pair values through Secret Manager (matching the `SUPABASE_SERVICE_ROLE_KEY` pattern) and the three non-secret values through GitHub Environment vars (matching the `SUPABASE_URL` pattern). `R2_PRIVATE_BUCKET` was deliberately left unprovisioned — DEC-038 keeps it that way pending the Q-012 legal review, and `StorageService` only requires it lazily, at the first private-bucket (POD) operation.
 2. **Stripe secret missing (commit `9e5d40b5`).** `StripePaymentProvider`'s constructor requires `STRIPE_SECRET_KEY` and throws without it (DEC-055 clause 13). `PAYMENT_PROVIDER` is bound to `StripePaymentProvider` unconditionally, so Nest constructs it during bootstrap, before `app.listen()` — `deploy-api.yml` never supplied the key, so every deploy attempt crashed at that point. Confirmed via revision `banhao-api-staging-00007-vxs`'s runtime logs (R2 initialised successfully, then `"Stripe is not configured. Missing: STRIPE_SECRET_KEY"`, then `exit(1)`). Fixed by wiring the Secret Manager reference, matching the existing pattern. `STRIPE_WEBHOOK_SECRET` was not added — `StripePaymentProvider` checks it lazily, inside `verifyWebhookSignature`, not at construction.
+3. **Webhook secret added (2026-11-02).** Without it every Stripe webhook failed verification, so staging could never confirm a payment. A Stripe **test-mode** endpoint, `we_1UXG7eARZ0Fu9Rq0GSa6HM96`, now points at `/webhooks/payments/stripe` with exactly DEC-055 clause 7's three events; refund events stay unsubscribed. Its signing secret is the Secret Manager secret `STRIPE_WEBHOOK_SECRET`, wired into the service as revision `00009-z62` (same image as `00008-4zw`) and into `deploy-api.yml`'s `secrets:` block.
 
-Both fixes are deploy-configuration changes only (`deploy-api.yml` + Secret Manager references) — no application code, schema, or decision changed as part of either fix.
+All three fixes are deploy-configuration changes only (`deploy-api.yml` + Secret Manager references) — no application code, schema, or decision changed as part of either fix.
 
 ---
 

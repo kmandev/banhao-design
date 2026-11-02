@@ -249,7 +249,7 @@ staging.
 
 | Component | State |
 |---|---|
-| API | `banhao-api-staging`, revision `00008-4zw`, created 2026-09-15. **Predates `36d99edd`.** `/health` answers `status: ok`, database `ok`, after the restore |
+| API | `banhao-api-staging`, revision `00009-z62` (2026-11-02, adds `STRIPE_WEBHOOK_SECRET`), same image as `00008-4zw` (2026-09-15). **The image predates `36d99edd`.** `/health` answers `status: ok`, database `ok`, after the restore |
 | Database | `banhao-dev`, `ACTIVE_HEALTHY` after a restore from pause on 2026-11-02 |
 | Tick Worker | Deployed, fail-closed by owner decision |
 | Admin | `deploy-web.yml` last succeeded 2026-09-21; the live site was not checked |
@@ -281,7 +281,7 @@ effort alone.
 
 | # | Blocked | Class | What would unblock it |
 |---|---|---|---|
-| 0a | **Staging cannot take an order end to end** | Configuration | No `STRIPE_WEBHOOK_SECRET` on Cloud Run and zero Stripe webhook endpoints, so no payment confirms; no `R2_PRIVATE_BUCKET`, so no delivery completes. See [`E2E_RUN_2026-11-02.md`](E2E_RUN_2026-11-02.md) |
+| 0a | **Staging cannot take an order end to end** | Configuration | **Webhook half fixed 2026-11-02:** Stripe test endpoint `we_1UXG7eARZ0Fu9Rq0GSa6HM96` (the three DEC-055 clause 7 events only) and `STRIPE_WEBHOOK_SECRET` on revision `00009-z62`. A real delivery to staging has not been observed yet, and confirmation still needs a tick. Still open: no `R2_PRIVATE_BUCKET`, so no delivery completes. See [`E2E_RUN_2026-11-02.md`](E2E_RUN_2026-11-02.md) |
 | 0c | **No operator exists** | Data / owner action | `platform_staff` is empty, so refunds, case handling and delivery failure cannot be performed by anyone |
 | 0d | Customer notifications show raw event names (`OrderDelivered`), no body | Product decision | A per-event title/body convention |
 | 0b | **Recurring Tick**: order expiry, outbox dispatch and escalations do not run on their own | **Owner decision** | Currently DO NOT ENABLE. Set the Worker-side `INTERNAL_TICK_SECRET` when the owner decides |
