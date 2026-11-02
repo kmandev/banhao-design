@@ -7,7 +7,9 @@
 - **Name:** BANHAO | บ้านเฮา
 - **Type:** Local Super App
 - **Repository:** `banhao-design` (GitHub: `kmandev/banhao-design`)
-- **Current repository contents:** Product/UX design artifacts and process documentation only. **No application source code exists in this repository yet** (verified — see [Technology Stack](#technology-stack)).
+- **Current repository contents:** A pnpm/Turborepo monorepo: NestJS API, Expo customer and driver apps, Next.js merchant and admin apps, a Cloudflare tick worker, shared packages, Supabase migrations, plus the design artifacts and documentation.
+
+> **Corrected 2026-11-02.** This file still claimed no application code existed. Sections that described that state are replaced below. For current detail, `CLAUDE.md` and [`CURRENT_STATUS.md`](CURRENT_STATUS.md) take precedence.
 
 ## Project Vision
 
@@ -15,7 +17,7 @@ Build the first major local multi-service platform for อำเภอบุณ�
 
 ## Current Phase
 
-**Phase 1 — Food Delivery.** Product and UX design for this phase are substantially complete (design system + full customer flow). No implementation has started.
+**Phase 1 — Food Delivery.** Implementation is well underway and **not launch-ready**: settlement and payout are unbuilt, real-money payments and legal review are outstanding, and only a staging environment exists.
 
 ## Target Market
 
@@ -31,13 +33,13 @@ Marketplace connecting customers, merchants (restaurants/shops), and drivers ("�
 
 ## Current Product
 
-Only the **Customer App** has a complete UI design (18 screens, Phase 1 food-ordering flow — see [`design/customer/`](../design/customer/)). Driver App, Merchant Web, and Admin Web exist only as a handful of wireframe-level sketches inside the Product Architecture canvas (see [Current Architecture](#current-architecture)) — not full designs, not implementations.
+Customer, Merchant, Driver and Admin apps all exist as code, at different levels of completeness. See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) §5.
 
 ## Technology Stack
 
-**No application technology stack has been chosen or implemented.** This is a design-only repository: no `package.json`, no backend/frontend framework files, no database schema, no API code, no Dockerfile, no CI config, and no `.env` example exist anywhere in the repo (verified by full-repository file search on 2026-08-09).
+The accepted stack is in `CLAUDE.md` §2: NestJS, Supabase (PostgreSQL + PostGIS), React Native + Expo, Next.js, pnpm + Turborepo.
 
-What *is* evidenced in the repository:
+*Historical (2026-08-09), design-tooling evidence only — not the application stack:*
 
 | Item | Evidence | Status |
 |---|---|---|
@@ -48,8 +50,6 @@ What *is* evidenced in the repository:
 | Driver App platform intention: "Mobile · Flutter" | `docs/05-architecture/BANHAO Product Architecture.dc.html`, sitemap data (`platform:'Mobile · Flutter'`) | Documented **intention** in a design doc, not an implementation decision with sign-off recorded anywhere |
 | Merchant Web platform intention: "Responsive · Desktop first" (no framework named) | Same sitemap data | Intention only |
 | Admin Web platform intention: "Desktop first" (no framework named) | Same sitemap data | Intention only |
-
-Backend language, framework, hosting provider, and database: **UNKNOWN / NOT VERIFIED**.
 
 ## Repository Structure
 
@@ -90,7 +90,7 @@ This `AI_CONTEXT.md` file will not be expanded further to hold that content — 
 
 **The authoritative source for application implementation is [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md)** — *Application Architecture V1.1, APPROVED / READY FOR IMPLEMENTATION*: 12 `DEC-APP` decisions, 9 implementation phases plus F′. Where any other document conflicts with it, V1.1 wins.
 
-A system is built and running: a pnpm/Turborepo monorepo with a NestJS API (`/health`, `/api/v1/me`), an implemented Expo customer app, five shared packages, a deployed Supabase database (Postgres 17 + PostGIS, 16 migrations, 40 tables, **LOCKED** at `e471ec1d`), GitHub Actions CI, and a Dockerfile. What does **not** exist is business logic — no order creation, payment integration, dispatch, or settlement.
+Order creation, Stripe payment integration, refunds, dispatch and delivery exist as code; settlement and payout do not. The repository holds 32 Supabase migrations.
 
 See [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the system as built and [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md) for what works, what is mocked, and what is unverified.
 
@@ -102,33 +102,18 @@ Documented in [`docs/05-architecture/BANHAO Product Architecture.dc.html`](05-ar
 
 ## Current Features
 
-See [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md) for the full, honest breakdown. Summary: all "features" that exist today are **design artifacts** (click-through UI in `.dc.html` canvases), not running software.
-
-## Completed Features
-
-- Design System v1.0 (Phase 1 scope)
-- Customer App UI design — 18 screens, full Phase 1 food-ordering flow
-- Product Architecture documentation — strategy, sitemap, order state machine, user flow, wireframes, scaling model
-- Payment Architecture documentation — architecture, state machine, flows, ledger, driver cash handling, edge cases
-- Tracking-map prototype (mock data)
-- Repository documentation/process scaffold + AI memory system
-
-## In Progress
-
-Nothing is actively "in progress" in code. At the documentation level: this AI memory system (this session).
+See [`docs/CURRENT_STATUS.md`](CURRENT_STATUS.md) for the full breakdown, and treat "implemented" and "verified live" as separate claims.
 
 ## Not Yet Implemented
 
-- Any backend service, API, or database
-- Any authentication/authorization system
-- Driver App, Merchant Web, Admin Web (beyond a handful of wireframe screens)
-- Payment provider integration
-- Deployment/hosting of any kind
-- Automated tests of any kind
+- Settlement and payout
+- D-02…D-14 economics, routing, and rider GPS
+- Push notifications, real SMS, Sentry
+- A production environment
 
 ## Known Issues
 
-No runtime issues exist (no running system to have bugs in). Open **design-level** questions are tracked in [`docs/TODO.md`](TODO.md) under "Questions Requiring Product Decision" — they are sourced from caveats the design documents state about themselves (e.g. payment provider not yet chosen, legal/compliance review not yet done).
+`banhao-dev` is a free-tier project that pauses when idle; it was found paused and restored on 2026-11-02. See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) §13 for blockers.
 
 ## Important Constraints
 
@@ -149,7 +134,7 @@ Extracted from the design canvases (see [`docs/ARCHITECTURE.md`](ARCHITECTURE.md
 
 ## Technical Rules
 
-None exist yet at the code level (no code exists). The rules above are product/business rules that any future implementation must honor. See [AGENTS.md](../AGENTS.md) for agent-facing technical rules (no secrets in Git, no hardcoded credentials, webhook-only payment confirmation, ledger auditability, etc.).
+See `CLAUDE.md` §10 for the working rules and [AGENTS.md](../AGENTS.md) for agent-facing technical rules (no secrets in Git, no hardcoded credentials, webhook-only payment confirmation, ledger auditability, etc.).
 
 ## Development Principles
 
@@ -157,12 +142,7 @@ From [`docs/05-architecture/BANHAO Product Architecture.dc.html`](05-architectur
 
 ## Current Priorities
 
-1. Resolve the P0 items in [`docs/TODO.md`](TODO.md): payment provider/settlement model, backend stack, and database technology — nothing can be implemented until these are decided.
-2. Design the remaining surfaces (Driver App, Merchant Web, Admin Web) past wireframe stage.
-
-## Next Recommended Step
-
-Make the payment-provider and backend-technology decisions blocking all further implementation (see `docs/TODO.md` P0 list) — everything else in this repository is design-complete enough to start from once those decisions land.
+See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) §13 and §14.
 
 ---
 

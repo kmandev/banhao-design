@@ -31,7 +31,19 @@ The **migration count is corrected to 31** (not 26 — see §6/§7/§10). The
 `StripePaymentProvider` unconditionally (`apps/api/src/modules/payments/payments.module.ts`,
 since `593c65e9`, 2026-09-08), not `NullPaymentProvider` as this file
 previously stated — see §5/§10. **AI Ops dedup remains deferred**, unchanged
-by this reconciliation.
+by this reconciliation. Reconciled again 2026-11-02 at `36d99edd`, on `main`:
+**AI Ops audit dedup is now implemented in code** (`36d99edd`, under DEC-065),
+superseding the "deferred" sentence above, and its migration
+`20260921000001` brings the repository total to **32**. `banhao-dev` was found
+`INACTIVE` (paused) on 2026-11-02 and restored the same day by the owner. After
+the restore, **`supabase migration list --linked` shows all 32 migrations
+applied**, including `20260921000001`, and the index
+`audit_logs_ai_action_entity_key` exists live. That contradicts its own
+commit's "not applied" note: it was applied after that commit, by an action
+with no record in Git. Staging `/health` reports `ok`. The live API revision
+(`banhao-api-staging-00008-4zw`, created 2026-09-15) still **predates the dedup
+code**, so the index is live but the conflict-safe insert is not deployed.
+T7 is authorized by DEC-065 and **not done**. See §7.
 
 > **Authoritative for application implementation:**
 > [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
@@ -92,9 +104,11 @@ Fonts: **IBM Plex Sans Thai** 400/500/600/700, bundled via
 ## 3. Current branch
 
 ```
-main @ 14289652                   ← YOU ARE HERE — everything below is merged
+main @ 36d99edd                   ← YOU ARE HERE (2026-11-02) — everything below is merged
   e471ec1d                           supabase-migration-v1 merged (DB checkpoint)
   14289652                           Application Architecture V1.1 added
+  ab3efec3                           M-AV G-2 lock, last feature/g7-driver-availability work reconciled here
+  36d99edd                           AI Ops audit dedup
 ```
 
 **All feature branches are merged into `main`.** `feature/supabase-migration-v1`,
@@ -153,6 +167,7 @@ explicit instruction" rule.
 | EVENT-034 | **AC-04 answered — the customer-quoted preparation estimate is persisted** (**DEC-042**). One additive migration (**26 total**), `orders.customer_quoted_prep_minutes`: captured by `create_order()` alone, never client-supplied, immutable afterwards, NULL for every pre-existing order. Distinct from `orders.prep_minutes` (M-05's merchant answer at accept time) and from `orders.quoted_eta_minutes` (a delivery-arrival estimate), and excluded from ETA arithmetic. 16 SQL assertions plus customer-app coverage; C-14 renders one caption in one slot. **Both this migration and M-AV's were applied and verified on `banhao-dev` 2026-09-04**; a browser-level UI walkthrough of both features is still outstanding |
 | EVENT-030 | **AI-01 locked, then Phase J authorized.** One additive migration (**24 total**) widening `audit_logs.actor_type` to accept `'AI'` — every existing actor type, the append-only trigger, the DEC-032 operator-reason CHECK, RLS and grants all preserved, proven by 6 assertions in the domain suite (`95cc0dc4`). Then **DEC-040** added AI Operations + Human Supervisor to the roadmap as **Phase J, after Phase I — authorized, not started**: architecture direction only, no implementation code, no open business policy answered |
 | EVENT-035 | **D-01 commission snapshot implemented and accepted, Tick Worker deployed, First Manual Tick accepted.** D-01 (`0fd13887`, migration `20260915000001`, **31st** migration): merchant commission resolved once at order creation and frozen as an order-time fact; `commission-pricing.ts`'s rate constant itself now computes **10%** (D-01), not DEC-043's 8%; live-verified via `order_commission_snapshots` rows on `banhao-dev`. D-02…D-14 remain unbuilt. Separately: the Cloudflare Tick Worker (`apps/tick-worker`, deployed since 2026-08-16) had its `API_URL` wired to the real `banhao-api-staging` Cloud Run URL (`49296520`); the **First Manual Tick** ran 2026-09-20T06:31:01–12 UTC and is **accepted** (4 legacy orders frozen to `PAYMENT_EXPIRED`, 36 stale rider-assignment offers expired, 7 outbox events dispatched, AI Ops audit rows bounded); the owner decision is **DO NOT ENABLE recurring Tick** — the Worker-side `INTERNAL_TICK_SECRET` stays unset, so the live `* * * * *` cron schedule remains functionally fail-closed. Also corrected in this reconciliation: the payment-provider binding (`PAYMENT_PROVIDER` → `StripePaymentProvider` unconditionally, since `593c65e9`, not `NullPaymentProvider`), and the migration count (26 → 31 — five previously uncounted: `20260907000001`, `20260907000002`, `20260908000001`, `20260909000001`, `20260915000001`). AI Ops dedup remains deferred — unchanged |
+| EVENT-036 | **AI Ops audit dedup implemented under DEC-065** (`36d99edd`): one partial unique index, migration `20260921000001` (**32nd**), and a conflict-safe `AiAuditService.insert()`. The migration is applied on `banhao-dev` (confirmed 2026-11-02, with no record of who applied it), and the code is not on the live staging revision. T7 remains authorized and undone, its formal prerequisite still outstanding |
 
 ## 5. Current implementation status
 
@@ -164,7 +179,7 @@ explicit instruction" rule.
 | Supabase Auth (Phone OTP) | **Configured live**; app-side flow written |
 | `profiles` + RLS | **DONE and live-verified** |
 | Mock repositories | **None left in the Customer app.** All nine bindings in `apps/customer/src/repositories/index.ts` are live: catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. The `mockRepositories` object survives only as test fixtures |
-| NestJS API | 49 operations across 46 paths — identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (`NullPaymentProvider`), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage, and the Phase I Human Supervisor console (§13). **The contract is `docs/06-api/openapi.json`**, generated from the real `AppModule` and guarded against drift by `apps/api/test/openapi.contract.spec.ts`; `docs/06-api/README.md` documents the envelope, the error catalogue and the guard order |
+| NestJS API | 58 operations across 55 paths — identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (Stripe, see the Payments row), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage, and the Phase I Human Supervisor console (§13). **The contract is `docs/06-api/openapi.json`**, generated from the real `AppModule` and guarded against drift by `apps/api/test/openapi.contract.spec.ts`; `docs/06-api/README.md` documents the envelope, the error catalogue and the guard order |
 | Merchant app | **MUST scope complete** (Next.js, DEC-APP-003) — phone-OTP login, restaurant scope, the live order board with Realtime + audible arrival alerting, order detail panel, accept-with-prep-time, **M-11 menu management**, **M-12 opening hours**, **M-10 restaurant profile** and **M-AV availability (NORMAL / BUSY / PAUSED)**, and the real five-item nav. The documented build order M-01 → M-03 → M-04/M-05 → M-07/M-08 → M-11/M-12 is **complete**, and M-10 and M-AV landed after it, each from its own committed design artifact. **Not built: M-06 reject dialog (SHOULD), M-09 (SHOULD), UX-SPEC M-13 earnings / M-14 settings (LATER) — all still blocked on a design artifact, none exists.** M-AV is the availability work formerly labelled M-13; see §11 |
 | Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
 | Admin app | **Human Supervisor console built** (Next.js) — phone-OTP login, `platform_staff` gate, operations inbox (S-02), case detail with live domain state and append-only timeline (S-03), close-case-with-reason (S-06). The Admin design package's financial screens (A-16…A-22) are **not built** and are blocked on the money decisions. See §13 |
@@ -264,14 +279,14 @@ packages/
   types/ validation/ config/ api-client/
 
 apps/api/src/                 NestJS: guards, identity, merchant/catalog, cart, orders
-                               (incl. delivery-proof), payments (NullPaymentProvider),
+                               (incl. delivery-proof), payments (Stripe),
                                rider/delivery, storage
 apps/driver/                  Status/availability, offer inbox, active delivery,
                                proof camera/review/upload; screens + repositories, tested
 apps/merchant/                Next.js: order board, menu management (M-11),
                                opening hours (M-12); see §11
 apps/admin/                   Still a shell — see §5
-supabase/migrations/          31 migration files (16 at the `e471ec1d` checkpoint + 15 since)
+supabase/migrations/          32 migration files (16 at the `e471ec1d` checkpoint + 16 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -301,7 +316,7 @@ docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-0
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
 docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          31 migrations (16 at checkpoint + 15 since) — do not
+supabase/migrations/*.sql          32 migrations (16 at checkpoint + 16 since) — do not
                                     edit an existing file; do not add a new one without
                                     an explicit instruction (see §10)
 ```
@@ -317,7 +332,8 @@ supabase/migrations/*.sql          31 migrations (16 at checkpoint + 15 since) �
 | Region | `ap-southeast-1` (Singapore) — closest available to Thailand |
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
-| Migrations | **31 in the repository** (16 at the `e471ec1d` V1.1 checkpoint + 15 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04, delivery-arrival/contact-attempts, customer email, Q-020 reconciliation refund-kinds, and D-01). **26 of the 31 were verified applied live as of 2026-09-03/04** (see below, unchanged from the prior reconciliation). Of the **5 added since** (`20260907000001` delivery_customer_arrival, `20260907000002` delivery_contact_attempts, `20260908000001` profiles_customer_email, `20260909000001` reconciliation_cases_refund_kinds, `20260915000001` d01_order_commission_snapshot), **`20260915000001` is confirmed applied and live-exercised** — `order_commission_snapshots` holds live rows and the First Manual Tick's `expire_legacy_unpaid_orders()` freeze phase ran against it 2026-09-20 (see the D-01/Tick reconciliation above). **The other 4 are not independently re-verified as applied in this reconciliation pass** — treat as likely-applied (this is an actively used dev/staging project) but unconfirmed by direct schema read; do not assert live status for them without checking. The last two verified as of the prior pass, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` showed all 26 (then-current) with a matching Remote entry, and direct schema reads confirmed `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body was byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
+| Project state | `ACTIVE_HEALTHY`. Found `INACTIVE` (paused) on 2026-11-02 and restored the same day from the Dashboard by the owner. A free-tier project pauses itself when idle, so expect this again after long gaps |
+| Migrations | **32 in the repository, all 32 applied** — `supabase migration list --linked`, 2026-11-02, shows a matching Remote entry for every local version (16 at the `e471ec1d` V1.1 checkpoint + 16 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04, delivery-arrival/contact-attempts, customer email, Q-020 reconciliation refund-kinds, D-01, and AI Ops dedup). This settles the four previously unconfirmed (`20260907000001`, `20260907000002`, `20260908000001`, `20260909000001`) and `20260921000001`, whose own commit (`36d99edd`) said "not applied"; a direct read confirms its index `audit_logs_ai_action_entity_key` exists with the designed `WHERE actor_type = 'AI'` predicate. The four were confirmed by the migration list only, not by direct schema read. `20260915000001` is additionally live-exercised — `order_commission_snapshots` holds live rows and the First Manual Tick ran against it 2026-09-20. The last two verified as of the prior pass, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` showed all 26 (then-current) with a matching Remote entry, and direct schema reads confirmed `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body was byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -390,15 +406,15 @@ this file summarises it.
 | **C** | Catalog & merchant read path — replaces the customer app's mocks | Implemented — Customer app catalog integration built (EVENT-022) |
 | **D** | Cart | Implemented — cart/checkout validation built (EVENT-022) |
 | **E** | Order — nine ACCEPTED states plus `CANCELLED`, as commands | Order foundation + API built (EVENT-022); full lifecycle coverage not independently re-verified in this update |
-| **F** | Payment on `NullPaymentProvider` — ledger must balance to zero | `NullPaymentProvider` module implemented (service, controller, webhook simulator, attempt-expiry, event processing) in the API; ledger-balances-to-zero property not independently re-verified in this update |
+| **F** | Payment foundation, first built on `NullPaymentProvider` — ledger must balance to zero | Production binding is now Stripe (§10); `NullPaymentProvider` remains for tests/dev. Module implemented (service, controller, webhook simulator, attempt-expiry, event processing) in the API; ledger-balances-to-zero property not independently re-verified in this update |
 | **G** | Rider & delivery — depends on E, **not** F | Substantial implementation: dispatch broadcast, pickup/en-route/arrival/completion transitions, delivery release + reconciliation, and the G7 proof-of-delivery flow (driver capture → compressed/EXIF-stripped upload → private R2 storage → signed download → customer read UI), all with test coverage (EVENT-023). Full-phase completion not independently re-verified in this update |
 | **H** | Notification — outbox via the tick | Substantially built: `outbox` table + `OutboxDispatchService` running as a tick phase (H-2), a `NotificationChannel` interface with an in-app channel, and the customer-facing `GET/PATCH /api/v1/me/notifications` wired to the Customer app (H-5A). **No push channel** — web has none by DEC-APP-003, and FCM is configured in `.env.example` but unimplemented. Full-phase completion not independently verified |
 | **I** | Admin operations | **Started 2026-09-03 — the Human Supervisor half.** Exception inbox, case detail and case closure are built end to end (API + console + boundary tests). The financial half (payments, refunds, reconciliation, ledger, settlement) is **partially built**: refund initiation, the Stripe refund adapter, webhook finality, ledger reversal, the reconciliation schema and the reconciliation detector (Q-020, Slices 1–4B, `1981972d`) exist at the API layer, and operator/admin reconciliation-case visibility/resolution already covers the six Q-020 refund kinds through the existing `SupervisorController` path. **Settlement and payout remain unbuilt.** Q-001, Q-002 and Q-032 still gate the rest (Q-010/BQ-028's commission rate is resolved — **DEC-043**, 2026-09-05, 8% of the food subtotal, round to whole baht, its rate further superseded-but-unbuilt by **DEC-061** D-01 (10%), 2026-09-09; Q-001/payment-provider selection is resolved — **DEC-055** — runtime enablement status is tracked in §10, not restated here). **Q-002 is two separate things now: the legal/settlement-model question stays `OPEN`, while the Q-002-labelled economics numbers (D-01…D-14) are locked by DEC-061 and unbuilt — see §10.** Two design artifacts govern the phase and `docs/HUMAN_SUPERVISOR_CONTRACT.md` says which one governs what. See §13 |
 | **F′** | Real payment provider — externally blocked; may land any time after F | Still blocked, see §10 |
 | **J** | AI Operations + Human Supervisor — `outbox event → normalize → deterministic router → policy evaluation → agent → command → guarded domain service → verify → audit → resolve/escalate` | **AUTHORIZED (DEC-040, 2026-09-03) — IMPLEMENTATION STARTED 2026-09-03, two playbooks built (§12).** Positioned **after Phase I**. Authorizes an architecture direction only: AI orchestrates, never holds domain, database or financial authority; no new business state; no invented policy value; audits as `actor_type = 'AI'` (prerequisite AI-01 merged at `95cc0dc4` and **applied and verified live 2026-09-03**, see §7). Read DEC-040 — including its *Implementation status* section — before any Phase J work |
 
-**Current branch context:** this branch (`feature/g7-driver-availability`) is
-mid-Phase-G work (driver availability, delivery, and proof-of-delivery). The
+**Current branch context:** work now lands on `main`; the earlier
+`feature/g7-driver-availability` history is contained in it. The
 table above reflects what commit history and the file tree evidence as
 implemented, not a fresh end-to-end verification of every phase — see the
 caveat in §5.
@@ -537,14 +553,14 @@ migration explicitly instructed for the current phase — see §10.
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **31 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
-  plus 15 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04,
+- **32 migrations are merged** (16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 16 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04,
   delivery-arrival/contact-attempts, customer email, Q-020 reconciliation
-  refund-kinds, and D-01 — see §3/§7). **26 of the 31 are confirmed applied
-  live** (verified 2026-09-03/04); of the 5 added since, **D-01's
+  refund-kinds, D-01, and AI Ops dedup — see §3/§7). **26 are confirmed applied
+  live** (verified 2026-09-03/04); of the 6 added since, **D-01's
   (`20260915000001`) is confirmed applied and live-exercised** by the First
-  Manual Tick; the other 4 are not independently re-verified as applied in
-  this reconciliation — see §7 for the exact evidence boundary. Read
+  Manual Tick, and **all 6 show as applied** in `supabase migration list
+  --linked` (2026-11-02) — see §7 for the exact evidence boundary. Read
   `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
   edit an existing migration, and do not add a table, view, RLS policy, RPC, or
   new migration, and never run `supabase db push` or `supabase link`, without
@@ -595,8 +611,7 @@ entirely; treat it as done, not open. **Q-010
 subtotal, round to whole baht — **and its rate only is further superseded by
 DEC-061 (2026-09-09, 10%), runtime still on the DEC-043 8% figure, see §10's
 sample-figures entry above.** Under **DEC-APP-007** the remaining item gates
-**Phase F′ only**; build the whole
-order → delivery flow against `NullPaymentProvider`. The
+**Phase F′ only**. The
 schema stores **amounts, never rates**, so the open numbers can be set later
 without a migration — **do not invent a default anywhere in the application.**
 
@@ -881,8 +896,9 @@ these is a DEC-040 violation, not a refactor:
   `merchant-acceptance-policy.ts`.
 - **Audit is `actor_type = 'AI'`, never `SYSTEM`**, on an append-only table
   nothing in Phase J updates or deletes.
-- **No table, column, RLS policy, RPC or migration was added.** The migration
-  count is unchanged at 24.
+- **The J-01/J-02 units added no table, column, RLS policy, RPC or migration.**
+  The later dedup hardening (`36d99edd`, DEC-065) added one partial unique index
+  and nothing else.
 
 ### Known, recorded limitations — do not "fix" these silently
 
@@ -890,9 +906,12 @@ these is a DEC-040 violation, not a refactor:
   table's `kind` CHECK has no AI-operations value and widening it is a
   migration Phase J is not authorized to make.
 - **Idempotency is one `audit_logs` row per (action, aggregate).** Sequential
-  re-runs are suppressed; genuinely concurrent ticks are not, which would need
-  a unique constraint — again a migration. Same bound `NoRiderEscalationService`
-  documents for itself.
+  re-runs are suppressed. A concurrent duplicate is refused by
+  `audit_logs_ai_action_entity_key` (`36d99edd`), which is applied live. The
+  deployed API revision predates the conflict-safe insert, so there a refused
+  duplicate is logged as an audit-write failure rather than as the designed
+  outcome; it still never throws. `NoRiderEscalationService` documents its own
+  bound separately.
 - **Candidate selection is bounded by throughput, not by a cursor.** An event
   is missed only if more than `BATCH_SIZE` (25) qualifying events are written
   inside one 60-second tick. A consumer cursor column would close it.

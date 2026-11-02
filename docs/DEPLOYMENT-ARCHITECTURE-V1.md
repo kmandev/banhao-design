@@ -9,8 +9,9 @@ vs. service-account keys, the Worker's location, admin's rendering mode — this
 file is where that choice now lives. **If anything here appears to conflict
 with a `DEC-APP` decision, V1.1 wins**, per its own precedence rule.
 
-This document describes the *target* architecture. Nothing in it is deployed —
-see [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for what's actually live.
+This document describes the *target* architecture. The table below records
+staging state as of 2026-11-02; there is no production deployment — see
+[`CURRENT_STATUS.md`](CURRENT_STATUS.md) for what's actually live.
 
 ---
 
@@ -18,13 +19,13 @@ see [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for what's actually live.
 
 | Component | Target | Status |
 |---|---|---|
-| `apps/api` | Google Cloud Run, `asia-southeast3` | Not deployed |
-| `apps/admin` | Cloudflare Pages, static export | Not deployed |
-| `apps/tick-worker` (new) | Cloudflare Worker (cron) | Not created |
+| `apps/api` | Google Cloud Run, `asia-southeast3` | Staging only: `banhao-api-staging`, revision `00008-4zw` (2026-09-15). `/health` `ok` on 2026-11-02, after `banhao-dev` was restored from a pause |
+| `apps/admin` | Cloudflare Pages, static export | `deploy-web.yml` last succeeded 2026-09-21; live site not checked |
+| `apps/tick-worker` | Cloudflare Worker (cron) | Deployed; fail-closed by owner decision, Worker-side `INTERNAL_TICK_SECRET` unset |
 | `apps/customer`, `apps/driver` | Expo/EAS → App Store, Google Play | Separate track, not part of this document |
-| `apps/merchant` | Cloudflare Pages, **after** DEC-APP-003 conversion to Next.js | Deferred — still an Expo shell today |
-| GCP auth | Workload Identity Federation | Not configured |
-| Secrets | Google Secret Manager (API), Cloudflare Worker secrets (tick) | None provisioned |
+| `apps/merchant` | Cloudflare Pages, **after** DEC-APP-003 conversion to Next.js | Next.js conversion done, but **no deploy target**: `deploy-web.yml` builds `apps/admin` only |
+| GCP auth | Workload Identity Federation | Configured for staging |
+| Secrets | Google Secret Manager (API), Cloudflare Worker secrets (tick) | Staging API secrets provisioned; Worker tick secret deliberately unset |
 | Production database | A **separate** Supabase project — never `banhao-dev` | Does not exist yet |
 
 ## 2. Cloud Run topology

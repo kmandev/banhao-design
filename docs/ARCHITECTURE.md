@@ -6,6 +6,10 @@ This file describes the system **as built and deployed**, verified by reading th
 repository at commit `e471ec1d` (the database checkpoint) and `14289652` (current
 `main`). It is an orientation summary.
 
+> **Stale since that commit.** It predates most application work, and only the
+> payment and storage lines were corrected on 2026-11-02. For current state read
+> [`CURRENT_STATUS.md`](CURRENT_STATUS.md).
+
 **The authoritative source for application implementation is
 [`BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md)** — internally
 locked as *BANHAO Application Architecture V1.1 — APPROVED / READY FOR
@@ -108,8 +112,8 @@ Built and working in `apps/api/src`:
   `SUPABASE_JWT_SECRET`.
 - `SupabaseAuthGuard` (global) → `RolesGuard` (global) → `ResponseInterceptor`,
   with a global `HttpExceptionFilter`.
-- `PaymentProvider` interface + `NullPaymentProvider`. No real provider
-  (Q-001 `OPEN`). Provider SDKs may only be imported under `payments/providers/`.
+- `PaymentProvider` interface, bound to `StripePaymentProvider` (DEC-055);
+  `NullPaymentProvider` remains for tests/dev. Provider SDKs may only be imported under `payments/providers/`.
 - `loadServerEnv()` (zod) called before `NestFactory.create`, so a misconfigured
   deployment fails at boot rather than at the first request.
 
@@ -198,14 +202,14 @@ never reach any client bundle (CON-005).
 
 ## Storage
 
-Supabase Storage free tier (1 GB) for images; Cloudflare R2 at Stage 2.
-**Not yet used** — no upload path exists.
+V1.1's cost table starts images on Supabase Storage and moves to Cloudflare R2
+at Stage 2. **R2 was built first**; see `CURRENT_STATUS.md` §8 and §12.
 
 ## External services
 
 | Concern | Choice | State |
 |---|---|---|
-| Payments | PromptPay QR via a provider, webhook-confirmed | **No provider selected** (Q-001). `NullPaymentProvider` only |
+| Payments | PromptPay QR via a provider, webhook-confirmed | **Stripe selected and bound** (DEC-055). Staging uses a test-mode secret; no live payments |
 | Push | Expo Push + FCM | Not built |
 | SMS OTP | ThaiBulkSMS (~฿0.15/credit) | Not configured — Supabase Test OTP in dev |
 | Maps (display) | MapLibre GL + OSM tiles | Prototype only (Q-018) |

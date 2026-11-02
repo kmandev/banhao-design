@@ -2,9 +2,10 @@
 
 ## Last Updated
 
-2026-09-03 — after Phase J's first two AI Operations vertical slices
-(merchant acceptance timeout, no-rider triage) and Phase I's Human Supervisor
-console, the human-on-exception counterpart to them. Previously 2026-09-01, after
+2026-11-02 at `36d99edd`. **The project is not launch-ready.** Staging was down
+that morning because `banhao-dev` had paused, and is back up after the owner
+restored it. Previously 2026-09-03, after Phase J's first two AI
+Operations vertical slices and Phase I's Human Supervisor console. Before that 2026-09-01, after
 M-11 menu management and M-12 opening hours (`8da83eaf`), which complete the
 merchant app's MUST scope.
 
@@ -27,9 +28,9 @@ Built by a solo founder using AI as the development team.
 
 | | |
 |---|---|
-| Branch | `feature/g7-driver-availability`, pushed to `origin` |
-| Current commit | `feat(orders): snapshot customer prep estimate` — AC-04 / DEC-042, on top of `7ea20a65` (M-AV availability) |
-| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **10 additive migrations merged since, all 10 applied live** (§10) |
+| Branch | `main`, level with `origin/main` |
+| Current commit | `36d99edd` — `fix(ai-ops): harden audit deduplication` (2026-09-21) |
+| Database checkpoint | `e471ec1d` — the schema V1.1 was reviewed against; **16 additive migrations merged since**, not all confirmed applied (§10) |
 | Application architecture | [`BANHAO-APP-ARCHITECTURE-V1.md`](BANHAO-APP-ARCHITECTURE-V1.md) — V1.1, **APPROVED / READY FOR IMPLEMENTATION** |
 | API contract | [`06-api/openapi.json`](06-api/openapi.json), generated from the code and guarded against drift by a test |
 
@@ -41,6 +42,9 @@ wins**. A `DEC-NNN` business decision outranks both.
 
 **Read the distinction in §4 before using this table.** "Implemented" and
 "verified end to end" are separate claims, and only one phase has the second.
+**Payment runtime is now Stripe, and the commission rate is 10% (D-01):** the F
+row below is corrected only where it names the provider, and the 8% in it is the
+rate at the time those groups were built.
 
 | Phase | What | State |
 |---|---|---|
@@ -49,23 +53,25 @@ wins**. A `DEC-NNN` business decision outranks both.
 | **C** — Catalog & merchant read path | Customer app reads restaurants, hours, menu, options and availability live from Supabase | Implemented |
 | **D** — Cart | Supabase-persisted cart under RLS, `POST /cart/validate`, fail-closed checkout revalidation | Implemented |
 | **E** — Order | `create_order()`, `POST /orders`, pricing, the merchant and rider transitions as commands, `order_status_history` | Implemented; the full nine-state lifecycle has **not** been walked end to end against the live project |
-| **F** — Payment on `NullPaymentProvider` | Provider interface, null provider, payment attempts and expiry, webhook simulator, event processing, `reconciliation_cases` | Implemented. **Four ledger groups are now written**: `MERCHANT_COMMISSION` (DEC-043, 8% of the food subtotal, round to whole baht), `CUSTOMER_PAYMENT` (`+grand_total`, 2026-09-05) and `SERVICE_FEE_REVENUE` (`+orders.service_fee_satang` to `PLATFORM_REVENUE`, DEC-047, 2026-09-06) at payment success, and `RIDER_EARNING` (`RIDER_PAYABLE −1200` / `PLATFORM_WRITE_OFF +200`, DEC-044/045) at delivery completion; a **read-only** payment ↔ `CUSTOMER_PAYMENT` reconciliation followed 2026-09-06. **"The ledger balances to zero" is still not a testable claim** — gross merchant food payable is unposted and delivery-fee revenue is unrecognized. No settlement, no payout, no refund posting exists |
-| **F′** — Real payment provider | — | **Still hard-locked, but no longer on Q-001.** The provider is selected — **Stripe**, DEC-055 (2026-09-08), PromptPay/THB, no Connect in Phase 1 — and **no runtime exists**: `NullPaymentProvider` is still bound. Three prerequisites gate implementation: the payment-event starvation fix, a PromptPay QR sandbox spike, and **Q-020** for anything refund-shaped. **Q-002** remains `OPEN` and still gates settlement |
+| **F** — Payment foundation | Provider interface, null provider (tests/dev), payment attempts and expiry, webhook simulator, event processing, `reconciliation_cases` | Implemented. **Four ledger groups are now written**: `MERCHANT_COMMISSION` (DEC-043, 8% of the food subtotal, round to whole baht), `CUSTOMER_PAYMENT` (`+grand_total`, 2026-09-05) and `SERVICE_FEE_REVENUE` (`+orders.service_fee_satang` to `PLATFORM_REVENUE`, DEC-047, 2026-09-06) at payment success, and `RIDER_EARNING` (`RIDER_PAYABLE −1200` / `PLATFORM_WRITE_OFF +200`, DEC-044/045) at delivery completion; a **read-only** payment ↔ `CUSTOMER_PAYMENT` reconciliation followed 2026-09-06. **"The ledger balances to zero" is still not a testable claim** — gross merchant food payable is unposted and delivery-fee revenue is unrecognized. Refund reversal posting now exists (Q-020 Slices 1–4B). No settlement or payout exists |
+| **F′** — Real payment provider | Stripe, DEC-055, PromptPay/THB, no Connect in Phase 1 | **Bound in code since `593c65e9`, test mode only on staging.** No live-money use. Still outstanding: the Q-020 End-to-End Acceptance Audit, including Stripe webhook registration, and **Q-002**, which stays `OPEN` and gates settlement |
 | **G** — Rider & delivery | Broadcast dispatch, offer accept/decline, arrival, pickup, en-route, completion, release + reconciliation, proof of delivery end to end | Implemented; POD has never run against a real R2 bucket or on hardware |
 | **H** — Notification | `outbox` table, `OutboxDispatchService` as a tick phase, `NotificationChannel` with an in-app channel, `GET/PATCH /me/notifications` wired to the customer app | Implemented **without a push channel** — web has none by DEC-APP-003, and FCM is unimplemented (TQ-002 `OPEN`) |
-| **I** — Admin operations | The Human Supervisor console: three guarded endpoints under `/api/v1/admin/supervisor` plus the console screens, projecting AI Operations escalations out of `audit_logs` | **Started — the exception half only.** Inbox, case detail and case closure work end to end, with the HTTP boundary proven at 401/403/200 per route. The financial half (payments, refunds, reconciliation, ledger, settlement) is designed and unbuilt behind Q-001, Q-002, Q-020, Q-032 (Q-010/BQ-028's commission rate is resolved — DEC-043 — but the other three remain). See `docs/HUMAN_SUPERVISOR_CONTRACT.md` |
+| **I** — Admin operations | The Human Supervisor console: three guarded endpoints under `/api/v1/admin/supervisor` plus the console screens, projecting AI Operations escalations out of `audit_logs` | **Started — the exception half only.** Inbox, case detail and case closure work end to end, with the HTTP boundary proven at 401/403/200 per route. The financial half is partial: refunds and reconciliation exist at the API layer (Q-020), while the A-16…A-22 screens, settlement and payout are unbuilt behind Q-002 and Q-032. See `docs/HUMAN_SUPERVISOR_CONTRACT.md` |
 | **J** — AI Operations + Human Supervisor | Authorized by DEC-040, positioned after Phase I. Two vertical slices built in `apps/api/src/modules/ai-ops`: **merchant acceptance timeout** (`44abab39`) and **no-rider triage** (`0726b269`), both running as tick phases | **Started, deliberately partial.** The pipeline shape is complete end to end — normalize, deterministic router, policy gate, agent port, command catalog, dispatcher with domain revalidation, verification, `actor_type = 'AI'` audit. The merchant playbook **escalates rather than acting** in production because BQ-013 supplies no deadline; the no-rider playbook resolves DEC-022 and escalates by design, because it has no command at all. **No model vendor is selected** — the agent adapter is deterministic. Every remaining playbook in the design package is blocked on an open business decision (§13) |
 
 ## 4. Implemented is not verified
 
 The table above reflects what the code and its tests evidence. It does **not**
 claim that each flow has been walked against the live `banhao-dev` project.
-Two things have been, by execution:
+These have been, by execution:
 
 | Verified live | When | Evidence |
 |---|---|---|
 | Phone OTP → profile read under RLS → `display_name` write → session survives restart → logout persists | 2026-08-10 (EVENT-011) | `supabase/tests/live-rls-check.mjs`, 14/14 |
 | Merchant M-05 accept: one `POST /orders/:id/accept` → 200, `MERCHANT_ACCEPTED` with `prep_minutes`, exactly one `deliveries` / `order_status_history` / outbox row, board updated by Realtime | 2026-09-01 (EVENT-026) | `CLAUDE.md` §11; fixture `M05-VERIFY-0005` |
+| D-01 commission snapshot rows and the First Manual Tick (accepted) | 2026-09-20 | `CLAUDE.md` EVENT-035 |
+| M-AV PAUSED customer path on iOS Simulator (G-3 Test A); the rest of G-3 is `BLOCKED` | 2026-09, after `ab3efec3` | `CLAUDE.md` §11 |
 
 Everything else is unit- and integration-tested against fixtures, or against a
 Docker Postgres for the SQL suites. That is a real assurance level, and it is
@@ -79,11 +85,11 @@ not the same claim.
 | **Merchant** (Next.js, DEC-APP-003) | **MUST scope complete.** M-01 login, M-02 scope resolution, M-03 live board with Realtime and audible arrival alerting, M-04 detail panel, M-05 accept with prep time, M-07/M-08 board actions, **M-11 menu management, M-12 opening hours**, and the five-item nav the UX specification fixes. **M-10 restaurant profile**, and **M-AV availability (NORMAL / BUSY / PAUSED — DEC-041, formerly labelled M-13)**. Unbuilt: M-06/M-09 (`SHOULD`) and UX-SPEC M-13 earnings / M-14 settings (`LATER`), all still without a design artifact |
 | **Driver** (Expo) | Status/availability, offer inbox with the 15 s foreground poll, active delivery, proof camera/review/upload, navigation. The gap list in `BANHAO_POD_DRIVER_IMPLEMENTATION_PLAN.md` §4 is closed except the items that need a product decision (D-13 money, D-14 push, D-17 icons) |
 | **Admin** (Next.js) | **Human Supervisor console.** Phone-OTP login, `platform_staff` gate, operations inbox (S-02), case detail with live domain state and append-only timeline (S-03), close-case-with-reason (S-06). No Supabase data read at all — every screen goes through `/api/v1/admin/supervisor` (DEC-APP-008). The Admin package's financial screens (A-16…A-22) are **not built**: the money decisions gate them |
-| **tick-worker** (Cloudflare Worker) | Present, typechecks, bundles via dry-run, **never deployed** |
+| **tick-worker** (Cloudflare Worker) | **Deployed**, cron `* * * * *`, `API_URL` set to staging. **Fail-closed by owner decision**: Worker-side `INTERNAL_TICK_SECRET` unset, so recurring ticks do not run |
 
 ## 6. API
 
-49 operations across 46 paths, all under `/api/v1` except `GET /health`. The contract
+58 operations across 55 paths (counted from `openapi.json`, 2026-11-02), all under `/api/v1` except `GET /health`. The contract
 is [`06-api/openapi.json`](06-api/openapi.json), generated from the real
 `AppModule` by `pnpm --filter @banhao/api openapi` and compared against the
 code by `apps/api/test/openapi.contract.spec.ts` on every test run — a route
@@ -132,25 +138,28 @@ through short-lived signed URLs, per the POD-Q-01 decision in
 bucket. Server-templated object keys only, a MIME allow-list, and a 2 MB
 server-side size check on proof uploads.
 
-**Never exercised against a real bucket.** Every R2 test is against a fake
-client.
+Staging boots with R2 config wired (`71c05907`). `R2_PRIVATE_BUCKET` is
+deliberately unprovisioned (DEC-038, pending Q-012), so **proof-of-delivery has
+never run against a real bucket**.
 
 ## 9. Test and quality status
 
 Run in full, **uncached** (`pnpm turbo run lint typecheck test build --force`),
-2026-09-01. Repeated five times to catch load-dependent failures.
+2026-11-02 at `36d99edd`, once. The Docker SQL suites below were not run in this
+pass.
 
 | Package | Tests |
 |---|---|
-| `@banhao/api` | 1,335 |
-| `@banhao/merchant` | 520 |
-| `@banhao/customer` | 480 |
-| `@banhao/driver` | 316 |
-| `@banhao/validation` | 127 |
+| `@banhao/api` | 2,029 |
+| `@banhao/merchant` | 636 |
+| `@banhao/customer` | 514 |
+| `@banhao/driver` | 334 |
+| `@banhao/validation` | 220 |
 | `@banhao/ui` | 22 |
+| `@banhao/admin` | 18 |
 | `@banhao/api-client` | 16 |
 | `@banhao/config` | 13 |
-| **Total** | **2,829 — all passing** |
+| **Total** | **3,802 — all passing** |
 
 `lint`, `typecheck` and `build` pass for all 44 Turborepo tasks.
 
@@ -167,13 +176,22 @@ SQL suites, both Docker-based and both now run by CI:
 
 ## 10. Database
 
-**Live and LOCKED.** 26 migration files. 16 are the `e471ec1d` checkpoint V1.1
-was reviewed against; ten have been merged since, each additive and each under
-an explicit instruction. **All 26 are applied to `banhao-dev`** — the last
-two (M-AV, AC-04) were applied and verified 2026-09-04, see the last two rows.
-Every one of the ten is exercised by the Docker domain suite
-(`supabase/tests/run-domain-tests.sh`) as well as being confirmed live; "verified"
-below distinguishes the two where it matters.
+32 migration files. 16 are the `e471ec1d` checkpoint V1.1 was reviewed against;
+16 have been merged since, each additive and each under an explicit
+instruction. **All 32 are applied to `banhao-dev`**: `supabase migration list
+--linked`, run 2026-11-02 after the project was restored from a pause, shows a
+matching Remote entry for every local version.
+
+- `20260921000001` (AI Ops dedup) is applied even though its own commit says it
+  was not. Nothing in Git records who applied it. A direct read confirms
+  `audit_logs_ai_action_entity_key` exists as designed.
+- `20260907000001`, `20260907000002`, `20260908000001`, `20260909000001` are
+  confirmed by the migration list only, not by direct schema read.
+- `20260915000001` (D-01) is also exercised by the First Manual Tick.
+
+`banhao-dev` is a free-tier project and was found paused on 2026-11-02; it will
+pause again after long idle periods. The table below covers the first ten after
+the checkpoint.
 
 | Migration | Why |
 |---|---|
@@ -223,11 +241,20 @@ Cloud Run. Every step but the last has now been executed (2026-09-01):
 deployed API that cannot reach its database fails the deploy, even though the
 same body is deliberately a 200 for the platform's liveness probe.
 
-**Nothing is deployed.** All four workflows exist and validate; none has ever
-executed against real infrastructure, and no external infrastructure exists.
-[`INFRASTRUCTURE-READINESS-V1.md`](INFRASTRUCTURE-READINESS-V1.md) is the
-pre-provisioning checklist, and every item on it is a user action requiring a
-GCP project, billing, and credentials.
+The table above is the 2026-09-01 gate; Cloud Run has since been provisioned for
+staging.
+
+**Staging exists; production does not.** Checked 2026-11-02:
+
+| Component | State |
+|---|---|
+| API | `banhao-api-staging`, revision `00008-4zw`, created 2026-09-15. **Predates `36d99edd`.** `/health` answers `status: ok`, database `ok`, after the restore |
+| Database | `banhao-dev`, `ACTIVE_HEALTHY` after a restore from pause on 2026-11-02 |
+| Tick Worker | Deployed, fail-closed by owner decision |
+| Admin | `deploy-web.yml` last succeeded 2026-09-21; the live site was not checked |
+| Merchant | **No deploy target.** `deploy-web.yml` builds `apps/admin` only, and its comment calling merchant an Expo shell is stale |
+| Customer, Driver | No store or EAS release recorded |
+| Production database | Does not exist. It must be a separate project, never `banhao-dev` |
 
 Approved targets (V1.1 §12, `DEPLOYMENT-ARCHITECTURE-V1.md`): Cloud Run in
 `asia-southeast3`, Cloudflare Pages, Cloudflare Worker cron for the tick. The
@@ -253,14 +280,17 @@ effort alone.
 
 | # | Blocked | Class | What would unblock it |
 |---|---|---|---|
-| 1 | The Admin app's financial half — A-16 through A-22 (payments, refunds, reconciliation, ledger, settlement) | **Business decision** | Q-002, Q-020 and Q-032 (**Q-001 resolved 2026-09-08 — DEC-055, Stripe**) (Q-010/BQ-028 commission rate resolved 2026-09-05, **DEC-043**). The screens are fully designed in `BANHAO ADMIN - Operations - Phase I.dc.html`; what is missing is the remaining numbers, the legal model and the refund mechanism (the provider is now settled — DEC-055). The design package's own § 19 says the same. **The exception half — the Human Supervisor console — is built**, since the AI Operations package § 09 designs it and it needs none of those decisions |
+| 0b | **Recurring Tick**: order expiry, outbox dispatch and escalations do not run on their own | **Owner decision** | Currently DO NOT ENABLE. Set the Worker-side `INTERNAL_TICK_SECRET` when the owner decides |
+| 1 | The Admin app's financial half — A-16 through A-22 (payments, refunds, reconciliation, ledger, settlement) | **Business decision** | Q-002 and Q-032. Q-001 (DEC-055) and Q-020 (DEC-057…060) are resolved. The screens are fully designed in `BANHAO ADMIN - Operations - Phase I.dc.html`. **The exception half — the Human Supervisor console — is built**, since the AI Operations package § 09 designs it and it needs none of those decisions |
 | 1b | Phase I's operational commands from a case (cancel, release, redispatch, pause) | **Business decision** | BQ-013, UX-Q-006, OD-04, BQ-015, Q-032. Each case detail names the specific decision blocking it rather than rendering a control the platform cannot back |
 | 2 | Merchant M-06, M-09 (`SHOULD`), UX-SPEC M-13 earnings, M-14 settings (`LATER`) | Missing design artifact | Same. None is launch-critical, and M-13 earnings is additionally money-blocked (Q-032 — settlement-cycle parameters a payout screen would need; BQ-029 itself is resolved, **DEC-044**). **M-10 and M-AV are no longer on this list — both are built**, each from its own committed artifact |
 | 3 | Customer C-14 prep-time caption | **Missing credential** | The fixture orders belong to `+66811110009`, for which no Test OTP pair is documented. A Supabase Dashboard action, or a fixture pointed at an onboarded identity. Do not guess an OTP |
 | 4 | Sentry (the last Phase A item) | **External account** | An account and a DSN. Free tier is single-user; $26/month on the second developer |
-| 5 | Any deployment | **External infrastructure** | The whole of `INFRASTRUCTURE-READINESS-V1.md`: GCP project, billing, WIF, Artifact Registry, Cloudflare token |
-| 6 | R2 verified against a real bucket; POD on hardware | External infrastructure / devices | A provisioned private bucket; a physical iOS and Android device |
-| 7 | Phase F′ and everything ledger- or settlement-shaped | **Mixed — one business decision, two engineering prerequisites** | **Q-001 resolved 2026-09-08 (DEC-055 — Stripe)**. Still gated by Q-002 (legal model) and Q-020 (refund mechanism), plus two engineering prerequisites DEC-055 records: the payment-event starvation fix and the PromptPay QR sandbox spike. Q-010/BQ-028 commission rate resolved 2026-09-05, **DEC-043**; ledger-posting code for settlement is still unwritten |
+| 5 | Production deployment, and a merchant deployment at all | **External infrastructure** | A separate production Supabase project and production services; a Pages target for `apps/merchant` |
+| 6 | R2 private bucket; POD on hardware | External infrastructure / devices | `R2_PRIVATE_BUCKET`, held back by DEC-038 pending Q-012; a physical iOS and Android device |
+| 7 | Live money, and everything settlement-shaped | **Business decision and audit** | Q-002 (legal model) gates settlement. Live payments also need the Q-020 End-to-End Acceptance Audit and Stripe webhook registration. Ledger-posting code for settlement is still unwritten |
+| 7b | M-AV G-3 Tests B (rest), C, D | Device / environment | A working Simulator pipeline. `simctl` currently stops on an unaccepted Xcode license: run `sudo xcodebuild -license` |
+| 7c | AI Ops dedup code on staging, and T7 | Explicit instruction | The migration is applied; the API revision carrying `36d99edd` is not deployed. T7 also needs DEC-065's formal confirmation recorded |
 | 8 | Driver R-13 earnings, and any money on a rider surface | **Engineering task** (business decisions resolved) | **BQ-029 resolved 2026-09-05 — DEC-044** (flat ฿12/1200 satang per completed delivery). **Implemented** `6432e3b3`: `deliveries.rider_earning_satang` is snapshotted at delivery completion and a `RIDER_PAYABLE −1200` ledger entry is posted. That implementation surfaced a real accounting boundary — the entry has no offsetting funding entry, since no `CUSTOMER_PAYMENT` line exists anywhere in the current ledger — which **BQ-040 / DEC-045 (2026-09-05) resolved**: BANHAO absorbs the ฿2 (200 satang) gap between the ฿10 delivery fee and the ฿12 rider earning as a `PLATFORM_WRITE_OFF`. **The offsetting `PLATFORM_WRITE_OFF +200` entry is now implemented** (`b813b5c6`), posted in the same rider-earning completion ledger group as `RIDER_PAYABLE`. This narrows the group's residual from `-1200` to `-1000` — it does **not** mean full settlement/payout, or the broader `CUSTOMER_PAYMENT`/full-order-ledger flow, is implemented; those remain outside DEC-045's scope, and no rider earnings surface exists in any app yet |
 | 9 | Dropping `profiles.role` | **Approved migration** | A migration explicitly approved for it. The application half is already done |
 | 10 | Push notifications (Phase H's missing channel) | Technical decision | TQ-002 |
@@ -276,10 +306,11 @@ effort alone.
 | 20 | Cooked-food loss — who bears it when a prepared order fails | **Resolved (policy only)** | **DEC-051** (2026-09-07, resolving **BQ-015**) — allocated **by cause**: platform-caused loss (no rider; operator cancellation from the platform's own inability to deliver) to **BANHAO** as `PLATFORM_WRITE_OFF`; merchant-caused loss to the **merchant**. Food is prepared from **`PREPARING`**; valuation basis is `orders.subtotal_satang` — **not** net of the 8% commission and **not** a merchant payable. No merchant penalty, no customer charge, no partial refund. Post-`PICKED_UP` cases belong to BQ-017. ⚠️ **Runtime not implemented**: the cancel API rejects `causeCode` (tests pin it), nothing writes `orders.cause_code`, no gross merchant payable exists, and there is no `PLATFORM_WRITE_OFF` posting for food loss. Its one recorded residual — the **customer-caused pre-pickup** branch — was closed the same day by **DEC-052**: BANHAO absorbs that loss too, as `PLATFORM_WRITE_OFF` (an allocation rule, not a fault finding; no customer fee, no merchant penalty). BQ-017, BQ-031, Q-020, BQ-024 and BQ-013 stay `OPEN` |
 | 21 | Post-pickup delivery failure — customer unreachable, refusal, or a delivery that cannot be completed after pickup | **Resolved (policy only)** | **DEC-053** (2026-09-07, resolving **BQ-017**) — delivery **`FAILED`** / order **`DELIVERY_FAILED`**, declared by an **operator** after **2 contact attempts** and a **5-minute** wait from `ARRIVED`. Economics are **cause-dependent**: customer-caused → **no refund** of any component and the merchant absorbs the cooked-food loss (**not** a cancellation fee — DEC-050 unchanged); rider-, platform-caused and `INDETERMINATE` → full eligible refund with BANHAO absorbing the food loss (`PLATFORM_WRITE_OFF`, valued at `orders.subtotal_satang`); merchant-caused → full eligible refund with the merchant absorbing it. Rider compensation **eligible** in every case, amount owned by **BQ-024**. Safe drop-off **not** authorized (UX-Q-006/OD-04). **DEC-054** (2026-09-07) locks the anchor (`EN_ROUTE → ARRIVED`, distinct from merchant arrival `AT_MERCHANT`) and grants a **narrow DEC-APP-006 carve-out** letting this path use `DELIVERY_FAILED` while **BQ-013 stays `OPEN`**. ✅ **Operational runtime BUILT** in three slices (2026-09-07/08, branch `feature/g7-driver-availability`): customer-arrival transition + `arrived_at` anchor + `ARRIVED` state (`a50e7b17`); append-only `delivery_contact_attempts` capped at 2 by database constraints, the operator failure command `POST /admin/supervisor/deliveries/:id/fail` with all four preconditions and no override, rider-assignment close + slot release, and the removal of `PICKED_UP`/`DELIVERING` from generic operator cancellation (`7e6b2dbb`); the five-minute tick escalation, the read-only operator working list `GET /admin/supervisor/deliveries/awaiting-failure`, and the `OrderDeliveryFailed` customer/merchant notification. **The timer escalates only — it issues no `UPDATE` and cannot fail a delivery; the operator remains the sole authority.** ⚠️ **Economic runtime still not implemented**: no refund initiation or mechanism (**Q-020**), no ledger reversal, no `PLATFORM_WRITE_OFF` food-loss posting, no rider compensation (**BQ-024**), no merchant payout exclusion (settlement unbuilt). The three migrations are **merged but not applied to `banhao-dev`**. BQ-024, BQ-031, Q-020, BQ-013 and UX-Q-006 stay `OPEN` |
 
-**4 P0 business decisions remain**, all of them a number, a provider or a
-legal question: Q-001, Q-002, Q-020,
-BQ-030 (**stacking only** — the funder model is now
-resolved). BQ-015 left this list 2026-09-07 — **DEC-051** allocates the
+**2 P0 business decisions remain**: Q-002 (the legal/settlement model) and
+BQ-030 (**stacking only**). Q-001 left this list 2026-09-08 (DEC-055) and Q-020
+left it 2026-09-08/09 (DEC-057…060). Rows 19–21 above are as written at their
+dates: refund initiation has since landed, and `CUSTOMER_CANCELLABLE_STATES`
+still stops at `PAID` as of 2026-11-02, so row 19's gap stands. BQ-015 left this list 2026-09-07 — **DEC-051** allocates the
 cooked-food loss by cause (policy only, not implemented). BQ-027 left this list 2026-09-06 — **DEC-048** resolved
 refundability (Option A, service fee included in an eligible full order
 refund; not implemented), the last open half after DEC-047 resolved
