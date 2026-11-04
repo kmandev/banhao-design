@@ -14,7 +14,8 @@ module.exports = {
   ],
   collectCoverageFrom: ['src/**/*.{ts,tsx}'],
   /**
-   * 20 s, not Jest's 5 s default.
+   * 60 s, not Jest's 5 s default (and no longer the 20 s this was first set
+   * to).
    *
    * React Native suites render whole component trees under `jest-expo`, and a
    * few drive long timer sequences deliberately. Alone each is comfortably
@@ -22,6 +23,13 @@ module.exports = {
    * have been observed past 5 s and failing as timeouts rather than as failed
    * expectations. This changes no assertion — only how long a loaded machine
    * is given to reach one.
+   *
+   * 20 s proved too tight on GitHub's runners: with every package's tests
+   * running at once, a cold suite takes 40-60 s wall time there against about
+   * 11 s on a developer machine, and the first test of a suite pays for the
+   * lazy module loading. On 2026-11-02 and 2026-11-03 the same three suites
+   * (OfferInbox, ActiveDelivery, Home) timed out on their first test on the
+   * first attempt and passed on a re-run, with no code change.
    */
-  testTimeout: 20_000,
+  testTimeout: 60_000,
 };

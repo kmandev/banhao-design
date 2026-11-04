@@ -9,7 +9,8 @@ module.exports = {
   ],
   collectCoverageFrom: ['src/**/*.{ts,tsx}'],
   /**
-   * 20 s, not Jest's 5 s default.
+   * 60 s, not Jest's 5 s default. Raised from 20 s together with the driver app's
+   * identical setting (see apps/driver/jest.config.js for the CI evidence).
    *
    * React Native suites render whole component trees under `jest-expo`, and a
    * few drive long timer sequences deliberately. Alone each is comfortably
@@ -18,5 +19,5 @@ module.exports = {
    * expectations. This changes no assertion — only how long a loaded machine
    * is given to reach one.
    */
-  testTimeout: 20_000,
+  testTimeout: 60_000,
 };
