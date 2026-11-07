@@ -134,7 +134,7 @@ const OPERATOR_CANCELLABLE_STATES = [
  * ## Pricing — DEC-E-01
  *
  * `OrderPricingService.resolveOrderFees` is the sole authority for the
- * delivery and service fee amounts (DEC-035, DEC-036) and is called here in
+ * delivery and service fee amounts (DEC-035; DEC-061 D-03/D-04) and is called here in
  * its normal position in the flow. DEC-E-01 still governs: no fee value ever
  * comes from `request`, and a future change to either amount is a change to
  * `OrderPricingService` alone — nothing here does.

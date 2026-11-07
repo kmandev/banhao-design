@@ -83,7 +83,7 @@ export interface CartValidationLine {
  *
  * Deliberately carries no `deliveryFeeSatang`, `serviceFeeSatang`,
  * `discountSatang` or grand total (DEC-D-01) — pricing is `OrderPricingService`'s
- * job (DEC-035, DEC-036), not this Phase D cart path's, and discount (BQ-030)
+ * job (DEC-035; DEC-061 D-03/D-04), not this Phase D cart path's, and discount (BQ-030)
  * is still OPEN regardless.
  */
 export interface CartValidationResult {
