@@ -365,6 +365,19 @@ function AvailabilityPill({
         </button>
       ) : (
         <>
+          {mode === 'BUSY' ? (
+            // AV-T2: Busy -> Normal, one tap, no dialog. The design lists this
+            // as the first action of the Busy state; without it a Busy shop
+            // could only get back to Normal by pausing and then resuming.
+            <button
+              type="button"
+              data-testid="availability-action-normal"
+              onClick={onResume}
+              style={availabilityActionButtonStyle}
+            >
+              กลับเป็นเปิดปกติ
+            </button>
+          ) : null}
           <button
             type="button"
             data-testid="availability-action-busy"

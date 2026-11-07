@@ -77,6 +77,7 @@ const pill = () => screen.getByTestId('availability-pill');
 const busyButton = () => screen.getByTestId('availability-action-busy');
 const pauseButton = () => screen.getByTestId('availability-action-pause');
 const resumeButton = () => screen.getByTestId('availability-action-resume');
+const normalButton = () => screen.getByTestId('availability-action-normal');
 const dialog = () => screen.queryByTestId('availability-dialog');
 const confirmButton = () => screen.getByTestId('availability-dialog-confirm');
 const preset = (minutes: number) => screen.getByRole('radio', { name: `${minutes} นาที` });
@@ -115,10 +116,22 @@ describe('M-13 — the mode pill (server-confirmed state only)', () => {
     expect(screen.queryByTestId('availability-action-pause')).not.toBeInTheDocument();
   });
 
-  it('NORMAL and BUSY both offer the two forward actions, never Resume', async () => {
+  it('NORMAL offers the two forward actions, never Resume and never "back to Normal"', async () => {
     renderBoard();
     await waitFor(() => expect(pill()).toHaveTextContent('เปิดปกติ'));
 
+    expect(busyButton()).toBeInTheDocument();
+    expect(pauseButton()).toBeInTheDocument();
+    expect(screen.queryByTestId('availability-action-resume')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('availability-action-normal')).not.toBeInTheDocument();
+  });
+
+  it('BUSY offers a way back to Normal as well as the forward actions, never Resume', async () => {
+    getAvailability.mockResolvedValue(availabilityRow({ availability_mode: 'BUSY', busy_prep_minutes: 20 }));
+    renderBoard();
+    await waitFor(() => expect(pill()).toHaveTextContent('กำลังยุ่ง'));
+
+    expect(normalButton()).toHaveTextContent('กลับเป็นเปิดปกติ');
     expect(busyButton()).toBeInTheDocument();
     expect(pauseButton()).toBeInTheDocument();
     expect(screen.queryByTestId('availability-action-resume')).not.toBeInTheDocument();
@@ -249,7 +262,28 @@ describe('M-13 — Resume (AV-T2/AV-T5, one tap, no dialog)', () => {
     await waitFor(() => expect(pill()).toHaveTextContent('เปิดปกติ'));
   });
 
-  it('resume from Busy always returns to Normal, never back to the previous Busy value (AV-D02)', async () => {
+  it('Busy -> Normal is one tap with no dialog and sends { mode: NORMAL } (AV-T2)', async () => {
+    getAvailability.mockResolvedValue(availabilityRow({ availability_mode: 'BUSY', busy_prep_minutes: 20 }));
+    setAvailability.mockResolvedValue({
+      restaurantId: 'rest-a',
+      availabilityMode: 'NORMAL',
+      busyPrepMinutes: null,
+      updatedAt: '2026-09-04T01:00:00.000Z',
+    });
+    renderBoard();
+    await waitFor(() => expect(pill()).toHaveTextContent('กำลังยุ่ง'));
+
+    await act(async () => {
+      fireEvent.click(normalButton());
+    });
+
+    expect(dialog()).not.toBeInTheDocument();
+    expect(setAvailability).toHaveBeenCalledWith('rest-a', { mode: 'NORMAL' });
+    await waitFor(() => expect(pill()).toHaveTextContent('เปิดปกติ'));
+    expect(pill()).not.toHaveTextContent('นาที');
+  });
+
+  it('resume from Paused always returns to Normal, never to Busy (AV-D02)', async () => {
     getAvailability.mockResolvedValue(availabilityRow({ availability_mode: 'PAUSED' }));
     setAvailability.mockResolvedValue({
       restaurantId: 'rest-a',
