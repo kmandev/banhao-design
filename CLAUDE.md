@@ -13,8 +13,8 @@ this branch — see §9/§10. Reconciled again 2026-09-15 at `ab3efec3` after
 **owner-approved direction pending field validation**, not a locked provider
 — D-16/TQ-004 stay `OPEN`), **DEC-064** (Q-012 rider GPS: policy direction
 locked, Q-012 itself stays `OPEN`/`LEGAL_REVIEW_REQUIRED`, no GPS collection
-built), and **M-AV G-1/G-2 closed** (G-3 device verification still
-`BLOCKED`; R-6/BQ-038 was `OPEN` then and was decided 2026-11-02, DEC-068 C3) — see §9/§10/§11. **A decision lock is not
+built), and **M-AV G-1/G-2 closed** (G-3 device verification was
+`BLOCKED` then and was closed 2026-11-08; R-6/BQ-038 was `OPEN` then and was decided 2026-11-02, DEC-068 C3) — see §9/§10/§11. **A decision lock is not
 an implementation authorization** — treat these as decided-but-unbuilt unless
 this file says otherwise. Reconciled again 2026-09-21 at `49296520`: **D-01
 runtime is implemented and accepted** (not merely locked) — `commission-pricing.ts`'s
@@ -721,13 +721,21 @@ own owner or verification action, not by code landing:
   (`restaurant-availability.service.spec.ts`), no schema/migration/runtime
   change. **Do not restore the swallowed-failure path** — C3-A reversed it on
   purpose, and a mode change without its audit row must not succeed.
-- **G-3: STILL OPEN — the customer-on-Simulator half is not run.** Two
-  earlier sessions failed the iOS Simulator health check before completing the
-  B (NORMAL) / C (BUSY) / D (SIGNED-OUT) regression checklist. The Simulator
-  works again (Xcode license accepted 2026-11-07), but **the customer-app B/C/D
-  walk has not been done.** The PAUSED path *was* verified live against
-  `banhao-dev` in an earlier session and may be cited as evidence, but it does
-  not close the checklist.
+- **G-3: CLOSED 2026-11-08.** Two earlier sessions failed the iOS Simulator
+  health check before completing the B (NORMAL) / C (BUSY) / D (SIGNED-OUT)
+  regression checklist; Test A (PAUSED) was verified then. The rest was walked
+  on 2026-11-08 on the iPhone 16 Simulator, Expo Go, through the loopback
+  proxies to `banhao-dev` and the staging API. The dev restaurant's opening
+  hours end at 20:00 and the walk ran after midnight, so its Sunday row was
+  widened to 00:00–23:59 for the walk and put back to 09:00–20:00 afterwards.
+  **B (NORMAL):** list and shop show "เปิดอยู่" and the restaurant's own
+  20-minute estimate, no busy notice, and an item adds to the cart (the added
+  line was removed again). **C (BUSY, 30 min via the merchant API):** list and
+  shop show 30 minutes, the shop shows "ร้านกำลังยุ่ง — เวลาทำอาหารนานกว่าปกติ"
+  (the design's `shop.busy.notice` copy), and the item stays orderable.
+  **D (SIGNED-OUT):** sign-out asks for confirmation, lands on onboarding with
+  no shop or cart reachable, and stays signed out across an app restart. The
+  restaurant was returned to NORMAL. The Simulator was left signed out.
   **2026-11-08, merchant side only, built-in browser, local API + merchant dev
   server against `banhao-dev`:** signed-out `/dashboard` redirects to `/login`;
   NORMAL renders; NORMAL → BUSY (20 min) returned `PUT … 200`, the pill read
