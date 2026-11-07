@@ -4594,7 +4594,7 @@ and BQ-015, BQ-017, BQ-031 and Q-020 all remain open as recorded here.
 > merchant screen that has no design. **Customer app (added the same day):**
 > the tracking screen now has the design's "no rider yet" card with a confirmed
 > cancel, shown only when the server has said no rider was found
-> (DEQ-06 in `CUSTOMER_APP_IMPLEMENTATION_MAP.md`). A customer who has not been
+> (DQ-06 in `CUSTOMER_APP_IMPLEMENTATION_MAP.md`). A customer who has not been
 > told that has no cancel button, so the window is reachable from the app only
 > in that case; whether it should be reachable from every state inside it is
 > an open product decision.
