@@ -207,6 +207,32 @@ before `POST /orders`.
 list. Ranking/ordering rules are not specified; implemented as shops first,
 then menu items, in mock order.
 
+**DQ-06 — Cancelling an order, and the "no rider yet" state (2026-11-07).**
+The design offers "ยกเลิกออเดอร์" only on the no-driver state, and has a
+cancelled state with a refund line. Built on the tracking screen
+(`OrderTrackingScreen`): a card shown only when the server has said no rider was
+found (`OrderNoRiderFound` notification for this order, delivery still
+searching — the app computes nothing), with "รอต่ออีกสักครู่" and a confirmed
+"ยกเลิกออเดอร์" (DEC-050). Three things in the design are **not** reproduced,
+because none is an approved fact:
+
+- *"เรากำลังหาต่อให้อีก 3 นาที"* — no figure for how much longer the search
+  continues has been decided; DEC-022 never cancels, it hands over to an
+  operator. The card says "เรากำลังหาให้ต่อ".
+- *"เงิน ฿130 จะคืนเข้าบัญชีภายใน 1–3 วันทำการ"* — no refund timeline is
+  decided, and a PromptPay refund only completes once the customer completes
+  Stripe's emailed bank-details form. After a cancel the screen says "ทีมงานจะดำเนินการคืนเงินให้เต็มจำนวน"
+  (DEC-050 full refund, DEC-058 operator-executed), and only in the session that
+  cancelled.
+- The design's cancelled-state *reason* row ("ไม่มีไรเดอร์ว่าง") and refund
+  amount row — the app does not record why a customer cancelled.
+
+**Open:** the design places cancel only here. A customer whose order is `PAID`
+or `MERCHANT_ACCEPTED` but who has *not* been told "no rider" has no cancel
+button. Whether the free window (DEC-050) should be reachable from every state
+inside it, or only after a no-rider notice, is a product decision, not an
+implementation one.
+
 ---
 
 ## Explicitly NOT implemented (per brief §7)

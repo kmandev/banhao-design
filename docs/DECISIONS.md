@@ -4591,10 +4591,13 @@ and BQ-015, BQ-017, BQ-031 and Q-020 all remain open as recorded here.
 > (DEC-058: the operator, not the system, initiates the refund). The restaurant
 > gets an `OrderCancelled` notification. **Clause 3 (cancellation during
 > `PREPARING` with merchant confirmation) is not implemented** — it needs a
-> merchant screen that has no design — and the **customer app has no
-> cancel-order button**: the design places it on the no-driver screen, which
-> is not built. So the rule is enforced server-side but a customer cannot yet
-> reach it from the app.
+> merchant screen that has no design. **Customer app (added the same day):**
+> the tracking screen now has the design's "no rider yet" card with a confirmed
+> cancel, shown only when the server has said no rider was found
+> (DEQ-06 in `CUSTOMER_APP_IMPLEMENTATION_MAP.md`). A customer who has not been
+> told that has no cancel button, so the window is reachable from the app only
+> in that case; whether it should be reachable from every state inside it is
+> an open product decision.
 ### Decision
 
 Resolves **BQ-016** (cancellation windows, fees, and post-pickup policy). It
