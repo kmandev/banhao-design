@@ -75,7 +75,7 @@ function claimedRow(overrides: { payload?: unknown; aggregate_type?: string; att
     id: OUTBOX_ID,
     aggregate_type: overrides.aggregate_type ?? 'order',
     aggregate_id: 'order-1',
-    event_type: 'OrderCreated',
+    event_type: 'OrderCancelled',
     payload: overrides.payload ?? {
       recipients: [
         { recipientId: 'cust-1', recipientType: 'CUSTOMER' },
@@ -112,8 +112,8 @@ describe('OutboxDispatchService.processOne — success path', () => {
     expect(notificationInserts[0]?.payload).toMatchObject({
       recipient_id: 'cust-1',
       recipient_type: 'CUSTOMER',
-      event_type: 'OrderCreated',
-      title: 'OrderCreated',
+      event_type: 'OrderCancelled',
+      title: 'OrderCancelled',
       body: null,
       deep_link: null,
       order_id: 'order-1',
@@ -134,7 +134,7 @@ describe('OutboxDispatchService.processOne — success path', () => {
     expect(channel.deliver).toHaveBeenCalledWith({
       notificationId: 'notif-1',
       recipientId: 'cust-1',
-      title: 'OrderCreated',
+      title: 'OrderCancelled',
       body: null,
       deepLink: null,
     });
@@ -203,11 +203,35 @@ describe('OutboxDispatchService.processOne — notification content (DEC-068 D1)
 
   it('keeps an event outside the nine on the original behaviour, even for a customer', async () => {
     const { calls } = await dispatch(
-      row('OrderCreated', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
+      row('OrderCancelled', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
     );
 
     const insert = calls.find((c) => c.table === 'notifications' && c.op === 'insert');
-    expect(insert?.payload).toMatchObject({ title: 'OrderCreated', body: null });
+    expect(insert?.payload).toMatchObject({ title: 'OrderCancelled', body: null });
+  });
+
+  it('tells a customer nothing about OrderCreated — they just placed it, and it has no approved wording', async () => {
+    const { calls, channel } = await dispatch(
+      row('OrderCreated', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
+    );
+
+    expect(calls.filter((c) => c.table === 'notifications' && c.op === 'insert')).toHaveLength(0);
+    expect(channel.deliver).not.toHaveBeenCalled();
+  });
+
+  it('still tells the restaurant about OrderCreated, in the same event', async () => {
+    const { calls } = await dispatch(
+      row('OrderCreated', 'order', {
+        recipients: [
+          { recipientId: 'cust-1', recipientType: 'CUSTOMER' },
+          { recipientId: 'merch-1', recipientType: 'MERCHANT' },
+        ],
+      }),
+    );
+
+    const inserts = calls.filter((c) => c.table === 'notifications' && c.op === 'insert');
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]?.payload).toMatchObject({ recipient_id: 'merch-1', recipient_type: 'MERCHANT', title: 'OrderCreated' });
   });
 
   it('takes order_id from payload.orderId for a delivery-aggregate event, not from the delivery id', async () => {

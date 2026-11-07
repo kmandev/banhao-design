@@ -4,7 +4,7 @@ import {
   IN_APP_NOTIFICATION_CHANNEL,
   type NotificationChannel,
 } from './notification-channel.interface';
-import { customerCopyFor } from './customer-notification-copy';
+import { customerCopyFor, isSilentFor } from './customer-notification-copy';
 
 /** How many unprocessed `outbox` rows one tick claims work from at most — matches `PaymentEventProcessingService`'s `BATCH_SIZE`. */
 const BATCH_SIZE = 25;
@@ -179,11 +179,15 @@ export class OutboxDispatchService {
 
   private async dispatchClaimed(row: ClaimedOutboxRow): Promise<void> {
     const recipients = readRecipients(row.payload);
-    const validRecipients = recipients.filter((r) => r.recipientType !== 'OPERATOR');
+    // OPERATOR is unsupported in Phase H; a customer is told nothing for an
+    // event that has no approved customer wording and that they caused themselves.
+    const validRecipients = recipients.filter(
+      (r) => r.recipientType !== 'OPERATOR' && !isSilentFor(row.event_type, r.recipientType),
+    );
 
     if (recipients.length !== validRecipients.length) {
       this.logger.debug(
-        `outbox ${row.id}: skipped ${recipients.length - validRecipients.length} OPERATOR recipient(s) — unsupported in Phase H`,
+        `outbox ${row.id}: skipped ${recipients.length - validRecipients.length} recipient(s) — OPERATOR is unsupported in Phase H, or the event is deliberately silent for a customer`,
       );
     }
 

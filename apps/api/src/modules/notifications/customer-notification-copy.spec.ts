@@ -1,4 +1,4 @@
-import { CUSTOMER_COPY_EVENT_TYPES, customerCopyFor } from './customer-notification-copy';
+import { CUSTOMER_COPY_EVENT_TYPES, customerCopyFor, isSilentFor } from './customer-notification-copy';
 
 /**
  * DEC-068 D1 approved exactly nine events and their Thai wording. These tests
@@ -38,6 +38,14 @@ describe('customerCopyFor (DEC-068 D1)', () => {
   it('answers only for customers', () => {
     for (const recipient of ['MERCHANT', 'RIDER', 'OPERATOR']) {
       expect(customerCopyFor('OrderDelivered', recipient)).toBeNull();
+    }
+  });
+
+  it('is silent for a customer on OrderCreated only, and never for anyone else', () => {
+    expect(isSilentFor('OrderCreated', 'CUSTOMER')).toBe(true);
+    expect(isSilentFor('OrderCreated', 'MERCHANT')).toBe(false);
+    for (const eventType of CUSTOMER_COPY_EVENT_TYPES) {
+      expect(isSilentFor(eventType, 'CUSTOMER')).toBe(false);
     }
   });
 

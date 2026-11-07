@@ -30,6 +30,22 @@ const CUSTOMER_COPY: Readonly<Record<string, NotificationCopy>> = {
   OrderDeliveryFailed: { title: 'ส่งอาหารไม่สำเร็จ', body: 'ทีมงานจะติดต่อกลับ' },
 };
 
+/**
+ * Events a customer must not be notified about.
+ *
+ * `OrderCreated` fires the moment the customer places the order. It is not one
+ * of the nine approved events, so it has no approved wording, and showing the
+ * raw event name to someone who just tapped the button themselves is noise at
+ * best. The restaurant still gets it. Silence is the only option that invents
+ * nothing: DEC-068 D1 forbids new customer events and wording beyond the nine.
+ */
+const SILENT_FOR_CUSTOMER: ReadonlySet<string> = new Set(['OrderCreated']);
+
+/** Whether this recipient is deliberately sent nothing for this event. */
+export function isSilentFor(eventType: string, recipientType: string): boolean {
+  return recipientType === 'CUSTOMER' && SILENT_FOR_CUSTOMER.has(eventType);
+}
+
 /** The approved customer text for an event, or `null` when the recipient is not a customer or the event is not one of the nine. */
 export function customerCopyFor(eventType: string, recipientType: string): NotificationCopy | null {
   if (recipientType !== 'CUSTOMER') return null;
