@@ -9467,6 +9467,20 @@ how a staff request is authenticated and routed, and the merchant UI must
 handle a new failure outcome. None of that is settled here, no code or
 schema changed, and C3 stays unbuilt. Existing audit rows are not backfilled.
 
+*Implementation status — 2026-11-07 (added; the paragraph above is left as
+written, because it was true when recorded).* C3 and C3-A are built, after the
+Product Owner's instruction to do C1, C3 and D1. Migration
+`20261107000001` adds `public.set_restaurant_availability()`: one function, one
+transaction, so a failing audit insert rolls the mode change back. The merchant
+route and a new staff route (`PUT /api/v1/admin/supervisor/restaurants/:id/availability`,
+reason required, `OPERATOR` actor) both call it through
+`RestaurantAvailabilityService`; the service no longer writes the audit row
+itself and no longer swallows a failure. 25 SQL assertions cover the
+fail-closed case against real Postgres. **Not built:** an admin console screen
+for the staff route (no design artifact exists), and any change to the
+merchant UI beyond what its existing error state already shows. Existing audit
+rows are not backfilled.
+
 **D1 — Customer notification texts: the nine Thai title/body pairs in
 `PHASE-1-OWNER-QUESTIONS.md` §D1, used as drafted and unedited.** The nine
 events are `PaymentSucceeded`, `MerchantAcceptedOrder`, `RiderSearchStarted`,

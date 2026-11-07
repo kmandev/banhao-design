@@ -51,8 +51,10 @@ T7 is authorized by DEC-065 and **not done**. See §7. **Also 2026-11-02,
 DEC-068 A1 added a 33rd migration**, `20261102000001`
 (`payment_events.payment_id` write-once), tested by `run-domain-tests.sh` and
 applied to `banhao-dev`; all 33 show as applied. DEC-068 also recorded the
-owner's C1/C3/D1 answers (decided, unbuilt); its C3-A amends M-AV G-2 in part
-(§11).
+owner's C1/C3/D1 answers; its C3-A amends M-AV G-2 in part (§11). **On
+2026-11-07 all three were built**: D1 (`0d69d2db`), C1 (`4d2e9f7b`) and C3
+with a 34th migration, `20261107000001` (`set_restaurant_availability()`,
+atomic audit) — see §11/§12.
 
 > **Authoritative for application implementation:**
 > [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md) —
@@ -188,7 +190,7 @@ explicit instruction" rule.
 | Supabase Auth (Phone OTP) | **Configured live**; app-side flow written |
 | `profiles` + RLS | **DONE and live-verified** |
 | Mock repositories | **None left in the Customer app.** All nine bindings in `apps/customer/src/repositories/index.ts` are live: catalog, cart, cart validation, order creation, order history, order detail, delivery proof, notifications, addresses. The `mockRepositories` object survives only as test fixtures |
-| NestJS API | 58 operations across 55 paths — identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (Stripe, see the Payments row), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage, and the Phase I Human Supervisor console (§13). **The contract is `docs/06-api/openapi.json`**, generated from the real `AppModule` and guarded against drift by `apps/api/test/openapi.contract.spec.ts`; `docs/06-api/README.md` documents the envelope, the error catalogue and the guard order |
+| NestJS API | 59 operations across 56 paths — identity, merchant/catalog, cart, orders (incl. pricing, delivery-proof), payments (Stripe, see the Payments row), rider/delivery (dispatch, pickup/en-route/arrival/completion, release, proof retention), storage, and the Phase I Human Supervisor console (§13). **The contract is `docs/06-api/openapi.json`**, generated from the real `AppModule` and guarded against drift by `apps/api/test/openapi.contract.spec.ts`; `docs/06-api/README.md` documents the envelope, the error catalogue and the guard order |
 | Merchant app | **MUST scope complete** (Next.js, DEC-APP-003) — phone-OTP login, restaurant scope, the live order board with Realtime + audible arrival alerting, order detail panel, accept-with-prep-time, **M-11 menu management**, **M-12 opening hours**, **M-10 restaurant profile** and **M-AV availability (NORMAL / BUSY / PAUSED)**, and the real five-item nav. The documented build order M-01 → M-03 → M-04/M-05 → M-07/M-08 → M-11/M-12 is **complete**, and M-10 and M-AV landed after it, each from its own committed design artifact. **Not built: M-06 reject dialog (SHOULD), M-09 (SHOULD), UX-SPEC M-13 earnings / M-14 settings (LATER) — all still blocked on a design artifact, none exists.** M-AV is the availability work formerly labelled M-13; see §11 |
 | Driver app | **Substantial implementation** — screens and repositories for status/availability, offer inbox, active delivery, proof camera/review/upload, and navigation, backed by tests |
 | Admin app | **Human Supervisor console built** (Next.js) — phone-OTP login, `platform_staff` gate, operations inbox (S-02), case detail with live domain state and append-only timeline (S-03), close-case-with-reason (S-06). The Admin design package's financial screens (A-16…A-22) are **not built** and are blocked on the money decisions. See §13 |
@@ -295,7 +297,7 @@ apps/driver/                  Status/availability, offer inbox, active delivery,
 apps/merchant/                Next.js: order board, menu management (M-11),
                                opening hours (M-12); see §11
 apps/admin/                   Still a shell — see §5
-supabase/migrations/          33 migration files (16 at the `e471ec1d` checkpoint + 17 since)
+supabase/migrations/          34 migration files (16 at the `e471ec1d` checkpoint + 18 since)
 supabase/tests/               rls_profiles_test.sql (pg shim) + live-rls-check.mjs (LIVE)
 
 docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md   design audit, DQ-01…05
@@ -325,7 +327,7 @@ docs/DATABASE_DESIGN.md           46 tables, ERD, RLS matrix — APPROVED (DEC-0
 docs/OPEN_DATABASE_QUESTIONS.md   DBQ-001…DBQ-015 — 2 answered, 1 new
 docs/DATABASE_MIGRATION_V1_REPORT.md  16 migrations at the e471ec1d checkpoint, 40 tables, 60/60 tests pass
 
-supabase/migrations/*.sql          33 migrations (16 at checkpoint + 17 since) — do not
+supabase/migrations/*.sql          34 migrations (16 at checkpoint + 18 since) — do not
                                     edit an existing file; do not add a new one without
                                     an explicit instruction (see §10)
 ```
@@ -342,7 +344,7 @@ supabase/migrations/*.sql          33 migrations (16 at checkpoint + 17 since) �
 | Org | `kmandev's Org` (also holds an unrelated `videoup` project) |
 | Postgres | 17.6 + PostGIS |
 | Project state | `ACTIVE_HEALTHY`. Found `INACTIVE` (paused) on 2026-11-02 and restored the same day from the Dashboard by the owner. A free-tier project pauses itself when idle, so expect this again after long gaps |
-| Migrations | **33 in the repository, all 33 applied** (the 33rd, `20261102000001`, DEC-068 A1, applied 2026-11-02 by `supabase db push --linked`) — `supabase migration list --linked`, 2026-11-02, shows a matching Remote entry for every local version (16 at the `e471ec1d` V1.1 checkpoint + 17 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04, delivery-arrival/contact-attempts, customer email, Q-020 reconciliation refund-kinds, D-01, AI Ops dedup, and payment_events write-once). This settles the four previously unconfirmed (`20260907000001`, `20260907000002`, `20260908000001`, `20260909000001`) and `20260921000001`, whose own commit (`36d99edd`) said "not applied"; a direct read confirms its index `audit_logs_ai_action_entity_key` exists with the designed `WHERE actor_type = 'AI'` predicate. The four were confirmed by the migration list only, not by direct schema read. `20260915000001` is additionally live-exercised — `order_commission_snapshots` holds live rows and the First Manual Tick ran against it 2026-09-20. The last two verified as of the prior pass, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` showed all 26 (then-current) with a matching Remote entry, and direct schema reads confirmed `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body was byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
+| Migrations | **34 in the repository, all 34 applied** (the 34th, `20261107000001`, DEC-068 C3-A, applied 2026-11-07 by `supabase db push --linked`; the 33rd, `20261102000001`, DEC-068 A1, 2026-11-02) — `supabase migration list --linked`, 2026-11-02, shows a matching Remote entry for every local version (16 at the `e471ec1d` V1.1 checkpoint + 18 merged since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04, delivery-arrival/contact-attempts, customer email, Q-020 reconciliation refund-kinds, D-01, AI Ops dedup, payment_events write-once, and atomic availability audit). This settles the four previously unconfirmed (`20260907000001`, `20260907000002`, `20260908000001`, `20260909000001`) and `20260921000001`, whose own commit (`36d99edd`) said "not applied"; a direct read confirms its index `audit_logs_ai_action_entity_key` exists with the designed `WHERE actor_type = 'AI'` predicate. The four were confirmed by the migration list only, not by direct schema read. `20260915000001` is additionally live-exercised — `order_commission_snapshots` holds live rows and the First Manual Tick ran against it 2026-09-20. The last two verified as of the prior pass, `20260904000001` (M-AV availability) and `20260904000002` (AC-04 customer-quoted prep estimate), were **applied and verified on `banhao-dev` 2026-09-04** under an explicit operational instruction — `supabase migration list --linked` showed all 26 (then-current) with a matching Remote entry, and direct schema reads confirmed `restaurants.availability_mode` / `busy_prep_minutes` and `orders.customer_quoted_prep_minutes` exist with their designed constraints, `create_order()`'s deployed body was byte-identical to `20260904000002`'s restatement, and every pre-existing row defaulted to `NORMAL` / stayed NULL with no backfill. The 24 applied before them were **verified live 2026-09-03** against `banhao-dev` by `supabase migration list --linked` (every local version has a matching Remote entry) plus direct schema reads: the four merchant catalog-write functions exist with matching signatures (`20260901000002`), `order_item_options.menu_option_id` carries no foreign key and its comment matches the migration text (`20260902000001`), and `audit_logs_actor_type_check` reads `CHECK (actor_type = ANY (ARRAY['CUSTOMER','MERCHANT','RIDER','OPERATOR','SYSTEM','WEBHOOK','AI']))` (`20260903000001`, AI-01). Applying any migration remains an explicit instruction, never a side effect of other work |
 | Auth | Phone provider **enabled**; **Test OTP** configured (no SMS provider) |
 | Test numbers | `+66812345678` → `123456`, `+66899999999` → `654321` |
 
@@ -562,14 +564,15 @@ migration explicitly instructed for the current phase — see §10.
   and report it.
 - Never `SELECT`-then-check-then-`UPDATE` a guarded table — the state check goes
   in the `WHERE` clause (ADR-003).
-- **33 migrations are merged** (the 33rd is DEC-068 A1's `20261102000001`; 16 reviewed at the `e471ec1d` V1.1 checkpoint,
-  plus 17 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04,
+- **34 migrations are merged** (the 33rd is DEC-068 A1's `20261102000001`, the 34th C3-A's `20261107000001`; 16 reviewed at the `e471ec1d` V1.1 checkpoint,
+  plus 18 since for Phase C/E/G, M-05, M-10, M-11/M-12, AI-01, M-AV, AC-04,
   delivery-arrival/contact-attempts, customer email, Q-020 reconciliation
-  refund-kinds, D-01, AI Ops dedup, and payment_events write-once — see
+  refund-kinds, D-01, AI Ops dedup, payment_events write-once, and atomic
+  availability audit — see
   §3/§7). **26 are confirmed applied
-  live** (verified 2026-09-03/04); of the 7 added since, **D-01's
+  live** (verified 2026-09-03/04); of the 8 added since, **D-01's
   (`20260915000001`) is confirmed applied and live-exercised** by the First
-  Manual Tick, and **all 7 show as applied** in `supabase migration list
+  Manual Tick, and **all 8 show as applied** in `supabase migration list
   --linked` (2026-11-02) — see §7 for the exact evidence boundary. Read
   `docs/DATABASE_MIGRATION_V1_REPORT.md` before going near any of them. Do not
   edit an existing migration, and do not add a table, view, RLS policy, RPC, or
@@ -704,19 +707,20 @@ own owner or verification action, not by code landing:
 - **G-1: CLOSED.** The paused-restaurant add-to-cart gap is fixed
   (`a31abdd1`) — disabled CTA, correct copy, no navigation to Cart, no item
   added, existing cart untouched.
-- **G-2: CLOSED — OWNER DECISION LOCKED / BEST EFFORT AUDIT. Amended in part
-  2026-11-02 by DEC-068 C3-A: the target is now fail-closed and atomic (an
-  audit failure fails the mode change). Not yet implemented — until it is, the
-  code still does what this bullet describes; do not change it without a
-  separate implementation instruction (it needs a migration).** `ab3efec3`
-  locks the `audit_logs` write for a real availability-mode change as
+- **G-2: CLOSED — OWNER DECISION LOCKED; SUPERSEDED IN PART BY DEC-068 C3-A,
+  which is now implemented (2026-11-07).** The mode change and its audit row
+  are one transaction (`public.set_restaurant_availability()`, migration
+  `20261107000001`): if the audit row cannot be written, the change fails and
+  the mode is unchanged. The paragraph below describes what G-2 locked on
+  2026-09-14 and what the code did until then; it is no longer the behaviour.
+  `ab3efec3` locked the `audit_logs` write for a real availability-mode change as
   **best effort**: attempted after the state transition commits, failure
   logged and swallowed, never fails the API request, never triggers a
   compensating update. This is a **clarification of DEC-041 item 9, not a
   new decision number** — codifies already-tested behavior
   (`restaurant-availability.service.spec.ts`), no schema/migration/runtime
-  change. **Do not "fix" the swallowed-failure path on your own** — the change
-  is owned by C3-A's implementation task, not by a drive-by edit.
+  change. **Do not restore the swallowed-failure path** — C3-A reversed it on
+  purpose, and a mode change without its audit row must not succeed.
 - **G-3: BLOCKED — DEVICE RUNTIME VERIFICATION.** Two separate sessions
   failed the iOS Simulator health check before completing the B (NORMAL) / C
   (BUSY) / D (SIGNED-OUT) regression checklist — `screenshot` returns
@@ -725,9 +729,13 @@ own owner or verification action, not by code landing:
   made or is authorized in response to it. The PAUSED path *was* verified
   live against `banhao-dev` in an earlier session and may be cited as
   evidence, but it does not close the incomplete checklist.
-- **R-6 / BQ-038: DECIDED 2026-11-02 (DEC-068 C3), NOT BUILT.** Active
-  restaurant members plus BANHAO staff `ADMIN` / `OPERATOR` may change the
-  mode; staff must give a reason; C3-A makes the audit fail-closed.
+- **R-6 / BQ-038: DECIDED 2026-11-02 (DEC-068 C3), BUILT 2026-11-07 (API
+  only).** Active restaurant members (existing merchant route) and BANHAO
+  staff `ADMIN` / `OPERATOR` (`PUT /api/v1/admin/supervisor/restaurants/:id/availability`)
+  may change the mode; staff must give a reason; the audit is fail-closed and
+  records actor, role, merchant, old and new mode, time and source. **No admin
+  console screen exists for the staff route** — the console has no design
+  artifact for it, so it is reachable by API only.
 - **M-AV CORE IMPLEMENTATION: COMPLETE**, independent of G-3/R-6's status —
   the build-scope table below is unaffected by either.
 
