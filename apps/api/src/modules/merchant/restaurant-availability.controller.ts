@@ -15,6 +15,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RestaurantScope } from '../../common/decorators/restaurant-scope.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { parseOrThrow } from '../../common/validation/parse';
+import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { RestaurantAvailabilityService } from './restaurant-availability.service';
 
@@ -47,13 +48,27 @@ export class RestaurantAvailabilityController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
   @ApiForbiddenResponse({ description: 'Not a member of this restaurant' })
   @ApiConflictResponse({ description: 'INVALID_TRANSITION — e.g. PAUSED to BUSY directly is not implemented' })
+  // DEC-068 C3-A: the audit row is written in the same transaction as the
+  // change. If it cannot be written the change fails (500) and the mode is
+  // unchanged — it is never reported as a success.
   async setAvailability(
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Param('restaurantId') restaurantId: string,
     @Body() body: unknown,
   ): Promise<RestaurantAvailabilityResponse> {
     const input = parseOrThrow(setRestaurantAvailabilitySchema, body);
-    return this.availability.setAvailability(restaurantId, requireUser(user).id, input);
+    const caller = requireUser(user);
+    // `RestaurantScopeGuard` has already proved this membership exists; the
+    // role is read from it only so the audit row can record it (DEC-068 C3).
+    const membership = caller.capabilities.merchant.find((m) => m.restaurantId === restaurantId);
+    if (!membership) {
+      throw new DomainError('NOT_RESTAURANT_MEMBER');
+    }
+    return this.availability.setAvailability(
+      restaurantId,
+      { actorType: 'MERCHANT', userId: caller.id, role: membership.memberRole },
+      input,
+    );
   }
 }
 

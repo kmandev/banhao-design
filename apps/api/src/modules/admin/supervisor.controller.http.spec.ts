@@ -20,6 +20,7 @@ import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
 import { ReconciliationCaseService } from './reconciliation-case.service';
+import { RestaurantAvailabilityService } from '../merchant/restaurant-availability.service';
 
 /**
  * The HTTP boundary of the Human Supervisor console — Phase I.
@@ -40,6 +41,7 @@ import { ReconciliationCaseService } from './reconciliation-case.service';
 const CASE_ID = 'aa100000-0000-4000-8000-000000000001';
 const DELIVERY_ID = 'aa200000-0000-4000-8000-000000000001';
 const ORDER_ID = 'aa300000-0000-4000-8000-000000000001';
+const RESTAURANT_ID = 'aa500000-0000-4000-8000-000000000001';
 
 const OPERATOR: AuthenticatedUser = {
   id: 'user-operator-1',
@@ -156,6 +158,9 @@ function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
   return new FakeAuthGuard();
 }
 
+/** DEC-068 C3 — the staff availability route's service, reset before every test. */
+const availabilityStub = jest.fn();
+
 async function buildApp(
   user: AuthenticatedUser | null,
   stub: Stub,
@@ -176,6 +181,7 @@ async function buildApp(
       { provide: DeliveryFailureService, useValue: failures },
       { provide: RefundService, useValue: refunds },
       { provide: ReconciliationCaseService, useValue: reconciliation },
+      { provide: RestaurantAvailabilityService, useValue: { setAvailability: availabilityStub } },
       ...guards,
       { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
       Reflector,
@@ -189,7 +195,7 @@ async function buildApp(
 }
 
 /** Every route on the surface. A route added without a test here is visible in review. */
-const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post'; path: string; body?: unknown }> = [
+const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post' | 'put'; path: string; body?: unknown }> = [
   { name: 'identity', method: 'get', path: '/api/v1/admin/supervisor/me' },
   { name: 'inbox', method: 'get', path: '/api/v1/admin/supervisor/cases' },
   { name: 'case detail', method: 'get', path: `/api/v1/admin/supervisor/cases/${CASE_ID}` },
@@ -217,6 +223,12 @@ const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post'; path: string
     body: { reason: 'ยกเลิกก่อนร้านรับออเดอร์' },
   },
   {
+    name: 'set restaurant availability',
+    method: 'put',
+    path: `/api/v1/admin/supervisor/restaurants/${RESTAURANT_ID}/availability`,
+    body: { mode: 'PAUSED', reason: 'ร้านแจ้งว่าไฟดับ' },
+  },
+  {
     name: 'reconciliation cases list',
     method: 'get',
     path: '/api/v1/admin/supervisor/reconciliation-cases',
@@ -242,6 +254,13 @@ describe('SupervisorController — HTTP boundary', () => {
   let reconciliation: ReconciliationStub;
 
   beforeEach(() => {
+    availabilityStub.mockReset();
+    availabilityStub.mockResolvedValue({
+      restaurantId: RESTAURANT_ID,
+      availabilityMode: 'PAUSED',
+      busyPrepMinutes: null,
+      updatedAt: '2026-11-07T00:00:00.000Z',
+    });
     stub = makeStub();
     failures = makeFailureStub();
     refunds = makeRefundStub();
@@ -263,6 +282,7 @@ describe('SupervisorController — HTTP boundary', () => {
       reconciliation.listCases,
       reconciliation.getCase,
       reconciliation.resolveCase,
+      availabilityStub,
     ].some((fn) => fn.mock.calls.length > 0);
   }
 
@@ -289,6 +309,46 @@ describe('SupervisorController — HTTP boundary', () => {
     app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(200);
+  });
+
+  describe('set restaurant availability (DEC-068 C3)', () => {
+    const PATH = `/api/v1/admin/supervisor/restaurants/${RESTAURANT_ID}/availability`;
+
+    it('passes the staff identity and role, the reason, and the mode — as an OPERATOR actor', async () => {
+      app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer())
+        .put(PATH)
+        .send({ mode: 'BUSY', busyPrepMinutes: 30, reason: 'ร้านแจ้งว่าครัวเต็ม' })
+        .expect(200);
+
+      expect(availabilityStub).toHaveBeenCalledWith(
+        RESTAURANT_ID,
+        {
+          actorType: 'OPERATOR',
+          userId: OPERATOR.id,
+          role: OPERATOR.capabilities.platformStaff?.staffRole,
+          reason: 'ร้านแจ้งว่าครัวเต็ม',
+        },
+        { mode: 'BUSY', busyPrepMinutes: 30 },
+      );
+    });
+
+    it.each([
+      ['no reason', { mode: 'PAUSED' }],
+      ['a blank reason', { mode: 'PAUSED', reason: '   ' }],
+      ['an unknown mode', { mode: 'CLOSED', reason: 'x' }],
+      ['BUSY without minutes', { mode: 'BUSY', reason: 'x' }],
+      ['minutes outside the five values', { mode: 'BUSY', busyPrepMinutes: 25, reason: 'x' }],
+      ['minutes on PAUSED', { mode: 'PAUSED', busyPrepMinutes: 20, reason: 'x' }],
+      ['a smuggled actor', { mode: 'PAUSED', reason: 'x', actorType: 'MERCHANT' }],
+    ])('refuses %s with 400 and never reaches the service', async (_label, body) => {
+      app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).put(PATH).send(body).expect(400);
+
+      expect(availabilityStub).not.toHaveBeenCalled();
+    });
   });
 
   it('passes the server-verified identity to the service, never a body field', async () => {

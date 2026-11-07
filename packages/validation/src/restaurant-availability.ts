@@ -53,6 +53,38 @@ export const setRestaurantAvailabilitySchema = z
   ])
   .describe('M-13 availability mode change. BUSY requires busyPrepMinutes; NORMAL and PAUSED accept none.');
 
+/**
+ * DEC-068 C3 — the same mode change, made by BANHAO staff (`ADMIN` or
+ * `OPERATOR`) on a restaurant's behalf. Identical in every rule to
+ * {@link setRestaurantAvailabilitySchema} plus a required `reason`: a staff
+ * change is a manual operator action (DEC-032), and
+ * `audit_logs_operator_reason_check` makes an audit row without one
+ * impossible, so it must not be possible to send the request without one.
+ */
+const staffReason = z.string().trim().min(1).max(2000);
+
+export const staffSetRestaurantAvailabilitySchema = z
+  .discriminatedUnion('mode', [
+    z.object({ mode: z.literal('NORMAL'), reason: staffReason }).strict(),
+    z
+      .object({
+        mode: z.literal('BUSY'),
+        busyPrepMinutes: z.union([
+          z.literal(10),
+          z.literal(20),
+          z.literal(30),
+          z.literal(45),
+          z.literal(60),
+        ]),
+        reason: staffReason,
+      })
+      .strict(),
+    z.object({ mode: z.literal('PAUSED'), reason: staffReason }).strict(),
+  ])
+  .describe('Staff availability mode change (DEC-068 C3). Same rules as the merchant change, plus a required reason.');
+
+export type StaffSetRestaurantAvailabilityInput = z.infer<typeof staffSetRestaurantAvailabilitySchema>;
+
 export type SetRestaurantAvailabilityInput = z.infer<typeof setRestaurantAvailabilitySchema>;
 
 export type RestaurantAvailabilityMode = 'NORMAL' | 'BUSY' | 'PAUSED';

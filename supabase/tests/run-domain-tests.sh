@@ -508,4 +508,18 @@ if grep -q "FAIL" /tmp/banhao-payment-events-wo-out.log; then
 fi
 
 echo ""
-echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY + D-01 COMMISSION SNAPSHOT + D-01 FREEZE RACE + DEC-065 AI AUDIT DEDUP + DEC-068 PAYMENT_EVENTS WRITE-ONCE VERIFICATION PASSED"
+echo "==> Running DEC-068 C3 set_restaurant_availability assertions (20261107000001)"
+docker cp "$REPO_ROOT/supabase/tests/set_restaurant_availability_test.sql" "$CONTAINER:/tmp/" >/dev/null
+if ! docker exec "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1 \
+       -f /tmp/set_restaurant_availability_test.sql 2>&1 | tee /tmp/banhao-set-availability-out.log \
+     | grep -E "PASS|FAIL|ERROR|assertions"; then
+  echo "==> DEC-068 C3 set_restaurant_availability verification FAILED"
+  exit 1
+fi
+if grep -q "FAIL" /tmp/banhao-set-availability-out.log; then
+  echo "==> DEC-068 C3 set_restaurant_availability verification FAILED"
+  exit 1
+fi
+
+echo ""
+echo "==> ALL DOMAIN + VIEW ROW-ISOLATION + RIDER RACE + REASSIGNMENT ATOMICITY + ORDER CREATION + MERCHANT CATALOG WRITE + AI-01 AUDIT ACTOR + M-AV AVAILABILITY + AC-04 CUSTOMER QUOTE + BQ-017 CUSTOMER ARRIVAL + CONTACT ATTEMPTS + ARRIVAL TIMEOUT + DEC-060 RECONCILIATION REFUND-KIND + Q-020 SLICE 4B RECONCILIATION-CASE CONCURRENCY + D-01 COMMISSION SNAPSHOT + D-01 FREEZE RACE + DEC-065 AI AUDIT DEDUP + DEC-068 PAYMENT_EVENTS WRITE-ONCE + DEC-068 C3 ATOMIC AVAILABILITY AUDIT VERIFICATION PASSED"

@@ -1,4 +1,4 @@
-import { BUSY_PREP_MINUTE_VALUES, setRestaurantAvailabilitySchema } from './restaurant-availability';
+import { staffSetRestaurantAvailabilitySchema, BUSY_PREP_MINUTE_VALUES, setRestaurantAvailabilitySchema } from './restaurant-availability';
 
 describe('setRestaurantAvailabilitySchema', () => {
   it('accepts NORMAL with no other fields', () => {
@@ -54,5 +54,33 @@ describe('setRestaurantAvailabilitySchema', () => {
 
   it('BUSY_PREP_MINUTE_VALUES is exactly the five M-05 presets, in the same order', () => {
     expect(BUSY_PREP_MINUTE_VALUES).toEqual([10, 20, 30, 45, 60]);
+  });
+});
+
+describe('staffSetRestaurantAvailabilitySchema (DEC-068 C3)', () => {
+  it.each([
+    [{ mode: 'NORMAL', reason: 'ร้านกลับมาพร้อมขาย' }],
+    [{ mode: 'PAUSED', reason: 'ร้านแจ้งว่าไฟดับ' }],
+    [{ mode: 'BUSY', busyPrepMinutes: 30, reason: 'ครัวเต็ม' }],
+  ])('accepts %j', (body) => {
+    expect(staffSetRestaurantAvailabilitySchema.safeParse(body).success).toBe(true);
+  });
+
+  it.each([
+    ['no reason', { mode: 'PAUSED' }],
+    ['an empty reason', { mode: 'PAUSED', reason: '' }],
+    ['a blank reason', { mode: 'PAUSED', reason: '   ' }],
+    ['BUSY without minutes', { mode: 'BUSY', reason: 'x' }],
+    ['minutes outside the five values', { mode: 'BUSY', busyPrepMinutes: 25, reason: 'x' }],
+    ['minutes on PAUSED', { mode: 'PAUSED', busyPrepMinutes: 20, reason: 'x' }],
+    ['an unknown mode', { mode: 'CLOSED', reason: 'x' }],
+    ['an extra actor field', { mode: 'PAUSED', reason: 'x', actorType: 'MERCHANT' }],
+  ])('rejects %s', (_label, body) => {
+    expect(staffSetRestaurantAvailabilitySchema.safeParse(body).success).toBe(false);
+  });
+
+  it('trims the reason', () => {
+    const parsed = staffSetRestaurantAvailabilitySchema.parse({ mode: 'PAUSED', reason: '  ไฟดับ  ' });
+    expect(parsed.reason).toBe('ไฟดับ');
   });
 });

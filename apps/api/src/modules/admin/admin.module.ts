@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SupabaseModule } from '../../supabase/supabase.module';
+import { MerchantModule } from '../merchant/merchant.module';
 import { OrdersModule } from '../orders/orders.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { SupervisorCaseService } from './supervisor-case.service';
@@ -35,13 +36,18 @@ import { SupervisorController } from './supervisor.controller';
  * order-transition operation — it neither touches `payments.state` nor
  * `orders.state` (see `RefundService`'s own doc comment).
  *
+ * `MerchantModule` is imported for `RestaurantAvailabilityService` (DEC-068 C3):
+ * staff may change a restaurant's operating mode with a reason, through the
+ * same service the merchant route uses, so there is one write path and one
+ * atomic audit rule.
+ *
  * `ReconciliationCaseService` (Q-020 Slice 4) needs only `SupabaseModule` —
  * it reads/writes `reconciliation_cases` directly, the same table
  * `PaymentEventProcessingService.openCase` already writes, under this
  * console's existing `@Roles('OPERATOR', 'ADMIN')` grant.
  */
 @Module({
-  imports: [SupabaseModule, OrdersModule, PaymentsModule],
+  imports: [SupabaseModule, OrdersModule, PaymentsModule, MerchantModule],
   controllers: [SupervisorController],
   providers: [SupervisorCaseService, DeliveryFailureService, RefundService, ReconciliationCaseService],
   exports: [SupervisorCaseService],

@@ -126,10 +126,12 @@ describe('RestaurantAvailabilityController', () => {
 
     await request(app.getHttpServer()).put(PATH).send({ mode: 'BUSY', busyPrepMinutes: 20 }).expect(200);
 
-    expect(setAvailability).toHaveBeenCalledWith(RESTAURANT_ID, user.id, {
-      mode: 'BUSY',
-      busyPrepMinutes: 20,
-    });
+    // DEC-068 C3: the actor carries the member's role so the audit row can record it.
+    expect(setAvailability).toHaveBeenCalledWith(
+      RESTAURANT_ID,
+      { actorType: 'MERCHANT', userId: user.id, role: 'OWNER' },
+      { mode: 'BUSY', busyPrepMinutes: 20 },
+    );
   });
 
   it('answers 200 with the saved availability', async () => {
@@ -148,14 +150,14 @@ describe('RestaurantAvailabilityController', () => {
       app = await buildApp(merchantOf(RESTAURANT_ID), setAvailability);
 
       await request(app.getHttpServer()).put(PATH).send({ mode: 'NORMAL' }).expect(200);
-      expect(setAvailability).toHaveBeenCalledWith(RESTAURANT_ID, expect.any(String), { mode: 'NORMAL' });
+      expect(setAvailability).toHaveBeenCalledWith(RESTAURANT_ID, expect.objectContaining({ actorType: 'MERCHANT' }), { mode: 'NORMAL' });
     });
 
     it('accepts PAUSED with no body fields beyond mode', async () => {
       app = await buildApp(merchantOf(RESTAURANT_ID), setAvailability);
 
       await request(app.getHttpServer()).put(PATH).send({ mode: 'PAUSED' }).expect(200);
-      expect(setAvailability).toHaveBeenCalledWith(RESTAURANT_ID, expect.any(String), { mode: 'PAUSED' });
+      expect(setAvailability).toHaveBeenCalledWith(RESTAURANT_ID, expect.objectContaining({ actorType: 'MERCHANT' }), { mode: 'PAUSED' });
     });
 
     it('rejects BUSY with no busyPrepMinutes', async () => {

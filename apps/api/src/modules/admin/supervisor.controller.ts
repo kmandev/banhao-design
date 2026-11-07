@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -13,6 +13,7 @@ import {
   initiateRefundSchema,
   resolveSupervisorCaseSchema,
   resolveReconciliationCaseSchema,
+  staffSetRestaurantAvailabilitySchema,
 } from '@banhao/validation';
 import type {
   AwaitingFailureListResponse,
@@ -25,6 +26,7 @@ import type {
   ReconciliationCaseListResponse,
   ReconciliationCaseDetailResponse,
   ResolveReconciliationCaseResponse,
+  RestaurantAvailabilityResponse,
 } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -34,6 +36,7 @@ import { SupervisorCaseService } from './supervisor-case.service';
 import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
 import { ReconciliationCaseService } from './reconciliation-case.service';
+import { RestaurantAvailabilityService } from '../merchant/restaurant-availability.service';
 
 /**
  * Human Supervisor console — Phase I, screens S-02, S-03 and S-06 of the AI
@@ -90,6 +93,7 @@ export class SupervisorController {
     private readonly failures: DeliveryFailureService,
     private readonly refunds: RefundService,
     private readonly reconciliation: ReconciliationCaseService,
+    private readonly availability: RestaurantAvailabilityService,
   ) {}
 
   /**
@@ -262,6 +266,45 @@ export class SupervisorController {
   ): Promise<InitiateRefundResponse> {
     const request = parseOrThrow(initiateRefundSchema, body);
     return this.refunds.initiateRefund(user, id, request);
+  }
+
+  /**
+   * DEC-068 C3 — BANHAO staff (`ADMIN` or `OPERATOR`) change a restaurant's
+   * operating mode (`NORMAL` / `BUSY` / `PAUSED`) on its behalf.
+   *
+   * **A reason is required** — a staff change is a manual operator action
+   * (DEC-032), and the audit row's `OPERATOR` actor type cannot exist without
+   * one. It goes through the same service as the merchant route, so the
+   * transition rules, the no-op rule and the atomic audit (DEC-068 C3-A: no
+   * audit row, no change) are one implementation, not two.
+   *
+   * Operating mode only. This neither changes `restaurants.status` nor sets a
+   * temporary close, and it is not the pause policy BQ-013 leaves open.
+   */
+  @Put('restaurants/:id/availability')
+  @HttpCode(200)
+  @ApiOkResponse({ description: 'The saved availability, re-read from the database' })
+  @ApiNotFoundResponse({ description: 'Restaurant not found' })
+  @ApiConflictResponse({ description: 'INVALID_TRANSITION — e.g. PAUSED to BUSY directly is not implemented' })
+  async setRestaurantAvailability(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<RestaurantAvailabilityResponse> {
+    const request = parseOrThrow(staffSetRestaurantAvailabilitySchema, body);
+    const { reason, ...input } = request;
+    return this.availability.setAvailability(
+      id,
+      {
+        actorType: 'OPERATOR',
+        userId: user.id,
+        // Present by construction: the class-level `@Roles('OPERATOR','ADMIN')`
+        // refused anyone without an active grant before this handler ran.
+        role: user.capabilities.platformStaff?.staffRole ?? 'OPERATOR',
+        reason,
+      },
+      input,
+    );
   }
 
   /**

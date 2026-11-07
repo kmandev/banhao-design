@@ -47,5 +47,8 @@ import { RestaurantAvailabilityService } from './restaurant-availability.service
     RestaurantProfileService,
     RestaurantAvailabilityService,
   ],
+  // DEC-068 C3: the supervisor route calls the same service, so there is one
+  // write path (and one audit rule) for a mode change, not a second copy.
+  exports: [RestaurantAvailabilityService],
 })
 export class MerchantModule {}
