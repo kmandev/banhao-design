@@ -8,6 +8,8 @@ import type {
 import type { PaymentAttemptExpiryService } from '../payments/payment-attempt-expiry.service';
 import type { LegacyPaymentExpiryService } from '../payments/legacy-payment-expiry.service';
 import type { DispatchService } from '../rider/dispatch.service';
+import type { DeliveryAbandonmentService } from '../orders/delivery-abandonment.service';
+import type { CancelledPaidOrderEscalationService } from '../ai-ops/cancelled-paid-order-escalation.service';
 import type { NoRiderEscalationService } from '../rider/no-rider-escalation.service';
 import type { ArrivalTimeoutEscalationService } from '../rider/arrival-timeout-escalation.service';
 import type { ProofPhotoRetentionService } from '../rider/proof-photo-retention.service';
@@ -94,13 +96,18 @@ describe('TickController', () => {
     const aiOps = { run: runAiOps } as unknown as MerchantAcceptanceTimeoutService;
     const runAiOpsNoRider = jest.fn().mockResolvedValue(aiOpsNoRiderResult);
     const aiOpsNoRider = { run: runAiOpsNoRider } as unknown as NoRiderTriageService;
+    const runAiOpsCancelledPaid = jest.fn().mockResolvedValue({ examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 });
+    const aiOpsCancelledPaid = { run: runAiOpsCancelledPaid } as unknown as CancelledPaidOrderEscalationService;
     const expireLegacyUnpaidOrders = jest.fn().mockResolvedValue({ expired: 0, failed: false });
     const legacyPaymentExpiry = { expireLegacyUnpaidOrders } as unknown as LegacyPaymentExpiryService;
+    const sweepCancelledOrders = jest.fn().mockResolvedValue({ examined: 0, abandoned: 0, failed: 0 });
+    const deliveryAbandonment = { sweepCancelledOrders } as unknown as DeliveryAbandonmentService;
     const controller = new TickController(
       paymentEvents,
       refundEvents,
       refundReconciliation,
       paymentAttemptExpiry,
+      deliveryAbandonment,
       dispatch,
       noRiderEscalation,
       arrivalTimeoutEscalation,
@@ -108,6 +115,7 @@ describe('TickController', () => {
       outboxDispatch,
       aiOps,
       aiOpsNoRider,
+      aiOpsCancelledPaid,
       legacyPaymentExpiry,
     );
     return {
@@ -118,6 +126,7 @@ describe('TickController', () => {
       runRefundReconciliation,
       processExpiredAttempts,
       runDispatchRound,
+      sweepCancelledOrders,
       runNoRiderEscalation,
       runArrivalTimeout,
       run,
@@ -140,6 +149,7 @@ describe('TickController', () => {
       refundEvents: { processed: 0, skipped: 0 },
       refundReconciliation: EMPTY_REFUND_RECONCILIATION_RESULT,
       paymentAttemptExpiry: { expired: 1, skipped: 0 },
+      deliveryAbandonment: { examined: 0, abandoned: 0, failed: 0 },
       dispatch: { deliveries: 3, offers: 7, expiredOffers: 2 },
       noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
   arrivalTimeoutEscalation: { examined: 0, escalated: 0, skipped: 0, failed: 0 },
@@ -154,6 +164,7 @@ describe('TickController', () => {
       outboxDispatch: { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
       aiOps: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
       aiOpsNoRider: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
+      aiOpsCancelledPaid: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
     });
   });
 
@@ -267,6 +278,8 @@ describe('TickController', () => {
       'refundEvents',
       'refundReconciliation',
       'paymentAttemptExpiry',
+      // DEC-050 — closes the deliveries of cancelled orders, ahead of dispatch.
+      'deliveryAbandonment',
       'dispatch',
       'noRiderEscalation',
       // BQ-017 Slice #3 — DEC-053's five-minute customer-arrival wait, placed
@@ -276,6 +289,8 @@ describe('TickController', () => {
       'outboxDispatch',
       'aiOps',
       'aiOpsNoRider',
+      // DEC-050/DEC-058 — cancelled-after-payment orders needing a refund decision.
+      'aiOpsCancelledPaid',
     ]);
   });
 
@@ -495,5 +510,16 @@ describe('TickController', () => {
     expect(result.legacyPaymentExpiry).toEqual({ expired: 0, failed: true });
     expect(processPendingEvents).toHaveBeenCalledTimes(1);
     expect(result.accepted).toBe(true);
+  });
+
+  it('closes the deliveries of cancelled orders before dispatch, so a cancelled order is not offered to riders again', async () => {
+    const { controller, sweepCancelledOrders, runDispatchRound } = build();
+
+    await controller.handle();
+
+    expect(sweepCancelledOrders).toHaveBeenCalledTimes(1);
+    expect(sweepCancelledOrders.mock.invocationCallOrder[0]).toBeLessThan(
+      runDispatchRound.mock.invocationCallOrder[0] as number,
+    );
   });
 });

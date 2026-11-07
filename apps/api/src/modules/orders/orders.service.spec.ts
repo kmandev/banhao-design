@@ -4,6 +4,7 @@ import type { SupabaseService } from '../../supabase/supabase.service';
 import type { CartService, CartValidationResult } from '../cart/cart.service';
 import type { AddressesService, Address } from '../users/addresses.service';
 import type { OrderPricingService, OrderCommission } from './order-pricing.service';
+import type { DeliveryAbandonmentService } from './delivery-abandonment.service';
 import { calculateFoodSubtotalCommissionSatang } from '../payments/commission-pricing';
 import type { AuthenticatedUser } from '../../common/types';
 
@@ -132,7 +133,8 @@ function buildService(options?: {
     resolveOrderCommission: commissionResolve,
   } as unknown as OrderPricingService;
 
-  const subject = new OrdersService(supabase, cart, addresses, pricing);
+  const abandonment = fakeAbandonment().service;
+  const subject = new OrdersService(supabase, cart, addresses, pricing, abandonment);
 
   return { subject, cartValidate, addressesGetOwned, pricingResolve, commissionResolve, rpc, fromSpy, fromCalls };
 }
@@ -476,13 +478,23 @@ function ordersTableStub(results: Result[]) {
   return { supabase: { admin } as unknown as SupabaseService, calls };
 }
 
+/** A stand-in for `DeliveryAbandonmentService`: what it does is tested in its own spec. */
+function fakeAbandonment() {
+  const abandonForOrder = jest.fn().mockResolvedValue('NO_DELIVERY');
+  return {
+    abandonForOrder,
+    service: { abandonForOrder, sweepCancelledOrders: jest.fn() } as unknown as DeliveryAbandonmentService,
+  };
+}
+
 function buildTransitionService(results: Result[]) {
   const { supabase, calls } = ordersTableStub(results);
+  const { abandonForOrder, service: abandonment } = fakeAbandonment();
   const cart = {} as unknown as CartService;
   const addresses = {} as unknown as AddressesService;
   const pricing = {} as unknown as OrderPricingService;
-  const subject = new OrdersService(supabase, cart, addresses, pricing);
-  return { subject, calls };
+  const subject = new OrdersService(supabase, cart, addresses, pricing, abandonment);
+  return { subject, calls, abandonForOrder };
 }
 
 const ORDER_ID = 'order-1';
@@ -828,7 +840,8 @@ describe('OrdersService.cancelOrder — customer', () => {
     const updateCall = calls.find((c) => c.table === 'orders' && c.op === 'update');
     expect(updateCall?.eq).toMatchObject({ id: ORDER_ID, customer_id: 'customer-1' });
     expect(updateCall?.payload).toHaveProperty('cancelled_at');
-    expect(updateCall?.in.state).toEqual(['CREATED', 'PENDING_PAYMENT', 'PAID']);
+    // DEC-050: free through MERCHANT_ACCEPTED. PREPARING is not here — it needs the merchant's confirmation.
+    expect(updateCall?.in.state).toEqual(['CREATED', 'PENDING_PAYMENT', 'PAID', 'MERCHANT_ACCEPTED']);
 
     const historyCall = calls.find((c) => c.table === 'order_status_history');
     expect(historyCall?.payload).toMatchObject({
@@ -839,12 +852,78 @@ describe('OrdersService.cancelOrder — customer', () => {
     });
   });
 
-  it('rejects cancelling an order already MERCHANT_ACCEPTED — free window has closed', async () => {
-    const { subject } = buildTransitionService([{ data: null, error: null }]);
+  it('rejects cancelling an order already PREPARING — the free window (DEC-050) closes there', async () => {
+    // The guard is the `.in('state', ...)` clause, so an order outside the
+    // window matches 0 rows. This pins which states are inside it.
+    const { subject, calls } = buildTransitionService([{ data: null, error: null }]);
 
     await expect(
       subject.cancelOrder(customerUser('customer-1'), ORDER_ID, undefined),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    expect(calls[0]?.in.state).not.toContain('PREPARING');
+  });
+
+  it('closes the order\'s delivery after cancelling, naming the customer as the actor and passing the reason', async () => {
+    const { subject, abandonForOrder } = buildTransitionService([updatedRow('CANCELLED'), { data: null, error: null }]);
+
+    await subject.cancelOrder(customerUser('customer-1'), ORDER_ID, 'เปลี่ยนใจ');
+
+    expect(abandonForOrder).toHaveBeenCalledWith(ORDER_ID, { type: 'CUSTOMER', id: 'customer-1' }, 'เปลี่ยนใจ');
+  });
+
+  it('does not fail the cancellation when closing the delivery fails — the tick sweep finishes the job', async () => {
+    const { subject, abandonForOrder } = buildTransitionService([updatedRow('CANCELLED'), { data: null, error: null }]);
+    abandonForOrder.mockRejectedValue(new Error('connection reset'));
+
+    await expect(subject.cancelOrder(customerUser('customer-1'), ORDER_ID, undefined)).resolves.toEqual({
+      orderId: ORDER_ID,
+      state: 'CANCELLED',
+    });
+  });
+
+  it('does not close a delivery for a cancellation that did not happen', async () => {
+    const { subject, abandonForOrder } = buildTransitionService([{ data: null, error: null }]);
+
+    await expect(subject.cancelOrder(customerUser('customer-1'), ORDER_ID, undefined)).rejects.toThrow();
+
+    expect(abandonForOrder).not.toHaveBeenCalled();
+  });
+
+  it('tells the restaurant with one OrderCancelled event, MERCHANT recipient only', async () => {
+    const { subject, calls } = buildTransitionService([
+      updatedRow('CANCELLED'),
+      { data: null, error: null }, // order_status_history
+      MERCHANT_OWNER_LOOKUP,
+      MERCHANT_OWNER,
+      { data: null, error: null }, // outbox insert
+    ]);
+
+    await subject.cancelOrder(customerUser('customer-1'), ORDER_ID, undefined);
+
+    const outbox = calls.filter((c) => c.table === 'outbox' && c.op === 'insert');
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.payload).toMatchObject({
+      aggregate_type: 'order',
+      aggregate_id: ORDER_ID,
+      event_type: 'OrderCancelled',
+      payload: { recipients: [{ recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' }] },
+    });
+    // No customer or rider recipient: only nine customer events are approved (DEC-068 D1).
+    expect(JSON.stringify(outbox[0]?.payload)).not.toContain('CUSTOMER');
+    expect(JSON.stringify(outbox[0]?.payload)).not.toContain('RIDER');
+  });
+
+  it('does not fail the cancellation when the restaurant notification cannot be written', async () => {
+    const { subject } = buildTransitionService([
+      updatedRow('CANCELLED'),
+      { data: null, error: null },
+      { data: null, error: { message: 'connection reset' } },
+    ]);
+
+    await expect(subject.cancelOrder(customerUser('customer-1'), ORDER_ID, undefined)).resolves.toMatchObject({
+      state: 'CANCELLED',
+    });
   });
 
   it('reports NOT_FOUND (never a different code) for another customer\'s order — no existence leak', async () => {
@@ -1015,6 +1094,15 @@ describe('OrdersService.cancelOrder — operator', () => {
 
     const historyCall = calls.find((c) => c.table === 'order_status_history');
     expect(historyCall?.payload).toMatchObject({ actor_type: 'OPERATOR', reason: 'no rider available' });
+  });
+
+  it('closes the order\'s delivery after an operator cancellation too, naming the operator', async () => {
+    const { subject, abandonForOrder } = buildTransitionService([updatedRow('CANCELLED'), { data: null, error: null }]);
+    const operator = operatorUser();
+
+    await subject.cancelOrder(operator, ORDER_ID, 'no rider available');
+
+    expect(abandonForOrder).toHaveBeenCalledWith(ORDER_ID, { type: 'OPERATOR', id: operator.id }, 'no rider available');
   });
 
   /**
@@ -1452,7 +1540,8 @@ describe('OrdersService — H-3 outbox events', () => {
       resolveOrderFees: jest.fn().mockReturnValue(FEES),
       resolveOrderCommission: jest.fn().mockReturnValue({ commissionSatang: 1200, foodSubtotalSatang: 12000 }),
     } as unknown as OrderPricingService;
-    const subject = new OrdersService(supabase, cart, addresses, pricing);
+    const abandonment = fakeAbandonment().service;
+  const subject = new OrdersService(supabase, cart, addresses, pricing, abandonment);
 
     await subject.create(CUSTOMER_ID, { addressId: ADDRESS_ID, paymentMethod: 'ONLINE' });
 
@@ -1484,7 +1573,8 @@ describe('OrdersService — H-3 outbox events', () => {
     const cart = {} as unknown as CartService;
     const addresses = {} as unknown as AddressesService;
     const pricing = {} as unknown as OrderPricingService;
-    const subject = new OrdersService(supabase, cart, addresses, pricing);
+    const abandonment = fakeAbandonment().service;
+  const subject = new OrdersService(supabase, cart, addresses, pricing, abandonment);
 
     await subject.acceptOrder(merchantUser(RESTAURANT_A), ORDER_ID, ACCEPT_INPUT);
 
@@ -1518,7 +1608,8 @@ describe('OrdersService — H-3 outbox events', () => {
     const cart = {} as unknown as CartService;
     const addresses = {} as unknown as AddressesService;
     const pricing = {} as unknown as OrderPricingService;
-    const subject = new OrdersService(supabase, cart, addresses, pricing);
+    const abandonment = fakeAbandonment().service;
+  const subject = new OrdersService(supabase, cart, addresses, pricing, abandonment);
 
     await subject.markReady(merchantUser(RESTAURANT_A), ORDER_ID);
 
@@ -1548,7 +1639,8 @@ describe('OrdersService — H-3 outbox events', () => {
     const cart = {} as unknown as CartService;
     const addresses = {} as unknown as AddressesService;
     const pricing = {} as unknown as OrderPricingService;
-    const subject = new OrdersService(supabase, cart, addresses, pricing);
+    const abandonment = fakeAbandonment().service;
+  const subject = new OrdersService(supabase, cart, addresses, pricing, abandonment);
 
     await subject.markReady(merchantUser(RESTAURANT_A), ORDER_ID);
 

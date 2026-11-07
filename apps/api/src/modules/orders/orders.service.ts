@@ -15,6 +15,7 @@ import type { AuthenticatedUser } from '../../common/types';
 import { CartService } from '../cart/cart.service';
 import { AddressesService } from '../users/addresses.service';
 import { OrderPricingService } from './order-pricing.service';
+import { DeliveryAbandonmentService, type AbandonActor } from './delivery-abandonment.service';
 
 /** What `select * from public.create_order(...)` returns, one row. */
 interface CreateOrderRow {
@@ -57,12 +58,18 @@ interface RestaurantPickupRow {
 type ActorType = 'CUSTOMER' | 'MERCHANT' | 'RIDER' | 'OPERATOR';
 
 /**
- * `docs/ORDER_LIFECYCLE.md` § 5 — a customer may cancel free only before the
- * restaurant has accepted. `MERCHANT_ACCEPTED` itself is deliberately absent:
- * customer cancellation past that point is "⚠️ merchant confirms", not free,
- * and merchant-confirmed cancellation is BQ-013, still `OPEN`.
+ * DEC-050 — a customer may cancel freely through `MERCHANT_ACCEPTED`, with no
+ * cancellation fee. `PREPARING` is deliberately still absent: from there
+ * cancellation needs the merchant's confirmation, a flow with no screen and no
+ * design yet, so it stays with the operator, who can cancel through
+ * `READY_FOR_PICKUP` (`OPERATOR_CANCELLABLE_STATES`).
+ *
+ * `docs/ORDER_LIFECYCLE.md` § 5 stopped at `PAID` before DEC-050 (2026-09-07)
+ * moved the line. Letting a customer cancel this late is only safe because
+ * {@link DeliveryAbandonmentService} closes the delivery that `MERCHANT_ACCEPTED`
+ * is the first moment to have.
  */
-const CUSTOMER_CANCELLABLE_STATES = ['CREATED', 'PENDING_PAYMENT', 'PAID'] as const;
+const CUSTOMER_CANCELLABLE_STATES = ['CREATED', 'PENDING_PAYMENT', 'PAID', 'MERCHANT_ACCEPTED'] as const;
 
 /**
  * DEC-022 — an operator may cancel a non-terminal order **before the food
@@ -147,6 +154,7 @@ export class OrdersService {
     private readonly cart: CartService,
     private readonly addresses: AddressesService,
     private readonly pricing: OrderPricingService,
+    private readonly abandonment: DeliveryAbandonmentService,
   ) {}
 
   async create(customerId: string, request: CreateOrderRequest): Promise<CreateOrderResponse> {
@@ -887,6 +895,7 @@ export class OrdersService {
     }
 
     await this.writeHistory(orderId, null, 'CANCELLED', 'CUSTOMER', user.id, reason);
+    await this.afterCancellation(data, { type: 'CUSTOMER', id: user.id }, reason);
 
     return { orderId: data.id, state: data.state };
   }
@@ -914,8 +923,50 @@ export class OrdersService {
     }
 
     await this.writeHistory(orderId, null, 'CANCELLED', 'OPERATOR', user.id, reason);
+    await this.afterCancellation(data, { type: 'OPERATOR', id: user.id }, reason);
 
     return { orderId: data.id, state: data.state };
+  }
+
+  /**
+   * What follows an order that has already been cancelled and recorded.
+   * Neither step may fail the cancellation: the order is `CANCELLED` and the
+   * customer or operator must be told so.
+   *
+   * 1. **Close the delivery** (`DeliveryAbandonmentService`). Without this the
+   *    delivery keeps being offered to riders. If it fails here the tick's
+   *    sweep finds it and finishes the job.
+   * 2. **Tell the restaurant** — one `OrderCancelled` outbox event, `MERCHANT`
+   *    recipient only. No customer or rider recipient: the nine approved
+   *    customer notifications (DEC-068 D1) do not include this event, and no
+   *    rider wording was decided. The merchant keeps the raw event name like
+   *    every other merchant notification today.
+   */
+  private async afterCancellation(
+    order: OrderDiagnosisRow,
+    actor: AbandonActor,
+    reason: string | undefined,
+  ): Promise<void> {
+    try {
+      await this.abandonment.abandonForOrder(order.id, actor, reason);
+    } catch (cause) {
+      this.logger.warn(
+        `Order ${order.id} is cancelled but closing its delivery failed; the tick sweep will retry: ` +
+          `${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
+
+    try {
+      const recipients = await this.resolveEventRecipients(order, ['MERCHANT']);
+      if (recipients.length > 0) {
+        await this.writeOutboxEvent('order', order.id, 'OrderCancelled', recipients);
+      }
+    } catch (cause) {
+      this.logger.warn(
+        `Order ${order.id} is cancelled but the restaurant notification was not written: ` +
+          `${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
   }
 
   /**

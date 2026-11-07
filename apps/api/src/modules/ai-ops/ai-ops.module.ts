@@ -16,6 +16,7 @@ import {
 } from './no-rider-triage-policy';
 import { NoRiderTriageService } from './no-rider-triage.service';
 import { PlaybookRouter } from './playbook-router';
+import { CancelledPaidOrderEscalationService } from './cancelled-paid-order-escalation.service';
 
 /**
  * Phase J (DEC-040) — AI Operations.
@@ -45,12 +46,13 @@ import { PlaybookRouter } from './playbook-router';
     CommandDispatcher,
     MerchantAcceptanceTimeoutService,
     NoRiderTriageService,
+    CancelledPaidOrderEscalationService,
     { provide: MerchantAcceptancePolicySource, useClass: Dec068C1MerchantAcceptancePolicySource },
     { provide: NoRiderTriagePolicySource, useClass: Dec022NoRiderTriagePolicySource },
     // The agent is constructed with no Supabase client, no credential and no
     // HTTP client — DEC-040 §2 enforced by what is not injected.
     { provide: AgentPort, useClass: DeterministicAgentAdapter },
   ],
-  exports: [MerchantAcceptanceTimeoutService, NoRiderTriageService],
+  exports: [MerchantAcceptanceTimeoutService, NoRiderTriageService, CancelledPaidOrderEscalationService],
 })
 export class AiOpsModule {}

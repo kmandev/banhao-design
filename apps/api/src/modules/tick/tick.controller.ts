@@ -15,6 +15,10 @@ import {
 } from '../payments/legacy-payment-expiry.service';
 import { DispatchService, type DispatchRoundResult } from '../rider/dispatch.service';
 import {
+  DeliveryAbandonmentService,
+  type AbandonmentSweepResult,
+} from '../orders/delivery-abandonment.service';
+import {
   NoRiderEscalationService,
   type NoRiderEscalationResult,
 } from '../rider/no-rider-escalation.service';
@@ -32,6 +36,7 @@ import {
 } from '../notifications/outbox-dispatch.service';
 import { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-acceptance-timeout.service';
 import { NoRiderTriageService } from '../ai-ops/no-rider-triage.service';
+import { CancelledPaidOrderEscalationService } from '../ai-ops/cancelled-paid-order-escalation.service';
 import type { AiOpsRunResult } from '../ai-ops/ai-ops.types';
 
 export interface TickAcceptedResponse {
@@ -46,6 +51,8 @@ export interface TickAcceptedResponse {
   refundReconciliation: RefundReconciliationRunResult;
   /** How many timed-out `payment_attempts` rows this tick expired. */
   paymentAttemptExpiry: { expired: number; skipped: number };
+  /** DEC-050 — deliveries of cancelled orders this tick closed. Runs before dispatch so a cancelled order is never offered to riders again. */
+  deliveryAbandonment: AbandonmentSweepResult;
   /** G-2 — the broadcast dispatch round this tick ran (DEC-020, DEC-037). */
   dispatch: DispatchRoundResult;
   /** DEC-022 — the no-rider escalation check this tick ran (Phase H final gap). */
@@ -60,6 +67,8 @@ export interface TickAcceptedResponse {
   aiOps: AiOpsRunResult;
   /** Phase J (DEC-040) — the AI operations no-rider triage pipeline run this tick (DEC-022's decision point). */
   aiOpsNoRider: AiOpsRunResult;
+  /** DEC-050/DEC-058 — orders cancelled after payment with no refund started, escalated to an operator. */
+  aiOpsCancelledPaid: AiOpsRunResult;
 }
 
 /**
@@ -178,6 +187,7 @@ export class TickController {
     private readonly refundEvents: RefundEventProcessingService,
     private readonly refundReconciliation: RefundReconciliationDetectorService,
     private readonly paymentAttemptExpiry: PaymentAttemptExpiryService,
+    private readonly deliveryAbandonment: DeliveryAbandonmentService,
     private readonly dispatch: DispatchService,
     private readonly noRiderEscalation: NoRiderEscalationService,
     private readonly arrivalTimeoutEscalation: ArrivalTimeoutEscalationService,
@@ -185,6 +195,7 @@ export class TickController {
     private readonly outboxDispatch: OutboxDispatchService,
     private readonly aiOps: MerchantAcceptanceTimeoutService,
     private readonly aiOpsNoRider: NoRiderTriageService,
+    private readonly aiOpsCancelledPaid: CancelledPaidOrderEscalationService,
     private readonly legacyPaymentExpiry: LegacyPaymentExpiryService,
   ) {}
 
@@ -200,6 +211,9 @@ export class TickController {
     const refundEvents = await this.refundEvents.processPendingEvents();
     const refundReconciliation = await this.refundReconciliation.run();
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
+    // Before dispatch, so the delivery of an order cancelled since the last tick
+    // is closed rather than offered to riders once more.
+    const deliveryAbandonment = await this.deliveryAbandonment.sweepCancelledOrders();
     const dispatch = await this.dispatch.runDispatchRound();
     const noRiderEscalation = await this.noRiderEscalation.run();
     const arrivalTimeoutEscalation = await this.arrivalTimeoutEscalation.run();
@@ -207,6 +221,7 @@ export class TickController {
     const outboxDispatch = await this.outboxDispatch.dispatchPending();
     const aiOps = await this.aiOps.run();
     const aiOpsNoRider = await this.aiOpsNoRider.run();
+    const aiOpsCancelledPaid = await this.aiOpsCancelledPaid.run();
     return {
       accepted: true,
       legacyPaymentExpiry,
@@ -214,6 +229,7 @@ export class TickController {
       refundEvents,
       refundReconciliation,
       paymentAttemptExpiry,
+      deliveryAbandonment,
       dispatch,
       noRiderEscalation,
       arrivalTimeoutEscalation,
@@ -221,6 +237,7 @@ export class TickController {
       outboxDispatch,
       aiOps,
       aiOpsNoRider,
+      aiOpsCancelledPaid,
     };
   }
 }

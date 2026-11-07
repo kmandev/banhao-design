@@ -31,6 +31,8 @@ import { ProofPhotoRetentionService } from '../src/modules/rider/proof-photo-ret
 import { OutboxDispatchService } from '../src/modules/notifications/outbox-dispatch.service';
 import { MerchantAcceptanceTimeoutService } from '../src/modules/ai-ops/merchant-acceptance-timeout.service';
 import { NoRiderTriageService } from '../src/modules/ai-ops/no-rider-triage.service';
+import { CancelledPaidOrderEscalationService } from '../src/modules/ai-ops/cancelled-paid-order-escalation.service';
+import { DeliveryAbandonmentService } from '../src/modules/orders/delivery-abandonment.service';
 import { SupabaseModule } from '../src/supabase/supabase.module';
 import { UsersModule } from '../src/modules/users/users.module';
 
@@ -63,6 +65,7 @@ const PHASE_RESULTS = {
     refundedLedgerIncomplete: EMPTY_REFUND_RECONCILIATION_PHASE,
   },
   paymentAttemptExpiry: { expired: 0, skipped: 0 },
+  deliveryAbandonment: { examined: 0, abandoned: 0, failed: 0 },
   dispatch: { deliveries: 0, offers: 0, expiredOffers: 0 },
   noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
   arrivalTimeoutEscalation: { examined: 0, escalated: 0, skipped: 0, failed: 0 },
@@ -77,6 +80,7 @@ const PHASE_RESULTS = {
   outboxDispatch: { claimed: 0, dispatched: 0, skipped: 0, failed: 0 },
   aiOps: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
   aiOpsNoRider: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
+  aiOpsCancelledPaid: { examined: 0, acted: 0, escalated: 0, skipped: 0, failed: 0 },
 } as const;
 
 function sign(body: string): string {
@@ -187,6 +191,10 @@ describe('POST /internal/tick (integration)', () => {
       .useValue({ run: async () => PHASE_RESULTS.aiOps })
       .overrideProvider(NoRiderTriageService)
       .useValue({ run: async () => PHASE_RESULTS.aiOpsNoRider })
+      .overrideProvider(CancelledPaidOrderEscalationService)
+      .useValue({ run: async () => PHASE_RESULTS.aiOpsCancelledPaid })
+      .overrideProvider(DeliveryAbandonmentService)
+      .useValue({ sweepCancelledOrders: async () => PHASE_RESULTS.deliveryAbandonment })
       .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });
