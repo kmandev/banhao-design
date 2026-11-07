@@ -895,6 +895,7 @@ path.
 | J-01 candidate-ordering fix | `44eed3fc` | The outbox is read newest-first. Oldest-first let the same settled rows fill the batch forever, so the pipeline stopped working at order `BATCH_SIZE + 1` |
 | J-02 no-rider triage | `0726b269` | The design package's § 10 "No rider found" playbook. Turns a delivery past DEC-022's 8-minute decision point into a durable `audit_logs` escalation with round history and the current eligible-rider count |
 | Agent-failure containment | `dede3719` | An unavailable or unparseable agent escalates `ESC-UNKNOWN` with the failure recorded — design package § 11 |
+| Cancelled-after-payment escalation | 2026-11-07 | A tick phase with no agent and no command. An order `CANCELLED` whose payment is `SUCCESS` and that has no refund row gets one `AI_OPS_CANCELLED_PAID_ORDER` escalation (`ESC-UNKNOWN`, ids only) so an operator knows a refund is owed (DEC-050); the operator initiates it (DEC-058). It starts nothing itself |
 
 ### The boundaries, and how each is actually enforced
 

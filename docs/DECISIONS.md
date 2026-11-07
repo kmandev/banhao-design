@@ -4582,6 +4582,19 @@ and BQ-015, BQ-017, BQ-031 and Q-020 all remain open as recorded here.
 
 **Status:** ACCEPTED — POLICY · **RUNTIME NOT IMPLEMENTED** · **Date:** 2026-09-07 · **Owner:** PRODUCT_OWNER
 
+> **Implementation status — 2026-11-07 (added; the decision text below is unchanged).**
+> Clause 1 is implemented in the API: a customer may cancel through
+> `MERCHANT_ACCEPTED`. Letting a cancellation reach that late meant closing the
+> delivery it strands, so cancelling an order (customer or operator) now also
+> abandons its delivery, and a tick sweep repairs any that were missed. A paid
+> order cancelled with no refund started raises one operator escalation
+> (DEC-058: the operator, not the system, initiates the refund). The restaurant
+> gets an `OrderCancelled` notification. **Clause 3 (cancellation during
+> `PREPARING` with merchant confirmation) is not implemented** — it needs a
+> merchant screen that has no design — and the **customer app has no
+> cancel-order button**: the design places it on the no-driver screen, which
+> is not built. So the rule is enforced server-side but a customer cannot yet
+> reach it from the app.
 ### Decision
 
 Resolves **BQ-016** (cancellation windows, fees, and post-pickup policy). It
