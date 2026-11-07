@@ -510,7 +510,14 @@ migration explicitly instructed for the current phase — see §10.
   **Two generations of real (non-sample) figures now exist, and they are not
   interchangeable:**
   - **What the running code implements today:** flat delivery **฿10 / 1000
-    satang** (DEC-035), fixed service **฿5 / 500 satang** (DEC-036). Commission
+    satang** (DEC-035). Service fee is **no longer DEC-036's fixed ฿5** — as
+    of 2026-11-08 it is DEC-061 **D-03/D-04**: 5% of the food subtotal, floor
+    ฿5, cap ฿15, satang precision (`orders/service-fee-pricing.ts`), resolved
+    once at order creation and stored in the immutable
+    `orders.service_fee_satang`; no migration. Orders created earlier keep
+    their stored ฿5. **The customer app's Checkout and QR screens still show
+    the design's sample totals** (`apps/customer/src/mocks/pricing.ts`), not
+    the fees actually charged — a known gap. Commission
     is **no longer DEC-043's 8%** — as of D-01 (`0fd13887`, 2026-09-15,
     migration `20260915000001`), `commission-pricing.ts`'s rate constant
     itself computes **10%** (`COMMISSION_RATE_NUMERATOR = 10`), matching
@@ -518,12 +525,12 @@ migration explicitly instructed for the current phase — see §10.
     immutable `order_commission_snapshots` row — see the D-01 reconciliation
     above and §9 Phase I. `rider-earning-pricing.ts` is unchanged by D-01 and
     still computes DEC-044's flat ฿12.
-  - **What is locked but NOT yet built (D-02…D-14, excluding D-01):**
+  - **What is locked but NOT yet built (D-05…D-14; D-01 and D-03/D-04 are built, D-02 is the preserved rounding rule):**
     **DEC-061** (2026-09-09) supersedes DEC-035 in full, DEC-036 in full, and
     DEC-043/044/045 partially, with **D-01…D-14** — **D-01 (commission rate)
-    is now implemented and accepted, see above; D-02…D-14 remain unbuilt:**
-    service fee **5% of food subtotal, ฿5 floor, ฿15 cap**
-    (D-03/D-04), dynamic rider/delivery economics (D-05…D-10: 80% rider
+    is now implemented and accepted, and D-03/D-04 (service fee 5%, ฿5 floor,
+    ฿15 cap) were implemented 2026-11-08, see above; D-05…D-14 remain unbuilt:**
+    dynamic rider/delivery economics (D-05…D-10: 80% rider
     share, ฿12 rider floor, ฿8 rider base, +฿1.20/operational-road-km, ฿15
     delivery-fee minimum, ฿35 maximum), a ฿5 minimum-safe-contribution
     pre-acceptance guardrail (D-11), a 15 km maximum **road-distance** service

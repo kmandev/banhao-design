@@ -70,7 +70,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-057** | **Q-020 Phase 1 refund mechanism: full-refund-only scope, hybrid finality, PromptPay state mapping, reconciliation as a production prerequisite** | **ACCEPTED — ARCHITECTURE / POLICY · LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED** | **2026-09-08** | `docs/PAYMENT_LIFECYCLE.md`, Q-020 Refund RECON, Q-020 Stripe Refund Sandbox Spike |
 | **DEC-058** | **Refund authority: actor boundaries for request, approval, execution, cancellation and override** | **ACCEPTED — POLICY · LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED** | **2026-09-08** | `apps/api/src/modules/ai-ops/command-catalog.ts`, DEC-040, DEC-032, Q-020 |
 | **DEC-059** | **Full refund accounting: which ledger components reverse, and which do not** | **ACCEPTED — POLICY · LOCKED · IMPLEMENTED through Q-020 Slice 4B — E2E acceptance audit PASSED** | **2026-09-08** | `apps/api/src/modules/payments/commission-pricing.ts`, DEC-043, Q-020 |
-| **DEC-061** | **Q-002 Owner Decision Lock: D-01…D-14 (commission, service fee, dynamic rider/delivery economics, contribution guardrail, operational distance, minimum order value, promotion funding)** | **LOCKED — ECONOMIC POLICY · RUNTIME NOT IMPLEMENTED** | **2026-09-09** | `docs/Q-002-OWNER-DECISION-PACK.md`, `docs/Q-002-ECONOMICS-ARCHITECTURE-SPEC.md` |
+| **DEC-061** | **Q-002 Owner Decision Lock: D-01…D-14 (commission, service fee, dynamic rider/delivery economics, contribution guardrail, operational distance, minimum order value, promotion funding)** | **LOCKED — ECONOMIC POLICY · D-01, D-03/D-04 IMPLEMENTED · D-02 preserved · D-05…D-14 RUNTIME NOT IMPLEMENTED** | **2026-09-09** | `docs/Q-002-OWNER-DECISION-PACK.md`, `docs/Q-002-ECONOMICS-ARCHITECTURE-SPEC.md` |
 | **DEC-062** | **Q-018 Owner Decision Lock: OD-1…OD-8 (benchmark methodology, fixture quality, ground-truth and acquisition authority) — not a provider selection** | **ACCEPTED — BENCHMARK METHODOLOGY · NOT A PROVIDER SELECTION** | **2026-09-10** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, Q-018, TQ-004, D-16 (unaffected, `OPEN`), D-17 (unaffected, `OPEN`) |
 | **DEC-063** | **Q-018 ground truth source: the Rider performing a real customer delivery — actual delivery GPS trace as quantitative ground truth, Rider operational feedback as qualitative evidence. Supersedes DEC-062 OD-3 (separately appointed local reviewer) only** | **ACCEPTED — METHODOLOGY · NOT AN IMPLEMENTATION AUTHORIZATION** | **2026-09-14** | `ai/RESEARCH/Q-018-ROUTING-PROVIDER-BENCHMARK.md`, DEC-062 (OD-3 superseded; OD-6 unchanged), Q-012, TQ-016, BQ-022, D-16 (`OPEN`), D-17 (`OPEN`) |
 | **DEC-064** | **Rider GPS owner policy: explicit Terms/Privacy acceptance as the access gate for location-dependent Rider functionality; active-delivery-only scope; no continuous tracking, surveillance or automated discipline; purpose limitation; refusal blocks only the gated functionality; no GPS pay input; customer live tracking out of scope** | **ACCEPTED — OWNER PRODUCT POLICY · NOT A LEGAL DETERMINATION · NOT AN IMPLEMENTATION AUTHORIZATION** | **2026-09-14** | `docs/Q-012-RIDER-GPS-COUNSEL-BRIEF.md`, `docs/Q-012-RIDER-GPS-OWNER-DECISION-PACK.md`, DEC-037, DEC-063, Q-012 (`OPEN`), TQ-016 (`OPEN`), BQ-022 (`OPEN`), OD-6 (`NOT AUTHORIZED`), D-17 (`OPEN`) |
@@ -8361,6 +8361,24 @@ implementation provided the economic result preserves this locked meaning.
 **D-03 and D-04 together fully supersede DEC-036.** **DEC-047** (service-fee
 recognition timing) and **DEC-048** (service-fee refund treatment) are
 **preserved unchanged**.
+
+> **D-03/D-04 implementation status — 2026-11-08 (added; the decision text
+> above is unchanged).** Implemented under the owner's explicit authorization
+> of 2026-11-08 ("อนุญาตทำ D-03/D-04"). `apps/api/src/modules/orders/service-fee-pricing.ts`
+> computes `min(1500, max(500, round_half_up(food_subtotal_satang × 5 / 100)))`
+> once per order in `OrderPricingService.resolveOrderFees`; `create_order()`
+> stores the amount in the immutable `orders.service_fee_satang`, and the
+> DEC-047 recognition and DEC-048/DEC-059 reversal already read that stored
+> amount, so **no migration and no ledger change** were needed. Base is the food
+> subtotal only. **Rounding:** D-03 says integer satang and nothing else, so the
+> fee keeps satang precision (฿150 → ฿7.50, as the §8A.3 matrix shows) and only
+> a sub-satang fraction is rounded half-up; D-02's whole-baht rule governs the
+> commission only and is deliberately not borrowed. Orders created before this
+> keep their stored ฿5. Delivery stays DEC-035's flat ฿10 — D-05…D-14 remain
+> unbuilt. **Known gap, not addressed here:** the customer app's Checkout and
+> PromptPay QR screens still display the design's sample totals
+> (`apps/customer/src/mocks/pricing.ts`), so the fee the customer sees before
+> paying is not the fee charged.
 
 ### D-05 — Rider share
 
