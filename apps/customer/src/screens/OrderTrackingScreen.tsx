@@ -1,8 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import {
+  Button,
   Card,
   SectionHeader,
   StateView,
@@ -42,6 +43,52 @@ export function OrderTrackingScreen() {
     [params.orderId],
   );
   const state = useAsyncData(load, [params.orderId]);
+
+  // DEC-050. The cancel action and the "no rider yet" card. Hooks live above
+  // the early returns below, as the rules of hooks require.
+  const [cancelling, setCancelling] = useState(false);
+  const [justCancelled, setJustCancelled] = useState(false);
+  const [keptWaiting, setKeptWaiting] = useState(false);
+  const orderState = state.status === 'success' ? state.data?.state : undefined;
+  // Asked only while the order sits at `MERCHANT_ACCEPTED`, the last state in
+  // which DEC-050 lets the customer cancel for free. A failed read is "no
+  // notice": the card is an offer, and a missing offer costs nothing.
+  const noRiderNotice = useAsyncData(
+    () =>
+      orderState === 'MERCHANT_ACCEPTED'
+        ? repositories.noRiderNotice.hasNoRiderNotice(params.orderId).catch(() => false)
+        : Promise.resolve(false),
+    [params.orderId, orderState],
+  );
+  const showNoRider =
+    orderState === 'MERCHANT_ACCEPTED' &&
+    noRiderNotice.status === 'success' &&
+    noRiderNotice.data &&
+    !keptWaiting;
+
+  function confirmCancel() {
+    Alert.alert(
+      'ยกเลิกออเดอร์นี้?',
+      'อาหารของคุณยังไม่ถูกปรุง หากยกเลิกตอนนี้จะได้เงินคืนเต็มจำนวน',
+      [
+        { text: 'ไม่ยกเลิก', style: 'cancel' },
+        { text: 'ยกเลิกออเดอร์', style: 'destructive', onPress: () => void cancelOrder() },
+      ],
+    );
+  }
+
+  async function cancelOrder() {
+    setCancelling(true);
+    try {
+      await repositories.orderCancellation.cancelOrder(params.orderId);
+      setJustCancelled(true);
+      state.reload();
+    } catch {
+      Alert.alert('ยกเลิกไม่สำเร็จ', 'กรุณาลองอีกครั้ง หากยังไม่ได้ โปรดติดต่อทีมงาน');
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   if (state.status === 'loading') {
     return (
@@ -153,6 +200,38 @@ export function OrderTrackingScreen() {
       </Card>
 
       {/*
+        C-15's "no rider yet" state (DEC-050). It appears only when the server
+        has said so (see `apiNoRiderNotice`), never on a timer in the app. The
+        design also states a figure for how much longer the search continues
+        and a refund window in days; neither is an approved number, so neither
+        is shown — DESIGN_QUESTION recorded in `docs/CUSTOMER_APP_IMPLEMENTATION_MAP.md`.
+      */}
+      {showNoRider ? (
+        <Card style={styles.noRider} testID="tracking-no-rider">
+          <Text style={styles.noRiderTitle}>ยังหาไรเดอร์ไม่ได้</Text>
+          <Text style={styles.noRiderBody}>ขณะนี้ยังไม่มีไรเดอร์ว่างในบริเวณนี้ เรากำลังหาให้ต่อ</Text>
+          <Text style={styles.noRiderNote}>
+            อาหารของคุณยังไม่ถูกปรุง หากยกเลิกตอนนี้จะได้เงินคืนเต็มจำนวน
+          </Text>
+          <Button label="รอต่ออีกสักครู่" onPress={() => setKeptWaiting(true)} testID="tracking-keep-waiting" />
+          <Button
+            label="ยกเลิกออเดอร์"
+            variant="ghost"
+            onPress={confirmCancel}
+            loading={cancelling}
+            testID="tracking-cancel-order"
+          />
+        </Card>
+      ) : null}
+
+      {/* Shown only in the session that cancelled it: the screen then knows the order was paid, which an old cancelled order's row does not say. */}
+      {justCancelled && order.state === 'CANCELLED' ? (
+        <Card testID="tracking-cancelled-note">
+          <Text style={styles.noRiderNote}>ทีมงานจะดำเนินการคืนเงินให้เต็มจำนวน</Text>
+        </Card>
+      ) : null}
+
+      {/*
         The section is omitted entirely when nothing in the recorded history
         has approved customer copy — today that is every order, because
         `create_order()` writes only `CREATED` and UX-SPEC §10 gives `CREATED`
@@ -183,6 +262,10 @@ const styles = StyleSheet.create({
   },
   prepCaption: { fontSize: fontSize.md, fontFamily: fontFamily.medium, color: colors.textMuted },
   orderId: { fontSize: fontSize.sm, fontFamily: fontFamily.regular, color: colors.textSubtle },
+  noRider: { gap: spacing.sm },
+  noRiderTitle: { fontSize: fontSize.xl, fontFamily: fontFamily.bold, color: colors.textPrimary },
+  noRiderBody: { fontSize: fontSize.md, fontFamily: fontFamily.regular, color: colors.textMuted },
+  noRiderNote: { fontSize: fontSize.md, fontFamily: fontFamily.regular, color: colors.textMuted },
   summaryFooter: {
     flexDirection: 'row',
     alignItems: 'center',

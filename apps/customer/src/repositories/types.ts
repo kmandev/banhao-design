@@ -157,6 +157,23 @@ export interface OrderDetailRepository {
   getOrder(orderId: string): Promise<OrderDetail | null>;
 }
 
+/**
+ * `POST /api/v1/orders/:id/cancel` (DEC-050). Takes only the order id: whether
+ * the order is inside the free window, and whether it is the caller's, are the
+ * server's to decide, and a refusal is thrown.
+ */
+export interface OrderCancellationRepository {
+  cancelOrder(orderId: string): Promise<void>;
+}
+
+/**
+ * Has the server told this customer it cannot find a rider yet, for an order
+ * whose delivery is still searching? The app never computes this itself.
+ */
+export interface NoRiderNoticeRepository {
+  hasNoRiderNotice(orderId: string): Promise<boolean>;
+}
+
 export interface NotificationRepository {
   listNotifications(): Promise<AppNotification[]>;
   /** Marks one notification read (H-5A). `id` is `AppNotification.id`. */
@@ -230,6 +247,8 @@ export interface Repositories {
   orders: OrderRepository;
   orderDetail: OrderDetailRepository;
   deliveryProof: DeliveryProofRepository;
+  orderCancellation: OrderCancellationRepository;
+  noRiderNotice: NoRiderNoticeRepository;
   notifications: NotificationRepository;
   addresses: AddressRepository;
 }

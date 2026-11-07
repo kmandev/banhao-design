@@ -22,10 +22,14 @@ import { supabaseOrderDetailRepository } from './supabaseOrderDetail';
 import { supabaseOrderHistoryRepository } from './supabaseOrderHistory';
 import { apiDeliveryProofRepository } from './apiDeliveryProof';
 import { apiNotificationRepository } from './apiNotifications';
+import { apiOrderCancellationRepository } from './apiOrderCancellation';
+import { apiNoRiderNoticeRepository } from './apiNoRiderNotice';
 import type {
   CartValidationRepository,
   DeliveryProofRepository,
   NotificationRepository,
+  NoRiderNoticeRepository,
+  OrderCancellationRepository,
   OrderCreationRepository,
   OrderDetailRepository,
   OrderRepository,
@@ -52,6 +56,11 @@ export {
 } from './apiOrderCreation';
 export { apiAddressRepository, createApiAddressRepository } from './apiAddresses';
 export { apiNotificationRepository, createApiNotificationRepository } from './apiNotifications';
+export {
+  apiOrderCancellationRepository,
+  createApiOrderCancellationRepository,
+} from './apiOrderCancellation';
+export { apiNoRiderNoticeRepository, createApiNoRiderNoticeRepository } from './apiNoRiderNotice';
 export { mockAddressRepository, createMockAddressRepository } from './mockAddresses';
 export {
   supabaseOrderDetailRepository,
@@ -119,6 +128,16 @@ export const mockDeliveryProofRepository: DeliveryProofRepository = {
   getDeliveryProof: () => delay(null),
 };
 
+/** Fixture cancellation, for screen tests that are not about cancelling. */
+export const mockOrderCancellationRepository: OrderCancellationRepository = {
+  cancelOrder: () => delay(undefined),
+};
+
+/** Fixture no-rider notice — never one, for screen tests that are not about it. */
+export const mockNoRiderNoticeRepository: NoRiderNoticeRepository = {
+  hasNoRiderNotice: () => delay(false),
+};
+
 /**
  * The active repositories.
  *
@@ -169,6 +188,8 @@ export const repositories: Repositories = {
   orders: supabaseOrderHistoryRepository,
   orderDetail: supabaseOrderDetailRepository,
   deliveryProof: apiDeliveryProofRepository,
+  orderCancellation: apiOrderCancellationRepository,
+  noRiderNotice: apiNoRiderNoticeRepository,
   notifications: apiNotificationRepository,
   addresses: apiAddressRepository,
 };
@@ -189,6 +210,8 @@ export const mockRepositories: Repositories = {
   orders: mockOrderRepository,
   orderDetail: mockOrderDetailRepository,
   deliveryProof: mockDeliveryProofRepository,
+  orderCancellation: mockOrderCancellationRepository,
+  noRiderNotice: mockNoRiderNoticeRepository,
   notifications: mockNotificationRepository,
   addresses: mockAddressRepository,
 };

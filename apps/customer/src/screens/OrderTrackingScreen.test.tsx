@@ -1,9 +1,14 @@
+import { Alert } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { OrderTrackingScreen } from './OrderTrackingScreen';
 import { repositories } from '../repositories';
 import type { OrderDetail } from '../domain/order';
-import type { OrderDetailRepository } from '../repositories/types';
+import type {
+  NoRiderNoticeRepository,
+  OrderCancellationRepository,
+  OrderDetailRepository,
+} from '../repositories/types';
 
 /**
  * Phase E-3D — C-14 only renders the order-detail repository's RLS-scoped
@@ -14,12 +19,18 @@ import type { OrderDetailRepository } from '../repositories/types';
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
 const mockGetOrder = jest.fn();
+const mockHasNoRiderNotice = jest.fn();
+const mockCancelOrder = jest.fn();
 const mockGoBack = jest.fn();
 const mockRouteParams: { orderId: string } = { orderId: ORDER_ID };
 
 function stub() {
   const orderDetailRepo: OrderDetailRepository = { getOrder: mockGetOrder };
   (repositories as unknown as { orderDetail: OrderDetailRepository }).orderDetail = orderDetailRepo;
+  const noRiderRepo: NoRiderNoticeRepository = { hasNoRiderNotice: mockHasNoRiderNotice };
+  (repositories as unknown as { noRiderNotice: NoRiderNoticeRepository }).noRiderNotice = noRiderRepo;
+  const cancelRepo: OrderCancellationRepository = { cancelOrder: mockCancelOrder };
+  (repositories as unknown as { orderCancellation: OrderCancellationRepository }).orderCancellation = cancelRepo;
 }
 
 jest.mock('@react-navigation/native', () => {
@@ -68,6 +79,10 @@ const ORDER: OrderDetail = {
 beforeEach(() => {
   mockGetOrder.mockReset();
   mockGoBack.mockReset();
+  mockHasNoRiderNotice.mockReset();
+  mockHasNoRiderNotice.mockResolvedValue(false);
+  mockCancelOrder.mockReset();
+  mockCancelOrder.mockResolvedValue(undefined);
   stub();
 });
 
@@ -365,4 +380,144 @@ it('presents the quote as preparation time, never as an arrival estimate', async
   await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
 
   expect(screen.queryByText(/ถึงเวลา|จะถึง|ส่งถึง|เวลาส่ง/)).toBeNull();
+});
+
+// DEC-050 — the "no rider yet" card and the cancel action.
+const ACCEPTED: OrderDetail = { ...ORDER, state: 'MERCHANT_ACCEPTED' };
+
+/** Presses the confirm button of the most recent `Alert.alert` call. */
+function pressAlertButton(label: string) {
+  const call = (Alert.alert as jest.Mock).mock.calls.at(-1);
+  const button = (call?.[2] as { text: string; onPress?: () => void }[]).find((b) => b.text === label);
+  button?.onPress?.();
+}
+
+describe('no rider yet and cancelling (DEC-050)', () => {
+  beforeEach(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('shows the card only when the server has said no rider was found, and the order is MERCHANT_ACCEPTED', async () => {
+    mockGetOrder.mockResolvedValue(ACCEPTED);
+    mockHasNoRiderNotice.mockResolvedValue(true);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('tracking-no-rider')).toBeTruthy());
+    expect(screen.getByText('ยังหาไรเดอร์ไม่ได้')).toBeTruthy();
+    expect(mockHasNoRiderNotice).toHaveBeenCalledWith(ORDER_ID);
+  });
+
+  it('shows no card when the server has not said so', async () => {
+    mockGetOrder.mockResolvedValue(ACCEPTED);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+    await waitFor(() => expect(mockHasNoRiderNotice).toHaveBeenCalled());
+    expect(screen.queryByTestId('tracking-no-rider')).toBeNull();
+  });
+
+  it.each(['PAID', 'PREPARING', 'READY_FOR_PICKUP', 'DELIVERING'] as const)(
+    'never asks, and never shows the card, for an order in %s — DEC-050 ends the free window at MERCHANT_ACCEPTED',
+    async (state) => {
+      mockGetOrder.mockResolvedValue({ ...ORDER, state });
+      mockHasNoRiderNotice.mockResolvedValue(true);
+      renderScreen();
+
+      await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+      expect(mockHasNoRiderNotice).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('tracking-no-rider')).toBeNull();
+    },
+  );
+
+  it('treats a failed notice read as "no notice" — no card, no error screen', async () => {
+    mockGetOrder.mockResolvedValue(ACCEPTED);
+    mockHasNoRiderNotice.mockRejectedValue(new Error('Network request failed'));
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+    await waitFor(() => expect(mockHasNoRiderNotice).toHaveBeenCalled());
+    expect(screen.queryByTestId('tracking-no-rider')).toBeNull();
+  });
+
+  it('states no figure the design sample carried: no minutes of further searching, no refund window in days', async () => {
+    mockGetOrder.mockResolvedValue(ACCEPTED);
+    mockHasNoRiderNotice.mockResolvedValue(true);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('tracking-no-rider')).toBeTruthy());
+    expect(screen.queryByText(/อีก \d+ นาที/)).toBeNull();
+    expect(screen.queryByText(/วันทำการ/)).toBeNull();
+  });
+
+  it('"keep waiting" hides the card and cancels nothing', async () => {
+    mockGetOrder.mockResolvedValue(ACCEPTED);
+    mockHasNoRiderNotice.mockResolvedValue(true);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('tracking-no-rider')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('tracking-keep-waiting'));
+
+    expect(screen.queryByTestId('tracking-no-rider')).toBeNull();
+    expect(mockCancelOrder).not.toHaveBeenCalled();
+  });
+
+  it('asks for confirmation first, and cancels nothing if the customer backs out', async () => {
+    mockGetOrder.mockResolvedValue(ACCEPTED);
+    mockHasNoRiderNotice.mockResolvedValue(true);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('tracking-cancel-order'));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'ยกเลิกออเดอร์นี้?',
+      expect.stringContaining('เงินคืนเต็มจำนวน'),
+      expect.any(Array),
+    );
+    expect(mockCancelOrder).not.toHaveBeenCalled();
+  });
+
+  it('on confirm, cancels with the route order id only, reloads the order, and says the team will refund in full', async () => {
+    mockGetOrder.mockResolvedValueOnce(ACCEPTED).mockResolvedValue({ ...ACCEPTED, state: 'CANCELLED' });
+    mockHasNoRiderNotice.mockResolvedValue(true);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('tracking-cancel-order'));
+    pressAlertButton('ยกเลิกออเดอร์');
+
+    await waitFor(() => expect(mockCancelOrder).toHaveBeenCalledWith(ORDER_ID));
+    expect(mockCancelOrder.mock.calls[0]).toEqual([ORDER_ID]);
+    await waitFor(() => expect(screen.getByTestId('tracking-cancelled-note')).toBeTruthy());
+    expect(screen.getByText('ทีมงานจะดำเนินการคืนเงินให้เต็มจำนวน')).toBeTruthy();
+    expect(screen.getByText('ออเดอร์ถูกยกเลิก')).toBeTruthy();
+    expect(mockGetOrder.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('on a failed cancel, says so, promises no refund, and leaves the order as it was', async () => {
+    mockGetOrder.mockResolvedValue(ACCEPTED);
+    mockHasNoRiderNotice.mockResolvedValue(true);
+    mockCancelOrder.mockRejectedValue(new Error('NOT_FOUND'));
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('tracking-cancel-order'));
+    pressAlertButton('ยกเลิกออเดอร์');
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenLastCalledWith('ยกเลิกไม่สำเร็จ', expect.any(String)),
+    );
+    expect(screen.queryByTestId('tracking-cancelled-note')).toBeNull();
+    expect(screen.getByTestId('tracking-no-rider')).toBeTruthy();
+  });
+
+  it('does not show the refund note on an old cancelled order it did not cancel this session', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'CANCELLED' });
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+    expect(screen.queryByTestId('tracking-cancelled-note')).toBeNull();
+  });
 });
