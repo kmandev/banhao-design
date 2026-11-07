@@ -721,14 +721,24 @@ own owner or verification action, not by code landing:
   (`restaurant-availability.service.spec.ts`), no schema/migration/runtime
   change. **Do not restore the swallowed-failure path** — C3-A reversed it on
   purpose, and a mode change without its audit row must not succeed.
-- **G-3: BLOCKED — DEVICE RUNTIME VERIFICATION.** Two separate sessions
-  failed the iOS Simulator health check before completing the B (NORMAL) / C
-  (BUSY) / D (SIGNED-OUT) regression checklist — `screenshot` returns
-  `captureFailed`, `inspect` has no fallback. **This is an
-  environment/device blocker, not a BANHAO code defect** — no code change was
-  made or is authorized in response to it. The PAUSED path *was* verified
-  live against `banhao-dev` in an earlier session and may be cited as
-  evidence, but it does not close the incomplete checklist.
+- **G-3: STILL OPEN — the customer-on-Simulator half is not run.** Two
+  earlier sessions failed the iOS Simulator health check before completing the
+  B (NORMAL) / C (BUSY) / D (SIGNED-OUT) regression checklist. The Simulator
+  works again (Xcode license accepted 2026-11-07), but **the customer-app B/C/D
+  walk has not been done.** The PAUSED path *was* verified live against
+  `banhao-dev` in an earlier session and may be cited as evidence, but it does
+  not close the checklist.
+  **2026-11-08, merchant side only, built-in browser, local API + merchant dev
+  server against `banhao-dev`:** signed-out `/dashboard` redirects to `/login`;
+  NORMAL renders; NORMAL → BUSY (20 min) returned `PUT … 200`, the pill read
+  "กำลังยุ่ง · 20 นาที", `restaurants` held `BUSY`/20, and the audit row had
+  actor `MERCHANT`, role `OWNER`, old/new mode and merchant; BUSY → NORMAL wrote
+  its own audit row and cleared the minutes; sign-out returned to login. That
+  walk found a **real defect — a Busy restaurant had no way back to Normal
+  except pause-then-resume** (design AV-T2 lists the action) — fixed, with a
+  real test (the old "resume from Busy" test actually started from PAUSED).
+  The restaurant was returned to NORMAL. This is merchant evidence and does not
+  stand in for the customer-side checks.
 - **R-6 / BQ-038: DECIDED 2026-11-02 (DEC-068 C3), BUILT 2026-11-07 (API
   only).** Active restaurant members (existing merchant route) and BANHAO
   staff `ADMIN` / `OPERATOR` (`PUT /api/v1/admin/supervisor/restaurants/:id/availability`)
