@@ -1026,6 +1026,7 @@ describe('DeliveryCompletionService — H-3 OrderDelivered outbox event', () => 
       aggregate_type: 'delivery',
       aggregate_id: DELIVERY_ID,
       event_type: 'OrderDelivered',
+      payload: { orderId: ORDER_ID },
     });
     const recipients = (outboxInsert?.payload as { payload: { recipients: unknown[] } }).payload.recipients;
     expect(recipients).toEqual([

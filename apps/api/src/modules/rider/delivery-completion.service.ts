@@ -983,7 +983,7 @@ export class DeliveryCompletionService {
       aggregate_type: 'delivery',
       aggregate_id: delivery.id,
       event_type: 'OrderDelivered',
-      payload: { recipients },
+      payload: { recipients, orderId: delivery.order_id },
     });
 
     if (error) {

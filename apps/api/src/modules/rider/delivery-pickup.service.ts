@@ -390,7 +390,7 @@ export class DeliveryPickupService {
       aggregate_type: 'delivery',
       aggregate_id: delivery.id,
       event_type: 'OrderPickedUp',
-      payload: { recipients },
+      payload: { recipients, orderId: delivery.order_id },
     });
 
     if (error) {

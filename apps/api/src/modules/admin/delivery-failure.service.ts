@@ -919,7 +919,7 @@ export class DeliveryFailureService {
       aggregate_type: 'delivery',
       aggregate_id: delivery.id,
       event_type: 'OrderDeliveryFailed',
-      payload: { recipients },
+      payload: { recipients, orderId: delivery.order_id },
     });
 
     if (error) {

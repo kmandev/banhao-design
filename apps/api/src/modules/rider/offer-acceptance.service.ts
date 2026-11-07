@@ -546,7 +546,7 @@ export class OfferAcceptanceService {
       aggregate_type: 'delivery',
       aggregate_id: delivery.id,
       event_type: 'RiderAssigned',
-      payload: { recipients },
+      payload: { recipients, orderId: delivery.order_id },
     });
 
     if (error) {

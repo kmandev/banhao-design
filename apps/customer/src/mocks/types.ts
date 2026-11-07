@@ -107,6 +107,8 @@ export interface AppNotification {
   body: string;
   time: string;
   read: boolean;
+  /** The order this notification is about, when the server supplied one (DEC-068 D1), so the app can open it. */
+  orderId?: string | null;
 }
 
 /*

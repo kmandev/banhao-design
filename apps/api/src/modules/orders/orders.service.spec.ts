@@ -1134,7 +1134,7 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
       ...MERCHANT_ACCEPTED_OUTBOX_SEGMENT,
       deliverySnapshot(),
       RESTAURANT_PICKUP,
-      NO_ERROR, // deliveries insert
+      { data: { id: 'delivery-1' }, error: null }, // deliveries insert (returns the created row)
       NO_ERROR, // RiderSearchStarted outbox insert
     ]);
 
@@ -1145,6 +1145,13 @@ describe('OrdersService.acceptOrder — delivery row creation (Phase G)', () => 
     const deliveryInserts = calls.filter((c) => c.table === 'deliveries' && c.op === 'insert');
     expect(deliveryInserts).toHaveLength(1);
     expect(deliveryInserts[0]?.payload).toEqual(EXPECTED_DELIVERY);
+
+    // DEC-068 D1: the delivery-aggregate event carries the order id, because
+    // the notification dispatcher must not join into deliveries to find it.
+    const searchStarted = calls.find(
+      (c) => c.table === 'outbox' && (c.payload as { event_type?: string } | undefined)?.event_type === 'RiderSearchStarted',
+    );
+    expect(searchStarted?.payload).toMatchObject({ aggregate_type: 'delivery', payload: { orderId: ORDER_ID } });
   });
 
   it('5. never invents a rider earning — rider_earning_satang is explicitly null (BQ-029/DEC-023 still OPEN)', async () => {

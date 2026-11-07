@@ -4,6 +4,7 @@ import {
   IN_APP_NOTIFICATION_CHANNEL,
   type NotificationChannel,
 } from './notification-channel.interface';
+import { customerCopyFor } from './customer-notification-copy';
 
 /** How many unprocessed `outbox` rows one tick claims work from at most — matches `PaymentEventProcessingService`'s `BATCH_SIZE`. */
 const BATCH_SIZE = 25;
@@ -60,16 +61,19 @@ export interface OutboxDispatchResult {
  * (ADR-003: the state check lives in the `WHERE` clause, never a prior
  * `SELECT`).
  *
- * ## Notification content — sourced only from columns that already exist
+ * ## Notification content
  *
- * `notifications.title` is `NOT NULL` and no doc or existing writer defines a
- * per-event title/body convention (H-2A/H-3 found none). Rather than invent a
- * new payload field, `title` is populated from the outbox row's own existing
- * `event_type` column; `body`/`deep_link` are left `null` (both nullable);
- * `order_id` is set only when `aggregate_type === 'order'` (using the
- * already-claimed `aggregate_id`, not a lookup into another module's table) —
- * for `aggregate_type === 'delivery'`, `order_id` stays `null` rather than
- * joining into `deliveries` to find it.
+ * **Customer text — DEC-068 D1.** For a `CUSTOMER` recipient of one of the nine
+ * approved events, `title` and `body` are the Product Owner's Thai wording
+ * (`customer-notification-copy.ts`). Every other recipient, and any event not
+ * among the nine, keeps the original behaviour: `title` is the outbox row's own
+ * `event_type`, `body`/`deep_link` are `null`. Merchant and rider wording was
+ * never decided, so none is invented here.
+ *
+ * **`order_id`.** Set from `payload.orderId` when the writer supplied it (every
+ * delivery-sourced writer now does, because this service must not join into
+ * `deliveries` to find it), otherwise from `aggregate_id` when
+ * `aggregate_type === 'order'`. An older outbox row with neither stays `null`.
  *
  * ## Failure handling
  *
@@ -183,20 +187,22 @@ export class OutboxDispatchService {
       );
     }
 
-    const title = row.event_type;
-    const orderId = row.aggregate_type === 'order' ? row.aggregate_id : null;
+    const orderId = readOrderId(row);
 
     for (const recipient of validRecipients) {
-      await this.notifyOne(row, recipient, title, orderId);
+      await this.notifyOne(row, recipient, orderId);
     }
   }
 
   private async notifyOne(
     row: ClaimedOutboxRow,
     recipient: OutboxRecipient,
-    title: string,
     orderId: string | null,
   ): Promise<void> {
+    const copy = customerCopyFor(row.event_type, recipient.recipientType);
+    const title = copy?.title ?? row.event_type;
+    const body = copy?.body ?? null;
+
     const { data: notification, error: notificationError } = await this.supabase.admin
       .from('notifications')
       .insert({
@@ -204,7 +210,7 @@ export class OutboxDispatchService {
         recipient_type: recipient.recipientType,
         event_type: row.event_type,
         title,
-        body: null,
+        body,
         deep_link: null,
         order_id: orderId,
       })
@@ -235,7 +241,7 @@ export class OutboxDispatchService {
       notificationId: notification.id,
       recipientId: recipient.recipientId,
       title,
-      body: null,
+      body,
       deepLink: null,
     });
 
@@ -259,6 +265,15 @@ export class OutboxDispatchService {
       throw new Error(`notification_deliveries SENT update failed: ${sentError.message}`);
     }
   }
+}
+
+/** `payload.orderId` when the writer supplied one, else the aggregate id of an order-aggregate event, else `null`. */
+function readOrderId(row: ClaimedOutboxRow): string | null {
+  if (typeof row.payload === 'object' && row.payload !== null) {
+    const fromPayload = (row.payload as Record<string, unknown>).orderId;
+    if (typeof fromPayload === 'string' && fromPayload.length > 0) return fromPayload;
+  }
+  return row.aggregate_type === 'order' ? row.aggregate_id : null;
 }
 
 function readRecipients(payload: unknown): OutboxRecipient[] {

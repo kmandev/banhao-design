@@ -186,7 +186,7 @@ export class NoRiderEscalationService {
       aggregate_type: NO_RIDER_AGGREGATE_TYPE,
       aggregate_id: delivery.id,
       event_type: NO_RIDER_EVENT_TYPE,
-      payload: { recipients },
+      payload: { recipients, orderId: delivery.order_id },
     });
 
     if (error) {

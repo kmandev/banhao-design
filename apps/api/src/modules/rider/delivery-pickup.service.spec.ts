@@ -534,6 +534,7 @@ describe('DeliveryPickupService — H-3 OrderPickedUp outbox event', () => {
       aggregate_type: 'delivery',
       aggregate_id: DELIVERY_ID,
       event_type: 'OrderPickedUp',
+      payload: { orderId: ORDER_ID },
     });
     const recipients = (outboxInsert?.payload as { payload: { recipients: unknown[] } }).payload.recipients;
     expect(recipients).toEqual([

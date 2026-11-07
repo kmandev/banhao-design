@@ -262,8 +262,11 @@ describe('NoRiderEscalationService — outbox contract, H-2 compatibility', () =
 
     const insertCall = calls.find((c) => c.table === 'outbox' && c.op === 'insert');
     const payload = insertCall?.payload as { payload: unknown };
+    // `orderId` rides along because a delivery-aggregate event has no other way
+    // to tell the notification which order it is about (DEC-068 D1).
     expect(payload.payload).toEqual({
       recipients: [{ recipientId: CUSTOMER_ID, recipientType: 'CUSTOMER' }],
+      orderId: ORDER_ID,
     });
   });
 

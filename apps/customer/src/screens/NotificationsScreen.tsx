@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import {
   Card,
@@ -12,9 +14,13 @@ import {
 import { Screen } from '../components/Screen';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
+import type { CustomerStackParamList } from '../navigation/types';
+
+type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 
 /** 17 แจ้งเตือน. */
 export function NotificationsScreen() {
+  const navigation = useNavigation<Nav>();
   const state = useAsyncData(() => repositories.notifications.listNotifications());
 
   // H-5B — locally-confirmed reads, layered over `state.data` rather than a
@@ -31,7 +37,7 @@ export function NotificationsScreen() {
    * failure UX (H-5B's product lock: no toast/global error system for this
    * action).
    */
-  async function handlePress(id: string, alreadyRead: boolean): Promise<void> {
+  async function markRead(id: string, alreadyRead: boolean): Promise<void> {
     if (alreadyRead) return;
     try {
       await repositories.notifications.markNotificationRead(id);
@@ -39,6 +45,15 @@ export function NotificationsScreen() {
     } catch {
       // Swallowed deliberately — see the function's own comment above.
     }
+  }
+
+  /**
+   * DEC-068 D1: a notification that names an order opens that order. Opening
+   * does not wait for, and does not depend on, the read mark succeeding.
+   */
+  function handlePress(id: string, alreadyRead: boolean, orderId: string | null | undefined): void {
+    void markRead(id, alreadyRead);
+    if (orderId) navigation.navigate('OrderDetail', { orderId });
   }
 
   return (
@@ -70,7 +85,7 @@ export function NotificationsScreen() {
           return (
             <Card
               key={n.id}
-              onPress={() => void handlePress(n.id, read)}
+              onPress={() => handlePress(n.id, read, n.orderId)}
               testID={`notification-card-${n.id}`}
               style={[styles.card, !read && styles.cardUnread]}
             >

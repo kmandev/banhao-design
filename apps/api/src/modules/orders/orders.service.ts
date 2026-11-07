@@ -687,12 +687,13 @@ export class OrdersService {
     aggregateId: string,
     eventType: string,
     recipients: OutboxRecipient[],
+    orderId?: string,
   ): Promise<void> {
     const { error } = await this.supabase.admin.from('outbox').insert({
       aggregate_type: aggregateType,
       aggregate_id: aggregateId,
       event_type: eventType,
-      payload: { recipients },
+      payload: orderId ? { recipients, orderId } : { recipients },
     });
 
     if (error) {
@@ -807,9 +808,13 @@ export class OrdersService {
     // branch above already returned for a concurrent/retried creation), so a
     // retry of `acceptOrder` never double-notifies.
     if (insertedDelivery) {
-      await this.writeOutboxEvent('delivery', insertedDelivery.id, 'RiderSearchStarted', [
-        { recipientId: order.customer_id, recipientType: 'CUSTOMER' },
-      ]);
+      await this.writeOutboxEvent(
+        'delivery',
+        insertedDelivery.id,
+        'RiderSearchStarted',
+        [{ recipientId: order.customer_id, recipientType: 'CUSTOMER' }],
+        orderId,
+      );
     }
   }
 

@@ -153,6 +153,95 @@ describe('OutboxDispatchService.processOne — success path', () => {
   });
 });
 
+describe('OutboxDispatchService.processOne — notification content (DEC-068 D1)', () => {
+  function row(eventType: string, aggregateType: string, payload: unknown) {
+    return { id: OUTBOX_ID, aggregate_type: aggregateType, aggregate_id: 'agg-1', event_type: eventType, payload, attempts: 0 };
+  }
+
+  async function dispatch(outboxRow: ReturnType<typeof row>, channel = alwaysDelivers()) {
+    const { supabase, calls } = supabaseStub([
+      { data: outboxRow, error: null },
+      { data: { id: 'notif-1' }, error: null },
+      { data: { id: 'delivery-1' }, error: null },
+      { data: null, error: null },
+      { data: { id: 'notif-2' }, error: null },
+      { data: { id: 'delivery-2' }, error: null },
+      { data: null, error: null },
+    ]);
+    const service = new OutboxDispatchService(supabase, channel);
+    await service.processOne(OUTBOX_ID);
+    return { calls, channel };
+  }
+
+  it('gives a CUSTOMER recipient of an approved event the approved Thai title and body, and passes both to the channel', async () => {
+    const { calls, channel } = await dispatch(
+      row('OrderDelivered', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
+    );
+
+    const insert = calls.find((c) => c.table === 'notifications' && c.op === 'insert');
+    expect(insert?.payload).toMatchObject({ title: 'ส่งถึงแล้ว', body: 'ขอให้อร่อยกับมื้อนี้', event_type: 'OrderDelivered' });
+    expect(channel.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'ส่งถึงแล้ว', body: 'ขอให้อร่อยกับมื้อนี้' }),
+    );
+  });
+
+  it('does not give a MERCHANT or RIDER recipient the customer wording — they keep the raw event name', async () => {
+    const { calls } = await dispatch(
+      row('OrderDelivered', 'order', {
+        recipients: [
+          { recipientId: 'cust-1', recipientType: 'CUSTOMER' },
+          { recipientId: 'merch-1', recipientType: 'MERCHANT' },
+        ],
+      }),
+    );
+
+    const inserts = calls.filter((c) => c.table === 'notifications' && c.op === 'insert');
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0]?.payload).toMatchObject({ recipient_type: 'CUSTOMER', title: 'ส่งถึงแล้ว' });
+    expect(inserts[1]?.payload).toMatchObject({ recipient_type: 'MERCHANT', title: 'OrderDelivered', body: null });
+  });
+
+  it('keeps an event outside the nine on the original behaviour, even for a customer', async () => {
+    const { calls } = await dispatch(
+      row('OrderCreated', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
+    );
+
+    const insert = calls.find((c) => c.table === 'notifications' && c.op === 'insert');
+    expect(insert?.payload).toMatchObject({ title: 'OrderCreated', body: null });
+  });
+
+  it('takes order_id from payload.orderId for a delivery-aggregate event, not from the delivery id', async () => {
+    const { calls } = await dispatch(
+      row('OrderPickedUp', 'delivery', {
+        recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }],
+        orderId: 'order-9',
+      }),
+    );
+
+    const insert = calls.find((c) => c.table === 'notifications' && c.op === 'insert');
+    expect(insert?.payload).toMatchObject({ order_id: 'order-9', title: 'ไรเดอร์รับอาหารแล้ว' });
+  });
+
+  it('leaves order_id null for an older delivery-aggregate row that carries no orderId (no join into deliveries)', async () => {
+    const { calls } = await dispatch(
+      row('OrderPickedUp', 'delivery', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
+    );
+
+    const insert = calls.find((c) => c.table === 'notifications' && c.op === 'insert');
+    expect(insert?.payload).toMatchObject({ order_id: null });
+    expect(calls.some((c) => c.table === 'deliveries')).toBe(false);
+  });
+
+  it('prefers payload.orderId but still uses aggregate_id for an order-aggregate event', async () => {
+    const { calls } = await dispatch(
+      row('PaymentSucceeded', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
+    );
+
+    const insert = calls.find((c) => c.table === 'notifications' && c.op === 'insert');
+    expect(insert?.payload).toMatchObject({ order_id: 'agg-1', title: 'ชำระเงินสำเร็จ' });
+  });
+});
+
 describe('OutboxDispatchService.processOne — claiming', () => {
   it('an already-dispatched (or nonexistent) row is skipped with no further calls', async () => {
     const { supabase, calls } = supabaseStub([{ data: null, error: null }]);

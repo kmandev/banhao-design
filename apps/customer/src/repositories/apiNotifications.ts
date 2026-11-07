@@ -60,6 +60,7 @@ function toAppNotification(row: NotificationApiResponse): AppNotification {
     body: row.body ?? '',
     time: toTimeLabel(row.createdAt),
     read: row.read,
+    orderId: row.orderId,
   };
 }
 

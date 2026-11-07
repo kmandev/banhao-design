@@ -14,6 +14,15 @@ import type { NotificationRepository } from '../repositories/types';
 
 const mockListNotifications = jest.fn();
 const mockMarkNotificationRead = jest.fn();
+const mockNavigate = jest.fn();
+
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useNavigation: () => ({ navigate: mockNavigate }),
+  };
+});
 
 function stub() {
   const notificationsRepo: NotificationRepository = {
@@ -53,6 +62,7 @@ const READ: AppNotification = {
 beforeEach(() => {
   mockListNotifications.mockReset();
   mockMarkNotificationRead.mockReset();
+  mockNavigate.mockReset();
   mockMarkNotificationRead.mockResolvedValue(undefined);
   stub();
 });
@@ -126,4 +136,58 @@ it('does not crash and leaves the card unread when markNotificationRead fails', 
   // Visual state preserved — still shows the unread dot, no crash, no new error UI.
   expect(screen.getByLabelText('ยังไม่ได้อ่าน')).toBeTruthy();
   expect(screen.getByTestId('screen-notifications')).toBeTruthy();
+});
+
+// DEC-068 D1 — a notification that names an order opens that order.
+const WITH_ORDER: AppNotification = {
+  id: 'n3',
+  glyph: '🔔',
+  title: 'ส่งถึงแล้ว',
+  body: 'ขอให้อร่อยกับมื้อนี้',
+  time: '12:00',
+  read: false,
+  orderId: 'order-77',
+};
+
+it('tapping a notification that carries an orderId opens that order and still marks it read', async () => {
+  mockListNotifications.mockResolvedValue([WITH_ORDER]);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId(`notification-card-${WITH_ORDER.id}`)).toBeTruthy());
+  fireEvent.press(screen.getByTestId(`notification-card-${WITH_ORDER.id}`));
+
+  expect(mockNavigate).toHaveBeenCalledWith('OrderDetail', { orderId: 'order-77' });
+  await waitFor(() => expect(mockMarkNotificationRead).toHaveBeenCalledWith(WITH_ORDER.id));
+});
+
+it('opens the order even when the notification was already read', async () => {
+  mockListNotifications.mockResolvedValue([{ ...WITH_ORDER, read: true }]);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId(`notification-card-${WITH_ORDER.id}`)).toBeTruthy());
+  fireEvent.press(screen.getByTestId(`notification-card-${WITH_ORDER.id}`));
+
+  expect(mockNavigate).toHaveBeenCalledWith('OrderDetail', { orderId: 'order-77' });
+  expect(mockMarkNotificationRead).not.toHaveBeenCalled();
+});
+
+it('opens the order even when marking it read fails', async () => {
+  mockMarkNotificationRead.mockRejectedValue(new Error('connection reset'));
+  mockListNotifications.mockResolvedValue([WITH_ORDER]);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId(`notification-card-${WITH_ORDER.id}`)).toBeTruthy());
+  fireEvent.press(screen.getByTestId(`notification-card-${WITH_ORDER.id}`));
+
+  expect(mockNavigate).toHaveBeenCalledWith('OrderDetail', { orderId: 'order-77' });
+});
+
+it('does not navigate for a notification with no orderId', async () => {
+  mockListNotifications.mockResolvedValue([UNREAD]);
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId(`notification-card-${UNREAD.id}`)).toBeTruthy());
+  fireEvent.press(screen.getByTestId(`notification-card-${UNREAD.id}`));
+
+  expect(mockNavigate).not.toHaveBeenCalled();
 });

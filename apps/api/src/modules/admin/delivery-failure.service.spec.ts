@@ -308,6 +308,7 @@ describe('DeliveryFailureService — a successful failure resolution', () => {
       aggregate_id: DELIVERY_ID,
       event_type: 'OrderDeliveryFailed',
       payload: {
+        orderId: ORDER_ID,
         recipients: [
           { recipientId: CUSTOMER_ID, recipientType: 'CUSTOMER' },
           { recipientId: MERCHANT_OWNER_ID, recipientType: 'MERCHANT' },

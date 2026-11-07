@@ -56,6 +56,13 @@ describe('apiNotifications — mapping', () => {
     expect(notification?.body).toBe('ไรเดอร์กำลังไปส่ง');
   });
 
+  it('carries the order id through so the app can open the order (DEC-068 D1)', async () => {
+    const { client } = stubClient([ROW, { ...ROW, id: 'n-2', orderId: null }]);
+    const [withOrder, without] = await createApiNotificationRepository(client).listNotifications();
+    expect(withOrder?.orderId).toBe('order-1');
+    expect(without?.orderId).toBeNull();
+  });
+
   it('falls back to an empty body when the API sends null', async () => {
     const { client } = stubClient([{ ...ROW, body: null }]);
     const [notification] = await createApiNotificationRepository(client).listNotifications();
