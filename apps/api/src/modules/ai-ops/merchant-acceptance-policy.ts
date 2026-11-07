@@ -5,8 +5,12 @@ import type { PolicyResolution } from './ai-ops.types';
 export interface MerchantAcceptanceTimeoutPolicy {
   /** How long a merchant has to accept a `PAID` order before the timeout fires. */
   readonly acceptanceDeadlineSeconds: number;
-  /** How long before the deadline a reminder is sent. */
-  readonly reminderLeadSeconds: number;
+  /**
+   * How long before the deadline a reminder is sent. Optional because no value
+   * is approved: DEC-068 C1 says the system "may" remind the restaurant but
+   * names no lead time, and DEC-040 §5 forbids supplying one.
+   */
+  readonly reminderLeadSeconds?: number;
 }
 
 /**
@@ -18,41 +22,44 @@ export abstract class MerchantAcceptancePolicySource {
 }
 
 /**
- * Phase J — stage 3, production implementation: **there is no approved
- * merchant-acceptance deadline, so this resolves to `MISSING` and the
- * pipeline fails closed.**
+ * The merchant acceptance deadline: **5 minutes** from payment confirmation.
  *
- * This is the correct behaviour, not a stub awaiting completion. BQ-013
- * ("merchant accept timeout behaviour") is `OPEN` in
- * `docs/OPEN_BUSINESS_QUESTIONS.md`: it establishes that a deadline should be
- * server-side and configurable, and supplies **no number**. The AI Operations
- * design package says the same thing in its own words about this exact
- * playbook — "Auto-pause has no threshold (BQ-013 open) and no consequence
- * policy… Three minutes appears nowhere."
+ * Source: DEC-068 C1 (Product Owner, 2026-11-02), answering the deadline half
+ * of BQ-013. The clock starts when the order is `PAID` (`orders.paid_at`).
+ * This is the only number the decision supplies — see the class comment for
+ * what it deliberately does not.
+ */
+export const MERCHANT_ACCEPTANCE_DEADLINE_SECONDS = 5 * 60;
+
+/**
+ * Phase J — stage 3, production implementation. **This resolves, because the
+ * deadline is now approved (DEC-068 C1).** Until then it resolved `MISSING`
+ * and failed closed, which was the correct behaviour while BQ-013 supplied no
+ * number.
  *
- * DEC-040 §5 is therefore what this class implements: a missing decision is
- * never a licence to choose a default. Note what is deliberately absent —
- * there is no `?? 180`, no environment-variable fallback, and no "sensible"
- * constant. `DISPATCH_ACCEPT_WINDOW`/`ACCEPT_WINDOW_SECONDS` in
- * `rider/dispatch-policy.ts` is the **rider** offer window fixed by DEC-037
- * and must not be borrowed for the merchant side: they are different actors,
- * different decisions, and reusing one number for the other would be
- * inventing the merchant policy by aliasing.
+ * What the decision does and does not say matters for how far this goes:
  *
- * When BQ-013 is decided, the shape of the fix is the DEC-037/DEC-039
- * precedent: approved numbers become cited constants in a policy module that
- * names the decision, and this class returns `RESOLVED` with a
- * `policyVersion`. That is a documentation-and-constant change here — no
- * pipeline stage below this one has to move.
+ * - It supplies a deadline and says what happens at it: an operator is alerted
+ *   and decides. **No automatic cancellation**, and any cancellation or refund
+ *   follows DEC-058.
+ * - It does **not** supply merchant auto-pause thresholds, counts, windows,
+ *   durations or a cooldown — BQ-013 stays `OPEN` for those, and DEC-040 §5
+ *   still forbids inventing them. Nothing here pauses a restaurant.
+ * - It does **not** supply a reminder lead time, so none is set
+ *   (`reminderLeadSeconds` stays absent) and no reminder is scheduled.
+ *
+ * Note what is still refused: borrowing `ACCEPT_WINDOW_SECONDS` from
+ * `rider/dispatch-policy.ts`. That is the **rider** offer window (DEC-037), a
+ * different actor and decision; the merchant deadline is its own cited
+ * constant above.
  */
 @Injectable()
-export class Bq013MerchantAcceptancePolicySource extends MerchantAcceptancePolicySource {
+export class Dec068C1MerchantAcceptancePolicySource extends MerchantAcceptancePolicySource {
   resolve(): PolicyResolution<MerchantAcceptanceTimeoutPolicy> {
     return {
-      status: 'MISSING',
-      dependency: 'BQ-013',
-      detail:
-        'No approved merchant acceptance deadline exists. BQ-013 is OPEN: it requires a server-side configurable deadline and supplies no value, and the AI Operations design package records the same gap for this playbook. DEC-040 §5 forbids inventing one.',
+      status: 'RESOLVED',
+      value: { acceptanceDeadlineSeconds: MERCHANT_ACCEPTANCE_DEADLINE_SECONDS },
+      policyVersion: 'DEC-068-C1',
     };
   }
 }

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import type { AgentDecision, ScopedOperationalProjection } from './ai-ops.types';
-import { COMMAND_NOTIFY_MERCHANT_ACCEPTANCE_DEADLINE } from './command-catalog';
 
 /**
  * Phase J — stage 4. The agent boundary.
@@ -44,13 +43,19 @@ export abstract class AgentPort {
 export class DeterministicAgentAdapter extends AgentPort {
   async decide(projection: ScopedOperationalProjection): Promise<AgentDecision> {
     if (projection.playbook === 'MERCHANT_ACCEPTANCE_TIMEOUT') {
+      // DEC-068 C1: at the deadline an operator is alerted and decides. There
+      // is no automatic cancellation, and no merchant command is approved
+      // beyond that, so the only outcome is an escalation. (The L2 reminder
+      // command stays in the catalog, unused by this path: C1 says the system
+      // "may" remind the restaurant but names no lead time, and inventing one
+      // is forbidden by DEC-040 §5.)
       return {
-        kind: 'COMMAND',
-        command: {
-          name: COMMAND_NOTIFY_MERCHANT_ACCEPTANCE_DEADLINE,
-          orderId: projection.orderId,
-          reason: `Order has been awaiting merchant acceptance for ${projection.elapsedSeconds}s`,
-        },
+        kind: 'ESCALATE',
+        escalation: 'ESC-UNKNOWN',
+        reason:
+          `Order has been awaiting merchant acceptance for ${projection.elapsedSeconds}s, past the ` +
+          `5-minute deadline (DEC-068 C1). An operator should contact the restaurant and decide; ` +
+          `nothing is cancelled or refunded automatically (DEC-058).`,
       };
     }
 

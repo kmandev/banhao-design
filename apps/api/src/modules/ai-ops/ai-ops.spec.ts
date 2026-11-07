@@ -5,7 +5,8 @@ import { AiAuditService } from './ai-audit.service';
 import { CommandDispatcher } from './command-dispatcher';
 import { EventNormalizer } from './event-normalizer';
 import {
-  Bq013MerchantAcceptancePolicySource,
+  Dec068C1MerchantAcceptancePolicySource,
+  MERCHANT_ACCEPTANCE_DEADLINE_SECONDS,
   MerchantAcceptancePolicySource,
   type MerchantAcceptanceTimeoutPolicy,
 } from './merchant-acceptance-policy';
@@ -98,9 +99,16 @@ class FixturePolicySource extends MerchantAcceptancePolicySource {
   resolve(): PolicyResolution<MerchantAcceptanceTimeoutPolicy> {
     return {
       status: 'RESOLVED',
-      value: { acceptanceDeadlineSeconds: this.deadlineSeconds, reminderLeadSeconds: 30 },
+      value: { acceptanceDeadlineSeconds: this.deadlineSeconds },
       policyVersion: 'test-fixture-policy-v1',
     };
+  }
+}
+
+/** A policy source with no approved value — used ONLY in tests, to keep the fail-closed branch exercised now that production resolves. */
+class MissingPolicySource extends MerchantAcceptancePolicySource {
+  resolve(): PolicyResolution<MerchantAcceptanceTimeoutPolicy> {
+    return { status: 'MISSING', dependency: 'BQ-013', detail: 'Fixture: no approved value.' };
   }
 }
 
@@ -148,7 +156,7 @@ function buildService(params: {
     supabase,
     new EventNormalizer(),
     new PlaybookRouter(),
-    params.policy ?? new Bq013MerchantAcceptancePolicySource(),
+    params.policy ?? new Dec068C1MerchantAcceptancePolicySource(),
     agent,
     dispatcher,
     audit,
@@ -213,17 +221,21 @@ describe('Phase J — deterministic routing', () => {
   });
 });
 
-describe('Phase J — policy fails closed (DEC-040 §5)', () => {
-  it('production policy source resolves MISSING, citing BQ-013', () => {
-    const resolution = new Bq013MerchantAcceptancePolicySource().resolve();
+describe('Phase J — the merchant acceptance deadline (DEC-068 C1) and the fail-closed gate (DEC-040 §5)', () => {
+  it('production policy resolves the approved 5-minute deadline, cited to DEC-068 C1', () => {
+    const resolution = new Dec068C1MerchantAcceptancePolicySource().resolve();
 
-    expect(resolution.status).toBe('MISSING');
-    if (resolution.status === 'MISSING') {
-      expect(resolution.dependency).toBe('BQ-013');
+    expect(resolution.status).toBe('RESOLVED');
+    if (resolution.status === 'RESOLVED') {
+      expect(resolution.value.acceptanceDeadlineSeconds).toBe(300);
+      expect(resolution.policyVersion).toBe('DEC-068-C1');
+      // No reminder lead time is approved, so none is supplied.
+      expect(resolution.value.reminderLeadSeconds).toBeUndefined();
     }
+    expect(MERCHANT_ACCEPTANCE_DEADLINE_SECONDS).toBe(300);
   });
 
-  it('escalates ESC-UNKNOWN and never reaches the agent when policy is missing', async () => {
+  it('still escalates ESC-UNKNOWN and never reaches the agent when a policy value is missing', async () => {
     const agent = new FixtureAgent({ kind: 'NO_ACTION', reason: 'should never be called' });
     const { pipeline, calls } = buildService({
       results: [
@@ -231,6 +243,7 @@ describe('Phase J — policy fails closed (DEC-040 §5)', () => {
         { data: [], error: null }, // audit dedupe check — not handled yet
         { data: null, error: null }, // audit insert
       ],
+      policy: new MissingPolicySource(),
       agent,
     });
 
@@ -246,9 +259,7 @@ describe('Phase J — policy fails closed (DEC-040 §5)', () => {
     expect(String(audit.reason)).toContain('BQ-013');
   });
 
-  it('invents no default anywhere in the production policy module', () => {
-    // Guards against the failure mode DEC-040 §5 names: a "sensible" fallback
-    // appearing later. The rider accept window must not be aliased here.
+  it('takes the deadline from the cited constant and borrows nothing from the rider side', () => {
     const source = readFileSync(join(__dirname, 'merchant-acceptance-policy.ts'), 'utf8');
 
     const code = source
@@ -256,8 +267,95 @@ describe('Phase J — policy fails closed (DEC-040 §5)', () => {
       .filter((line) => !line.trimStart().startsWith('*') && !line.trimStart().startsWith('//'))
       .join('\n');
 
-    expect(code).not.toMatch(/acceptanceDeadlineSeconds\s*:\s*\d+/);
+    // The only number is the cited constant; the policy value points at it.
+    expect(code).toMatch(/MERCHANT_ACCEPTANCE_DEADLINE_SECONDS\s*=\s*5 \* 60/);
+    expect(code).toMatch(/acceptanceDeadlineSeconds:\s*MERCHANT_ACCEPTANCE_DEADLINE_SECONDS/);
     expect(code).not.toMatch(/ACCEPT_WINDOW_SECONDS/);
+    // And no auto-pause value of any kind exists here (BQ-013 stays open for those).
+    expect(code.toLowerCase()).not.toMatch(/pause|cooldown|threshold/);
+  });
+});
+
+describe('Phase J — production behaviour at the 5-minute deadline (DEC-068 C1)', () => {
+  /** An order paid `secondsAgo` seconds ago and still awaiting acceptance. */
+  const paidAgo = (secondsAgo: number, state = 'PAID') => ({
+    ...paidOrderRow(state),
+    paid_at: new Date(Date.now() - secondsAgo * 1000).toISOString(),
+  });
+
+  /** Production policy and the real deterministic agent — nothing injected but the stubbed database. */
+  function production(order: ReturnType<typeof paidAgo>, deduped = false) {
+    return buildService({
+      results: [
+        { data: [outboxRow()], error: null }, // outbox candidates
+        { data: deduped ? [{ id: 'earlier' }] : [], error: null }, // audit dedupe
+        { data: order, error: null }, // projection order
+        { data: [], error: null }, // deliveries
+        { data: null, error: null }, // audit insert
+      ],
+      agent: new DeterministicAgentAdapter(),
+    });
+  }
+
+  it('escalates an order still PAID after 5 minutes, recording the times an operator needs', async () => {
+    const { pipeline, calls } = production(paidAgo(6 * 60));
+
+    const result = await pipeline.run();
+
+    expect(result.escalated).toBe(1);
+    expect(result.acted).toBe(0);
+    const audit = firstAuditPayload(calls);
+    expect(audit.actor_type).toBe('AI');
+    expect(audit.action).toBe('AI_OPS_MERCHANT_ACCEPTANCE_TIMEOUT');
+    expect(String(audit.reason)).toContain('DEC-068 C1');
+    expect(audit.after).toMatchObject({
+      escalation: 'ESC-UNKNOWN',
+      policyVersion: 'DEC-068-C1',
+      deadlineSeconds: 300,
+    });
+    const after = audit.after as { awaitingAcceptanceSince: string; elapsedSeconds: number };
+    expect(typeof after.awaitingAcceptanceSince).toBe('string');
+    expect(after.elapsedSeconds).toBeGreaterThanOrEqual(360);
+  });
+
+  it('does nothing before the deadline, and writes no audit row yet', async () => {
+    const { pipeline, calls } = production(paidAgo(4 * 60));
+
+    const result = await pipeline.run();
+
+    expect(result.escalated).toBe(0);
+    expect(result.acted).toBe(0);
+    expect(auditInserts(calls)).toHaveLength(0);
+  });
+
+  it('does nothing for an order the merchant has already accepted', async () => {
+    const { pipeline, calls } = production(paidAgo(30 * 60, 'MERCHANT_ACCEPTED'));
+
+    const result = await pipeline.run();
+
+    expect(result.escalated).toBe(0);
+    expect(auditInserts(calls)).toHaveLength(0);
+  });
+
+  it('raises the alert once per order — a handled order is skipped', async () => {
+    const { pipeline, calls } = production(paidAgo(30 * 60), true);
+
+    const result = await pipeline.run();
+
+    expect(result.skipped).toBe(1);
+    expect(auditInserts(calls)).toHaveLength(0);
+  });
+
+  it('never cancels, refunds, pauses or notifies — the only write is the audit row', async () => {
+    const { pipeline, calls } = production(paidAgo(30 * 60));
+
+    await pipeline.run();
+
+    const writes = calls.filter((c) => c.op === 'insert').map((c) => c.table);
+    expect(writes).toEqual(['audit_logs']);
+    for (const table of ['orders', 'refunds', 'payments', 'outbox', 'restaurants']) {
+      expect(calls.some((c) => c.table === table && c.op !== 'select')).toBe(false);
+    }
   });
 });
 
@@ -322,10 +420,13 @@ describe('Phase J — the agent boundary (DEC-040 §1/§2)', () => {
       hasDelivery: false,
     });
 
-    expect(decision.kind).toBe('COMMAND');
-    if (decision.kind === 'COMMAND') {
-      expect(decision.command.name).toBe(COMMAND_NOTIFY_MERCHANT_ACCEPTANCE_DEADLINE);
-      expect(Object.keys(decision.command).sort()).toEqual(['name', 'orderId', 'reason']);
+    // DEC-068 C1: at the deadline an operator is alerted and decides. No
+    // command, so nothing the agent returns can cancel, refund or pause.
+    expect(decision.kind).toBe('ESCALATE');
+    if (decision.kind === 'ESCALATE') {
+      expect(decision.escalation).toBe('ESC-UNKNOWN');
+      expect(decision.reason).toContain('DEC-068 C1');
+      expect(decision.reason).toContain('900s');
     }
   });
 

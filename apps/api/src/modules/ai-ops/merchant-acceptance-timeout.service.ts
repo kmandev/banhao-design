@@ -224,7 +224,15 @@ export class MerchantAcceptanceTimeoutService {
         entityId: event.aggregateId,
         escalation: decision.escalation,
         reason: decision.reason,
-        context: { playbook, policyVersion: resolved.policyVersion },
+        // The times an operator (and a later audit) needs: when the clock
+        // started, the deadline that applied, and how long it had run.
+        context: {
+          playbook,
+          policyVersion: resolved.policyVersion,
+          awaitingAcceptanceSince: projection.awaitingAcceptanceSince,
+          deadlineSeconds: resolved.value.acceptanceDeadlineSeconds,
+          elapsedSeconds: projection.elapsedSeconds,
+        },
       });
       return 'ESCALATED';
     }

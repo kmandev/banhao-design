@@ -37,7 +37,7 @@ export const AI_OPS_ACTION_PREFIX = 'AI_OPS_';
  */
 const BLOCKED_BY_ACTION: Readonly<Record<string, string>> = Object.freeze({
   AI_OPS_MERCHANT_ACCEPTANCE_TIMEOUT:
-    'BQ-013 — no merchant acceptance deadline or auto-pause threshold is approved, so no merchant command exists to offer.',
+    'BQ-013 — the 5-minute acceptance deadline is approved (DEC-068 C1) and ends in this alert, but no auto-pause threshold or merchant command is approved, so none is offered. Cancellation and refund stay with an operator (DEC-058).',
   AI_OPS_NO_RIDER_TRIAGE:
     'UX-Q-006 — the no-rider terminal outcome is undecided. DEC-020 forbids auto-cancellation, so no cancel, fail or redispatch control exists here.',
 });

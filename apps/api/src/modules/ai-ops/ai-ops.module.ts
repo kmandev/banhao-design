@@ -6,7 +6,7 @@ import { AiAuditService } from './ai-audit.service';
 import { CommandDispatcher } from './command-dispatcher';
 import { EventNormalizer } from './event-normalizer';
 import {
-  Bq013MerchantAcceptancePolicySource,
+  Dec068C1MerchantAcceptancePolicySource,
   MerchantAcceptancePolicySource,
 } from './merchant-acceptance-policy';
 import { MerchantAcceptanceTimeoutService } from './merchant-acceptance-timeout.service';
@@ -45,7 +45,7 @@ import { PlaybookRouter } from './playbook-router';
     CommandDispatcher,
     MerchantAcceptanceTimeoutService,
     NoRiderTriageService,
-    { provide: MerchantAcceptancePolicySource, useClass: Bq013MerchantAcceptancePolicySource },
+    { provide: MerchantAcceptancePolicySource, useClass: Dec068C1MerchantAcceptancePolicySource },
     { provide: NoRiderTriagePolicySource, useClass: Dec022NoRiderTriagePolicySource },
     // The agent is constructed with no Supabase client, no credential and no
     // HTTP client — DEC-040 §2 enforced by what is not injected.
