@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import {
@@ -22,6 +22,22 @@ type Nav = NativeStackNavigationProp<CustomerStackParamList>;
 export function NotificationsScreen() {
   const navigation = useNavigation<Nav>();
   const state = useAsyncData(() => repositories.notifications.listNotifications());
+
+  // Refetch on every return to this tab. A tab keeps its screen mounted, so
+  // without this the list froze at whatever it held when first opened and a
+  // customer saw none of the events that arrived since. The very first focus
+  // is skipped — `useAsyncData`'s own mount effect already fetches — so
+  // entering the screen does not fetch twice (the `AddressScreen` pattern).
+  const isFirstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      state.reload();
+    }, []),
+  );
 
   // H-5B — locally-confirmed reads, layered over `state.data` rather than a
   // copy of it: the list itself still comes straight from the load, so a

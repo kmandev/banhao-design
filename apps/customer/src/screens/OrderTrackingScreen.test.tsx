@@ -86,6 +86,22 @@ beforeEach(() => {
   stub();
 });
 
+it('shows no kitchen-time estimate on a cancelled order, even when one was recorded', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'CANCELLED', prepMinutes: 15, customerQuotedPrepMinutes: 20 });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+  expect(screen.queryByTestId('tracking-prep-minutes')).toBeNull();
+  expect(screen.queryByTestId('tracking-quoted-prep-minutes')).toBeNull();
+});
+
+it('still shows the kitchen-time estimate while the order is live', async () => {
+  mockGetOrder.mockResolvedValue({ ...ORDER, state: 'MERCHANT_ACCEPTED', prepMinutes: 15 });
+  renderScreen();
+
+  await waitFor(() => expect(screen.getByTestId('tracking-prep-minutes')).toBeTruthy());
+});
+
 it('loads the real order detail using the real route UUID', async () => {
   mockGetOrder.mockResolvedValue(ORDER);
   renderScreen();

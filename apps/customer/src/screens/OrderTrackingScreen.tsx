@@ -178,8 +178,11 @@ export function OrderTrackingScreen() {
           become one — no countdown, no arithmetic against the delivery time,
           no clock time, and never a live `restaurants.avg_prep_minutes`,
           which the catalog mappers already refuse to derive an ETA from.
+
+          Not shown on a cancelled order: an estimate of how long the kitchen
+          will take is a statement about food that is no longer being made.
         */}
-        {order.prepMinutes !== null ? (
+        {order.state === 'CANCELLED' ? null : order.prepMinutes !== null ? (
           <Text style={styles.prepCaption} testID="tracking-prep-minutes">
             ร้านใช้เวลาทำอาหารประมาณ {order.prepMinutes} นาที
           </Text>

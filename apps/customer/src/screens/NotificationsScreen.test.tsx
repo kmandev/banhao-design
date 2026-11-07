@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { NotificationsScreen } from './NotificationsScreen';
 import { repositories } from '../repositories';
@@ -15,12 +15,23 @@ import type { NotificationRepository } from '../repositories/types';
 const mockListNotifications = jest.fn();
 const mockMarkNotificationRead = jest.fn();
 const mockNavigate = jest.fn();
+/** The latest focus callback the screen registered, so a test can simulate returning to the tab. */
+const mockFocus: { current: (() => void) | null } = { current: null };
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
+  const react = jest.requireActual('react');
   return {
     ...actual,
     useNavigation: () => ({ navigate: mockNavigate }),
+    // Runs the callback once on mount (the first focus), as the real hook does,
+    // and keeps it so a test can fire a later focus.
+    useFocusEffect: (callback: () => void) => {
+      react.useEffect(() => {
+        mockFocus.current = callback;
+        callback();
+      }, [callback]);
+    },
   };
 });
 
@@ -190,4 +201,27 @@ it('does not navigate for a notification with no orderId', async () => {
   fireEvent.press(screen.getByTestId(`notification-card-${UNREAD.id}`));
 
   expect(mockNavigate).not.toHaveBeenCalled();
+});
+
+describe('refreshing when the customer returns to the tab', () => {
+  it('does not fetch twice on first open — the mount fetch covers the first focus', async () => {
+    mockListNotifications.mockResolvedValue([UNREAD]);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId(`notification-card-${UNREAD.id}`)).toBeTruthy());
+    expect(mockListNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches again on a later focus, so events that arrived meanwhile appear', async () => {
+    mockListNotifications.mockResolvedValueOnce([UNREAD]).mockResolvedValue([UNREAD, WITH_ORDER]);
+    renderScreen();
+
+    await waitFor(() => expect(screen.getByTestId(`notification-card-${UNREAD.id}`)).toBeTruthy());
+    expect(screen.queryByTestId(`notification-card-${WITH_ORDER.id}`)).toBeNull();
+
+    act(() => mockFocus.current?.());
+
+    await waitFor(() => expect(screen.getByTestId(`notification-card-${WITH_ORDER.id}`)).toBeTruthy());
+    expect(mockListNotifications).toHaveBeenCalledTimes(2);
+  });
 });
