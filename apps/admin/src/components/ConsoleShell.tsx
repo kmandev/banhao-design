@@ -80,6 +80,9 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
             <a href="/pricing" style={styles.meta} data-testid="nav-pricing">
               ค่าส่ง
             </a>
+            <a href="/payouts" style={styles.meta} data-testid="nav-payouts">
+              จ่ายเงิน
+            </a>
           </nav>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
