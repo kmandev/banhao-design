@@ -65,10 +65,22 @@ export interface UnavailableItem {
 export type CartConflict =
   | { kind: 'PRICE_CHANGED'; changes: PriceChange[] }
   | { kind: 'ITEM_UNAVAILABLE'; items: UnavailableItem[] }
-  // M-13: the restaurant paused (or otherwise closed) between when the cart
-  // was shown and the place-order press. Carries nothing beyond its kind —
-  // there is no per-line diff to show, unlike PRICE_CHANGED/ITEM_UNAVAILABLE.
-  | { kind: 'RESTAURANT_CLOSED' };
+  // The restaurant is not taking orders at the place-order press. No per-line
+  // diff, unlike PRICE_CHANGED/ITEM_UNAVAILABLE — only why, so the screen can
+  // say it truthfully: PAUSED (M-13, the merchant stopped taking orders) or
+  // OUTSIDE_HOURS (the shop is closed by its opening hours).
+  | { kind: 'RESTAURANT_CLOSED'; reason: RestaurantClosedReason };
+
+export type RestaurantClosedReason = 'PAUSED' | 'OUTSIDE_HOURS';
+
+/**
+ * The server's `details.reason` for RESTAURANT_CLOSED. Anything other than
+ * OUTSIDE_HOURS — including a server too old to send a reason — reads as
+ * PAUSED, which is what this conflict meant before the hours check existed.
+ */
+export function restaurantClosedReason(details: Record<string, unknown> | undefined): RestaurantClosedReason {
+  return details?.reason === 'OUTSIDE_HOURS' ? 'OUTSIDE_HOURS' : 'PAUSED';
+}
 
 /**
  * A conflict the server named, raised so a caller cannot mistake it for a

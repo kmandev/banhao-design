@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { CartValidateRequest } from '@banhao/validation';
+import { isRestaurantOpenAt, type CartValidateRequest, type OpeningWindowRow } from '@banhao/validation';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { DomainError } from '../../common/errors/domain-error';
 
@@ -22,6 +22,10 @@ import { DomainError } from '../../common/errors/domain-error';
  * M-13 adds one more: `RESTAURANT_CLOSED` when the restaurant is Paused
  * (`availability_mode = 'PAUSED'`) — the same code `POST /orders` already
  * raises for the identical condition, so the two revalidation paths agree.
+ * The same code is raised when the restaurant is outside its opening hours
+ * (BUSINESS_RULES: "Restaurant opening hours govern whether orders may be
+ * placed", `ACCEPTED`). `details.reason` says which: `PAUSED` or
+ * `OUTSIDE_HOURS`, so the client can word it truthfully.
  */
 
 interface CartRow {
@@ -54,6 +58,7 @@ interface RestaurantRow {
   id: string;
   status: string;
   availability_mode: string;
+  temporarily_closed_until: string | null;
 }
 
 interface MenuOptionGroupRow {
@@ -143,9 +148,10 @@ export class CartService {
     }
 
     const menuItemIds = [...new Set(items.map((item) => item.menu_item_id))];
-    const [restaurant, menuItems] = await Promise.all([
+    const [restaurant, menuItems, openingHours] = await Promise.all([
       this.fetchRestaurant(cart.restaurant_id),
       this.fetchMenuItems(menuItemIds),
+      this.fetchOpeningHours(cart.restaurant_id),
     ]);
 
     const itemsById = new Map(menuItems.map((row) => [row.id, row]));
@@ -159,7 +165,26 @@ export class CartService {
     // while status = ACTIVE (a Paused restaurant's status is untouched), so
     // this never changes the pre-existing non-ACTIVE handling below.
     if (restaurantIsActive && restaurant?.availability_mode === 'PAUSED') {
-      throw new DomainError('RESTAURANT_CLOSED', { details: { restaurantId: cart.restaurant_id } });
+      throw new DomainError('RESTAURANT_CLOSED', {
+        details: { restaurantId: cart.restaurant_id, reason: 'PAUSED' },
+      });
+    }
+
+    // Opening hours. A cart filled while the shop was open must not check out
+    // after it closes: the customer app only greys the shop out, and a cart
+    // already holding items never passes that screen again. Same rule as the
+    // app's display (`isRestaurantOpenAt`, Asia/Bangkok, [opens, closes)), and
+    // no order cutoff before closing — that is BQ-007, still PROPOSED.
+    // `POST /orders` runs this validation first, so it is enforced there too.
+    // create_order() itself does not re-check hours; the remaining window is
+    // the milliseconds between this check and that call.
+    if (
+      restaurantIsActive &&
+      !isRestaurantOpenAt(openingHours, restaurant?.temporarily_closed_until ?? null, new Date())
+    ) {
+      throw new DomainError('RESTAURANT_CLOSED', {
+        details: { restaurantId: cart.restaurant_id, reason: 'OUTSIDE_HOURS' },
+      });
     }
 
     const unavailable = items.filter((item) => {
@@ -337,12 +362,23 @@ export class CartService {
   private async fetchRestaurant(restaurantId: string): Promise<RestaurantRow | null> {
     const { data, error } = await this.supabase.admin
       .from('restaurants')
-      .select('id, status, availability_mode')
+      .select('id, status, availability_mode, temporarily_closed_until')
       .eq('id', restaurantId)
       .maybeSingle<RestaurantRow>();
 
     if (error) this.fail('restaurant lookup', restaurantId, error.message);
     return data ?? null;
+  }
+
+  private async fetchOpeningHours(restaurantId: string): Promise<OpeningWindowRow[]> {
+    const { data, error } = await this.supabase.admin
+      .from('restaurant_hours')
+      .select('day_of_week, opens_at, closes_at')
+      .eq('restaurant_id', restaurantId)
+      .returns<OpeningWindowRow[]>();
+
+    if (error) this.fail('opening hours lookup', restaurantId, error.message);
+    return data ?? [];
   }
 
   private async fetchMenuOptions(optionIds: string[]): Promise<MenuOptionRow[]> {

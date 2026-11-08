@@ -349,7 +349,7 @@ describe('ITEM_UNAVAILABLE', () => {
 
 describe('RESTAURANT_CLOSED (M-13 — the restaurant paused between the cart and this press)', () => {
   const paused = () =>
-    jest.fn().mockRejectedValue(new CartConflictError({ kind: 'RESTAURANT_CLOSED' }));
+    jest.fn().mockRejectedValue(new CartConflictError({ kind: 'RESTAURANT_CLOSED', reason: 'PAUSED' }));
 
   it('does not proceed to payment', async () => {
     stub({ validate: paused() });
@@ -357,6 +357,18 @@ describe('RESTAURANT_CLOSED (M-13 — the restaurant paused between the cart and
 
     await waitFor(() => expect(screen.getByTestId('checkout-restaurant-closed')).toBeTruthy());
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('says the shop is closed — not paused — when the server reports OUTSIDE_HOURS', async () => {
+    stub({
+      validate: jest
+        .fn()
+        .mockRejectedValue(new CartConflictError({ kind: 'RESTAURANT_CLOSED', reason: 'OUTSIDE_HOURS' })),
+    });
+    await pressPlaceOrder();
+
+    await waitFor(() => expect(screen.getByText('ร้านปิดอยู่')).toBeTruthy());
+    expect(screen.queryByText('ร้านหยุดรับออเดอร์ชั่วคราว')).toBeNull();
   });
 
   it('renders the paused copy, no per-line diff', async () => {

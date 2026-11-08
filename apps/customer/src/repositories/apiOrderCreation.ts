@@ -15,7 +15,12 @@
 import type { ApiClient } from '@banhao/api-client';
 import { ApiClientError } from '@banhao/api-client';
 import { apiClient as defaultClient } from '../lib/apiClient';
-import { CartConflictError, type PriceChange, type UnavailableItem } from '../domain/cartValidation';
+import {
+  CartConflictError,
+  restaurantClosedReason,
+  type PriceChange,
+  type UnavailableItem,
+} from '../domain/cartValidation';
 import type { CreateOrderInput, CreatedOrder, OrderCreationRepository } from './types';
 
 /** `PRICE_CHANGED` details, as `CartService.checkPriceChanges` builds them. */
@@ -87,7 +92,10 @@ export function createApiOrderCreationRepository(
           // this one (the restaurant paused in between), not a bug. Same
           // conflict, same UI, whichever of the two calls detects it.
           if (cause.code === 'RESTAURANT_CLOSED') {
-            throw new CartConflictError({ kind: 'RESTAURANT_CLOSED' });
+            throw new CartConflictError({
+              kind: 'RESTAURANT_CLOSED',
+              reason: restaurantClosedReason(cause.details),
+            });
           }
         }
 

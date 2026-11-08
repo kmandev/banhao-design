@@ -147,6 +147,17 @@ describe('apiOrderCreation — conflict mapping', () => {
     await expect(promise).rejects.toMatchObject({ conflict: { kind: 'RESTAURANT_CLOSED' } });
   });
 
+  it.each([
+    [{ reason: 'OUTSIDE_HOURS' }, 'OUTSIDE_HOURS'],
+    [{ reason: 'PAUSED' }, 'PAUSED'],
+    [undefined, 'PAUSED'],
+  ])('carries the closed reason from details %j as %s', async (details, reason) => {
+    const { client } = stubClient({ error: new ApiClientError(409, { code: 'RESTAURANT_CLOSED', details }) });
+    const promise = createApiOrderCreationRepository(client).create(INPUT);
+
+    await expect(promise).rejects.toMatchObject({ conflict: { kind: 'RESTAURANT_CLOSED', reason } });
+  });
+
   it.each<ErrorCode>([
     'CART_EMPTY',
     'MIXED_RESTAURANT',

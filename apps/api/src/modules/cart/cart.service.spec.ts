@@ -68,6 +68,14 @@ function serviceWith(byTable: Record<string, Result | Result[]>) {
   };
 }
 
+// Validation now depends on the clock (opening hours). Pin it to Bangkok noon
+// so no test here passes or fails by the time of day it runs; the hours tests
+// below move it explicitly.
+beforeEach(() => {
+  jest.useFakeTimers({ now: new Date('2026-11-08T12:00:00+07:00'), doNotFake: ['nextTick', 'setImmediate'] });
+});
+afterEach(() => jest.useRealTimers());
+
 const USER = 'user-1';
 const OTHER_USER = 'user-2';
 const CART = { id: 'cart-1', restaurant_id: 'shop-1' };
@@ -79,7 +87,11 @@ const MENU_ITEM = {
   is_available: true,
   archived_at: null,
 };
-const RESTAURANT = { id: 'shop-1', status: 'ACTIVE', availability_mode: 'NORMAL' };
+const RESTAURANT = { id: 'shop-1', status: 'ACTIVE', availability_mode: 'NORMAL', temporarily_closed_until: null };
+/** Open all day, every day — so tests that are not about hours pass at any clock time. */
+const ALL_DAY_HOURS = [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day_of_week: day, opens_at: '00:00:00', closes_at: '23:59:00' }));
+/** 09:00–20:00 every day, for the hours tests below. */
+const NINE_TO_EIGHT = [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day_of_week: day, opens_at: '09:00:00', closes_at: '20:00:00' }));
 
 describe('CartService.validate — ownership', () => {
   it('scopes the cart lookup to the caller, never a client-supplied id', async () => {
@@ -127,6 +139,7 @@ function baseTables(overrides: Record<string, Result | Result[]> = {}) {
     carts: { data: CART, error: null },
     cart_items: { data: [CART_ITEM], error: null },
     restaurants: { data: RESTAURANT, error: null },
+    restaurant_hours: { data: ALL_DAY_HOURS, error: null },
     menu_items: { data: [MENU_ITEM], error: null },
     cart_item_options: { data: [], error: null },
     menu_options: { data: [], error: null },
@@ -393,5 +406,89 @@ describe('CartService.validate — DEC-D-01, no invented money', () => {
     expect(keys).not.toContain('discountSatang');
     expect(keys).not.toContain('totalSatang');
     expect(keys).not.toContain('grandTotalSatang');
+  });
+});
+
+describe('CartService.validate — opening hours (BUSINESS_RULES: hours govern whether orders may be placed)', () => {
+  afterEach(() => jest.useRealTimers());
+
+  const at = (iso: string) => {
+    jest.useFakeTimers({ now: new Date(iso), doNotFake: ['nextTick', 'setImmediate'] });
+  };
+
+  it('refuses a cart outside the hours with RESTAURANT_CLOSED, reason OUTSIDE_HOURS', async () => {
+    at('2026-11-08T00:40:00+07:00'); // the post-midnight case that let a staging order through
+    const { subject } = serviceWith(baseTables({ restaurant_hours: { data: NINE_TO_EIGHT, error: null } }));
+
+    await expect(subject.validate(USER, {})).rejects.toMatchObject({
+      code: 'RESTAURANT_CLOSED',
+      details: { restaurantId: 'shop-1', reason: 'OUTSIDE_HOURS' },
+    });
+  });
+
+  it('accepts the same cart inside the hours', async () => {
+    at('2026-11-08T12:00:00+07:00');
+    const { subject } = serviceWith(baseTables({ restaurant_hours: { data: NINE_TO_EIGHT, error: null } }));
+
+    await expect(subject.validate(USER, {})).resolves.toMatchObject({ subtotalSatang: 12000 });
+  });
+
+  it('is closed at the closing minute itself — no cutoff before it is invented (BQ-007)', async () => {
+    const tables = baseTables({ restaurant_hours: { data: NINE_TO_EIGHT, error: null } });
+
+    at('2026-11-08T19:59:00+07:00');
+    await expect(serviceWith(tables).subject.validate(USER, {})).resolves.toBeDefined();
+
+    at('2026-11-08T20:00:00+07:00');
+    await expect(serviceWith(tables).subject.validate(USER, {})).rejects.toMatchObject({ code: 'RESTAURANT_CLOSED' });
+  });
+
+  it('treats a restaurant with no hours rows as closed', async () => {
+    at('2026-11-08T12:00:00+07:00');
+    const { subject } = serviceWith(baseTables({ restaurant_hours: { data: [], error: null } }));
+
+    await expect(subject.validate(USER, {})).rejects.toMatchObject({
+      code: 'RESTAURANT_CLOSED',
+      details: { reason: 'OUTSIDE_HOURS' },
+    });
+  });
+
+  it('a future temporary closure closes the shop inside its hours', async () => {
+    at('2026-11-08T12:00:00+07:00');
+    const { subject } = serviceWith(
+      baseTables({
+        restaurants: { data: { ...RESTAURANT, temporarily_closed_until: '2026-11-08T15:00:00+07:00' }, error: null },
+      }),
+    );
+
+    await expect(subject.validate(USER, {})).rejects.toMatchObject({ details: { reason: 'OUTSIDE_HOURS' } });
+  });
+
+  it('a paused shop reports PAUSED, not OUTSIDE_HOURS, even when also outside its hours', async () => {
+    at('2026-11-08T00:40:00+07:00');
+    const { subject } = serviceWith(
+      baseTables({
+        restaurants: { data: { ...RESTAURANT, availability_mode: 'PAUSED' }, error: null },
+        restaurant_hours: { data: NINE_TO_EIGHT, error: null },
+      }),
+    );
+
+    await expect(subject.validate(USER, {})).rejects.toMatchObject({ details: { reason: 'PAUSED' } });
+  });
+
+  it('reads the hours of the cart\'s own restaurant', async () => {
+    const { subject, callsTo } = serviceWith(baseTables());
+    await subject.validate(USER, {});
+
+    expect(callsTo('restaurant_hours')[0]?.eq).toEqual({ restaurant_id: 'shop-1' });
+  });
+
+  it('fails as a system error, not as "open", when the hours cannot be read', async () => {
+    const { subject } = serviceWith(
+      baseTables({ restaurant_hours: { data: null, error: { message: 'connection reset' } } }),
+    );
+
+    await expect(subject.validate(USER, {})).rejects.not.toMatchObject({ code: 'RESTAURANT_CLOSED' });
+    await expect(subject.validate(USER, {})).rejects.toBeDefined();
   });
 });

@@ -20,6 +20,7 @@ import { ApiClientError } from '@banhao/api-client';
 import { apiClient as defaultClient } from '../lib/apiClient';
 import {
   CartConflictError,
+  restaurantClosedReason,
   type CartValidation,
   type ExpectedLine,
   type PriceChange,
@@ -87,7 +88,10 @@ export function createApiCartValidationRepository(
           // identical condition `POST /orders` already reports, so both
           // revalidation calls agree.
           if (cause.code === 'RESTAURANT_CLOSED') {
-            throw new CartConflictError({ kind: 'RESTAURANT_CLOSED' });
+            throw new CartConflictError({
+              kind: 'RESTAURANT_CLOSED',
+              reason: restaurantClosedReason(cause.details),
+            });
           }
         }
 

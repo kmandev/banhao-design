@@ -258,7 +258,9 @@ export function CheckoutScreen() {
       */}
       {conflict?.kind === 'RESTAURANT_CLOSED' ? (
         <Card style={styles.conflict} testID="checkout-restaurant-closed">
-          <Text style={styles.conflictTitle}>ร้านหยุดรับออเดอร์ชั่วคราว</Text>
+          <Text style={styles.conflictTitle}>
+            {conflict.reason === 'OUTSIDE_HOURS' ? 'ร้านปิดอยู่' : 'ร้านหยุดรับออเดอร์ชั่วคราว'}
+          </Text>
           <Text style={styles.conflictItem}>ตะกร้าของคุณยังอยู่ครบ ลองอีกครั้งภายหลัง</Text>
           <Button
             label="กลับไปที่ร้าน"
