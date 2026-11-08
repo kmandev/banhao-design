@@ -32,3 +32,15 @@ jest.mock('react-native-screens', () => {
   const actual = jest.requireActual('react-native-screens');
   return { ...actual, enableScreens: jest.fn() };
 });
+
+// LAUNCH_PLAN 1.1 — native push modules. Tests run as "not a physical device",
+// so registerForPush() returns before asking for permission or a token.
+jest.mock('expo-device', () => ({ isDevice: false }));
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
+  getPermissionsAsync: jest.fn(async () => ({ granted: false })),
+  requestPermissionsAsync: jest.fn(async () => ({ granted: false })),
+  getExpoPushTokenAsync: jest.fn(),
+  AndroidImportance: { HIGH: 4 },
+}));

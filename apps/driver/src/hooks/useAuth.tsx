@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { registerForPush, unregisterPush } from '../lib/pushRegistration';
 
 /**
  * Driver App session state.
@@ -70,7 +71,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw new Error(error.message);
   }, []);
 
+  // LAUNCH_PLAN 1.1 — register this device for push once a user is signed in.
+  // Best-effort and silent; see lib/pushRegistration.ts.
+  const signedInUserId = session?.user.id ?? null;
+  useEffect(() => {
+    if (signedInUserId) void registerForPush();
+  }, [signedInUserId]);
+
   const signOut = useCallback(async () => {
+    // Revoke while the session is still valid, so this device stops receiving
+    // the previous user's pushes.
+    await unregisterPush();
     await supabase.auth.signOut();
     setSession(null);
   }, []);
