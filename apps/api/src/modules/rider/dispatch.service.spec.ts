@@ -220,7 +220,12 @@ describe('DispatchService.runDispatchRound — the offers a round writes', () =>
     // Two attempted, one already existed: exactly one new offer, no error raised.
     expect(result.offers).toBe(1);
     // The duplicate was attempted by INSERT — never by a prior existence SELECT.
-    const selects = calls.filter((c) => c.table === 'rider_assignment_attempts' && c.op === 'select');
+    // (The only read of this table after the inserts is DEC-072's first-offer
+    // check, which looks at EARLIER rounds for notification and never decides
+    // whether an offer is written.)
+    const selects = calls.filter(
+      (c) => c.table === 'rider_assignment_attempts' && c.op === 'select' && !('round_no' in (c.lt ?? {})),
+    );
     expect(selects).toHaveLength(0);
   });
 
@@ -313,7 +318,11 @@ describe('DispatchService.runDispatchRound — domain isolation', () => {
     ]) {
       expect(tables.has(forbidden)).toBe(false);
     }
-    expect([...tables].sort()).toEqual(['deliveries', 'rider_assignment_attempts']);
+    // DEC-072: riders (to address the first-offer notification) and outbox
+    // are the only additions — still no order, payment or ledger table.
+    for (const table of tables) {
+      expect(['deliveries', 'rider_assignment_attempts', 'riders', 'outbox']).toContain(table);
+    }
   });
 
   it('computes no money — no payload written by a round mentions an earning or a fee', async () => {
@@ -329,5 +338,55 @@ describe('DispatchService.runDispatchRound — domain isolation', () => {
       expect(keys).not.toContain('rider_earning_satang');
       expect(keys.filter((k) => k.includes('satang'))).toEqual([]);
     }
+  });
+});
+
+describe('DispatchService — DEC-072 "มีงานใหม่ใกล้คุณ" on a rider\'s first offer', () => {
+  it('writes one RiderOfferAvailable event to riders offered this delivery for the first time', async () => {
+    const { supabase, calls } = supabaseStub([
+      ...results([{ id: DELIVERY_A, order_id: 'order-a', created_at: CREATED_AT }], [OK, OK]),
+      { data: [], error: null }, // no earlier-round offers
+      { data: [{ user_id: 'user-a' }, { user_id: 'user-b' }], error: null }, // riders
+      OK, // outbox
+    ]);
+    const { strategy } = strategyStub([RIDER_A, RIDER_B]);
+
+    await new DispatchService(supabase, strategy).runDispatchRound();
+
+    const outbox = calls.find((c) => c.table === 'outbox' && c.op === 'insert');
+    expect(outbox?.payload).toEqual({
+      aggregate_type: 'delivery',
+      aggregate_id: DELIVERY_A,
+      event_type: 'RiderOfferAvailable',
+      payload: {
+        recipients: [
+          { recipientId: 'user-a', recipientType: 'RIDER' },
+          { recipientId: 'user-b', recipientType: 'RIDER' },
+        ],
+        orderId: 'order-a',
+      },
+    });
+  });
+
+  it('does not re-notify a rider who was offered this delivery in an earlier round', async () => {
+    const { supabase, calls } = supabaseStub([
+      ...results([{ id: DELIVERY_A, order_id: 'order-a', created_at: CREATED_AT }], [OK]),
+      { data: [{ rider_id: RIDER_A }], error: null }, // already offered before
+    ]);
+    const { strategy } = strategyStub([RIDER_A]);
+
+    await new DispatchService(supabase, strategy).runDispatchRound();
+
+    expect(calls.some((c) => c.table === 'outbox')).toBe(false);
+  });
+
+  it('a failed notification never fails the round — the offer still counts', async () => {
+    const { supabase } = supabaseStub([
+      ...results([{ id: DELIVERY_A, order_id: 'order-a', created_at: CREATED_AT }], [OK]),
+      { data: null, error: { message: 'connection reset' } },
+    ]);
+    const { strategy } = strategyStub([RIDER_A]);
+
+    await expect(new DispatchService(supabase, strategy).runDispatchRound()).resolves.toMatchObject({ offers: 1 });
   });
 });

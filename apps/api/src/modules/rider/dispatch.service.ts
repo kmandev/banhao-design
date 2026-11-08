@@ -11,6 +11,7 @@ import { DISPATCH_STRATEGY, type DispatchStrategy } from './dispatch-strategy.in
 /** `deliveries`, the columns one dispatch round needs. */
 interface DispatchableDeliveryRow {
   id: string;
+  order_id: string;
   created_at: string;
 }
 
@@ -139,7 +140,7 @@ export class DispatchService {
   private async listDispatchableDeliveries(): Promise<DispatchableDeliveryRow[]> {
     const { data, error } = await this.supabase.admin
       .from('deliveries')
-      .select('id, created_at')
+      .select('id, order_id, created_at')
       .in('state', [...DISPATCHABLE_DELIVERY_STATES])
       .order('created_at', { ascending: true })
       .limit(DISPATCH_BATCH_SIZE)
@@ -164,6 +165,7 @@ export class DispatchService {
     const expiresAt = offerExpiryFor(now);
 
     let created = 0;
+    const newlyOffered: string[] = [];
     for (const riderId of riderIds) {
       const { error } = await this.supabase.admin.from('rider_assignment_attempts').insert({
         delivery_id: delivery.id,
@@ -178,6 +180,7 @@ export class DispatchService {
 
       if (!error) {
         created++;
+        newlyOffered.push(riderId);
         continue;
       }
 
@@ -194,7 +197,62 @@ export class DispatchService {
       );
     }
 
+    await this.notifyFirstOffer(delivery, newlyOffered, roundNo);
     return created;
+  }
+
+  /**
+   * DEC-072 — "มีงานใหม่ใกล้คุณ" to each rider offered this delivery for the
+   * FIRST time. A delivery is re-broadcast every round (every tick), so
+   * notifying on every new row would message a rider every minute about the
+   * same job; a rider who already had an offer for this delivery in an earlier
+   * round is skipped. One outbox event per round, RIDER recipients only.
+   *
+   * Never throws: offers are already written, and a lost notification must not
+   * fail the dispatch round.
+   */
+  private async notifyFirstOffer(
+    delivery: DispatchableDeliveryRow,
+    newlyOffered: string[],
+    roundNo: number,
+  ): Promise<void> {
+    if (newlyOffered.length === 0) return;
+    try {
+      const { data: earlier, error: earlierError } = await this.supabase.admin
+        .from('rider_assignment_attempts')
+        .select('rider_id')
+        .eq('delivery_id', delivery.id)
+        .in('rider_id', newlyOffered)
+        .lt('round_no', roundNo)
+        .returns<{ rider_id: string }[]>();
+      if (earlierError) throw new Error(`earlier-offer read failed: ${earlierError.message}`);
+
+      const seen = new Set((earlier ?? []).map((row) => row.rider_id));
+      const firstTime = newlyOffered.filter((id) => !seen.has(id));
+      if (firstTime.length === 0) return;
+
+      const { data: riders, error: riderError } = await this.supabase.admin
+        .from('riders')
+        .select('user_id')
+        .in('id', firstTime)
+        .returns<{ user_id: string }[]>();
+      if (riderError) throw new Error(`rider profile read failed: ${riderError.message}`);
+
+      const recipients = (riders ?? []).map((row) => ({ recipientId: row.user_id, recipientType: 'RIDER' }));
+      if (recipients.length === 0) return;
+
+      const { error } = await this.supabase.admin.from('outbox').insert({
+        aggregate_type: 'delivery',
+        aggregate_id: delivery.id,
+        event_type: 'RiderOfferAvailable',
+        payload: { recipients, orderId: delivery.order_id },
+      });
+      if (error) throw new Error(`outbox insert failed: ${error.message}`);
+    } catch (cause) {
+      this.logger.error(
+        `RiderOfferAvailable not written for delivery ${delivery.id}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
   }
 }
 

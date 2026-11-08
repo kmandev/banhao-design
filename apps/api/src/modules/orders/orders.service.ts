@@ -938,15 +938,23 @@ export class OrdersService {
    *    sweep finds it and finishes the job.
    * 2. **Tell the restaurant and the customer** — one `OrderCancelled` outbox
    *    event, `MERCHANT` and `CUSTOMER` recipients. The customer text is
-   *    DEC-069 §1's ("ออเดอร์ถูกยกเลิกแล้ว — ถ้าชำระเงินแล้ว เราจะคืนเงินเต็ม
-   *    จำนวน"). No rider recipient: no rider wording was decided. The merchant
-   *    keeps the raw event name like every other merchant notification today.
+   *    DEC-069 §1's; the merchant's and rider's are DEC-072's. The assigned
+   *    rider, if any, is added as a third recipient ("งานนี้ถูกยกเลิก").
    */
   private async afterCancellation(
     order: OrderDiagnosisRow,
     actor: AbandonActor,
     reason: string | undefined,
   ): Promise<void> {
+    // DEC-072 — the rider holding this order must hear it was cancelled. Read
+    // before the delivery is closed, while the assignment is still current.
+    let riderProfileId: string | null = null;
+    try {
+      riderProfileId = await this.resolveAssignedRiderProfileId(order.id);
+    } catch {
+      riderProfileId = null;
+    }
+
     try {
       await this.abandonment.abandonForOrder(order.id, actor, reason);
     } catch (cause) {
@@ -958,6 +966,9 @@ export class OrdersService {
 
     try {
       const recipients = await this.resolveEventRecipients(order, ['CUSTOMER', 'MERCHANT']);
+      if (riderProfileId) {
+        recipients.push({ recipientId: riderProfileId, recipientType: 'RIDER' });
+      }
       if (recipients.length > 0) {
         await this.writeOutboxEvent('order', order.id, 'OrderCancelled', recipients);
       }

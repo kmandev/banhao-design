@@ -894,6 +894,7 @@ describe('OrdersService.cancelOrder — customer', () => {
     const { subject, calls } = buildTransitionService([
       { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'CANCELLED', customer_id: 'customer-1' }, error: null },
       { data: null, error: null }, // order_status_history
+      { data: null, error: null }, // DEC-072 assigned-rider lookup: no rider yet
       MERCHANT_OWNER_LOOKUP,
       MERCHANT_OWNER,
       { data: null, error: null }, // outbox insert
@@ -916,6 +917,23 @@ describe('OrdersService.cancelOrder — customer', () => {
     });
     // No rider recipient: no rider wording was decided.
     expect(JSON.stringify(outbox[0]?.payload)).not.toContain('RIDER');
+  });
+
+  it('also tells the assigned rider, read before the delivery is closed (DEC-072)', async () => {
+    const { subject, calls } = buildTransitionService([
+      { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'CANCELLED', customer_id: 'customer-1' }, error: null },
+      { data: null, error: null }, // order_status_history
+      { data: { rider_id: 'rider-9' }, error: null }, // delivery holding a rider
+      { data: { user_id: 'rider-user-9' }, error: null }, // rider profile
+      MERCHANT_OWNER_LOOKUP,
+      MERCHANT_OWNER,
+      { data: null, error: null }, // outbox insert
+    ]);
+
+    await subject.cancelOrder(customerUser('customer-1'), ORDER_ID, undefined);
+
+    const outbox = calls.find((c) => c.table === 'outbox' && c.op === 'insert');
+    expect(JSON.stringify(outbox?.payload)).toContain('"recipientId":"rider-user-9","recipientType":"RIDER"');
   });
 
   it('does not fail the cancellation when the restaurant notification cannot be written', async () => {
