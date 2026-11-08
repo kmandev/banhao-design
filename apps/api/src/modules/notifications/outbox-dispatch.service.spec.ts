@@ -366,3 +366,56 @@ describe('OutboxDispatchService.dispatchPending', () => {
     expect(result).toEqual({ claimed: 0, dispatched: 0, skipped: 0, failed: 0 });
   });
 });
+
+describe('OutboxDispatchService — PUSH after IN_APP (LAUNCH_PLAN 1.1)', () => {
+  function pushChannel(result: { delivered: true } | { delivered: false; reason: string }): NotificationChannel {
+    return { channel: 'PUSH', deliver: jest.fn().mockResolvedValue(result) };
+  }
+
+  function dispatchWithPush(recipientType: string, push: NotificationChannel) {
+    const { supabase, calls } = supabaseStub([
+      { data: claimedRow({ payload: { recipients: [{ recipientId: 'user-1', recipientType }] } }), error: null },
+      { data: { id: 'notif-1' }, error: null },
+      { data: { id: 'delivery-1' }, error: null },
+      { data: null, error: null }, // IN_APP -> SENT
+      { data: null, error: null }, // PUSH delivery record
+    ]);
+    const service = new OutboxDispatchService(supabase, alwaysDelivers(), push);
+    return { run: () => service.processOne(OUTBOX_ID), calls };
+  }
+
+  it('pushes the same title and body to a customer and records a SENT PUSH delivery', async () => {
+    const push = pushChannel({ delivered: true });
+    const { run, calls } = dispatchWithPush('CUSTOMER', push);
+
+    await expect(run()).resolves.toBe('dispatched');
+    expect(push.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({ notificationId: 'notif-1', recipientId: 'user-1', title: 'ออเดอร์ถูกยกเลิกแล้ว' }),
+    );
+    const pushRecord = calls.filter((c) => c.table === 'notification_deliveries' && c.op === 'insert')[1];
+    expect(pushRecord?.payload).toMatchObject({ channel: 'PUSH', state: 'SENT' });
+  });
+
+  it('writes no PUSH record for a recipient with no registered device', async () => {
+    const { run, calls } = dispatchWithPush('CUSTOMER', pushChannel({ delivered: false, reason: 'NO_TOKEN' }));
+
+    await run();
+    expect(calls.filter((c) => c.table === 'notification_deliveries' && c.op === 'insert')).toHaveLength(1);
+  });
+
+  it('records a FAILED push but still dispatches the outbox row — the in-app notice is already delivered', async () => {
+    const { run, calls } = dispatchWithPush('RIDER', pushChannel({ delivered: false, reason: 'expo push HTTP 500' }));
+
+    await expect(run()).resolves.toBe('dispatched');
+    const pushRecord = calls.filter((c) => c.table === 'notification_deliveries' && c.op === 'insert')[1];
+    expect(pushRecord?.payload).toMatchObject({ channel: 'PUSH', state: 'FAILED', last_error: 'expo push HTTP 500' });
+  });
+
+  it('never pushes to a merchant — the merchant web has no push', async () => {
+    const push = pushChannel({ delivered: true });
+    const { run } = dispatchWithPush('MERCHANT', push);
+
+    await run();
+    expect(push.deliver).not.toHaveBeenCalled();
+  });
+});

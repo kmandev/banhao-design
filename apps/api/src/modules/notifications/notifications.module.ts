@@ -3,7 +3,10 @@ import { OutboxDispatchService } from './outbox-dispatch.service';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { InAppNotificationChannel } from './channels/in-app-notification.channel';
-import { IN_APP_NOTIFICATION_CHANNEL } from './notification-channel.interface';
+import { IN_APP_NOTIFICATION_CHANNEL, PUSH_NOTIFICATION_CHANNEL } from './notification-channel.interface';
+import { ExpoPushNotificationChannel } from './channels/expo-push-notification.channel';
+import { PushTokensController } from './push-tokens.controller';
+import { PushTokensService } from './push-tokens.service';
 
 /**
  * Phase H notification core: dispatch (H-2) and the customer read path (H-5A).
@@ -24,11 +27,13 @@ import { IN_APP_NOTIFICATION_CHANNEL } from './notification-channel.interface';
  * `notification_deliveries` — see `NotificationsService`'s own header.
  */
 @Module({
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, PushTokensController],
   providers: [
     OutboxDispatchService,
     NotificationsService,
     { provide: IN_APP_NOTIFICATION_CHANNEL, useClass: InAppNotificationChannel },
+    { provide: PUSH_NOTIFICATION_CHANNEL, useClass: ExpoPushNotificationChannel },
+    PushTokensService,
   ],
   exports: [OutboxDispatchService],
 })

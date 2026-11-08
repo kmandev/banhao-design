@@ -26,3 +26,6 @@ export interface NotificationChannel {
 
 /** DI token for the IN_APP channel adapter — same pattern as `PAYMENT_PROVIDER`. */
 export const IN_APP_NOTIFICATION_CHANNEL = Symbol('IN_APP_NOTIFICATION_CHANNEL');
+
+/** DI token for the PUSH channel adapter (Expo push, LAUNCH_PLAN 1.1). */
+export const PUSH_NOTIFICATION_CHANNEL = Symbol('PUSH_NOTIFICATION_CHANNEL');

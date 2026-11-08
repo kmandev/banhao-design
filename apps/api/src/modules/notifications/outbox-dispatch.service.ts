@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import {
   IN_APP_NOTIFICATION_CHANNEL,
+  PUSH_NOTIFICATION_CHANNEL,
   type NotificationChannel,
 } from './notification-channel.interface';
 import { isSilentFor, notificationCopyFor } from './customer-notification-copy';
@@ -95,6 +96,7 @@ export class OutboxDispatchService {
   constructor(
     private readonly supabase: SupabaseService,
     @Inject(IN_APP_NOTIFICATION_CHANNEL) private readonly inAppChannel: NotificationChannel,
+    @Optional() @Inject(PUSH_NOTIFICATION_CHANNEL) private readonly pushChannel?: NotificationChannel,
   ) {}
 
   /** Claims and dispatches up to `BATCH_SIZE` undispatched outbox rows. Called once per tick. */
@@ -267,6 +269,44 @@ export class OutboxDispatchService {
 
     if (sentError) {
       throw new Error(`notification_deliveries SENT update failed: ${sentError.message}`);
+    }
+
+    await this.sendPush(notification.id, recipient, title, body);
+  }
+
+  /**
+   * LAUNCH_PLAN 1.1 — the same notification as a phone push, after the in-app
+   * record is safely stored. Best-effort by design: a push that cannot be sent
+   * is recorded as a FAILED `PUSH` delivery and never fails the outbox row,
+   * because the in-app notification has already been delivered. Merchants are
+   * skipped (the merchant web has no push, DEC-APP-003); a recipient with no
+   * registered device gets no delivery row at all.
+   */
+  private async sendPush(
+    notificationId: string,
+    recipient: OutboxRecipient,
+    title: string,
+    body: string | null,
+  ): Promise<void> {
+    if (!this.pushChannel || recipient.recipientType === 'MERCHANT') return;
+    try {
+      const result = await this.pushChannel.deliver({
+        notificationId,
+        recipientId: recipient.recipientId,
+        title,
+        body,
+        deepLink: null,
+      });
+      if (!result.delivered && result.reason === 'NO_TOKEN') return;
+
+      const { error } = await this.supabase.admin.from('notification_deliveries').insert(
+        result.delivered
+          ? { notification_id: notificationId, channel: 'PUSH', state: 'SENT', attempts: 1, sent_at: new Date().toISOString() }
+          : { notification_id: notificationId, channel: 'PUSH', state: 'FAILED', attempts: 1, last_error: result.reason },
+      );
+      if (error) this.logger.error(`PUSH delivery record failed for ${notificationId}: ${error.message}`);
+    } catch (cause) {
+      this.logger.error(`PUSH failed for notification ${notificationId}: ${cause instanceof Error ? cause.message : String(cause)}`);
     }
   }
 }

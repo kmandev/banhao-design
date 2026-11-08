@@ -16,3 +16,4 @@ export * from './supervisor';
 export * from './reconciliation';
 export * from './restaurant-open';
 export * from './delivery-fee';
+export * from './push-token';
