@@ -44,9 +44,11 @@ describe('customerCopyFor (DEC-068 D1)', () => {
     }
   });
 
-  it('is silent for a customer on OrderCreated only, and never for anyone else', () => {
+  it('is silent for a customer on OrderCreated, and for a merchant on OrderCreated and OrderReady (DEC-072)', () => {
     expect(isSilentFor('OrderCreated', 'CUSTOMER')).toBe(true);
-    expect(isSilentFor('OrderCreated', 'MERCHANT')).toBe(false);
+    expect(isSilentFor('OrderCreated', 'MERCHANT')).toBe(true);
+    expect(isSilentFor('OrderReady', 'MERCHANT')).toBe(true);
+    expect(isSilentFor('OrderReady', 'RIDER')).toBe(false);
     for (const eventType of CUSTOMER_COPY_EVENT_TYPES) {
       expect(isSilentFor(eventType, 'CUSTOMER')).toBe(false);
     }

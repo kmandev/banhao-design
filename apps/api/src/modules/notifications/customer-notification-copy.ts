@@ -45,9 +45,51 @@ const CUSTOMER_COPY: Readonly<Record<string, NotificationCopy>> = {
  */
 const SILENT_FOR_CUSTOMER: ReadonlySet<string> = new Set(['OrderCreated']);
 
+/**
+ * DEC-072 — merchant and rider wording, approved by the owner on 2026-11-08
+ * from `docs/NOTIFICATION_COPY_DRAFT.md`. Changing a string here is changing
+ * an approved decision.
+ */
+const MERCHANT_COPY: Readonly<Record<string, NotificationCopy>> = {
+  PaymentSucceeded: { title: 'ออเดอร์ใหม่เข้ามา', body: 'กดรับออเดอร์ภายใน 5 นาที' },
+  RiderAssigned: { title: 'ไรเดอร์รับงานแล้ว', body: 'ไรเดอร์กำลังไปที่ร้าน' },
+  OrderPickedUp: { title: 'ไรเดอร์รับอาหารแล้ว', body: 'ออเดอร์กำลังไปส่งลูกค้า' },
+  OrderDelivered: { title: 'ส่งถึงลูกค้าแล้ว', body: 'ออเดอร์นี้เสร็จเรียบร้อย' },
+  OrderNoRiderFound: { title: 'ยังหาไรเดอร์ไม่ได้', body: 'ทีมงานกำลังช่วยหาไรเดอร์ให้' },
+  OrderCancelled: { title: 'ออเดอร์ถูกยกเลิก', body: 'ไม่ต้องเตรียมอาหารสำหรับออเดอร์นี้' },
+  OrderDeliveryFailed: { title: 'ส่งอาหารไม่สำเร็จ', body: 'ทีมงานจะติดต่อกลับ' },
+};
+
+const RIDER_COPY: Readonly<Record<string, NotificationCopy>> = {
+  RiderOfferAvailable: { title: 'มีงานใหม่ใกล้คุณ', body: 'เปิดแอปเพื่อรับงาน' },
+  RiderAssigned: { title: 'ได้งานแล้ว', body: 'ไปรับอาหารที่ร้านได้เลย' },
+  OrderReady: { title: 'อาหารพร้อมแล้ว', body: 'ไปรับที่ร้านได้เลย' },
+  OrderCancelled: { title: 'งานนี้ถูกยกเลิก', body: 'ไม่ต้องไปรับอาหารแล้ว' },
+};
+
+/**
+ * DEC-072: a merchant is not told about an order before it is paid (it can do
+ * nothing with it), nor about "food ready", which the merchant pressed itself.
+ */
+const SILENT_FOR_MERCHANT: ReadonlySet<string> = new Set(['OrderCreated', 'OrderReady']);
+
 /** Whether this recipient is deliberately sent nothing for this event. */
 export function isSilentFor(eventType: string, recipientType: string): boolean {
-  return recipientType === 'CUSTOMER' && SILENT_FOR_CUSTOMER.has(eventType);
+  if (recipientType === 'CUSTOMER') return SILENT_FOR_CUSTOMER.has(eventType);
+  if (recipientType === 'MERCHANT') return SILENT_FOR_MERCHANT.has(eventType);
+  return false;
+}
+
+/**
+ * The approved text for this event and recipient — customer (DEC-068 D1 +
+ * DEC-069), merchant or rider (DEC-072) — or `null`, in which case the caller
+ * keeps its old behaviour (the raw event name), never an invented sentence.
+ */
+export function notificationCopyFor(eventType: string, recipientType: string): NotificationCopy | null {
+  if (recipientType === 'CUSTOMER') return CUSTOMER_COPY[eventType] ?? null;
+  if (recipientType === 'MERCHANT') return MERCHANT_COPY[eventType] ?? null;
+  if (recipientType === 'RIDER') return RIDER_COPY[eventType] ?? null;
+  return null;
 }
 
 /** The approved customer text for an event, or `null` when the recipient is not a customer or the event is not one of the nine. */
@@ -58,3 +100,6 @@ export function customerCopyFor(eventType: string, recipientType: string): Notif
 
 /** The approved event names (DEC-068 D1's nine plus DEC-069's three), for tests. */
 export const CUSTOMER_COPY_EVENT_TYPES: readonly string[] = Object.keys(CUSTOMER_COPY);
+/** DEC-072's approved merchant and rider event names, for tests. */
+export const MERCHANT_COPY_EVENT_TYPES: readonly string[] = Object.keys(MERCHANT_COPY);
+export const RIDER_COPY_EVENT_TYPES: readonly string[] = Object.keys(RIDER_COPY);

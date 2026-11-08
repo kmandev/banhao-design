@@ -186,7 +186,7 @@ describe('OutboxDispatchService.processOne — notification content (DEC-068 D1)
     );
   });
 
-  it('does not give a MERCHANT or RIDER recipient the customer wording — they keep the raw event name', async () => {
+  it('gives each recipient type its own approved wording (DEC-072)', async () => {
     const { calls } = await dispatch(
       row('OrderDelivered', 'order', {
         recipients: [
@@ -199,7 +199,7 @@ describe('OutboxDispatchService.processOne — notification content (DEC-068 D1)
     const inserts = calls.filter((c) => c.table === 'notifications' && c.op === 'insert');
     expect(inserts).toHaveLength(2);
     expect(inserts[0]?.payload).toMatchObject({ recipient_type: 'CUSTOMER', title: 'ส่งถึงแล้ว' });
-    expect(inserts[1]?.payload).toMatchObject({ recipient_type: 'MERCHANT', title: 'OrderDelivered', body: null });
+    expect(inserts[1]?.payload).toMatchObject({ recipient_type: 'MERCHANT', title: 'ส่งถึงลูกค้าแล้ว', body: 'ออเดอร์นี้เสร็จเรียบร้อย' });
   });
 
   it('keeps an event without approved wording on the original behaviour, even for a customer', async () => {
@@ -220,7 +220,7 @@ describe('OutboxDispatchService.processOne — notification content (DEC-068 D1)
     expect(channel.deliver).not.toHaveBeenCalled();
   });
 
-  it('still tells the restaurant about OrderCreated, in the same event', async () => {
+  it('tells nobody about OrderCreated — the merchant is told once the order is paid (DEC-072)', async () => {
     const { calls } = await dispatch(
       row('OrderCreated', 'order', {
         recipients: [
@@ -231,8 +231,7 @@ describe('OutboxDispatchService.processOne — notification content (DEC-068 D1)
     );
 
     const inserts = calls.filter((c) => c.table === 'notifications' && c.op === 'insert');
-    expect(inserts).toHaveLength(1);
-    expect(inserts[0]?.payload).toMatchObject({ recipient_id: 'merch-1', recipient_type: 'MERCHANT', title: 'OrderCreated' });
+    expect(inserts).toHaveLength(0);
   });
 
   it('takes order_id from payload.orderId for a delivery-aggregate event, not from the delivery id', async () => {

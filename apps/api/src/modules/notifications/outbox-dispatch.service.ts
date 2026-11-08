@@ -4,7 +4,7 @@ import {
   IN_APP_NOTIFICATION_CHANNEL,
   type NotificationChannel,
 } from './notification-channel.interface';
-import { customerCopyFor, isSilentFor } from './customer-notification-copy';
+import { isSilentFor, notificationCopyFor } from './customer-notification-copy';
 
 /** How many unprocessed `outbox` rows one tick claims work from at most — matches `PaymentEventProcessingService`'s `BATCH_SIZE`. */
 const BATCH_SIZE = 25;
@@ -203,7 +203,7 @@ export class OutboxDispatchService {
     recipient: OutboxRecipient,
     orderId: string | null,
   ): Promise<void> {
-    const copy = customerCopyFor(row.event_type, recipient.recipientType);
+    const copy = notificationCopyFor(row.event_type, recipient.recipientType);
     const title = copy?.title ?? row.event_type;
     const body = copy?.body ?? null;
 
