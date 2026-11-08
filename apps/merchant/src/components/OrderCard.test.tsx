@@ -11,6 +11,7 @@ function order(overrides: Partial<MerchantOrderSummary> & { id: string }): Merch
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 18500,
     placedAt: '2026-08-31T04:41:20.000Z',
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,
@@ -60,14 +61,13 @@ describe('OrderCard — PAID', () => {
     expect(screen.queryByText(/ออเดอร์ใหม่ · เพิ่งเข้ามา/)).not.toBeInTheDocument();
   });
 
-  it('shows the timeout banner and a disabled contact-admin action once the accept window has elapsed', () => {
+  it('shows the late banner but keeps accept once the window has elapsed (DEC-068 C1)', () => {
     render(
       <OrderCard order={order({ id: '1', state: 'PAID', placedAt: new Date(NOW - 400_000).toISOString() })} now={NOW} />,
     );
 
-    expect(screen.getByText('หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ')).toBeInTheDocument();
-    const button = screen.getByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ });
-    expect(button).toBeDisabled();
+    expect(screen.getByText('เกินเวลาตอบรับแล้ว · ยังกดรับได้ ลูกค้ากำลังรอ')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ })).toBeNull();
   });
 });
 
@@ -126,7 +126,7 @@ describe('OrderCard — wired actions', () => {
     expect(onAction).toHaveBeenCalledWith(subject, command);
   });
 
-  it('never wires the expired card — BQ-013 is open and there is no endpoint', () => {
+  it('still wires accept on the expired card — DEC-068 C1, no auto-cancel', () => {
     const onAction = jest.fn();
     render(
       <OrderCard
@@ -136,11 +136,11 @@ describe('OrderCard — wired actions', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ });
-    expect(button).toBeDisabled();
+    const button = screen.getByRole('button', { name: /รับออเดอร์/ });
+    expect(button).toBeEnabled();
 
     fireEvent.click(button);
-    expect(onAction).not.toHaveBeenCalled();
+    expect(onAction).toHaveBeenCalledTimes(1);
   });
 
   it('keeps READY_FOR_PICKUP a non-tappable status even when a handler is supplied', () => {
@@ -283,7 +283,7 @@ describe('OrderCard — onOpenDetail wired', () => {
     expect(onAction).toHaveBeenCalledTimes(1); // unchanged
   });
 
-  it('is enabled and openable even for the expired PAID card, whose action button stays disabled', () => {
+  it('is enabled and openable for the expired PAID card too', () => {
     const onOpenDetail = jest.fn();
     render(
       <OrderCard
@@ -294,7 +294,6 @@ describe('OrderCard — onOpenDetail wired', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: /เปิดรายละเอียด/ }));
     expect(onOpenDetail).toHaveBeenCalledTimes(1);
   });

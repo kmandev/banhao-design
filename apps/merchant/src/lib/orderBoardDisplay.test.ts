@@ -23,6 +23,7 @@ function order(overrides: Partial<MerchantOrderSummary> & { id: string }): Merch
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 18500,
     placedAt: '2026-08-31T04:42:00.000Z',
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,
@@ -133,12 +134,13 @@ describe('acceptWindowState', () => {
     expect(remainingSeconds).toBe(MERCHANT_ACCEPT_WINDOW_SECONDS - 10);
   });
 
-  it('turns warning in the final third of the 3-minute window', () => {
-    // final third starts at remaining <= 60s, i.e. elapsed >= 120s
-    const placedAt = new Date(NOW - 130_000).toISOString();
+  it('turns warning in the final third of the 5-minute window (DEC-068 C1)', () => {
+    // final third starts at remaining <= 100s, i.e. elapsed >= 200s
+    const placedAt = new Date(NOW - 210_000).toISOString();
     const { phase, remainingSeconds } = acceptWindowState(placedAt, NOW);
+    expect(MERCHANT_ACCEPT_WINDOW_SECONDS).toBe(300);
     expect(phase).toBe('warning');
-    expect(remainingSeconds).toBe(50);
+    expect(remainingSeconds).toBe(90);
   });
 
   it('is expired at exactly the window boundary and never goes negative', () => {
@@ -186,7 +188,7 @@ describe('presentOrderCard — PAID', () => {
   });
 
   it('warning phase in the final third', () => {
-    const placedAt = new Date(NOW - 130_000).toISOString();
+    const placedAt = new Date(NOW - 210_000).toISOString();
     const p = presentOrderCard(order({ id: '1', state: 'PAID', placedAt }), NOW)!;
 
     expect(p.chipLabel).toBe('ใกล้หมดเวลา');
@@ -196,16 +198,27 @@ describe('presentOrderCard — PAID', () => {
     expect(p.isNewArrival).toBe(false);
   });
 
-  it('expired phase: disabled-looking action, timeout chip, action label changes', () => {
+  it('expired phase: timeout chip, but accepting stays open (DEC-068 C1 — no auto-cancel)', () => {
     const placedAt = new Date(NOW - 400_000).toISOString();
     const p = presentOrderCard(order({ id: '1', state: 'PAID', placedAt }), NOW)!;
 
     expect(p.chipLabel).toBe('หมดเวลาตอบรับ');
     expect(p.chipTone).toBe('expired');
     expect(p.timerLabel).toBe('0:00');
-    expect(p.actionLabel).toBe('ติดต่อผู้ดูแลระบบ');
-    expect(p.actionStyle).toBe('off');
+    expect(p.actionLabel).toBe('รับออเดอร์');
+    expect(p.actionStyle).toBe('primary');
+    expect(p.actionCommand).toBe('accept');
     expect(p.isExpired).toBe(true);
+  });
+
+  it('counts the window from payment, not from order creation', () => {
+    // Created 10 minutes ago, paid 20 seconds ago: the window is fresh.
+    const placedAt = new Date(NOW - 600_000).toISOString();
+    const paidAt = new Date(NOW - 20_000).toISOString();
+    const p = presentOrderCard(order({ id: '1', state: 'PAID', placedAt, paidAt }), NOW)!;
+
+    expect(p.isExpired).toBe(false);
+    expect(p.timerLabel).toBe('4:40');
   });
 
   it('never exposes recipientPhoneSnapshot in the presentation object', () => {

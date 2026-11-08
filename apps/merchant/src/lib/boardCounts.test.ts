@@ -9,6 +9,7 @@ function order(overrides: Partial<MerchantOrderSummary> & { id: string; placedAt
     recipientNameSnapshot: 'คุณสมชาย ใจดี',
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 10000,
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,

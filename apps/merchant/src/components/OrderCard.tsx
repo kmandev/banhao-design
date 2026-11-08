@@ -32,12 +32,10 @@ import {
  *   contract, not a leftover: a card with no handler has nothing to invoke,
  *   and rendering it live would be an affordance that silently does nothing.
  *   M-2.6's tests exercise exactly this shape and continue to pass unchanged.
- * - `actionCommand === null` → disabled regardless of the handler. Two cards
- *   do this, both deliberately: an **expired** `PAID` card, whose
- *   `ติดต่อผู้ดูแลระบบ` action has no endpoint because BQ-013 is still `OPEN`
- *   (the design's §07 log renders it disabled "because the expiry rule is
- *   undecided... not because rejection occurred"), and `READY_FOR_PICKUP`,
- *   which is not a `<button>` at all.
+ * - `actionCommand === null` → disabled regardless of the handler. Only
+ *   `READY_FOR_PICKUP` does this, and it is not a `<button>` at all. An
+ *   expired `PAID` card keeps its accept action: DEC-068 C1 set the deadline
+ *   with no auto-cancel, so expiry is a warning, not a lock.
  * - `pending` → disabled while the command is unresolved, which is what stops
  *   a double press. See `useOrderActions` for why "unresolved" outlasts the
  *   HTTP response.
@@ -204,7 +202,7 @@ export function OrderCard({
 
       {presentation.isExpired ? (
         <div style={{ background: '#FBEAEA', color: '#B32B2B', padding: '9px 14px', fontSize: 12.5, fontWeight: 700 }}>
-          หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ
+          เกินเวลาตอบรับแล้ว · ยังกดรับได้ ลูกค้ากำลังรอ
         </div>
       ) : null}
 

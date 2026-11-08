@@ -64,6 +64,7 @@ function order(overrides: Partial<MerchantOrderSummary> & { id: string }): Merch
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 24800,
     placedAt: new Date(Date.now() - 60_000).toISOString(),
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,
@@ -515,69 +516,67 @@ describe('M-05 — dismissal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Expiry (M05-D10) — reported by the existing acceptWindowState, never enforced
+// Expiry — DEC-068 C1: 5 minutes from payment, a warning only, never a lock
 // ---------------------------------------------------------------------------
 
 describe('M-05 — expiry', () => {
-  /** Placed 200s ago: past MERCHANT_ACCEPT_WINDOW_SECONDS = 180. */
-  const EXPIRED_PLACED_AT = () => new Date(Date.now() - 200_000).toISOString();
+  /** Paid 400s ago: past MERCHANT_ACCEPT_WINDOW_SECONDS = 300. */
+  const EXPIRED_PAID_AT = () => new Date(Date.now() - 400_000).toISOString();
 
-  it('an already-expired card offers no accept trigger at all, so M-05 never opens for it', () => {
+  it('an expired card still opens M-05 and the late accept goes through', async () => {
     mockUseOrderBoard.mockReturnValue(
-      boardState({ orders: [order({ id: 'o1', state: 'PAID', placedAt: EXPIRED_PLACED_AT() })] }),
+      boardState({ orders: [order({ id: 'o1', state: 'PAID', paidAt: EXPIRED_PAID_AT() })] }),
     );
     render(<OrderBoard restaurantId="rest-a" />);
 
-    // Unchanged from M-2.7: the expired card's action has no endpoint,
-    // because BQ-013 is still OPEN. M-05 does not give it one.
-    expect(screen.queryByRole('button', { name: 'รับออเดอร์' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ })).toBeDisabled();
-    expect(dialog()).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ติดต่อผู้ดูแลระบบ/ })).not.toBeInTheDocument();
+    fireEvent.click(acceptButton());
+    expect(screen.getByTestId('accept-dialog-expired')).toHaveTextContent('เกินเวลาตอบรับแล้ว');
+    fireEvent.click(preset(20));
+    fireEvent.click(confirmButton());
+
+    await waitFor(() => expect(transitionOrder).toHaveBeenCalledTimes(1));
+    expect(transitionOrder).toHaveBeenCalledWith('o1', { command: 'accept', prepMinutes: 20 });
   });
 
-  it('replaces the body in place when the window expires while the dialog is open', async () => {
+  it('adds the warning in place when the window expires while the dialog is open, keeping the form', async () => {
     mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
     const view = render(<OrderBoard restaurantId="rest-a" />);
 
     fireEvent.click(acceptButton());
     fireEvent.click(preset(20));
-    expect(screen.getByTestId('accept-dialog-confirm')).toBeInTheDocument();
+    expect(screen.queryByTestId('accept-dialog-expired')).not.toBeInTheDocument();
 
-    // The same order, now past the 3-minute window. `now` is read per render.
     mockUseOrderBoard.mockReturnValue(
-      boardState({ orders: [order({ id: 'o1', state: 'PAID', placedAt: EXPIRED_PLACED_AT() })] }),
+      boardState({ orders: [order({ id: 'o1', state: 'PAID', paidAt: EXPIRED_PAID_AT() })] }),
     );
     await act(async () => {
       view.rerender(<OrderBoard restaurantId="rest-a" />);
     });
 
     expect(dialog()).toBeInTheDocument();
-    expect(screen.getByTestId('accept-dialog-expired')).toHaveTextContent('หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ');
-    expect(screen.queryByTestId('accept-dialog-confirm')).not.toBeInTheDocument();
-    expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    expect(screen.getByTestId('accept-dialog-dismiss')).toHaveTextContent('ปิด');
+    expect(screen.getByTestId('accept-dialog-expired')).toBeInTheDocument();
+    expect(screen.getByTestId('accept-dialog-confirm')).toBeInTheDocument();
+    expect(screen.queryAllByRole('radio').length).toBeGreaterThan(0);
   });
 
-  it('an expired order cannot be accepted — no command is issued and ปิด just closes', async () => {
-    mockUseOrderBoard.mockReturnValue(boardState({ orders: [order({ id: 'o1', state: 'PAID' })] }));
-    const view = render(<OrderBoard restaurantId="rest-a" />);
+  it('counts the window from payment: an order created long ago but just paid is not expired', () => {
+    mockUseOrderBoard.mockReturnValue(
+      boardState({
+        orders: [
+          order({
+            id: 'o1',
+            state: 'PAID',
+            placedAt: new Date(Date.now() - 900_000).toISOString(),
+            paidAt: new Date(Date.now() - 10_000).toISOString(),
+          }),
+        ],
+      }),
+    );
+    render(<OrderBoard restaurantId="rest-a" />);
 
     fireEvent.click(acceptButton());
-    fireEvent.click(preset(20));
-
-    mockUseOrderBoard.mockReturnValue(
-      boardState({ orders: [order({ id: 'o1', state: 'PAID', placedAt: EXPIRED_PLACED_AT() })] }),
-    );
-    await act(async () => {
-      view.rerender(<OrderBoard restaurantId="rest-a" />);
-    });
-
-    fireEvent.click(screen.getByTestId('accept-dialog-dismiss'));
-
-    expect(dialog()).not.toBeInTheDocument();
-    expect(transitionOrder).not.toHaveBeenCalled();
-    // BQ-013 untouched: nothing was rejected, cancelled or auto-actioned.
-    expect(screen.getByTestId('order-card-o1')).toHaveAttribute('data-state', 'PAID');
+    expect(screen.queryByTestId('accept-dialog-expired')).not.toBeInTheDocument();
   });
 });
 

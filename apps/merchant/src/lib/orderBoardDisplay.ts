@@ -170,7 +170,9 @@ export function formatArrivalSeconds(seconds: number): string {
 // card's countdown chip says.
 // ---------------------------------------------------------------------------
 
-export const MERCHANT_ACCEPT_WINDOW_SECONDS = 180;
+// DEC-068 C1 (2026-11-02): 5 minutes, counted from payment (`paid_at`), with
+// no auto-cancel — supersedes the 3-minute figure above.
+export const MERCHANT_ACCEPT_WINDOW_SECONDS = 300;
 
 export type CountdownPhase = 'normal' | 'warning' | 'expired';
 
@@ -185,8 +187,8 @@ export interface AcceptWindowState {
  * "turns warning-coloured in its final third" / "at zero shows หมดเวลาตอบรับ"
  * rule (UX-SPEC §6).
  */
-export function acceptWindowState(placedAtIso: string, nowMs: number): AcceptWindowState {
-  const elapsed = elapsedSeconds(placedAtIso, nowMs);
+export function acceptWindowState(windowStartIso: string, nowMs: number): AcceptWindowState {
+  const elapsed = elapsedSeconds(windowStartIso, nowMs);
   const remainingSeconds = Math.max(0, MERCHANT_ACCEPT_WINDOW_SECONDS - elapsed);
   const phase: CountdownPhase =
     remainingSeconds <= 0 ? 'expired' : remainingSeconds <= MERCHANT_ACCEPT_WINDOW_SECONDS / 3 ? 'warning' : 'normal';
@@ -230,14 +232,10 @@ export type ActionStyle = 'primary' | 'dark' | 'off' | 'waiting';
  * and are `@Roles('MERCHANT')`-gated — the value is the URL segment itself, so
  * this union cannot drift from the route without failing the repository tests.
  *
- * **`null` is a first-class answer**, and the two cards that return it are not
- * oversights:
+ * **`null` is a first-class answer** and is not an oversight. (An expired
+ * `PAID` card used to return it too; DEC-068 C1 settled the expiry rule — no
+ * auto-cancel — so that card keeps `accept`.)
  *
- * - An **expired** `PAID` card. Its action is `ติดต่อผู้ดูแลระบบ`, for which no
- *   endpoint exists and none should be invented — BQ-013 (accept-window expiry
- *   behaviour) is still `OPEN`, and the design's §07 decision log renders the
- *   button disabled precisely "because the expiry rule is undecided... not
- *   because rejection occurred". Wiring it would be inventing product policy.
  * - A **`READY_FOR_PICKUP`** card, which has no merchant action at all
  *   (`actionKind: 'status'`, design §01: "not tappable").
  *
@@ -267,7 +265,7 @@ export interface OrderCardPresentation {
 }
 
 function paidCardPresentation(order: MerchantOrderSummary, nowMs: number): OrderCardPresentation {
-  const { remainingSeconds, phase } = acceptWindowState(order.placedAt, nowMs);
+  const { remainingSeconds, phase } = acceptWindowState(order.paidAt ?? order.placedAt, nowMs);
   const clock = formatClockTime(order.placedAt) ?? '--:--';
   const elapsed = formatElapsedShort(elapsedSeconds(order.placedAt, nowMs));
 
@@ -295,10 +293,10 @@ function paidCardPresentation(order: MerchantOrderSummary, nowMs: number): Order
       chipLabel: 'หมดเวลาตอบรับ',
       chipTone: 'expired',
       timerTone: 'expired',
-      actionLabel: 'ติดต่อผู้ดูแลระบบ',
-      actionStyle: 'off',
-      // No endpoint, deliberately — BQ-013 is OPEN. See `OrderActionCommand`.
-      actionCommand: null,
+      // DEC-068 C1: no auto-cancel past the deadline — accepting stays open.
+      actionLabel: 'รับออเดอร์',
+      actionStyle: 'primary',
+      actionCommand: 'accept',
     },
   };
 

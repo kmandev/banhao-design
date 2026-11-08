@@ -36,12 +36,11 @@ import { acceptWindowState, formatBahtFixed, formatCountdown } from '../lib/orde
  *
  * ## Expiry
  *
- * At `phase === 'expired'` the body is *replaced*, not disabled: with the
- * window closed there is nothing left to confirm, so the preset group and the
- * confirm button are removed and `ปิด` is the only control (M05-D10). An
- * accept already in flight is not cancelled client-side — the server's guarded
- * `WHERE state = 'PAID'` is the only authority on whether it lands, and
- * BQ-013 has defined no expiry rule for it to enforce.
+ * At `phase === 'expired'` a warning is shown above the form, which stays
+ * usable: DEC-068 C1 sets a 5-minute deadline from payment with no
+ * auto-cancel, so a late accept is still the right outcome. An
+ * accept is never blocked client-side — the server's guarded
+ * `WHERE state = 'PAID'` is the only authority on whether it lands.
  */
 
 /** The five presets M-05 offers. A UI policy — the database allows any positive integer (M05-Q-01). */
@@ -154,7 +153,7 @@ export function AcceptConfirmDialog({
 
   if (!order) return null;
 
-  const { remainingSeconds, phase } = acceptWindowState(order.placedAt, now);
+  const { remainingSeconds, phase } = acceptWindowState(order.paidAt ?? order.placedAt, now);
   const expired = phase === 'expired';
   const palette = stripPalette(remainingSeconds, expired);
 
@@ -162,7 +161,9 @@ export function AcceptConfirmDialog({
   // confirm button (M05-D07). Everything else keeps the selection and the
   // same button, pressed again.
   const retryBlocked = failure !== null && !failure.retryable;
-  const showForm = !expired && !retryBlocked;
+  // DEC-068 C1: past the deadline the merchant may still accept — no
+  // auto-cancel; the operator is alerted separately. Expiry only adds a warning.
+  const showForm = !retryBlocked;
   const canConfirm = showForm && prepMinutes !== null && !pending;
 
   /**
@@ -323,10 +324,9 @@ export function AcceptConfirmDialog({
 
           {expired ? (
             /*
-              M05-D10 — the body is replaced, not greyed: with the window
-              closed there is nothing to confirm. The board's existing copy is
-              reused verbatim, and BQ-013 stays untouched — nothing here
-              rejects, refunds or cancels anything.
+              DEC-068 C1 — past the deadline the form stays usable; this
+              warning is added above it. Nothing here rejects, refunds or
+              cancels anything.
             */
             <div
               role="alert"
@@ -342,9 +342,10 @@ export function AcceptConfirmDialog({
                 lineHeight: 1.7,
               }}
             >
-              หมดเวลาตอบรับ · ติดต่อผู้ดูแลระบบ
+              เกินเวลาตอบรับแล้ว · ยังกดรับได้ ลูกค้ากำลังรอ
             </div>
-          ) : (
+          ) : null}
+          {(
             <>
               {showForm ? (
                 <div>

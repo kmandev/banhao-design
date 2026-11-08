@@ -61,6 +61,7 @@ function order(overrides: Partial<MerchantOrderSummary> & { id: string }): Merch
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 18500,
     placedAt: new Date(Date.now() - 60_000).toISOString(),
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,

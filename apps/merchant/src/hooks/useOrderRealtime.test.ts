@@ -159,6 +159,7 @@ describe('useOrderRealtime — INSERT / UPDATE / DELETE normalization', () => {
         recipientPhoneSnapshot: '+66812345678',
         grandTotalSatang: 15000,
         placedAt: '2026-08-31T09:00:00Z',
+        paidAt: null,
         acceptedAt: '2026-08-31T09:02:00Z',
         readyAt: null,
         pickedUpAt: null,

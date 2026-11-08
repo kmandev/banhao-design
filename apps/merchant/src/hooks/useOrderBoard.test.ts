@@ -95,6 +95,7 @@ function order(overrides: Partial<MerchantOrderSummary> & { id: string }): Merch
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 15000,
     placedAt: '2026-08-31T09:00:00Z',
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,

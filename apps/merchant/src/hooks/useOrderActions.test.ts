@@ -34,6 +34,7 @@ function order(id: string, state: OrderState): MerchantOrderSummary {
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 18500,
     placedAt: '2026-08-31T04:41:20.000Z',
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,

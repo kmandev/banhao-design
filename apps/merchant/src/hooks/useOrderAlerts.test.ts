@@ -33,6 +33,7 @@ function order(overrides: Partial<MerchantOrderSummary> & { id: string }): Merch
     recipientPhoneSnapshot: '+66812345678',
     grandTotalSatang: 10000,
     placedAt: new Date().toISOString(),
+    paidAt: null,
     acceptedAt: null,
     readyAt: null,
     pickedUpAt: null,

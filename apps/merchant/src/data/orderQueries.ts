@@ -32,7 +32,7 @@ const ORDER_STATES: readonly OrderState[] = [
  * `order_item_options` / `order_status_history`, and never `select('*')`.
  */
 const ORDER_BOARD_COLUMNS =
-  'id, order_number, state, restaurant_id, recipient_name_snapshot, recipient_phone_snapshot, grand_total_satang, placed_at, accepted_at, ready_at, picked_up_at';
+  'id, order_number, state, restaurant_id, recipient_name_snapshot, recipient_phone_snapshot, grand_total_satang, placed_at, paid_at, accepted_at, ready_at, picked_up_at';
 
 /**
  * Raw row shape from the `orders` read above. Kept separate from
@@ -54,6 +54,8 @@ export interface OrderBoardRow {
   recipient_phone_snapshot: string;
   grand_total_satang: number;
   placed_at: string;
+  /** Optional on the wire: a Realtime payload from before this column was selected may omit it. */
+  paid_at?: string | null;
   accepted_at: string | null;
   ready_at: string | null;
   picked_up_at: string | null;
@@ -83,6 +85,7 @@ export function isOrderBoardRow(value: unknown): value is OrderBoardRow {
     typeof row.recipient_phone_snapshot === 'string' &&
     typeof row.grand_total_satang === 'number' &&
     typeof row.placed_at === 'string' &&
+    (row.paid_at === undefined || nullableString(row.paid_at)) &&
     nullableString(row.accepted_at) &&
     nullableString(row.ready_at) &&
     nullableString(row.picked_up_at)
@@ -137,6 +140,7 @@ export function toMerchantOrderSummary(row: OrderBoardRow): MerchantOrderSummary
     recipientPhoneSnapshot: row.recipient_phone_snapshot,
     grandTotalSatang: row.grand_total_satang,
     placedAt: row.placed_at,
+    paidAt: row.paid_at ?? null,
     acceptedAt: row.accepted_at,
     readyAt: row.ready_at,
     pickedUpAt: row.picked_up_at,

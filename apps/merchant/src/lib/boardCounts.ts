@@ -73,7 +73,7 @@ export function countTodayOrders(orders: readonly MerchantOrderSummary[], nowMs:
  * The tab-title / arrival-alert waiting count — orders still in `PAID`,
  * awaiting the merchant's accept/reject decision. Intentionally the same
  * membership `boardColumnForState` assigns to the NEW column (including an
- * expired-but-still-`PAID` card, which still needs `ติดต่อผู้ดูแลระบบ`
+ * expired-but-still-`PAID` card, which still needs accepting
  * attention and has not left the board) — this does not introduce a second,
  * narrower definition of "waiting" than the column the merchant is already
  * looking at.

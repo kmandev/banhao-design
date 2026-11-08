@@ -59,6 +59,8 @@ export interface MerchantOrderSummary {
   grandTotalSatang: Satang;
   /** `orders.placed_at` — `not null`, ISO-8601 as PostgREST returns `timestamptz`. */
   placedAt: string;
+  /** `orders.paid_at` — null until payment succeeds. Starts the DEC-068 C1 accept window. */
+  paidAt: string | null;
   /** `orders.accepted_at` — null until `MERCHANT_ACCEPTED`. */
   acceptedAt: string | null;
   /** `orders.ready_at` — null until `READY_FOR_PICKUP`. */
