@@ -82,6 +82,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-070** | **Launch-plan answers: legal work deferred to the end; delivery fee editable from the back office (fixed or percentage); production stays on Supabase free tier with keep-alive; Q2–Q5, Q7 as recommended** | **ACCEPTED** (implementation authorized; migrations still need their own go-ahead) | **2026-11-08** | `docs/LAUNCH_PLAN.md`, DEC-035, DEC-045, DEC-061 D-18/D-19 |
 | **DEC-071** | **Delivery fee model for the pilot (Option C): back-office fee FIXED or PERCENT, always ฿15–35; rider 80% of the fee, at least ฿12; BANHAO never makes up a delivery shortfall** | **ACCEPTED** (implementation and migration authorized) | **2026-11-08** | DEC-061 D-05/D-06/D-09/D-10, DEC-070 §2, DEC-044, DEC-045 |
 | **DEC-072** | **Merchant and rider notification wording; merchant silent on OrderCreated/OrderReady; riders told of a new offer and of a cancelled job** | **ACCEPTED** (implemented) | **2026-11-08** | `docs/NOTIFICATION_COPY_DRAFT.md`, DEC-068 D1, DEC-069 |
+| **DEC-073** | **Pilot settlement: weekly manual payouts computed from order facts (merchant = food − commission, rider = snapshotted earning, on DELIVERED); failures and mid-route cancellations reviewed by staff; ADMIN records transfers; no bank numbers stored; ledger completion after the pilot** | **ACCEPTED** (implementation and migration authorized) | **2026-11-08** | `docs/SETTLEMENT_PILOT_DESIGN.md`, DEC-070 Q4/Q5, DEC-053, BQ-024 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -9689,4 +9690,30 @@ distance component, still blocked on D-16/D-17).
 
 These are in-app records today. Riders and merchants see them as push only
 once LAUNCH_PLAN 1.1 (Expo Push) is built.
+
+---
+
+## DEC-073 — Pilot settlement (S1–S7)
+
+**Status:** ACCEPTED · **Date:** 2026-11-08 · **Owner:** PRODUCT_OWNER ("อนุมัติ S1–S7"
+on `docs/SETTLEMENT_PILOT_DESIGN.md`)
+
+- **S1** A merchant is owed `subtotal − commission snapshot` for each `DELIVERED`
+  order; a rider is owed the delivery's snapshotted `rider_earning_satang` for
+  each `DELIVERED` delivery.
+- **S2** `DELIVERY_FAILED` orders and deliveries abandoned with a rider assigned
+  are listed for staff review, never paid automatically, until BQ-024 is decided.
+- **S3** Weekly periods, Monday 00:00 – Sunday 23:59 Asia/Bangkok, by delivery
+  completion time. Unpaid items from earlier periods carry forward.
+- **S4** Only ADMIN records a transfer, with the transfer date and the bank-slip
+  reference. A mistaken record is voided (with a reason), never edited.
+- **S5** No bank account numbers are stored during the pilot.
+- **S6** Two API-only tables, `payouts` and `payout_items`; an item can be in at
+  most one non-voided payout (database-enforced).
+- **S7** The ledger does not yet carry merchant payables; completing it is post-pilot
+  work. This is pilot settlement, not a closed set of books.
+
+Supersedes nothing. Satisfies the "Product Owner decision" CLAUDE.md requires
+before settlement work, for this pilot scope only; Q-002 (legal model) remains
+deferred under DEC-070 §1.
 

@@ -1717,6 +1717,125 @@
         ]
       }
     },
+    "/api/v1/admin/supervisor/settlement/report": {
+      "get": {
+        "operationId": "SupervisorController_settlementReport",
+        "parameters": [
+          {
+            "name": "week",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Weekly payout report"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/supervisor/settlement/payouts": {
+      "get": {
+        "operationId": "SupervisorController_payoutHistory",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Payout history"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "SupervisorController_recordPayout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The new payout id"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Not an ADMIN"
+          },
+          "409": {
+            "description": "An item is already paid"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/supervisor/settlement/payouts/{id}/void": {
+      "post": {
+        "operationId": "SupervisorController_voidPayout",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Voided"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Not an ADMIN"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/supervisor/pricing/delivery-fee": {
       "get": {
         "operationId": "SupervisorController_getDeliveryFee",
