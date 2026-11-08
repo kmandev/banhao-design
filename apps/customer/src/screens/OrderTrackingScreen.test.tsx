@@ -1,5 +1,5 @@
 import { Alert } from 'react-native';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { OrderTrackingScreen } from './OrderTrackingScreen';
 import { repositories } from '../repositories';
@@ -537,3 +537,81 @@ describe('no rider yet and cancelling (DEC-050)', () => {
     expect(screen.queryByTestId('tracking-cancelled-note')).toBeNull();
   });
 });
+
+describe('cancel through the whole free window (DEC-069 §2 / DQ-06)', () => {
+  beforeEach(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it.each(['CREATED', 'PENDING_PAYMENT', 'PAID', 'MERCHANT_ACCEPTED'] as const)(
+    'offers the cancel action on a %s order without any no-rider notice',
+    async (state) => {
+      mockGetOrder.mockResolvedValue({ ...ORDER, state });
+      renderScreen();
+
+      await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+      expect(screen.queryByTestId('tracking-no-rider')).toBeNull();
+    },
+  );
+
+  it.each(['PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'DELIVERING', 'DELIVERED', 'CANCELLED'] as const)(
+    'offers no cancel action once the free window has closed (%s)',
+    async (state) => {
+      mockGetOrder.mockResolvedValue({ ...ORDER, state });
+      renderScreen();
+
+      await waitFor(() => expect(screen.getByTestId('screen-order-tracking')).toBeTruthy());
+      expect(screen.queryByTestId('tracking-cancel-order')).toBeNull();
+    },
+  );
+
+  it('promises a full refund in the confirmation only when the order was paid', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'PAID' });
+    renderScreen();
+    await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('tracking-cancel-order'));
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'ยกเลิกออเดอร์นี้?',
+      'อาหารของคุณยังไม่ถูกปรุง หากยกเลิกตอนนี้จะได้เงินคืนเต็มจำนวน',
+      expect.any(Array),
+    );
+  });
+
+  it('says there is nothing to refund when the order was never paid', async () => {
+    mockGetOrder.mockResolvedValue({ ...ORDER, state: 'PENDING_PAYMENT' });
+    renderScreen();
+    await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('tracking-cancel-order'));
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'ยกเลิกออเดอร์นี้?',
+      'ออเดอร์นี้ยังไม่ได้ชำระเงิน ยกเลิกได้เลยโดยไม่มีค่าใช้จ่าย',
+      expect.any(Array),
+    );
+  });
+
+  it('shows the refund note after cancelling a paid order, and not after cancelling an unpaid one', async () => {
+    mockCancelOrder.mockResolvedValue(undefined);
+
+    mockGetOrder.mockResolvedValueOnce({ ...ORDER, state: 'PENDING_PAYMENT' }).mockResolvedValue({ ...ORDER, state: 'CANCELLED' });
+    const unpaid = renderScreen();
+    await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('tracking-cancel-order'));
+    await act(async () => pressAlertButton('ยกเลิกออเดอร์'));
+    await waitFor(() => expect(mockCancelOrder).toHaveBeenCalledWith(ORDER_ID));
+    expect(screen.queryByTestId('tracking-cancelled-note')).toBeNull();
+    unpaid.unmount();
+
+    mockGetOrder.mockReset();
+    mockGetOrder.mockResolvedValueOnce({ ...ORDER, state: 'PAID' }).mockResolvedValue({ ...ORDER, state: 'CANCELLED' });
+    renderScreen();
+    await waitFor(() => expect(screen.getByTestId('tracking-cancel-order')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('tracking-cancel-order'));
+    await act(async () => pressAlertButton('ยกเลิกออเดอร์'));
+    await waitFor(() => expect(screen.getByTestId('tracking-cancelled-note')).toBeTruthy());
+  });
+});
+

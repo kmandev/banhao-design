@@ -35,6 +35,9 @@ type TrackRoute = RouteProp<CustomerStackParamList, 'OrderTracking'>;
  * screen omits that unsupported label rather than leaking the identifier or
  * inventing copy.
  */
+/** DEC-050's free-cancellation window. Mirrors the server's own list; the server remains the authority. */
+const FREE_CANCEL_STATES: readonly string[] = ['CREATED', 'PENDING_PAYMENT', 'PAID', 'MERCHANT_ACCEPTED'];
+
 export function OrderTrackingScreen() {
   const navigation = useNavigation<Nav>();
   const { params } = useRoute<TrackRoute>();
@@ -65,11 +68,19 @@ export function OrderTrackingScreen() {
     noRiderNotice.status === 'success' &&
     noRiderNotice.data &&
     !keptWaiting;
+  // DEC-069 §2 (DQ-06): the cancel action is offered for the whole DEC-050
+  // free window, not only after the no-rider notice. The server still decides
+  // — this only decides whether to offer the button.
+  const inFreeWindow = orderState !== undefined && FREE_CANCEL_STATES.includes(orderState);
+  const paid = orderState === 'PAID' || orderState === 'MERCHANT_ACCEPTED';
+  const [cancelledAfterPaying, setCancelledAfterPaying] = useState(false);
 
   function confirmCancel() {
     Alert.alert(
       'ยกเลิกออเดอร์นี้?',
-      'อาหารของคุณยังไม่ถูกปรุง หากยกเลิกตอนนี้จะได้เงินคืนเต็มจำนวน',
+      paid
+        ? 'อาหารของคุณยังไม่ถูกปรุง หากยกเลิกตอนนี้จะได้เงินคืนเต็มจำนวน'
+        : 'ออเดอร์นี้ยังไม่ได้ชำระเงิน ยกเลิกได้เลยโดยไม่มีค่าใช้จ่าย',
       [
         { text: 'ไม่ยกเลิก', style: 'cancel' },
         { text: 'ยกเลิกออเดอร์', style: 'destructive', onPress: () => void cancelOrder() },
@@ -79,9 +90,11 @@ export function OrderTrackingScreen() {
 
   async function cancelOrder() {
     setCancelling(true);
+    const wasPaid = paid;
     try {
       await repositories.orderCancellation.cancelOrder(params.orderId);
       setJustCancelled(true);
+      setCancelledAfterPaying(wasPaid);
       state.reload();
     } catch {
       Alert.alert('ยกเลิกไม่สำเร็จ', 'กรุณาลองอีกครั้ง หากยังไม่ได้ โปรดติดต่อทีมงาน');
@@ -225,10 +238,18 @@ export function OrderTrackingScreen() {
             testID="tracking-cancel-order"
           />
         </Card>
+      ) : inFreeWindow ? (
+        <Button
+          label="ยกเลิกออเดอร์"
+          variant="ghost"
+          onPress={confirmCancel}
+          loading={cancelling}
+          testID="tracking-cancel-order"
+        />
       ) : null}
 
-      {/* Shown only in the session that cancelled it: the screen then knows the order was paid, which an old cancelled order's row does not say. */}
-      {justCancelled && order.state === 'CANCELLED' ? (
+      {/* Shown only in the session that cancelled a PAID order: the screen then knows money was taken, which an old cancelled order's row does not say. */}
+      {justCancelled && cancelledAfterPaying && order.state === 'CANCELLED' ? (
         <Card testID="tracking-cancelled-note">
           <Text style={styles.noRiderNote}>ทีมงานจะดำเนินการคืนเงินให้เต็มจำนวน</Text>
         </Card>
