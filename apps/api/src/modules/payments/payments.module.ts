@@ -4,6 +4,7 @@ import { StripePaymentProvider } from './providers/stripe-payment.provider';
 import { CUSTOMER_EMAIL_SOURCE, ProfileCustomerEmailSource } from './customer-email-source';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { PaymentSummaryService } from './payment-summary.service';
 import { PaymentEventProcessingService } from './payment-event-processing.service';
 import { RefundEventProcessingService } from './refund-event-processing.service';
 import { RefundLedgerReversalService } from './refund-ledger-reversal.service';
@@ -66,6 +67,7 @@ import { PaymentReconciliationService } from './payment-reconciliation.service';
     { provide: PAYMENT_PROVIDER, useClass: StripePaymentProvider },
     { provide: CUSTOMER_EMAIL_SOURCE, useClass: ProfileCustomerEmailSource },
     PaymentsService,
+    PaymentSummaryService,
     PaymentEventProcessingService,
     RefundLedgerReversalService,
     RefundEventProcessingService,

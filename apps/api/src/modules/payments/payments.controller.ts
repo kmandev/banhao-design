@@ -1,4 +1,4 @@
-import { Controller, HttpCode, Param, Post, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, Post, UnauthorizedException } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -7,11 +7,12 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { PaymentInitiationResponse } from '@banhao/validation';
+import type { PaymentInitiationResponse, PaymentSummaryResponse } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../../common/types';
 import { PaymentsService } from './payments.service';
+import { PaymentSummaryService } from './payment-summary.service';
 
 /**
  * `POST /api/v1/orders/:id/payment` (Phase F-1). No request body — every
@@ -24,7 +25,22 @@ import { PaymentsService } from './payments.service';
 @ApiBearerAuth()
 @Controller('api/v1/orders')
 export class PaymentsController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly summaries: PaymentSummaryService,
+  ) {}
+
+  @Get(':id/payment')
+  @Roles('CUSTOMER')
+  @ApiOkResponse({ description: "The caller's own order's payment and latest refund, with only customer-safe fields" })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  @ApiNotFoundResponse({ description: 'Order not found, or not owned by this customer' })
+  async getPayment(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Param('id') id: string,
+  ): Promise<PaymentSummaryResponse> {
+    return this.summaries.getSummary(requireUser(user), id);
+  }
 
   @Post(':id/payment')
   @HttpCode(200)

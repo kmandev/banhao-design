@@ -1129,6 +1129,38 @@
       }
     },
     "/api/v1/orders/{id}/payment": {
+      "get": {
+        "operationId": "PaymentsController_getPayment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's own order's payment and latest refund, with only customer-safe fields"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "404": {
+            "description": "Order not found, or not owned by this customer"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "payments"
+        ]
+      },
       "post": {
         "operationId": "PaymentsController_createPayment",
         "parameters": [

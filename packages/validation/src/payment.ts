@@ -35,3 +35,28 @@ export interface PaymentInitiationResponse {
     expiresAt: string;
   };
 }
+
+/**
+ * `GET /api/v1/orders/:id/payment` — what the customer may see about their own
+ * order's payment and refund. Customers have no read access to `payments` or
+ * `refunds` (API-only tables), so this is the one window onto them: no
+ * provider id beyond its last four characters, no failure text, no actor ids.
+ */
+export interface PaymentSummaryResponse {
+  orderNumber: string;
+  payment: {
+    paymentReference: string;
+    state: string;
+    method: string;
+    amountSatang: Satang;
+    /** The provider's payment id reduced to its last four characters, or null if there is none yet. */
+    providerRefTail: string | null;
+  } | null;
+  /** The most recent refund for the payment, if any was ever started. */
+  refund: {
+    state: string;
+    amountSatang: Satang;
+    requestedAt: string;
+    completedAt: string | null;
+  } | null;
+}

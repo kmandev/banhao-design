@@ -14,6 +14,7 @@ import { HttpExceptionFilter } from '../../common/filters/http-exception.filter'
 import { ResponseInterceptor } from '../../common/interceptors/response.interceptor';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { PaymentSummaryService } from './payment-summary.service';
 import { DomainError } from '../../common/errors/domain-error';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthenticatedUser } from '../../common/types';
@@ -62,8 +63,10 @@ function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
 async function buildApp(options: {
   user: AuthenticatedUser | null;
   createPayment?: jest.Mock;
+  getSummary?: jest.Mock;
   withRolesGuard?: boolean;
 }): Promise<INestApplication> {
+  const getSummary = options.getSummary ?? jest.fn();
   const createPayment = options.createPayment ?? jest.fn().mockResolvedValue(PAYMENT_RESULT);
 
   const guards: Provider[] = [{ provide: APP_GUARD, useValue: fakeAuthGuard(options.user) }];
@@ -76,6 +79,7 @@ async function buildApp(options: {
     controllers: [PaymentsController],
     providers: [
       { provide: PaymentsService, useValue: { createPayment } },
+      { provide: PaymentSummaryService, useValue: { getSummary } },
       ...guards,
       { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
       Reflector,
@@ -173,5 +177,48 @@ describe('POST /api/v1/orders/:id/payment', () => {
 
     expect(response.status).toBe(403);
     expect(createPayment).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/orders/:id/payment', () => {
+  let app: INestApplication;
+
+  afterEach(async () => {
+    await app?.close();
+  });
+
+  const SUMMARY = {
+    orderNumber: 'BH-20261108-0002',
+    payment: { paymentReference: 'PAY-1', state: 'SUCCESS', method: 'ONLINE', amountSatang: 19900, providerRefTail: '8F2A' },
+    refund: null,
+  };
+
+  it('rejects an unauthenticated request before it reaches the handler', async () => {
+    const getSummary = jest.fn();
+    app = await buildApp({ user: null, getSummary });
+
+    const response = await request(app.getHttpServer()).get(`/api/v1/orders/${ORDER_ID}/payment`);
+
+    expect(response.status).toBe(401);
+    expect(getSummary).not.toHaveBeenCalled();
+  });
+
+  it('reads with the server-verified user and the route order id, and returns the summary', async () => {
+    const getSummary = jest.fn().mockResolvedValue(SUMMARY);
+    app = await buildApp({ user: CUSTOMER_USER, getSummary });
+
+    const response = await request(app.getHttpServer()).get(`/api/v1/orders/${ORDER_ID}/payment`).expect(200);
+
+    expect(getSummary).toHaveBeenCalledWith(CUSTOMER_USER, ORDER_ID);
+    expect(response.body).toEqual({ success: true, data: SUMMARY });
+  });
+
+  it('renders NOT_FOUND for an order that is not the caller\'s', async () => {
+    const getSummary = jest.fn().mockRejectedValue(new DomainError('NOT_FOUND', { message: 'Order not found' }));
+    app = await buildApp({ user: CUSTOMER_USER, getSummary });
+
+    const response = await request(app.getHttpServer()).get(`/api/v1/orders/${ORDER_ID}/payment`);
+
+    expect(response.status).toBe(404);
   });
 });
