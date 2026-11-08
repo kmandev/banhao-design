@@ -517,8 +517,9 @@ migration explicitly instructed for the current phase — see §10.
     `orders.service_fee_satang`; no migration. Orders created earlier keep
     their stored ฿5. Since 2026-11-08 the customer app's QR screen shows the
     real Stripe QR, the server's amount and the order's own fees, and
-    Checkout shows fees as `คำนวณเมื่อยืนยัน`; PayDetail and Refund still
-    render sample figures. Commission
+    Checkout shows fees as `คำนวณเมื่อยืนยัน`, and PayDetail / Refund read
+    `GET /orders/:id/payment` (customer-safe payment + latest refund). No
+    production customer screen uses `mocks/pricing.ts` any more. Commission
     is **no longer DEC-043's 8%** — as of D-01 (`0fd13887`, 2026-09-15,
     migration `20260915000001`), `commission-pricing.ts`'s rate constant
     itself computes **10%** (`COMMISSION_RATE_NUMERATOR = 10`), matching

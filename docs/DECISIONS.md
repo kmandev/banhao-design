@@ -8377,8 +8377,8 @@ recognition timing) and **DEC-048** (service-fee refund treatment) are
 > keep their stored ฿5. Delivery stays DEC-035's flat ฿10 — D-05…D-14 remain
 > unbuilt. The customer app's Checkout and PromptPay QR screens displayed the
 > design's sample totals until the same day, when the QR screen moved to the
-> server's amount and the order's own fees (PayDetail and Refund still show
-> sample figures).
+> server's amount and the order's own fees; PayDetail and Refund followed,
+> reading `GET /orders/:id/payment`.
 
 ### D-05 — Rider share
 
