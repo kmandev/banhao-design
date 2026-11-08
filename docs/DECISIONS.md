@@ -78,6 +78,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-066** | **Staging-only enablement: proof-of-delivery bucket, recurring tick, first staff member** | **ACCEPTED — STAGING (`banhao-dev` / `banhao-api-staging`) ONLY** | **2026-11-02** | `docs/E2E_RUN_2026-11-02.md`, DEC-038, DEC-039, DEC-055, Q-012 (`OPEN`) |
 | **DEC-067** | **Settlement question set 1: cycle, refund events, rider compensation, tax, statements** | **ACCEPTED — DECISION ONLY, NOT IMPLEMENTED** (S2–S4 provisional on S1) | **2026-11-02** | `docs/SETTLEMENT_MODEL.md`, `docs/Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md`, DEC-055, BQ-024, BQ-032 |
 | **DEC-068** | **Phase 1 owner question set 2: payment_events fix, order-flow policy, money-flow follow-ups, notifications, pilot scope** (C3-A amends DEC-041 G-2 in part) | **ACCEPTED** (A1 and E2 authorized; C1, C3, D1 decision only; B2/B3 conditional on S1) | **2026-11-02** | `docs/PHASE-1-OWNER-QUESTIONS.md`, `docs/Q-002-PROVIDER-EMAIL-DRAFTS.md`, `docs/legal/`, DEC-041, DEC-053, DEC-058, BQ-013, BQ-038 |
+| **DEC-069** | **Customer cancel/refund notifications, cancel button through the whole free window (DQ-06), `CREATED` order expiry at 15 minutes, service-fee satang precision confirmed** | **ACCEPTED** (implementation authorized) | **2026-11-08** | DEC-050, DEC-058, DEC-061 D-03/D-04, DEC-068 D1, DQ-06 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -9563,3 +9564,40 @@ only (and DEC-041 item 9's actor-type wording for staff-originated changes).
 **Preserves unchanged:** DEC-022, DEC-032, DEC-040, DEC-041 (everything except
 what C3-A names), DEC-053, DEC-055, DEC-058, DEC-061, DEC-065, DEC-066,
 DEC-067, DEC-APP-006.
+
+---
+
+## DEC-069 — Customer cancel/refund notifications, DQ-06, `CREATED` expiry, service-fee rounding
+
+**Status:** ACCEPTED · implementation authorized · **Date:** 2026-11-08 ·
+**Owner:** PRODUCT_OWNER (approved in chat: "อนุมัติทั้งหมด", on the
+recommendations recorded below)
+
+1. **Three more customer notifications** (adds to DEC-068 D1's nine; the
+   wording is the owner's approval of these exact strings):
+
+   | Event | Title | Body |
+   |---|---|---|
+   | `OrderCancelled` | ออเดอร์ถูกยกเลิกแล้ว | ถ้าชำระเงินแล้ว เราจะคืนเงินเต็มจำนวน |
+   | `RefundInitiated` | เริ่มคืนเงินแล้ว | ตรวจอีเมลเพื่อกรอกบัญชีรับเงินคืน |
+   | `RefundSucceeded` | คืนเงินสำเร็จ | เงินคืนเข้าบัญชีของคุณแล้ว |
+
+   The second matters most: a Stripe PromptPay refund cannot move until the
+   customer completes the bank-details form Stripe emails them.
+
+2. **DQ-06 answered:** the customer's cancel action is offered for the whole
+   DEC-050 free window (`CREATED`, `PENDING_PAYMENT`, `PAID`,
+   `MERCHANT_ACCEPTED`), not only after the no-rider notice. It keeps its
+   confirmation step.
+
+3. **An order still `CREATED` 15 minutes after creation expires** to
+   `PAYMENT_EXPIRED`. Longer than the 10-minute QR, so it never cuts off a
+   customer about to pay; no money is involved because no payment was started.
+
+4. **Service fee rounding (D-03/D-04) confirmed as implemented:** satang
+   precision, sub-satang fractions rounded half-up. No whole-baht rounding.
+
+**Preserves unchanged:** DEC-050, DEC-058 (operators still start and execute
+refunds; these notifications only report them), DEC-061, DEC-068 D1's nine
+texts.
+
