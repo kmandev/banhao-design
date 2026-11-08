@@ -149,6 +149,12 @@ export const mockPaymentRepository: PaymentRepository = {
       qrImageUrl: 'https://example.invalid/qr.png',
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     }),
+  getPaymentSummary: () =>
+    delay({
+      orderNumber: 'BH-FIXTURE',
+      payment: { paymentReference: 'PAY-FIXTURE', state: 'SUCCESS', method: 'ONLINE', amountSatang: 7500, providerRefTail: 'AB12' },
+      refund: null,
+    }),
 };
 
 /**

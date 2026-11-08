@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { repositories } from '../repositories';
-import { PayCheckingScreen, PromptPayQrScreen } from '../screens/payment';
+import { PayCheckingScreen, PayDetailScreen, PromptPayQrScreen, RefundScreen } from '../screens/payment';
 
 /**
  * The ONLINE payment chain on real data: the QR, amount and fees come from the
@@ -33,6 +33,7 @@ const ORDER = {
 
 const mockStartPayment = jest.fn();
 const mockGetOrder = jest.fn();
+const mockGetSummary = jest.fn();
 
 beforeEach(() => {
   mockNavigate.mockReset();
@@ -44,7 +45,11 @@ beforeEach(() => {
     expiresAt: new Date(Date.now() + 600_000).toISOString(),
   });
   mockGetOrder.mockReset().mockResolvedValue(ORDER);
-  (repositories as unknown as Record<string, unknown>).payments = { startPayment: mockStartPayment };
+  mockGetSummary.mockReset();
+  (repositories as unknown as Record<string, unknown>).payments = {
+    startPayment: mockStartPayment,
+    getPaymentSummary: mockGetSummary,
+  };
   (repositories as unknown as Record<string, unknown>).orderDetail = { getOrder: mockGetOrder };
 });
 
@@ -149,5 +154,88 @@ describe('PayChecking waits for the server', () => {
     expect(mockReplace).not.toHaveBeenCalled();
     await poll();
     expect(mockReplace).toHaveBeenCalledWith('PaySuccess', ORDER_REF);
+  });
+});
+
+const PAID_SUMMARY = {
+  orderNumber: 'BH-20261108-0002',
+  payment: { paymentReference: 'PAY-REAL-1', state: 'SUCCESS', method: 'ONLINE', amountSatang: 19900, providerRefTail: '8F2A' },
+  refund: null,
+};
+
+describe('PayDetail on real data', () => {
+  it("shows the order's real payment, with only a partial provider reference", async () => {
+    mockGetSummary.mockResolvedValue(PAID_SUMMARY);
+    renderIn(<PayDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText('PAY-REAL-1')).toBeTruthy());
+    expect(screen.getByText('BH-20261108-0002')).toBeTruthy();
+    expect(screen.getByText('฿199')).toBeTruthy();
+    expect(screen.getByText('PROMPTPAY')).toBeTruthy();
+    expect(screen.getByText('····8F2A')).toBeTruthy();
+    expect(screen.queryByText('PAY-BH000125')).toBeNull();
+    expect(mockGetSummary).toHaveBeenCalledWith('order-1');
+  });
+
+  it('offers no refund action when there is no refund — customers do not start one here (DEC-058)', async () => {
+    mockGetSummary.mockResolvedValue(PAID_SUMMARY);
+    renderIn(<PayDetailScreen />);
+
+    await waitFor(() => expect(screen.getByText('PAY-REAL-1')).toBeTruthy());
+    expect(screen.queryByTestId('button-view-refund')).toBeNull();
+    expect(screen.queryByText('ขอคืนเงิน')).toBeNull();
+  });
+
+  it('opens the refund for this order when one exists', async () => {
+    mockGetSummary.mockResolvedValue({
+      ...PAID_SUMMARY,
+      refund: { state: 'REFUND_PROCESSING', amountSatang: 19900, requestedAt: '2026-11-08T08:30:00Z', completedAt: null },
+    });
+    renderIn(<PayDetailScreen />);
+
+    await waitFor(() => expect(screen.getByTestId('button-view-refund')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('button-view-refund'));
+    expect(mockNavigate).toHaveBeenCalledWith('Refund', { orderId: 'order-1' });
+  });
+
+  it('says so honestly when the order has no payment yet', async () => {
+    mockGetSummary.mockResolvedValue({ orderNumber: 'BH-1', payment: null, refund: null });
+    renderIn(<PayDetailScreen />);
+
+    await waitFor(() => expect(screen.getByTestId('state-pay-detail-none')).toBeTruthy());
+  });
+});
+
+describe('Refund on real data', () => {
+  const withRefund = (state: string) => ({
+    ...PAID_SUMMARY,
+    refund: { state, amountSatang: 19900, requestedAt: '2026-11-08T08:30:00Z', completedAt: null },
+  });
+
+  it.each([
+    ['REFUND_REQUESTED', 'กำลังดำเนินการคืนเงิน'],
+    ['REFUND_PROCESSING', 'กำลังดำเนินการคืนเงิน'],
+    ['REFUNDED', 'คืนเงินแล้ว'],
+    ['REFUND_FAILED', 'ทีมงานกำลังตรวจสอบการคืนเงิน'],
+  ])('%s → "%s", with the real amount', async (state, headline) => {
+    mockGetSummary.mockResolvedValue(withRefund(state));
+    renderIn(<RefundScreen />);
+
+    await waitFor(() => expect(screen.getByTestId('refund-status').props.children).toBe(headline));
+    expect(screen.getByTestId('refund-amount').props.children).toBe('฿199');
+  });
+
+  it('tells the customer to complete the bank form while the refund is in flight', async () => {
+    mockGetSummary.mockResolvedValue(withRefund('REFUND_PROCESSING'));
+    renderIn(<RefundScreen />);
+
+    await waitFor(() => expect(screen.getByText(/กรอกบัญชีที่จะรับเงินคืน/)).toBeTruthy());
+  });
+
+  it('says there is no refund rather than inventing one', async () => {
+    mockGetSummary.mockResolvedValue(PAID_SUMMARY);
+    renderIn(<RefundScreen />);
+
+    await waitFor(() => expect(screen.getByTestId('state-refund-none')).toBeTruthy());
   });
 });

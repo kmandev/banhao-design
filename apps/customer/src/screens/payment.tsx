@@ -16,18 +16,12 @@ import {
   spacing,
 } from '@banhao/ui';
 import { Screen } from '../components/Screen';
-import { useCart } from '../hooks/useCart';
 import { formatBaht } from '../lib/money';
 import { presentLoadError } from '../lib/loadError';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { repositories } from '../repositories';
 import type { PaymentStartRefusal } from '../repositories/types';
 import type { OrderState } from '../domain/order';
-// Phase F screens, still on sample fee numbers. The cart stopped computing
-// these at D-5 (DEC-D-01 — the app must not invent money), so the dependency on
-// the design's illustrative figures is explicit here rather than hidden inside
-// the cart hook. Real amounts arrive with the payment domain.
-import { calculateTotals } from '../mocks/pricing';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
@@ -395,7 +389,7 @@ export function PaySuccessScreen() {
           <Button
             label="รายละเอียดการจ่าย"
             variant="ghost"
-            onPress={() => navigation.navigate('PayDetail')}
+            onPress={() => navigation.navigate('PayDetail', { orderId: orderRef.orderId })}
           />
         </BottomBar>
       }
@@ -501,7 +495,7 @@ export function PayDuplicateScreen() {
           <Button
             label="รายละเอียดการจ่าย"
             variant="ghost"
-            onPress={() => navigation.navigate('PayDetail')}
+            onPress={() => navigation.navigate('PayDetail', { orderId: orderRef.orderId })}
           />
         </BottomBar>
       }
@@ -517,36 +511,90 @@ export function PayDuplicateScreen() {
   );
 }
 
-/** 12g รายละเอียดการจ่าย. */
+/** Phase 1's only online method is PromptPay QR (DEC-016, DEC-055), which is what the design labels it. */
+function methodLabel(method: string): string {
+  return method === 'ONLINE' ? 'PROMPTPAY' : method;
+}
+
+function usePaymentSummary(orderId: string | undefined) {
+  return useAsyncData(
+    () => (orderId ? repositories.payments.getPaymentSummary(orderId) : Promise.reject(new Error('NO_ORDER'))),
+    [orderId],
+  );
+}
+
+/**
+ * 12g รายละเอียดการจ่าย.
+ *
+ * Every value comes from `GET /orders/:id/payment`: BANHAO's payment
+ * reference, the amount actually charged, the payment state, and only the
+ * last four characters of the provider's id — the design is explicit that a
+ * full reference is never shown. The refund action appears only when a refund
+ * exists: customers do not start refunds from here (DEC-058 — a refund follows
+ * a cancellation and is executed by an operator), so a "request" button would
+ * have led to a screen claiming a refund that nobody had started.
+ */
 export function PayDetailScreen() {
   const navigation = useNavigation<Nav>();
-  const { subtotalSatang } = useCart();
-  const totals = calculateTotals(subtotalSatang);
+  const { orderId } = useRoute<RouteProp<CustomerStackParamList, 'PayDetail'>>().params ?? {};
+  const summary = usePaymentSummary(orderId);
+
+  if (summary.status === 'loading') {
+    return (
+      <Screen testID="screen-pay-detail">
+        <StateView kind="loading" title="กำลังโหลด" />
+      </Screen>
+    );
+  }
+
+  if (summary.status === 'error' || !summary.data.payment) {
+    const presentation = presentLoadError(summary.status === 'error' ? summary.message : '');
+    return (
+      <Screen testID="screen-pay-detail">
+        {summary.status === 'error' ? (
+          <StateView
+            kind="error"
+            glyph={presentation.glyph}
+            title={presentation.title}
+            actionLabel={presentation.actionLabel}
+            onAction={summary.reload}
+            testID="state-pay-detail-error"
+          />
+        ) : (
+          <StateView kind="info" title="ยังไม่มีการชำระเงินสำหรับออเดอร์นี้" testID="state-pay-detail-none" />
+        )}
+      </Screen>
+    );
+  }
+
+  const { payment, refund, orderNumber } = summary.data;
 
   return (
     <Screen
       scroll
       testID="screen-pay-detail"
       footer={
-        <BottomBar>
-          <Button
-            label="ขอคืนเงิน"
-            variant="secondary"
-            onPress={() => navigation.navigate('Refund')}
-            testID="button-request-refund"
-          />
-        </BottomBar>
+        refund ? (
+          <BottomBar>
+            <Button
+              label="ดูการคืนเงิน"
+              variant="secondary"
+              onPress={() => navigation.navigate('Refund', { orderId })}
+              testID="button-view-refund"
+            />
+          </BottomBar>
+        ) : undefined
       }
     >
       <SectionHeader title="รายละเอียดการจ่าย" />
 
       <Card>
-        <DetailRow label="PAYMENT ID" value="PAY-BH000125" />
-        <DetailRow label="ORDER" value="BH000125" />
-        <DetailRow label="AMOUNT" value={formatBaht(totals.totalSatang)} />
-        <DetailRow label="METHOD" value="PROMPTPAY" />
-        <DetailRow label="STATUS" value="SUCCESS" />
-        <DetailRow label="PROVIDER REF" value="····8F2A" />
+        <DetailRow label="PAYMENT ID" value={payment.paymentReference} />
+        <DetailRow label="ORDER" value={orderNumber} />
+        <DetailRow label="AMOUNT" value={formatBaht(payment.amountSatang)} />
+        <DetailRow label="METHOD" value={methodLabel(payment.method)} />
+        <DetailRow label="STATUS" value={payment.state} />
+        {payment.providerRefTail ? <DetailRow label="PROVIDER REF" value={`····${payment.providerRefTail}`} /> : null}
       </Card>
 
       {/*
@@ -560,17 +608,70 @@ export function PayDetailScreen() {
   );
 }
 
+/** Where a refund stands, as the three steps the design draws. */
+function refundProgress(state: string): { requested: 'done' | 'active'; bank: 'done' | 'active' | 'todo'; received: 'done' | 'todo' } {
+  switch (state) {
+    case 'REFUNDED':
+      return { requested: 'done', bank: 'done', received: 'done' };
+    case 'REFUND_PROCESSING':
+      return { requested: 'done', bank: 'active', received: 'todo' };
+    default:
+      // REFUND_REQUESTED / REFUND_PENDING: sent, the bank has not picked it up.
+      return { requested: 'active', bank: 'todo', received: 'todo' };
+  }
+}
+
+function refundHeadline(state: string): string {
+  if (state === 'REFUNDED') return 'คืนเงินแล้ว';
+  if (state === 'REFUND_FAILED' || state === 'REFUND_REJECTED') return 'ทีมงานกำลังตรวจสอบการคืนเงิน';
+  return 'กำลังดำเนินการคืนเงิน';
+}
+
 /**
- * 12h การคืนเงิน.
+ * 12h การคืนเงิน — the order's latest refund, from the server.
  *
- * ⚠️ Q-020: no examined payment provider supports native PromptPay refunds.
- * The real mechanism is undecided, so this screen states the process rather
- * than promising an automatic refund the platform cannot currently perform.
+ * Shows the refunded amount and where the refund stands. A PromptPay refund
+ * through Stripe needs the customer to give a bank account on a form Stripe
+ * emails them; until it is filled in the money cannot move, so the hint says
+ * so while the refund is still in flight.
  */
 export function RefundScreen() {
   const navigation = useNavigation<Nav>();
-  const { subtotalSatang } = useCart();
-  const totals = calculateTotals(subtotalSatang);
+  const { orderId } = useRoute<RouteProp<CustomerStackParamList, 'Refund'>>().params ?? {};
+  const summary = usePaymentSummary(orderId);
+
+  if (summary.status === 'loading') {
+    return (
+      <Screen testID="screen-refund">
+        <StateView kind="loading" title="กำลังโหลด" />
+      </Screen>
+    );
+  }
+
+  if (summary.status === 'error' || !summary.data.refund) {
+    const presentation = presentLoadError(summary.status === 'error' ? summary.message : '');
+    return (
+      <Screen testID="screen-refund">
+        {summary.status === 'error' ? (
+          <StateView
+            kind="error"
+            glyph={presentation.glyph}
+            title={presentation.title}
+            actionLabel={presentation.actionLabel}
+            onAction={summary.reload}
+            testID="state-refund-error"
+          />
+        ) : (
+          <StateView kind="info" title="ยังไม่มีการคืนเงินสำหรับออเดอร์นี้" testID="state-refund-none" />
+        )}
+      </Screen>
+    );
+  }
+
+  const { refund } = summary.data;
+  const settled = refund.state === 'REFUNDED';
+  const troubled = refund.state === 'REFUND_FAILED' || refund.state === 'REFUND_REJECTED';
+  const progress = refundProgress(refund.state);
 
   return (
     <Screen
@@ -585,19 +686,26 @@ export function RefundScreen() {
       <SectionHeader title="การคืนเงิน" />
 
       <Card style={styles.refundCard}>
-        <Text style={styles.refundAmount}>{formatBaht(totals.totalSatang)}</Text>
-        <Text style={styles.refundStatus}>กำลังดำเนินการคืนเงิน</Text>
+        <Text style={styles.refundAmount} testID="refund-amount">
+          {formatBaht(refund.amountSatang)}
+        </Text>
+        <Text style={styles.refundStatus} testID="refund-status">
+          {refundHeadline(refund.state)}
+        </Text>
       </Card>
 
-      <Card style={styles.steps}>
-        <RefundStep label="ส่งคำขอไปที่ธนาคาร" done />
-        <RefundStep label="ธนาคารกำลังดำเนินการ" active />
-        <RefundStep label="เงินเข้าบัญชีแล้ว" />
-      </Card>
+      {troubled ? null : (
+        <Card style={styles.steps}>
+          <RefundStep label="ส่งคำขอไปที่ธนาคาร" done={progress.requested === 'done'} active={progress.requested === 'active'} />
+          <RefundStep label="ธนาคารกำลังดำเนินการ" done={progress.bank === 'done'} active={progress.bank === 'active'} />
+          <RefundStep label="เงินเข้าบัญชีแล้ว" done={progress.received === 'done'} />
+        </Card>
+      )}
 
       <Text style={styles.hint}>
-        ทีมงานจะติดต่อกลับหากต้องการข้อมูลเพิ่มเติม{'\n'}
-        หากมีคำถาม ติดต่อศูนย์ช่วยเหลือได้ตลอดเวลา
+        {settled
+          ? 'หากมีคำถาม ติดต่อศูนย์ช่วยเหลือได้ตลอดเวลา'
+          : 'ตรวจอีเมลของคุณ แล้วกรอกบัญชีที่จะรับเงินคืนตามลิงก์จากผู้ให้บริการชำระเงิน\nทีมงานจะติดต่อกลับหากต้องการข้อมูลเพิ่มเติม'}
       </Text>
     </Screen>
   );

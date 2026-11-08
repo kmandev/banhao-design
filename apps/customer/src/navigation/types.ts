@@ -73,8 +73,10 @@ export type CustomerStackParamList = {
   PayFailed: { orderId?: string; orderNumber?: string } | undefined;
   PayExpired: { orderId?: string; orderNumber?: string } | undefined;
   PayDuplicate: { orderId?: string; orderNumber?: string } | undefined;
-  PayDetail: undefined;
-  Refund: undefined;
+  // The order whose payment / refund to show. Optional only so an older
+  // deep link without one renders an honest "not found" instead of crashing.
+  PayDetail: { orderId?: string } | undefined;
+  Refund: { orderId?: string } | undefined;
 
   /**
    * 13 สั่งสำเร็จ. `orderId` is present only for a real ONLINE order; the CASH

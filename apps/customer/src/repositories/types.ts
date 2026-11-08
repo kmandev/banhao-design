@@ -199,6 +199,25 @@ export class PaymentStartError extends Error {
  */
 export interface PaymentRepository {
   startPayment(orderId: string): Promise<PaymentStart>;
+  /** `GET /api/v1/orders/:id/payment` — the order's own payment and latest refund, customer-safe fields only. */
+  getPaymentSummary(orderId: string): Promise<PaymentSummary>;
+}
+
+export interface PaymentSummary {
+  orderNumber: string;
+  payment: {
+    paymentReference: string;
+    state: string;
+    method: string;
+    amountSatang: number;
+    providerRefTail: string | null;
+  } | null;
+  refund: {
+    state: string;
+    amountSatang: number;
+    requestedAt: string;
+    completedAt: string | null;
+  } | null;
 }
 
 /**

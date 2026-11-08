@@ -8,10 +8,10 @@
  * error state, so an unreachable server is never mistaken for a refusal.
  */
 
-import type { PaymentInitiationResponse } from '@banhao/validation';
+import type { PaymentInitiationResponse, PaymentSummaryResponse } from '@banhao/validation';
 import { ApiClientError, type ApiClient } from '@banhao/api-client';
 import { apiClient as defaultClient } from '../lib/apiClient';
-import { PaymentStartError, type PaymentRepository, type PaymentStart } from './types';
+import { PaymentStartError, type PaymentRepository, type PaymentStart, type PaymentSummary } from './types';
 
 const REFUSALS: Record<string, PaymentStartError['refusal']> = {
   CUSTOMER_EMAIL_REQUIRED: 'EMAIL_REQUIRED',
@@ -39,6 +39,10 @@ export function createApiPaymentRepository(client: ApiClient = defaultClient): P
         }
         throw cause;
       }
+    },
+
+    async getPaymentSummary(orderId: string): Promise<PaymentSummary> {
+      return client.request<PaymentSummaryResponse>(`/api/v1/orders/${orderId}/payment`, { method: 'GET' });
     },
   };
 }

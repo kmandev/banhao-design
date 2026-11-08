@@ -68,3 +68,13 @@ describe('apiPayments.startPayment', () => {
     await expect(createApiPaymentRepository(client).startPayment('o1')).rejects.toBe(outage);
   });
 });
+
+describe('apiPayments.getPaymentSummary', () => {
+  it('GETs /api/v1/orders/:id/payment and returns the summary unchanged', async () => {
+    const summary = { orderNumber: 'BH-1', payment: null, refund: null };
+    const { client, request } = stubClient(async () => summary);
+
+    await expect(createApiPaymentRepository(client).getPaymentSummary('o1')).resolves.toEqual(summary);
+    expect(request).toHaveBeenCalledWith('/api/v1/orders/o1/payment', { method: 'GET' });
+  });
+});
