@@ -37,7 +37,14 @@
           "cameraPermission": "BANHAO ใช้กล้องเพื่อถ่ายรูปหลักฐานการส่งเท่านั้น ระบบไม่เปิดกล้องเองและไม่ถ่ายรูปโดยที่คุณไม่ได้กด",
           "recordAudioAndroid": false
         }
-      ]
-    ]
+      ],
+      "expo-notifications"
+    ],
+    "owner": "kramlab",
+    "extra": {
+      "eas": {
+        "projectId": "4ae1f83e-aebf-41cb-b47e-76da493d91be"
+      }
+    }
   }
 }

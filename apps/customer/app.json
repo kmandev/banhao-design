@@ -6,7 +6,21 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "banhao",
-    "ios": { "supportsTablet": false, "bundleIdentifier": "app.banhao.customer" },
-    "android": { "package": "app.banhao.customer" }
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.banhao.customer"
+    },
+    "android": {
+      "package": "app.banhao.customer"
+    },
+    "owner": "kramlab",
+    "extra": {
+      "eas": {
+        "projectId": "9907033a-5e52-4b79-98ed-3113eace9b69"
+      }
+    },
+    "plugins": [
+      "expo-notifications"
+    ]
   }
 }
