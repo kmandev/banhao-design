@@ -68,9 +68,19 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
   return (
     <div style={styles.shell}>
       <header style={styles.header}>
-        <div>
-          <strong>{copy.appName}</strong>
-          <span style={{ ...styles.meta, marginLeft: 8 }}>{copy.console}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div>
+            <strong>{copy.appName}</strong>
+            <span style={{ ...styles.meta, marginLeft: 8 }}>{copy.console}</span>
+          </div>
+          <nav style={{ display: 'flex', gap: 12 }}>
+            <a href="/" style={styles.meta}>
+              กล่องงาน
+            </a>
+            <a href="/pricing" style={styles.meta} data-testid="nav-pricing">
+              ค่าส่ง
+            </a>
+          </nav>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={styles.meta} data-testid="staff-role">
