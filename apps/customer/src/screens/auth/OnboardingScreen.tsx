@@ -23,8 +23,13 @@ export function OnboardingScreen({ navigation }: Props) {
           <Text style={styles.markGlyph}>🏠</Text>
         </View>
         <Text style={styles.title}>สั่งอาหารในบุณฑริก{'\n'}ง่ายกว่าที่เคย</Text>
+        {/*
+          The design's line, with its number kept true: DEC-071 holds every
+          delivery fee to ฿15–35, so the lowest a customer can pay is ฿15 (it
+          said ฿10, DEC-035's old flat fee).
+        */}
         <Text style={styles.copy}>
-          ร้านในบุณฑริกให้เลือกเพียบ{'\n'}ค่าส่งเริ่มต้น 10 บาท รู้ราคาก่อนสั่งเสมอ
+          ร้านในบุณฑริกให้เลือกเพียบ{'\n'}ค่าส่งเริ่มต้น 15 บาท รู้ราคาก่อนสั่งเสมอ
         </Text>
       </View>
       <View style={styles.actions}>
