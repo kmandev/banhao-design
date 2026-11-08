@@ -24,11 +24,13 @@ import { apiDeliveryProofRepository } from './apiDeliveryProof';
 import { apiNotificationRepository } from './apiNotifications';
 import { apiOrderCancellationRepository } from './apiOrderCancellation';
 import { apiNoRiderNoticeRepository } from './apiNoRiderNotice';
+import { apiPaymentRepository } from './apiPayments';
 import type {
   CartValidationRepository,
   DeliveryProofRepository,
   NotificationRepository,
   NoRiderNoticeRepository,
+  PaymentRepository,
   OrderCancellationRepository,
   OrderCreationRepository,
   OrderDetailRepository,
@@ -138,6 +140,17 @@ export const mockNoRiderNoticeRepository: NoRiderNoticeRepository = {
   hasNoRiderNotice: () => delay(false),
 };
 
+/** Fixture payment — a QR that expires in ten minutes, for screen tests. */
+export const mockPaymentRepository: PaymentRepository = {
+  startPayment: () =>
+    delay({
+      paymentId: 'payment-fixture',
+      amountSatang: 7500,
+      qrImageUrl: 'https://example.invalid/qr.png',
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    }),
+};
+
 /**
  * The active repositories.
  *
@@ -190,6 +203,7 @@ export const repositories: Repositories = {
   deliveryProof: apiDeliveryProofRepository,
   orderCancellation: apiOrderCancellationRepository,
   noRiderNotice: apiNoRiderNoticeRepository,
+  payments: apiPaymentRepository,
   notifications: apiNotificationRepository,
   addresses: apiAddressRepository,
 };
@@ -212,6 +226,7 @@ export const mockRepositories: Repositories = {
   deliveryProof: mockDeliveryProofRepository,
   orderCancellation: mockOrderCancellationRepository,
   noRiderNotice: mockNoRiderNoticeRepository,
+  payments: mockPaymentRepository,
   notifications: mockNotificationRepository,
   addresses: mockAddressRepository,
 };

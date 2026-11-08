@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { repositories } from '../repositories';
 import { NavigationContainer } from '@react-navigation/native';
 import { AuthProvider } from '../hooks/useAuth';
 import { CartProvider } from '../hooks/useCart';
@@ -19,8 +20,9 @@ import {
  * real to track and its designed `ติดตามออเดอร์` action could not exist.
  *
  * These tests assert *navigation payloads only*. Nothing here confirms a
- * payment: CON-002 still means only a signature-verified provider webhook may
- * do that, and `PayChecking`'s `จำลอง:` buttons remain review scaffolding.
+ * payment: CON-002 means only a signature-verified provider webhook may do
+ * that. `PayChecking` moves on only when the server's order row says PAID,
+ * which these tests stub through the order-detail repository.
  */
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
@@ -28,6 +30,7 @@ const ORDER_NUMBER = 'BH-20260819-0042';
 const ORDER_REF = { orderId: ORDER_ID, orderNumber: ORDER_NUMBER };
 
 const mockNavigate = jest.fn();
+const mockReplace = jest.fn();
 let mockRouteParams: Record<string, unknown> | undefined = {};
 
 jest.mock('@react-navigation/native', () => {
@@ -36,7 +39,7 @@ jest.mock('@react-navigation/native', () => {
     ...actual,
     useNavigation: () => ({
       navigate: mockNavigate,
-      replace: jest.fn(),
+      replace: mockReplace,
       goBack: jest.fn(),
       setOptions: jest.fn(),
     }),
@@ -46,8 +49,27 @@ jest.mock('@react-navigation/native', () => {
 
 beforeEach(() => {
   mockNavigate.mockReset();
+  mockReplace.mockReset();
   mockRouteParams = { ...ORDER_REF };
+  (repositories as unknown as Record<string, unknown>).payments = {
+    startPayment: jest.fn().mockResolvedValue({
+      paymentId: 'payment-1',
+      amountSatang: 7500,
+      qrImageUrl: 'https://example.invalid/qr.png',
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+    }),
+  };
+  (repositories as unknown as Record<string, unknown>).orderDetail = {
+    getOrder: jest.fn().mockResolvedValue({ state: 'PAID' }),
+  };
 });
+
+/** Drives PayChecking until its poll reads the stubbed PAID order. */
+async function pollOnce() {
+  await act(async () => {
+    jest.advanceTimersByTime(3000);
+  });
+}
 
 /** Payment screens read the cart for their total; C-13 does not. */
 function renderWithProviders(ui: React.ReactElement) {
@@ -66,23 +88,24 @@ function renderPlain(ui: React.ReactElement) {
 
 // --- Test 1: the chain, hop by hop ---------------------------------------
 
-it('PromptPayQr forwards the order reference to PayChecking', () => {
-  jest.useFakeTimers();
-  try {
-    renderWithProviders(<PromptPayQrScreen />);
-    fireEvent.press(screen.getByTestId('button-paid'));
-  } finally {
-    jest.useRealTimers();
-  }
+it('PromptPayQr forwards the order reference to PayChecking', async () => {
+  renderWithProviders(<PromptPayQrScreen />);
+  await waitFor(() => expect(screen.getByTestId('button-paid')).toBeTruthy());
+  fireEvent.press(screen.getByTestId('button-paid'));
 
   expect(mockNavigate).toHaveBeenCalledWith('PayChecking', ORDER_REF);
 });
 
-it('PayChecking forwards the order reference to PaySuccess', () => {
-  renderPlain(<PayCheckingScreen />);
-  fireEvent.press(screen.getByText('จำลอง: สำเร็จ'));
+it('PayChecking forwards the order reference to PaySuccess once the server says PAID', async () => {
+  jest.useFakeTimers();
+  try {
+    renderPlain(<PayCheckingScreen />);
+    await pollOnce();
+  } finally {
+    jest.useRealTimers();
+  }
 
-  expect(mockNavigate).toHaveBeenCalledWith('PaySuccess', ORDER_REF);
+  expect(mockReplace).toHaveBeenCalledWith('PaySuccess', ORDER_REF);
 });
 
 it('PaySuccess forwards the order reference to OrderConfirmed', () => {
@@ -92,22 +115,23 @@ it('PaySuccess forwards the order reference to OrderConfirmed', () => {
   expect(mockNavigate).toHaveBeenCalledWith('OrderConfirmed', ORDER_REF);
 });
 
-it('carries the id through the chain unmutated, never regenerating one', () => {
+it('carries the id through the chain unmutated, never regenerating one', async () => {
   // Each hop is re-rendered with exactly what the previous hop emitted, so a
   // screen that silently substituted its own id would break the chain here.
-  jest.useFakeTimers();
-  try {
-    renderWithProviders(<PromptPayQrScreen />);
-    fireEvent.press(screen.getByTestId('button-paid'));
-  } finally {
-    jest.useRealTimers();
-  }
+  renderWithProviders(<PromptPayQrScreen />);
+  await waitFor(() => expect(screen.getByTestId('button-paid')).toBeTruthy());
+  fireEvent.press(screen.getByTestId('button-paid'));
   const [, toChecking] = mockNavigate.mock.calls.at(-1)!;
 
   mockRouteParams = toChecking as Record<string, unknown>;
-  renderPlain(<PayCheckingScreen />);
-  fireEvent.press(screen.getByText('จำลอง: สำเร็จ'));
-  const [, toSuccess] = mockNavigate.mock.calls.at(-1)!;
+  jest.useFakeTimers();
+  try {
+    renderPlain(<PayCheckingScreen />);
+    await pollOnce();
+  } finally {
+    jest.useRealTimers();
+  }
+  const [, toSuccess] = mockReplace.mock.calls.at(-1)!;
 
   mockRouteParams = toSuccess as Record<string, unknown>;
   renderPlain(<PaySuccessScreen />);
@@ -119,14 +143,13 @@ it('carries the id through the chain unmutated, never regenerating one', () => {
 
 // --- Test 4: duplicate symmetry ------------------------------------------
 
-it('PayChecking forwards the same reference to PayDuplicate as to PaySuccess', () => {
-  renderPlain(<PayCheckingScreen />);
-  fireEvent.press(screen.getByText('จำลอง: สำเร็จ'));
-  fireEvent.press(screen.getByText('จำลอง: จ่ายซ้ำ'));
+it('PromptPayQr sends an already-paid order to PayDuplicate with the same reference', async () => {
+  (repositories as unknown as Record<string, unknown>).payments = {
+    startPayment: jest.fn().mockRejectedValue(new Error('ALREADY_PAID')),
+  };
+  renderWithProviders(<PromptPayQrScreen />);
 
-  const [, toSuccess] = mockNavigate.mock.calls[0];
-  const [, toDuplicate] = mockNavigate.mock.calls[1];
-  expect(toDuplicate).toEqual(toSuccess);
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('PayDuplicate', ORDER_REF));
 });
 
 it('PayDuplicate reaches OrderConfirmed with the same order as the success path', () => {

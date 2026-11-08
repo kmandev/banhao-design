@@ -167,6 +167,41 @@ export interface OrderCancellationRepository {
 }
 
 /**
+ * What `POST /api/v1/orders/:id/payment` hands the customer: the amount the
+ * server will charge (the order's own grand total) and the provider's QR.
+ * The app renders these; it never computes or confirms a payment (CON-002).
+ */
+export interface PaymentStart {
+  paymentId: string;
+  amountSatang: number;
+  /** Absent only if the provider returned no presentation — the screen then has nothing to scan. */
+  qrImageUrl: string | null;
+  /** BANHAO's own payment-attempt expiry (ISO), never a provider value. Null with no QR. */
+  expiresAt: string | null;
+}
+
+/** Why a payment could not be started, when the server named a reason the customer can act on. */
+export type PaymentStartRefusal = 'EMAIL_REQUIRED' | 'NOT_PAYABLE' | 'ALREADY_PAID';
+
+export class PaymentStartError extends Error {
+  readonly refusal: PaymentStartRefusal;
+
+  constructor(refusal: PaymentStartRefusal) {
+    super(refusal);
+    this.name = 'PaymentStartError';
+    this.refusal = refusal;
+  }
+}
+
+/**
+ * Starts (or, on retry, returns the existing — DEC-028) payment for an order.
+ * Takes only the order id: amount, currency and method are server-derived.
+ */
+export interface PaymentRepository {
+  startPayment(orderId: string): Promise<PaymentStart>;
+}
+
+/**
  * Has the server told this customer it cannot find a rider yet, for an order
  * whose delivery is still searching? The app never computes this itself.
  */
@@ -249,6 +284,7 @@ export interface Repositories {
   deliveryProof: DeliveryProofRepository;
   orderCancellation: OrderCancellationRepository;
   noRiderNotice: NoRiderNoticeRepository;
+  payments: PaymentRepository;
   notifications: NotificationRepository;
   addresses: AddressRepository;
 }

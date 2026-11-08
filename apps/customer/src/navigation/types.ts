@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 /**
  * Route map for the Customer App.
  *
@@ -21,7 +23,9 @@ export type CustomerTabParamList = {
 };
 
 export type CustomerStackParamList = {
-  Tabs: undefined;
+  // Nested params let a screen open a specific tab (e.g. the QR screen sending
+  // the customer to Profile to add a payment email).
+  Tabs: NavigatorScreenParams<CustomerTabParamList> | undefined;
   Search: undefined;
   /** `closed` renders the 🌙 ร้านปิด state variant. */
   Shop: { shopId: string };
@@ -58,15 +62,16 @@ export type CustomerStackParamList = {
   // one. A screen that has no id renders no order reference — it never
   // invents one.
   //
-  // PayFailed/PayExpired are deliberately NOT widened: both exist only to
-  // route back into a retry, and whether a retry reuses the existing order or
-  // creates a new one is an unanswered idempotency question (REQ-003). Giving
-  // them an id they cannot yet use correctly would prejudge it.
+  // PayFailed/PayExpired carry the reference too: their retry re-enters
+  // PromptPayQr for the SAME order. The server already answers what a retry
+  // means — POST /orders/:id/payment returns the existing payment or mints a
+  // fresh attempt for an expired one (DEC-028), and refuses with
+  // ORDER_NOT_PAYABLE once the order itself has expired.
   PromptPayQr: { orderId?: string; orderNumber?: string } | undefined;
   PayChecking: { orderId?: string; orderNumber?: string } | undefined;
   PaySuccess: { orderId?: string; orderNumber?: string } | undefined;
-  PayFailed: undefined;
-  PayExpired: undefined;
+  PayFailed: { orderId?: string; orderNumber?: string } | undefined;
+  PayExpired: { orderId?: string; orderNumber?: string } | undefined;
   PayDuplicate: { orderId?: string; orderNumber?: string } | undefined;
   PayDetail: undefined;
   Refund: undefined;

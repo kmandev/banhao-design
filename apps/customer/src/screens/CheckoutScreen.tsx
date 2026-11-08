@@ -22,7 +22,6 @@ import { formatBaht } from '../lib/money';
 import { presentLoadError } from '../lib/loadError';
 import { optionsDeltaSatang } from '../domain/cart';
 import { CartConflictError, type CartConflict } from '../domain/cartValidation';
-import { SAMPLE_DISCOUNT_CODE, calculateTotals } from '../mocks/pricing';
 import type { CustomerStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<CustomerStackParamList>;
@@ -46,15 +45,18 @@ type Nav = NativeStackNavigationProp<CustomerStackParamList>;
  * integration here. An order **is** created (Phase E-3A,
  * `POST /api/v1/orders`), whose contract accepts `ONLINE` only (DEC-016).
  */
+/** A fee the server has not resolved yet. A literal, never a formatted zero (UX-SPEC § C-09). */
+const PENDING_FEE_LABEL = 'คำนวณเมื่อยืนยัน';
+
 export function CheckoutScreen() {
   const navigation = useNavigation<Nav>();
   const { cart, subtotalSatang, refresh, remove } = useCart();
   const lines = cart?.lines ?? [];
-  // Phase E/F screen, still on sample fee numbers. The cart no longer computes
-  // these (DEC-D-01 — the app must not invent money), so the dependency on the
-  // design's illustrative figures is now explicit here rather than hidden
-  // inside the cart hook. Checkout's real totals arrive with the order.
-  const totals = calculateTotals(subtotalSatang);
+  // Fees are resolved by the server at order creation (DEC-E-01) and shown on
+  // the QR screen from the order row. Until then this screen states only what
+  // it knows — the food subtotal — exactly as the cart does (UX-SPEC § C-09,
+  // DEC-D-01). It used to show the design's sample fees and a sample
+  // discount, which were not what the customer was then charged.
   const [validating, setValidating] = useState(false);
   const [conflict, setConflict] = useState<CartConflict | null>(null);
   const [systemError, setSystemError] = useState<string | null>(null);
@@ -176,7 +178,7 @@ export function CheckoutScreen() {
       ? (addressState.data.find((a) => a.isDefault) ?? addressState.data[0])
       : undefined;
 
-  const cta = `ไปสแกนจ่าย ${formatBaht(totals.totalSatang)}`;
+  const cta = 'ไปสแกนจ่าย';
 
   return (
     <Screen
@@ -331,16 +333,9 @@ export function CheckoutScreen() {
 
       <SectionHeader title="สรุปค่าใช้จ่าย" />
       <Card>
-        <PriceRow label="ราคาอาหาร" amount={formatBaht(totals.subtotalSatang)} />
-        <PriceRow label="ค่าส่ง (1.2 กม.)" amount={formatBaht(totals.deliveryFeeSatang)} />
-        <PriceRow label="ค่าบริการ" amount={formatBaht(totals.serviceFeeSatang)} />
-        <PriceRow
-          label={`ส่วนลด ${SAMPLE_DISCOUNT_CODE}`}
-          amount={`−${formatBaht(totals.discountSatang)}`}
-          discount
-        />
-        <View style={styles.divider} />
-        <PriceRow label="รวมทั้งหมด" amount={formatBaht(totals.totalSatang)} emphasis />
+        <PriceRow label="ราคาอาหาร" amount={formatBaht(subtotalSatang)} />
+        <PriceRow label="ค่าส่ง" amount={PENDING_FEE_LABEL} />
+        <PriceRow label="ค่าบริการ" amount={PENDING_FEE_LABEL} />
       </Card>
     </Screen>
   );

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import {
   BottomBar,
   Button,
@@ -18,6 +18,11 @@ import {
 import { Screen } from '../components/Screen';
 import { useCart } from '../hooks/useCart';
 import { formatBaht } from '../lib/money';
+import { presentLoadError } from '../lib/loadError';
+import { useAsyncData } from '../hooks/useAsyncData';
+import { repositories } from '../repositories';
+import type { PaymentStartRefusal } from '../repositories/types';
+import type { OrderState } from '../domain/order';
 // Phase F screens, still on sample fee numbers. The cart stopped computing
 // these at D-5 (DEC-D-01 — the app must not invent money), so the dependency on
 // the design's illustrative figures is explicit here rather than hidden inside
@@ -47,7 +52,7 @@ type OrderReference = { orderId?: string; orderNumber?: string };
 function useOrderReference(
   route: RouteProp<
     CustomerStackParamList,
-    'PromptPayQr' | 'PayChecking' | 'PaySuccess' | 'PayDuplicate'
+    'PromptPayQr' | 'PayChecking' | 'PaySuccess' | 'PayDuplicate' | 'PayFailed' | 'PayExpired'
   >,
 ): OrderReference {
   return { orderId: route.params?.orderId, orderNumber: route.params?.orderNumber };
@@ -66,32 +71,147 @@ function useOrderReference(
  * screen must never be the thing that decides a payment succeeded.
  */
 
-const QR_TTL_SECONDS = 600; // 10 minutes — the EXPIRED timeout in docs/ARCHITECTURE.md.
+/** How often the screens re-read the order while waiting for the server to confirm. A UI refresh rate, not a policy value. */
+const PAYMENT_POLL_MS = 3000;
 
-/** 12 พร้อมเพย์ QR. */
+/**
+ * Where an order stands from the payment screens' point of view, read from
+ * the server's own `orders.state`. The app never decides a payment succeeded
+ * (CON-002): `PAID` only appears after the provider's signed webhook.
+ */
+type PaymentOutcome = 'PENDING' | 'PAID' | 'EXPIRED' | 'FAILED' | 'CLOSED';
+
+function paymentOutcomeOf(state: OrderState): PaymentOutcome {
+  switch (state) {
+    case 'CREATED':
+    case 'PENDING_PAYMENT':
+      return 'PENDING';
+    case 'PAYMENT_EXPIRED':
+      return 'EXPIRED';
+    case 'PAYMENT_FAILED':
+      return 'FAILED';
+    case 'CANCELLED':
+      // Cancelled while the QR was open: nothing here can say whether money
+      // moved, so hand over to the order's own screen, which shows its state.
+      return 'CLOSED';
+    default:
+      // PAID and everything after it.
+      return 'PAID';
+  }
+}
+
+/**
+ * Re-reads the order until it leaves the pending states, then reports the
+ * outcome once. Read failures are ignored and the next tick tries again, so a
+ * dropped request never moves the customer to a wrong screen.
+ */
+function usePaymentOutcome(orderId: string | undefined, onOutcome: (outcome: PaymentOutcome) => void) {
+  const callback = useRef(onOutcome);
+  callback.current = onOutcome;
+
+  useEffect(() => {
+    if (!orderId) return undefined;
+    let settled = false;
+
+    const check = () => {
+      repositories.orderDetail
+        .getOrder(orderId)
+        .then((order) => {
+          if (settled || !order) return;
+          const outcome = paymentOutcomeOf(order.state);
+          if (outcome !== 'PENDING') {
+            settled = true;
+            callback.current(outcome);
+          }
+        })
+        .catch(() => undefined);
+    };
+
+    const timer = setInterval(check, PAYMENT_POLL_MS);
+    return () => {
+      settled = true;
+      clearInterval(timer);
+    };
+  }, [orderId]);
+}
+
+/** Moves to the screen for a settled outcome. `replace`, so Back cannot return to a dead QR. */
+function routeForOutcome(navigation: Nav, outcome: PaymentOutcome, orderRef: OrderReference) {
+  if (outcome === 'PAID') navigation.replace('PaySuccess', orderRef);
+  else if (outcome === 'EXPIRED') navigation.replace('PayExpired', orderRef);
+  else if (outcome === 'FAILED') navigation.replace('PayFailed', orderRef);
+  else if (outcome === 'CLOSED' && orderRef.orderId) navigation.replace('OrderDetail', { orderId: orderRef.orderId });
+}
+
+function secondsUntil(iso: string | null): number {
+  if (!iso) return 0;
+  const ms = Date.parse(iso) - Date.now();
+  return Number.isNaN(ms) ? 0 : Math.max(0, Math.ceil(ms / 1000));
+}
+
+/**
+ * 12 พร้อมเพย์ QR.
+ *
+ * Shows the provider's real QR and the amount the server will charge, both
+ * from `POST /orders/:id/payment`, and the fee breakdown from the order row
+ * itself — never the design's sample figures. The countdown runs to BANHAO's
+ * own attempt expiry (`expiresAt`). While it is open the screen watches the
+ * order, and moves on by itself once the server records the payment.
+ */
 export function PromptPayQrScreen() {
   const navigation = useNavigation<Nav>();
   const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PromptPayQr'>>());
-  const { subtotalSatang } = useCart();
-  const totals = calculateTotals(subtotalSatang);
-  const [secondsLeft, setSecondsLeft] = useState(QR_TTL_SECONDS);
+  const { orderId } = orderRef;
+
+  const payment = useAsyncData(
+    () => (orderId ? repositories.payments.startPayment(orderId) : Promise.reject(new Error('NO_ORDER'))),
+    [orderId],
+  );
+  const order = useAsyncData(
+    () => (orderId ? repositories.orderDetail.getOrder(orderId) : Promise.resolve(null)),
+    [orderId],
+  );
+
+  const expiresAt = payment.status === 'success' ? payment.data.expiresAt : null;
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    if (secondsLeft > 0) {
-      const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-      return () => clearTimeout(timer);
+    if (!expiresAt) return undefined;
+    setSecondsLeft(secondsUntil(expiresAt));
+    const timer = setInterval(() => setSecondsLeft(secondsUntil(expiresAt)), 1000);
+    return () => clearInterval(timer);
+  }, [expiresAt]);
+
+  useEffect(() => {
+    // The attempt has expired, so the code cannot be paid. This decides
+    // nothing about money; it stops showing a QR that no longer works.
+    if (secondsLeft === 0) navigation.replace('PayExpired', orderRef);
+    // orderRef is rebuilt every render; the ids inside it are what matter.
+  }, [secondsLeft, navigation, orderRef.orderId, orderRef.orderNumber]);
+
+  usePaymentOutcome(orderId, (outcome) => routeForOutcome(navigation, outcome, orderRef));
+
+  useEffect(() => {
+    if (payment.status === 'error' && isRefusal(payment.message, 'ALREADY_PAID')) {
+      navigation.replace('PayDuplicate', orderRef);
     }
+  }, [payment.status]);
 
-    // TTL reached zero. A QR that has expired cannot be paid, so EXPIRED is the
-    // only honest next state — this decides nothing about money, it just stops
-    // showing a code that no longer works. `replace` rather than `navigate` so
-    // Back cannot return to a dead QR.
-    navigation.replace('PayExpired');
-    return undefined;
-  }, [secondsLeft, navigation]);
+  if (payment.status === 'loading') {
+    return (
+      <Screen testID="screen-promptpay-qr">
+        <StateView kind="loading" title="กำลังสร้าง QR" testID="state-qr-loading" />
+      </Screen>
+    );
+  }
 
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = String(secondsLeft % 60).padStart(2, '0');
+  if (payment.status === 'error') {
+    return <PaymentStartFailure message={payment.message} orderId={orderId} onRetry={payment.reload} />;
+  }
+
+  const minutes = Math.floor((secondsLeft ?? 0) / 60);
+  const seconds = String((secondsLeft ?? 0) % 60).padStart(2, '0');
+  const detail = order.status === 'success' ? order.data : null;
 
   return (
     <Screen
@@ -104,40 +224,42 @@ export function PromptPayQrScreen() {
             onPress={() => navigation.navigate('PayChecking', orderRef)}
             testID="button-paid"
           />
-          <Button
-            label="ยกเลิก"
-            variant="ghost"
-            onPress={() => navigation.goBack()}
-          />
+          <Button label="ยกเลิก" variant="ghost" onPress={() => navigation.goBack()} />
         </BottomBar>
       }
     >
       <SectionHeader title="สแกนเพื่อจ่าย" />
 
       <Card style={styles.qrCard}>
-        {/*
-          Placeholder rather than a real QR: generating one requires a payment
-          provider (Q-001, OPEN). Rendering a fake scannable code would be worse
-          than an obvious placeholder — see docs/CUSTOMER_APP_ASSETS.md.
-        */}
-        <View style={styles.qrBox} accessibilityLabel="ตัวอย่าง QR พร้อมเพย์">
-          <Text style={styles.qrGlyph}>📱</Text>
-          <Text style={styles.qrNote}>ตัวอย่าง QR{'\n'}(ยังไม่ได้เชื่อมผู้ให้บริการ)</Text>
-        </View>
+        {payment.data.qrImageUrl ? (
+          <Image
+            source={{ uri: payment.data.qrImageUrl }}
+            style={styles.qrImage}
+            resizeMode="contain"
+            accessibilityLabel="QR พร้อมเพย์"
+            testID="qr-image"
+          />
+        ) : null}
 
-        <Text style={styles.amount}>{formatBaht(totals.totalSatang)}</Text>
-        <Text style={styles.countdown}>
-          QR หมดอายุใน {minutes}:{seconds}
+        <Text style={styles.amount} testID="qr-amount">
+          {formatBaht(payment.data.amountSatang)}
         </Text>
+        {secondsLeft !== null ? (
+          <Text style={styles.countdown}>
+            QR หมดอายุใน {minutes}:{seconds}
+          </Text>
+        ) : null}
       </Card>
 
-      <Card>
-        <PriceRow label="ราคาอาหาร" amount={formatBaht(totals.subtotalSatang)} />
-        <PriceRow label="ค่าส่ง" amount={formatBaht(totals.deliveryFeeSatang)} />
-        <PriceRow label="ค่าบริการ" amount={formatBaht(totals.serviceFeeSatang)} />
-        <View style={styles.divider} />
-        <PriceRow label="รวมทั้งหมด" amount={formatBaht(totals.totalSatang)} emphasis />
-      </Card>
+      {detail ? (
+        <Card testID="qr-breakdown">
+          <PriceRow label="ราคาอาหาร" amount={formatBaht(detail.subtotalSatang)} />
+          <PriceRow label="ค่าส่ง" amount={formatBaht(detail.deliveryFeeSatang)} />
+          <PriceRow label="ค่าบริการ" amount={formatBaht(detail.serviceFeeSatang)} />
+          <View style={styles.divider} />
+          <PriceRow label="รวมทั้งหมด" amount={formatBaht(detail.grandTotalSatang)} emphasis />
+        </Card>
+      ) : null}
 
       <Text style={styles.hint}>
         เปิดแอปธนาคาร → สแกน QR → ยืนยันการโอน{'\n'}
@@ -147,38 +269,102 @@ export function PromptPayQrScreen() {
   );
 }
 
-/** 12b กำลังตรวจสอบ — Payment state PROCESSING. */
+/**
+ * `useAsyncData` keeps only an error's message, and a `PaymentStartError`'s
+ * message is its refusal code, so the refusal is read back from there.
+ */
+function isRefusal(message: string, refusal: PaymentStartRefusal): boolean {
+  return message === refusal;
+}
+
+/** Why the QR could not be shown, worded for what the customer can do about it. */
+function PaymentStartFailure({
+  message,
+  orderId,
+  onRetry,
+}: {
+  message: string;
+  orderId: string | undefined;
+  onRetry: () => void;
+}) {
+  const navigation = useNavigation<Nav>();
+
+  if (isRefusal(message, 'EMAIL_REQUIRED')) {
+    return (
+      <Screen testID="screen-promptpay-qr">
+        <StateView
+          kind="info"
+          title="ใส่อีเมลสำหรับชำระเงินก่อน"
+          message="ผู้ให้บริการชำระเงินต้องใช้อีเมลของคุณ ใส่ได้ที่หน้าบัญชี"
+          actionLabel="ไปที่บัญชี"
+          onAction={() => navigation.navigate('Tabs', { screen: 'Profile' })}
+          testID="state-qr-email-required"
+        />
+      </Screen>
+    );
+  }
+
+  if (isRefusal(message, 'NOT_PAYABLE') || !orderId) {
+    return (
+      <Screen testID="screen-promptpay-qr">
+        <StateView
+          kind="info"
+          title="ออเดอร์นี้ชำระเงินไม่ได้แล้ว"
+          message="ดูสถานะออเดอร์ได้ที่หน้าออเดอร์"
+          actionLabel="ดูออเดอร์"
+          onAction={() =>
+            orderId ? navigation.replace('OrderDetail', { orderId }) : navigation.navigate('Tabs', { screen: 'Orders' })
+          }
+          testID="state-qr-not-payable"
+        />
+      </Screen>
+    );
+  }
+
+  if (isRefusal(message, 'ALREADY_PAID')) {
+    // The effect in PromptPayQrScreen is moving to PayDuplicate.
+    return (
+      <Screen testID="screen-promptpay-qr">
+        <StateView kind="loading" title="กำลังตรวจสอบการชำระเงิน" />
+      </Screen>
+    );
+  }
+
+  const presentation = presentLoadError(message);
+  return (
+    <Screen testID="screen-promptpay-qr">
+      <StateView
+        kind="error"
+        glyph={presentation.glyph}
+        title={presentation.title}
+        actionLabel={presentation.actionLabel}
+        onAction={onRetry}
+        testID="state-qr-error"
+      />
+    </Screen>
+  );
+}
+
+/**
+ * 12b กำลังตรวจสอบ — waiting for the server.
+ *
+ * Re-reads the order until the provider's webhook has moved it (CON-002), then
+ * moves on. There is no button that decides the outcome, and no timeout: a
+ * payment the bank is still processing is still pending, and the order's own
+ * expiry is the server's to apply.
+ */
 export function PayCheckingScreen() {
   const navigation = useNavigation<Nav>();
   const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PayChecking'>>());
+
+  usePaymentOutcome(orderRef.orderId, (outcome) => routeForOutcome(navigation, outcome, orderRef));
 
   return (
     <Screen
       testID="screen-pay-checking"
       footer={
         <BottomBar>
-          {/*
-            These buttons exist so every payment state is reachable for review.
-            In production the transition comes from a backend webhook (CON-002),
-            never from a customer tapping a button.
-          */}
-          <Button label="จำลอง: สำเร็จ" onPress={() => navigation.navigate('PaySuccess', orderRef)} />
-          <Button
-            label="จำลอง: ยืนยันไม่ได้"
-            variant="secondary"
-            // Not given the reference: `PayFailed` leads only back into a
-            // retry, and REQ-003 has not decided whether a retry reuses this
-            // order or creates a new one. Out of scope for E-3E.
-            onPress={() => navigation.navigate('PayFailed')}
-          />
-          <Button
-            label="จำลอง: จ่ายซ้ำ"
-            variant="ghost"
-            // Same reference as the success branch, deliberately: a duplicate
-            // payment is the *same* order (REQ-003), so C-13 must be able to
-            // track it exactly as it would after a first-time success.
-            onPress={() => navigation.navigate('PayDuplicate', orderRef)}
-          />
+          <Button label="กลับไปหน้า QR" variant="ghost" onPress={() => navigation.goBack()} />
         </BottomBar>
       }
     >
@@ -228,13 +414,14 @@ export function PaySuccessScreen() {
 /** 12d ยืนยันไม่ได้ — Payment state FAILED. */
 export function PayFailedScreen() {
   const navigation = useNavigation<Nav>();
+  const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PayFailed'>>());
 
   return (
     <Screen
       testID="screen-pay-failed"
       footer={
         <BottomBar>
-          <Button label="ลองจ่ายอีกครั้ง" onPress={() => navigation.navigate('PromptPayQr')} />
+          <Button label="ลองจ่ายอีกครั้ง" onPress={() => navigation.replace('PromptPayQr', orderRef)} />
           {/*
             Was `เปลี่ยนเป็นเงินสด`. DEC-016 disables Cash on Delivery in
             Phase 1, so a failed online payment must not offer cash as an
@@ -269,13 +456,14 @@ export function PayFailedScreen() {
 /** 12e QR หมดอายุ — Payment state EXPIRED. */
 export function PayExpiredScreen() {
   const navigation = useNavigation<Nav>();
+  const orderRef = useOrderReference(useRoute<RouteProp<CustomerStackParamList, 'PayExpired'>>());
 
   return (
     <Screen
       testID="screen-pay-expired"
       footer={
         <BottomBar>
-          <Button label="ขอ QR ใหม่" onPress={() => navigation.navigate('PromptPayQr')} />
+          <Button label="ขอ QR ใหม่" onPress={() => navigation.replace('PromptPayQr', orderRef)} />
           <Button label="กลับไปแก้ออเดอร์" variant="ghost" onPress={() => navigation.navigate('Checkout')} />
         </BottomBar>
       }
@@ -445,17 +633,7 @@ function RefundStep({
 
 const styles = StyleSheet.create({
   qrCard: { alignItems: 'center', gap: spacing.md },
-  qrBox: {
-    width: 200,
-    height: 200,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surfaceSunken,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  qrGlyph: { fontFamily: fontFamily.regular, fontSize: 56 },
-  qrNote: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center', lineHeight: 18 },
+  qrImage: { width: 220, height: 220, borderRadius: radius.lg, backgroundColor: colors.surface },
   amount: { fontSize: fontSize.h1, fontFamily: fontFamily.bold, color: colors.textPrimary },
   countdown: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textMuted },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },

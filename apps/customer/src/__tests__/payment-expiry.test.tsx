@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react-native';
+import { repositories } from '../repositories';
 import { NavigationContainer } from '@react-navigation/native';
 import { CartProvider } from '../hooks/useCart';
 import { AuthProvider } from '../hooks/useAuth';
@@ -35,7 +36,7 @@ jest.mock('@react-navigation/native', () => {
       goBack: jest.fn(),
       setOptions: jest.fn(),
     }),
-    useRoute: () => ({ params: {} }),
+    useRoute: () => ({ params: { orderId: 'order-1', orderNumber: 'BH-1' } }),
   };
 });
 
@@ -74,6 +75,14 @@ describe('PromptPay QR expiry', () => {
     jest.useFakeTimers();
     mockReplace.mockClear();
     mockNavigate.mockClear();
+    // The countdown runs to the server's attempt expiry, ten minutes from now.
+    const expiresAt = new Date(Date.now() + QR_TTL_SECONDS * 1000).toISOString();
+    (repositories as unknown as Record<string, unknown>).payments = {
+      startPayment: jest.fn().mockResolvedValue({ paymentId: 'p-1', amountSatang: 7500, qrImageUrl: null, expiresAt }),
+    };
+    (repositories as unknown as Record<string, unknown>).orderDetail = {
+      getOrder: jest.fn().mockResolvedValue({ state: 'PENDING_PAYMENT' }),
+    };
   });
 
   afterEach(() => {
@@ -82,6 +91,7 @@ describe('PromptPay QR expiry', () => {
 
   it('shows the countdown and does not expire while time remains', async () => {
     renderQr();
+    await act(async () => {});
 
     expect(screen.getByTestId('screen-promptpay-qr')).toBeTruthy();
 
@@ -90,16 +100,18 @@ describe('PromptPay QR expiry', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('moves to PayExpired when the TTL reaches 0', async () => {
+  it('moves to PayExpired, for the same order, when the attempt expires', async () => {
     renderQr();
+    await act(async () => {});
 
     await advanceSeconds(QR_TTL_SECONDS);
 
-    expect(mockReplace).toHaveBeenCalledWith('PayExpired');
+    expect(mockReplace).toHaveBeenCalledWith('PayExpired', { orderId: 'order-1', orderNumber: 'BH-1' });
   });
 
   it('replaces rather than pushes, so Back cannot return to a dead QR', async () => {
     renderQr();
+    await act(async () => {});
 
     await advanceSeconds(QR_TTL_SECONDS);
 

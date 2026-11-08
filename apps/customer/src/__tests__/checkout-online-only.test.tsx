@@ -48,7 +48,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), setOptions: jest.fn() }),
+    useNavigation: () => ({ navigate: mockNavigate, replace: mockNavigate, goBack: jest.fn(), setOptions: jest.fn() }),
     useRoute: () => ({ params: {} }),
   };
 });
@@ -204,7 +204,8 @@ describe('failed online payment offers no cash fallback (DEC-016)', () => {
     renderWithProviders(<PayFailedScreen />);
 
     fireEvent.press(screen.getByText('ลองจ่ายอีกครั้ง'));
-    expect(mockNavigate).toHaveBeenCalledWith('PromptPayQr');
+    // The retry is for the same order; with no reference in the route there is none to pass.
+    expect(mockNavigate).toHaveBeenCalledWith('PromptPayQr', { orderId: undefined, orderNumber: undefined });
 
     fireEvent.press(screen.getByText('กลับไปแก้ออเดอร์'));
     expect(mockNavigate).toHaveBeenCalledWith('Checkout');
