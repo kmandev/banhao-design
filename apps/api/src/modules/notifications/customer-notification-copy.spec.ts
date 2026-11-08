@@ -48,6 +48,8 @@ describe('customerCopyFor (DEC-068 D1)', () => {
     expect(isSilentFor('OrderCreated', 'CUSTOMER')).toBe(true);
     expect(isSilentFor('OrderCreated', 'MERCHANT')).toBe(true);
     expect(isSilentFor('OrderReady', 'MERCHANT')).toBe(true);
+    expect(isSilentFor('MerchantAcceptedOrder', 'MERCHANT')).toBe(true);
+    expect(isSilentFor('MerchantAcceptedOrder', 'CUSTOMER')).toBe(false);
     expect(isSilentFor('OrderReady', 'RIDER')).toBe(false);
     for (const eventType of CUSTOMER_COPY_EVENT_TYPES) {
       expect(isSilentFor(eventType, 'CUSTOMER')).toBe(false);

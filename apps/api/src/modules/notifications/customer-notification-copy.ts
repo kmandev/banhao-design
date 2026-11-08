@@ -70,8 +70,10 @@ const RIDER_COPY: Readonly<Record<string, NotificationCopy>> = {
 /**
  * DEC-072: a merchant is not told about an order before it is paid (it can do
  * nothing with it), nor about "food ready", which the merchant pressed itself.
+ * "Order accepted" follows the same rule — the merchant pressed it too; the
+ * 2026-11-08 staging E2E caught it arriving as the raw event name.
  */
-const SILENT_FOR_MERCHANT: ReadonlySet<string> = new Set(['OrderCreated', 'OrderReady']);
+const SILENT_FOR_MERCHANT: ReadonlySet<string> = new Set(['OrderCreated', 'OrderReady', 'MerchantAcceptedOrder']);
 
 /** Whether this recipient is deliberately sent nothing for this event. */
 export function isSilentFor(eventType: string, recipientType: string): boolean {
