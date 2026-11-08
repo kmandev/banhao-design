@@ -17,6 +17,15 @@ describe('loadServerEnv', () => {
     expect(env.supabaseUrl).toBe('https://example.supabase.co');
   });
 
+  it('also splits CORS_ORIGINS on whitespace, as the Cloud Run deploy passes it', () => {
+    const env = loadServerEnv({
+      ...validEnv,
+      CORS_ORIGINS: 'https://banhao-admin-staging.pages.dev https://banhao-merchant-staging.pages.dev',
+    });
+
+    expect(env.corsOrigins).toEqual(['https://banhao-admin-staging.pages.dev', 'https://banhao-merchant-staging.pages.dev']);
+  });
+
   it('splits CORS_ORIGINS into a trimmed list', () => {
     const env = loadServerEnv({
       ...validEnv,

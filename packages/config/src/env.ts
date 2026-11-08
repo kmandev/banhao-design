@@ -131,7 +131,9 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEn
   return {
     nodeEnv: env.NODE_ENV,
     port: env.PORT,
-    corsOrigins: env.CORS_ORIGINS.split(',')
+    // Commas or whitespace: Cloud Run's deploy action splits env_vars on
+    // commas, so the deployed value lists origins separated by spaces.
+    corsOrigins: env.CORS_ORIGINS.split(/[\s,]+/)
       .map((o) => o.trim())
       .filter(Boolean),
     supabaseUrl: env.SUPABASE_URL,

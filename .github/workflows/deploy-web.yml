@@ -1,9 +1,8 @@
 name: Deploy Web (Cloudflare Pages)
 
-# apps/admin only. apps/customer and apps/driver are Expo/native — a separate
-# EAS/App Store/Google Play track, never Pages. apps/merchant is still an
-# Expo shell (DEC-APP-003 conversion has not happened) and has no Pages
-# target yet — this workflow does not build or deploy it.
+# apps/admin and apps/merchant (two jobs, each gated on its own paths). Both are
+# Next.js static exports. apps/customer and apps/driver are Expo/native — a
+# separate EAS/App Store/Google Play track, never Pages.
 #
 # See .github/workflows/deploy-api.yml for the full reasoning behind gating
 # on workflow_run + head_sha rather than a raw push trigger; identical logic
@@ -67,6 +66,7 @@ jobs:
           filters: |
             web:
               - 'apps/admin/**'
+              - '.github/workflows/deploy-web.yml'
               - 'packages/**'
               - 'pnpm-lock.yaml'
               - 'package.json'
@@ -111,6 +111,15 @@ jobs:
         # scoped to what apps/admin needs. `next.config.mjs` sets
         # `output: 'export'` (locked in docs/DEPLOYMENT-ARCHITECTURE-V1.md
         # §6), which is what makes apps/admin/out exist below.
+        #
+        # NEXT_PUBLIC_* are inlined at build time. Without them the export has
+        # no Supabase or API address and cannot sign anyone in — found
+        # 2026-11-08, the deployed console had none. Public values only: the
+        # anon key is designed to ship to browsers; no secret appears here.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_API_URL: ${{ vars.API_PUBLIC_URL }}
         run: pnpm exec turbo run build --filter=@banhao/admin...
 
       - name: Verify static export exists
@@ -138,3 +147,106 @@ jobs:
         # main → production is Pages' own convention for the `--branch=main`
         # deployment; this workflow never runs for a pull_request (see the
         # workflow_run gate above), so no PR can reach a production deploy.
+
+  deploy-merchant:
+    name: Build and deploy apps/merchant to Cloudflare Pages
+    runs-on: ubuntu-latest
+    environment: production
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push')
+    steps:
+      - name: Checkout the exact commit CI tested
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve base commit for path filtering
+        if: github.event_name == 'workflow_run'
+        id: base
+        run: echo "sha=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+
+      - name: Detect apps/merchant-relevant changes
+        if: github.event_name == 'workflow_run'
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ steps.base.outputs.sha }}
+          filters: |
+            web:
+              - 'apps/merchant/**'
+              - '.github/workflows/deploy-web.yml'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+
+      - name: Decide whether to deploy
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=${{ steps.filter.outputs.web }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enable pnpm
+        if: steps.gate.outputs.deploy == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Set up Node
+        if: steps.gate.outputs.deploy == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.gate.outputs.deploy == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build apps/merchant (and its workspace dependencies)
+        if: steps.gate.outputs.deploy == 'true'
+        # Same public, build-time values as apps/admin, plus the public R2 base
+        # for menu and cover images. No secret appears here.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_API_URL: ${{ vars.API_PUBLIC_URL }}
+          NEXT_PUBLIC_R2_PUBLIC_URL: ${{ vars.R2_PUBLIC_URL }}
+        run: pnpm exec turbo run build --filter=@banhao/merchant...
+
+      - name: Verify static export exists
+        if: steps.gate.outputs.deploy == 'true'
+        run: test -f apps/merchant/out/index.html
+
+      - name: Create the Pages project if it does not exist yet
+        if: steps.gate.outputs.deploy == 'true'
+        # The first run creates it; later runs fail here with "already
+        # exists", which is fine — hence continue-on-error.
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/merchant
+          command: pages project create ${{ vars.CLOUDFLARE_PAGES_MERCHANT_PROJECT }} --production-branch=main
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.gate.outputs.deploy == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/merchant
+          command: >-
+            pages deploy out
+            --project-name=${{ vars.CLOUDFLARE_PAGES_MERCHANT_PROJECT }}
+            --branch=main
