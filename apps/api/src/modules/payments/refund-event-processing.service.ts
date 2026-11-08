@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../supabase/supabase.service';
 import { BATCH_SIZE, REFUND_EVENT_TYPE_PATTERN } from './payment-event-processing.service';
 import { RefundLedgerReversalService } from './refund-ledger-reversal.service';
+import { notifyCustomerOfRefund } from './refund-customer-notification';
 
 /** `refunds.state` values the ledger must never reverse against — a transition into `REFUNDED` is blocked from either of these by `transitionRefund`'s own guard, so a refund already in one of them before this event must never trigger a reversal either. */
 const LEDGER_REVERSAL_BLOCKED_STATES = new Set(['REFUND_FAILED', 'REFUND_REJECTED']);
@@ -395,6 +396,8 @@ export class RefundEventProcessingService {
     // — DEC-049/DEC-059, Slice 3, delegated".
     if (targetState === 'REFUNDED') {
       await this.ledgerReversal.postReversals(refund.id, payment.id);
+      // DEC-069 §1 — tell the customer the money is back.
+      await notifyCustomerOfRefund(this.supabase, this.logger, 'RefundSucceeded', refund.id, payment.order_id);
     }
   }
 

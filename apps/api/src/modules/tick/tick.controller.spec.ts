@@ -16,6 +16,7 @@ import type { ProofPhotoRetentionService } from '../rider/proof-photo-retention.
 import type { OutboxDispatchService } from '../notifications/outbox-dispatch.service';
 import type { MerchantAcceptanceTimeoutService } from '../ai-ops/merchant-acceptance-timeout.service';
 import type { NoRiderTriageService } from '../ai-ops/no-rider-triage.service';
+import type { StaleCreatedOrderExpiryService } from '../orders/stale-created-order-expiry.service';
 
 /**
  * F-2b: `POST /internal/tick` invokes `PaymentEventProcessingService`. Now
@@ -102,6 +103,8 @@ describe('TickController', () => {
     const legacyPaymentExpiry = { expireLegacyUnpaidOrders } as unknown as LegacyPaymentExpiryService;
     const sweepCancelledOrders = jest.fn().mockResolvedValue({ examined: 0, abandoned: 0, failed: 0 });
     const deliveryAbandonment = { sweepCancelledOrders } as unknown as DeliveryAbandonmentService;
+    const runStaleCreated = jest.fn().mockResolvedValue({ expired: 0, failed: false });
+    const staleCreatedOrderExpiry = { run: runStaleCreated } as unknown as StaleCreatedOrderExpiryService;
     const controller = new TickController(
       paymentEvents,
       refundEvents,
@@ -117,6 +120,7 @@ describe('TickController', () => {
       aiOpsNoRider,
       aiOpsCancelledPaid,
       legacyPaymentExpiry,
+      staleCreatedOrderExpiry,
     );
     return {
       controller,
@@ -127,6 +131,7 @@ describe('TickController', () => {
       processExpiredAttempts,
       runDispatchRound,
       sweepCancelledOrders,
+      runStaleCreated,
       runNoRiderEscalation,
       runArrivalTimeout,
       run,
@@ -149,6 +154,7 @@ describe('TickController', () => {
       refundEvents: { processed: 0, skipped: 0 },
       refundReconciliation: EMPTY_REFUND_RECONCILIATION_RESULT,
       paymentAttemptExpiry: { expired: 1, skipped: 0 },
+      staleCreatedOrders: { expired: 0, failed: false },
       deliveryAbandonment: { examined: 0, abandoned: 0, failed: 0 },
       dispatch: { deliveries: 3, offers: 7, expiredOffers: 2 },
       noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
@@ -278,6 +284,8 @@ describe('TickController', () => {
       'refundEvents',
       'refundReconciliation',
       'paymentAttemptExpiry',
+      // DEC-069 §3 — orders abandoned before payment, expired after 15 minutes.
+      'staleCreatedOrders',
       // DEC-050 — closes the deliveries of cancelled orders, ahead of dispatch.
       'deliveryAbandonment',
       'dispatch',

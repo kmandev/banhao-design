@@ -7,6 +7,7 @@ import { OrderPricingService } from './order-pricing.service';
 import { DeliveryProofController } from './delivery-proof.controller';
 import { DeliveryProofService } from './delivery-proof.service';
 import { DeliveryAbandonmentService } from './delivery-abandonment.service';
+import { StaleCreatedOrderExpiryService } from './stale-created-order-expiry.service';
 
 /**
  * `CartModule` is imported explicitly for `CartService` — it is not
@@ -23,9 +24,15 @@ import { DeliveryAbandonmentService } from './delivery-abandonment.service';
 @Module({
   imports: [CartModule, StorageModule],
   controllers: [OrdersController, DeliveryProofController],
-  providers: [OrdersService, OrderPricingService, DeliveryProofService, DeliveryAbandonmentService],
+  providers: [
+    OrdersService,
+    OrderPricingService,
+    DeliveryProofService,
+    DeliveryAbandonmentService,
+    StaleCreatedOrderExpiryService,
+  ],
   // The tick runs `DeliveryAbandonmentService`'s sweep for orders cancelled
   // before a delivery could be closed (or whose close failed).
-  exports: [OrdersService, DeliveryAbandonmentService],
+  exports: [OrdersService, DeliveryAbandonmentService, StaleCreatedOrderExpiryService],
 })
 export class OrdersModule {}

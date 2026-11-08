@@ -5,6 +5,7 @@ import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import { PAYMENT_PROVIDER } from '../payments/payment-provider.interface';
 import type { PaymentProvider } from '../payments/payment-provider.interface';
+import { notifyCustomerOfRefund } from '../payments/refund-customer-notification';
 
 /** `orders`, the columns eligibility needs. */
 interface OrderRefundRow {
@@ -163,6 +164,11 @@ export class RefundService {
     }
 
     const updated = await this.markPending(refund.id, providerRefundId);
+    // DEC-069 §1 — the provider has accepted the refund and will email the
+    // customer a bank-details form; without it a PromptPay refund cannot
+    // move, so the customer is told to look for it. Only on this path, the
+    // one that actually reached the provider.
+    await notifyCustomerOfRefund(this.supabase, this.logger, 'RefundInitiated', refund.id, orderId);
     return this.toResponse(orderId, payment, updated ?? { ...refund, provider_refund_id: providerRefundId });
   }
 

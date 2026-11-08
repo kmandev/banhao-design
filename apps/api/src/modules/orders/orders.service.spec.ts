@@ -890,9 +890,9 @@ describe('OrdersService.cancelOrder — customer', () => {
     expect(abandonForOrder).not.toHaveBeenCalled();
   });
 
-  it('tells the restaurant with one OrderCancelled event, MERCHANT recipient only', async () => {
+  it('tells the customer and the restaurant with one OrderCancelled event (DEC-069 §1)', async () => {
     const { subject, calls } = buildTransitionService([
-      updatedRow('CANCELLED'),
+      { data: { id: ORDER_ID, restaurant_id: RESTAURANT_A, state: 'CANCELLED', customer_id: 'customer-1' }, error: null },
       { data: null, error: null }, // order_status_history
       MERCHANT_OWNER_LOOKUP,
       MERCHANT_OWNER,
@@ -907,10 +907,14 @@ describe('OrdersService.cancelOrder — customer', () => {
       aggregate_type: 'order',
       aggregate_id: ORDER_ID,
       event_type: 'OrderCancelled',
-      payload: { recipients: [{ recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' }] },
+      payload: {
+        recipients: [
+          { recipientId: 'customer-1', recipientType: 'CUSTOMER' },
+          { recipientId: 'merchant-owner-1', recipientType: 'MERCHANT' },
+        ],
+      },
     });
-    // No customer or rider recipient: only nine customer events are approved (DEC-068 D1).
-    expect(JSON.stringify(outbox[0]?.payload)).not.toContain('CUSTOMER');
+    // No rider recipient: no rider wording was decided.
     expect(JSON.stringify(outbox[0]?.payload)).not.toContain('RIDER');
   });
 

@@ -1,6 +1,6 @@
 /**
  * DEC-068 D1 — the Thai title/body shown to a CUSTOMER for each of the nine
- * order events the system emits. The wording is the Product Owner's, copied
+ * order events the system emits, plus DEC-069 §1's three cancel/refund events. The wording is the Product Owner's, copied
  * verbatim from `docs/PHASE-1-OWNER-QUESTIONS.md` §D1; changing a string here
  * is changing an approved decision.
  *
@@ -28,6 +28,10 @@ const CUSTOMER_COPY: Readonly<Record<string, NotificationCopy>> = {
   OrderDelivered: { title: 'ส่งถึงแล้ว', body: 'ขอให้อร่อยกับมื้อนี้' },
   OrderNoRiderFound: { title: 'ยังหาไรเดอร์ไม่ได้', body: 'ทีมงานกำลังช่วยดูแลออเดอร์ของคุณ' },
   OrderDeliveryFailed: { title: 'ส่งอาหารไม่สำเร็จ', body: 'ทีมงานจะติดต่อกลับ' },
+  // DEC-069 §1 — three more, approved 2026-11-08.
+  OrderCancelled: { title: 'ออเดอร์ถูกยกเลิกแล้ว', body: 'ถ้าชำระเงินแล้ว เราจะคืนเงินเต็มจำนวน' },
+  RefundInitiated: { title: 'เริ่มคืนเงินแล้ว', body: 'ตรวจอีเมลเพื่อกรอกบัญชีรับเงินคืน' },
+  RefundSucceeded: { title: 'คืนเงินสำเร็จ', body: 'เงินคืนเข้าบัญชีของคุณแล้ว' },
 };
 
 /**
@@ -52,5 +56,5 @@ export function customerCopyFor(eventType: string, recipientType: string): Notif
   return CUSTOMER_COPY[eventType] ?? null;
 }
 
-/** The nine approved event names, for tests. */
+/** The approved event names (DEC-068 D1's nine plus DEC-069's three), for tests. */
 export const CUSTOMER_COPY_EVENT_TYPES: readonly string[] = Object.keys(CUSTOMER_COPY);

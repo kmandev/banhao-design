@@ -19,6 +19,10 @@ import {
   type AbandonmentSweepResult,
 } from '../orders/delivery-abandonment.service';
 import {
+  StaleCreatedOrderExpiryService,
+  type StaleCreatedOrderExpiryResult,
+} from '../orders/stale-created-order-expiry.service';
+import {
   NoRiderEscalationService,
   type NoRiderEscalationResult,
 } from '../rider/no-rider-escalation.service';
@@ -51,6 +55,8 @@ export interface TickAcceptedResponse {
   refundReconciliation: RefundReconciliationRunResult;
   /** How many timed-out `payment_attempts` rows this tick expired. */
   paymentAttemptExpiry: { expired: number; skipped: number };
+  /** DEC-069 §3 — orders still `CREATED` after 15 minutes, moved to `PAYMENT_EXPIRED`. */
+  staleCreatedOrders: StaleCreatedOrderExpiryResult;
   /** DEC-050 — deliveries of cancelled orders this tick closed. Runs before dispatch so a cancelled order is never offered to riders again. */
   deliveryAbandonment: AbandonmentSweepResult;
   /** G-2 — the broadcast dispatch round this tick ran (DEC-020, DEC-037). */
@@ -197,6 +203,7 @@ export class TickController {
     private readonly aiOpsNoRider: NoRiderTriageService,
     private readonly aiOpsCancelledPaid: CancelledPaidOrderEscalationService,
     private readonly legacyPaymentExpiry: LegacyPaymentExpiryService,
+    private readonly staleCreatedOrderExpiry: StaleCreatedOrderExpiryService,
   ) {}
 
   @Public()
@@ -211,6 +218,7 @@ export class TickController {
     const refundEvents = await this.refundEvents.processPendingEvents();
     const refundReconciliation = await this.refundReconciliation.run();
     const paymentAttemptExpiry = await this.paymentAttemptExpiry.processExpiredAttempts();
+    const staleCreatedOrders = await this.staleCreatedOrderExpiry.run();
     // Before dispatch, so the delivery of an order cancelled since the last tick
     // is closed rather than offered to riders once more.
     const deliveryAbandonment = await this.deliveryAbandonment.sweepCancelledOrders();
@@ -229,6 +237,7 @@ export class TickController {
       refundEvents,
       refundReconciliation,
       paymentAttemptExpiry,
+      staleCreatedOrders,
       deliveryAbandonment,
       dispatch,
       noRiderEscalation,

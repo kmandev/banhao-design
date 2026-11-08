@@ -113,8 +113,9 @@ describe('OutboxDispatchService.processOne — success path', () => {
       recipient_id: 'cust-1',
       recipient_type: 'CUSTOMER',
       event_type: 'OrderCancelled',
-      title: 'OrderCancelled',
-      body: null,
+      // DEC-069 §1 — the approved customer wording.
+      title: 'ออเดอร์ถูกยกเลิกแล้ว',
+      body: 'ถ้าชำระเงินแล้ว เราจะคืนเงินเต็มจำนวน',
       deep_link: null,
       order_id: 'order-1',
     });
@@ -134,8 +135,8 @@ describe('OutboxDispatchService.processOne — success path', () => {
     expect(channel.deliver).toHaveBeenCalledWith({
       notificationId: 'notif-1',
       recipientId: 'cust-1',
-      title: 'OrderCancelled',
-      body: null,
+      title: 'ออเดอร์ถูกยกเลิกแล้ว',
+      body: 'ถ้าชำระเงินแล้ว เราจะคืนเงินเต็มจำนวน',
       deepLink: null,
     });
   });
@@ -201,13 +202,13 @@ describe('OutboxDispatchService.processOne — notification content (DEC-068 D1)
     expect(inserts[1]?.payload).toMatchObject({ recipient_type: 'MERCHANT', title: 'OrderDelivered', body: null });
   });
 
-  it('keeps an event outside the nine on the original behaviour, even for a customer', async () => {
+  it('keeps an event without approved wording on the original behaviour, even for a customer', async () => {
     const { calls } = await dispatch(
-      row('OrderCancelled', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
+      row('MerchantRejectedOrder', 'order', { recipients: [{ recipientId: 'cust-1', recipientType: 'CUSTOMER' }] }),
     );
 
     const insert = calls.find((c) => c.table === 'notifications' && c.op === 'insert');
-    expect(insert?.payload).toMatchObject({ title: 'OrderCancelled', body: null });
+    expect(insert?.payload).toMatchObject({ title: 'MerchantRejectedOrder', body: null });
   });
 
   it('tells a customer nothing about OrderCreated — they just placed it, and it has no approved wording', async () => {

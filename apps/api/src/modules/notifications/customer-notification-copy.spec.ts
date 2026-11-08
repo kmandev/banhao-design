@@ -5,9 +5,12 @@ import { CUSTOMER_COPY_EVENT_TYPES, customerCopyFor, isSilentFor } from './custo
  * pin the set and the text so neither can drift without a visible change here.
  */
 describe('customerCopyFor (DEC-068 D1)', () => {
-  it('covers exactly the nine approved events', () => {
+  it('covers exactly the approved events — DEC-068 D1\'s nine and DEC-069\'s three', () => {
     expect([...CUSTOMER_COPY_EVENT_TYPES].sort()).toEqual(
       [
+        'OrderCancelled',
+        'RefundInitiated',
+        'RefundSucceeded',
         'MerchantAcceptedOrder',
         'OrderDeliveryFailed',
         'OrderDelivered',
@@ -52,5 +55,19 @@ describe('customerCopyFor (DEC-068 D1)', () => {
   it('answers null for an event outside the nine', () => {
     expect(customerCopyFor('OrderCreated', 'CUSTOMER')).toBeNull();
     expect(customerCopyFor('SomethingElse', 'CUSTOMER')).toBeNull();
+  });
+});
+
+describe('customerCopyFor — DEC-069 §1 cancel and refund wording', () => {
+  it.each([
+    ['OrderCancelled', 'ออเดอร์ถูกยกเลิกแล้ว', 'ถ้าชำระเงินแล้ว เราจะคืนเงินเต็มจำนวน'],
+    ['RefundInitiated', 'เริ่มคืนเงินแล้ว', 'ตรวจอีเมลเพื่อกรอกบัญชีรับเงินคืน'],
+    ['RefundSucceeded', 'คืนเงินสำเร็จ', 'เงินคืนเข้าบัญชีของคุณแล้ว'],
+  ])('%s → the approved text', (event, title, body) => {
+    expect(customerCopyFor(event, 'CUSTOMER')).toEqual({ title, body });
+  });
+
+  it('gives the merchant no customer wording for OrderCancelled', () => {
+    expect(customerCopyFor('OrderCancelled', 'MERCHANT')).toBeNull();
   });
 });

@@ -33,6 +33,7 @@ import { MerchantAcceptanceTimeoutService } from '../src/modules/ai-ops/merchant
 import { NoRiderTriageService } from '../src/modules/ai-ops/no-rider-triage.service';
 import { CancelledPaidOrderEscalationService } from '../src/modules/ai-ops/cancelled-paid-order-escalation.service';
 import { DeliveryAbandonmentService } from '../src/modules/orders/delivery-abandonment.service';
+import { StaleCreatedOrderExpiryService } from '../src/modules/orders/stale-created-order-expiry.service';
 import { SupabaseModule } from '../src/supabase/supabase.module';
 import { UsersModule } from '../src/modules/users/users.module';
 
@@ -65,6 +66,7 @@ const PHASE_RESULTS = {
     refundedLedgerIncomplete: EMPTY_REFUND_RECONCILIATION_PHASE,
   },
   paymentAttemptExpiry: { expired: 0, skipped: 0 },
+  staleCreatedOrders: { expired: 0, failed: false },
   deliveryAbandonment: { examined: 0, abandoned: 0, failed: 0 },
   dispatch: { deliveries: 0, offers: 0, expiredOffers: 0 },
   noRiderEscalation: { escalated: 0, decisionPointReached: 0, skipped: 0, failed: 0 },
@@ -195,6 +197,8 @@ describe('POST /internal/tick (integration)', () => {
       .useValue({ run: async () => PHASE_RESULTS.aiOpsCancelledPaid })
       .overrideProvider(DeliveryAbandonmentService)
       .useValue({ sweepCancelledOrders: async () => PHASE_RESULTS.deliveryAbandonment })
+      .overrideProvider(StaleCreatedOrderExpiryService)
+      .useValue({ run: async () => PHASE_RESULTS.staleCreatedOrders })
       .compile();
 
     app = moduleRef.createNestApplication({ rawBody: true });

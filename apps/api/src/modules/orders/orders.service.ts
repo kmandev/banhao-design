@@ -936,11 +936,11 @@ export class OrdersService {
    * 1. **Close the delivery** (`DeliveryAbandonmentService`). Without this the
    *    delivery keeps being offered to riders. If it fails here the tick's
    *    sweep finds it and finishes the job.
-   * 2. **Tell the restaurant** — one `OrderCancelled` outbox event, `MERCHANT`
-   *    recipient only. No customer or rider recipient: the nine approved
-   *    customer notifications (DEC-068 D1) do not include this event, and no
-   *    rider wording was decided. The merchant keeps the raw event name like
-   *    every other merchant notification today.
+   * 2. **Tell the restaurant and the customer** — one `OrderCancelled` outbox
+   *    event, `MERCHANT` and `CUSTOMER` recipients. The customer text is
+   *    DEC-069 §1's ("ออเดอร์ถูกยกเลิกแล้ว — ถ้าชำระเงินแล้ว เราจะคืนเงินเต็ม
+   *    จำนวน"). No rider recipient: no rider wording was decided. The merchant
+   *    keeps the raw event name like every other merchant notification today.
    */
   private async afterCancellation(
     order: OrderDiagnosisRow,
@@ -957,13 +957,13 @@ export class OrdersService {
     }
 
     try {
-      const recipients = await this.resolveEventRecipients(order, ['MERCHANT']);
+      const recipients = await this.resolveEventRecipients(order, ['CUSTOMER', 'MERCHANT']);
       if (recipients.length > 0) {
         await this.writeOutboxEvent('order', order.id, 'OrderCancelled', recipients);
       }
     } catch (cause) {
       this.logger.warn(
-        `Order ${order.id} is cancelled but the restaurant notification was not written: ` +
+        `Order ${order.id} is cancelled but its notifications were not written: ` +
           `${cause instanceof Error ? cause.message : String(cause)}`,
       );
     }
