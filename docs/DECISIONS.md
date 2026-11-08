@@ -79,6 +79,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-067** | **Settlement question set 1: cycle, refund events, rider compensation, tax, statements** | **ACCEPTED — DECISION ONLY, NOT IMPLEMENTED** (S2–S4 provisional on S1) | **2026-11-02** | `docs/SETTLEMENT_MODEL.md`, `docs/Q-002-MARKETPLACE-PAYMENT-PROVIDER-RESEARCH.md`, DEC-055, BQ-024, BQ-032 |
 | **DEC-068** | **Phase 1 owner question set 2: payment_events fix, order-flow policy, money-flow follow-ups, notifications, pilot scope** (C3-A amends DEC-041 G-2 in part) | **ACCEPTED** (A1 and E2 authorized; C1, C3, D1 decision only; B2/B3 conditional on S1) | **2026-11-02** | `docs/PHASE-1-OWNER-QUESTIONS.md`, `docs/Q-002-PROVIDER-EMAIL-DRAFTS.md`, `docs/legal/`, DEC-041, DEC-053, DEC-058, BQ-013, BQ-038 |
 | **DEC-069** | **Customer cancel/refund notifications, cancel button through the whole free window (DQ-06), `CREATED` order expiry at 15 minutes, service-fee satang precision confirmed** | **ACCEPTED** (implementation authorized) | **2026-11-08** | DEC-050, DEC-058, DEC-061 D-03/D-04, DEC-068 D1, DQ-06 |
+| **DEC-070** | **Launch-plan answers: legal work deferred to the end; delivery fee editable from the back office (fixed or percentage); production stays on Supabase free tier with keep-alive; Q2–Q5, Q7 as recommended** | **ACCEPTED** (implementation authorized; migrations still need their own go-ahead) | **2026-11-08** | `docs/LAUNCH_PLAN.md`, DEC-035, DEC-045, DEC-061 D-18/D-19 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -9600,4 +9601,38 @@ recommendations recorded below)
 **Preserves unchanged:** DEC-050, DEC-058 (operators still start and execute
 refunds; these notifications only report them), DEC-061, DEC-068 D1's nine
 texts.
+
+---
+
+## DEC-070 — Answers to the launch plan's owner questions
+
+**Status:** ACCEPTED · **Date:** 2026-11-08 · **Owner:** PRODUCT_OWNER
+("อนุมัติตามที่แนะนำ" with three changes, quoted below)
+
+1. **Legal work (LAUNCH_PLAN stage 5) is deferred until everything else is
+   done** ("งานกฎหมายเอาไว้ทำจนกว่าจะเสร็จทั้งหมด"). Recorded consequence, not
+   a new rule: the app stores require a published privacy policy and live
+   Stripe needs a completed account, so stage 4.5 (store release) and live
+   money wait on this.
+2. **Delivery fee is editable from the back office, not fixed in code**
+   ("ไม่อยาก fix ค่าส่ง ทำเป็นค่าที่สามารถแก้ไขได้จากหลังบ้าน … เปอร์เซนต์ก็ได้
+   fix rate ก็ได้"). Two modes: a fixed amount, or a percentage of the food
+   subtotal. The pilot starts at today's ฿10 fixed. Each order keeps the fee it
+   was created with (the amount is stored on the order, as today). This
+   answers, for the delivery fee only, who may change it (D-18: ADMIN staff)
+   and that a change applies to orders created after it (D-19). DEC-035's
+   flat ฿10 becomes the starting value, not a constant.
+3. **Production stays on the Supabase free tier**, and the system must keep
+   it from pausing for inactivity ("ยังใช้เป็นแผนฟรี แต่ช่วย … ออกแบบระบบไม่ให้
+   แผนฟรีหยุดเองเมื่อไม่มีคนใช้"). Design in `docs/LAUNCH_PLAN.md` §8: a
+   scheduled heartbeat that performs a real database read, not fabricated
+   orders (fake orders would enter the ledger and settlement).
+4. Q2 Expo Push, Q3 Claude drafts merchant/rider notification copy for
+   approval, Q4 weekly manual payouts from a system report, Q5 plain earnings
+   tables before a design exists, Q7 SMS provider by price — as recommended.
+
+**Open, raised by item 2:** DEC-045's `PLATFORM_WRITE_OFF +200` assumes the
+fee is ฿10 against the ฿12 rider earning. With an editable fee the gap moves;
+the proposed rule (BANHAO absorbs any shortfall, keeps any surplus) needs the
+owner's confirmation before the ledger code changes.
 
