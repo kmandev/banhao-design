@@ -1675,6 +1675,54 @@
         ]
       }
     },
+    "/api/v1/admin/supervisor/pricing/delivery-fee": {
+      "get": {
+        "operationId": "SupervisorController_getDeliveryFee",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Delivery fee setting, history and preview"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Caller holds no active platform_staff grant"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      },
+      "put": {
+        "operationId": "SupervisorController_setDeliveryFee",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The new setting, history and preview"
+          },
+          "401": {
+            "description": "Missing or invalid bearer token"
+          },
+          "403": {
+            "description": "Not an ADMIN"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/supervisor/me": {
       "get": {
         "operationId": "SupervisorController_me",

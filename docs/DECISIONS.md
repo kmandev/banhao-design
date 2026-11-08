@@ -80,6 +80,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-068** | **Phase 1 owner question set 2: payment_events fix, order-flow policy, money-flow follow-ups, notifications, pilot scope** (C3-A amends DEC-041 G-2 in part) | **ACCEPTED** (A1 and E2 authorized; C1, C3, D1 decision only; B2/B3 conditional on S1) | **2026-11-02** | `docs/PHASE-1-OWNER-QUESTIONS.md`, `docs/Q-002-PROVIDER-EMAIL-DRAFTS.md`, `docs/legal/`, DEC-041, DEC-053, DEC-058, BQ-013, BQ-038 |
 | **DEC-069** | **Customer cancel/refund notifications, cancel button through the whole free window (DQ-06), `CREATED` order expiry at 15 minutes, service-fee satang precision confirmed** | **ACCEPTED** (implementation authorized) | **2026-11-08** | DEC-050, DEC-058, DEC-061 D-03/D-04, DEC-068 D1, DQ-06 |
 | **DEC-070** | **Launch-plan answers: legal work deferred to the end; delivery fee editable from the back office (fixed or percentage); production stays on Supabase free tier with keep-alive; Q2–Q5, Q7 as recommended** | **ACCEPTED** (implementation authorized; migrations still need their own go-ahead) | **2026-11-08** | `docs/LAUNCH_PLAN.md`, DEC-035, DEC-045, DEC-061 D-18/D-19 |
+| **DEC-071** | **Delivery fee model for the pilot (Option C): back-office fee FIXED or PERCENT, always ฿15–35; rider 80% of the fee, at least ฿12; BANHAO never makes up a delivery shortfall** | **ACCEPTED** (implementation and migration authorized) | **2026-11-08** | DEC-061 D-05/D-06/D-09/D-10, DEC-070 §2, DEC-044, DEC-045 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -9635,4 +9636,37 @@ texts.
 fee is ฿10 against the ฿12 rider earning. With an editable fee the gap moves;
 the proposed rule (BANHAO absorbs any shortfall, keeps any surplus) needs the
 owner's confirmation before the ledger code changes.
+
+---
+
+## DEC-071 — Delivery fee model for the pilot: no per-order loss (Option C)
+
+**Status:** ACCEPTED · **Date:** 2026-11-08 · **Owner:** PRODUCT_OWNER ("เอาแบบ C",
+choosing among three options analysed in chat, with the instruction "ออกแบบยังไง
+ไม่ให้ BANHAO ออกส่วนที่ขาด หรือขาดทุนในแต่ละ order")
+
+1. **The delivery fee is a back-office setting** (DEC-070 §2): FIXED, or a
+   PERCENT of the food subtotal with optional min/max. **Every computed fee is
+   held to ฿15–35** — DEC-061 D-09/D-10's band, applied now without distance.
+2. **The rider earns 80% of the order's own delivery fee, never less than ฿12**
+   — DEC-061 D-05/D-06, applied now. This replaces DEC-044's flat ฿12 for
+   deliveries completed from now on. A legacy ฿10 order still earns ฿12.
+3. **Consequence, by construction:** with the fee never below ฿15, the rider's
+   share never exceeds the fee, so the delivery line is never negative and
+   BANHAO never posts a shortfall. The remainder is BANHAO's delivery margin,
+   posted as `PLATFORM_REVENUE`. DEC-045's `PLATFORM_WRITE_OFF` is posted only
+   for legacy orders whose stored fee is below the rider's earning.
+4. **Starting value: FIXED ฿15.** ADMIN may change it (with a reason); a change
+   applies to orders created afterwards; each order keeps its stored fee.
+5. Worked minimum, at the DEC-055 1.65% processing assumption: with fee ≥ ฿15
+   and service fee ≥ ฿5, a completed order leaves BANHAO at least about ฿7.60.
+
+**Not covered by this rule (recorded, not decided):** losses outside pricing —
+processing fees not returned on a post-payment refund, DEC-051/053 food-loss
+write-offs, and future promotions (to be checked against D-11 when built).
+
+**Supersedes:** DEC-035's flat ฿10 as the delivery fee for new orders; DEC-044's
+flat ฿12 rider earning for new completions; DEC-045 for orders priced under this
+decision. **Implements:** DEC-061 D-05, D-06, D-09, D-10 (without D-08's
+distance component, still blocked on D-16/D-17).
 
