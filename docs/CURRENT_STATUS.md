@@ -71,6 +71,7 @@ These have been, by execution:
 | Phone OTP → profile read under RLS → `display_name` write → session survives restart → logout persists | 2026-08-10 (EVENT-011) | `supabase/tests/live-rls-check.mjs`, 14/14 |
 | Merchant M-05 accept: one `POST /orders/:id/accept` → 200, `MERCHANT_ACCEPTED` with `prep_minutes`, exactly one `deliveries` / `order_status_history` / outbox row, board updated by Realtime | 2026-09-01 (EVENT-026) | `CLAUDE.md` §11; fixture `M05-VERIFY-0005` |
 | D-01 commission snapshot rows and the First Manual Tick (accepted) | 2026-09-20 | `CLAUDE.md` EVENT-035 |
+| DEC-061 D-03/D-04 service fee on staging: a ฿180 cart created `BH-20261108-0001` with `service_fee_satang = 900` (5%), delivery 1000, total 19900 | 2026-11-08 | `docs/DECISIONS.md` DEC-061 D-03/D-04 status note |
 | **Full order happy path**: cart → order → Stripe test payment → webhook → `PAID` → accept → dispatch → pickup → proof photo → `DELIVERED`, with the expected ledger. Local API against `banhao-dev`, API-level, manual ticks | 2026-11-02 | [`E2E_RUN_2026-11-02.md`](E2E_RUN_2026-11-02.md) |
 | M-AV PAUSED customer path on iOS Simulator (G-3 Test A) | 2026-09, after `ab3efec3` | `CLAUDE.md` §11 |
 | M-AV customer paths on iOS Simulator: NORMAL, BUSY (notice + 30-minute estimate, still orderable) and signed-out (G-3 Tests B, C, D). **G-3 closed** | 2026-11-08 | `CLAUDE.md` §11 |
