@@ -28,11 +28,42 @@ export interface Env {
   INTERNAL_TICK_SECRET: string;
 }
 
+/**
+ * DEC-070 §3 — the hourly heartbeat cron (wrangler.toml). Kept separate from
+ * the tick so it runs even where the tick is deliberately disabled
+ * (production: INTERNAL_TICK_SECRET unset). It needs no secret and changes
+ * nothing.
+ */
+export const HEARTBEAT_CRON = '0 * * * *';
+
 export default {
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (controller.cron === HEARTBEAT_CRON) {
+      ctx.waitUntil(runHeartbeat(env));
+      return;
+    }
     ctx.waitUntil(runTick(env));
   },
 } satisfies ExportedHandler<Env>;
+
+/**
+ * Keeps a Supabase free-tier project from pausing for inactivity (DEC-070 §3)
+ * without writing any fake data: `GET /health` performs a real, bounded
+ * database read (`health.service.ts`), which is activity Supabase counts.
+ * A failed or degraded answer throws, so it shows up as an error in the
+ * Worker's logs and any alert attached to them — a paused database is noticed
+ * within the hour instead of when the first customer tries to order.
+ */
+async function runHeartbeat(env: Env): Promise<void> {
+  if (!env.API_URL) {
+    throw new Error('tick-worker heartbeat: API_URL is not configured');
+  }
+  const response = await fetch(`${env.API_URL}/health`, { method: 'GET' });
+  const body = await response.text();
+  if (!response.ok || !body.includes('"database":{"status":"ok"')) {
+    throw new Error(`tick-worker heartbeat: /health unhealthy (HTTP ${response.status}): ${body.slice(0, 300)}`);
+  }
+}
 
 async function runTick(env: Env): Promise<void> {
   if (!env.API_URL) {

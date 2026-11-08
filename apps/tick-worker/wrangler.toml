@@ -13,7 +13,11 @@ main = "src/index.ts"
 compatibility_date = "2026-08-01"
 
 [triggers]
-crons = ["* * * * *"]
+# "* * * * *" — the tick (POST /internal/tick, HMAC-signed).
+# "0 * * * *" — the hourly heartbeat (GET /health, no secret, read-only), which
+#   keeps a Supabase free-tier project from pausing (DEC-070 §3) and fails
+#   loudly if the database is down. It runs even where the tick is disabled.
+crons = ["* * * * *", "0 * * * *"]
 
 [vars]
 # Non-secret: the Cloud Run URL the tick is sent to. Set to the
