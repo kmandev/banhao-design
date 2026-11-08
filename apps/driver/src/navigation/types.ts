@@ -37,6 +37,8 @@ export type AuthStackParamList = {
 export type RiderStackParamList = {
   Home: undefined;
   OfferInbox: undefined;
+  /** DEC-073 — the rider's own earnings; the week is chosen on the screen. */
+  Earnings: undefined;
   /**
    * No `deliveryId` parameter, deliberately. The screen reads *the* active
    * delivery from `deliveries` under `deliveries_select_rider`, and DEC-037

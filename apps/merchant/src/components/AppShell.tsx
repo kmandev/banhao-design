@@ -25,6 +25,8 @@ const NAV_ITEMS: { key: string; label: string; href: string | null }[] = [
   { key: 'history', label: 'ประวัติ', href: null },
   { key: 'menu', label: 'เมนู', href: '/menu' },
   { key: 'restaurant', label: 'ร้านของฉัน', href: '/restaurant' },
+  // DEC-073 / DEC-070 Q5 — plain earnings table until a design exists.
+  { key: 'earnings', label: 'รายได้', href: '/earnings' },
   { key: 'settings', label: 'ตั้งค่า', href: null },
 ];
 

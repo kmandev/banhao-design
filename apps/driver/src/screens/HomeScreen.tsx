@@ -148,6 +148,14 @@ export function HomeScreen() {
         testID="button-view-offers"
       />
 
+      <ListRow
+        icon="💰"
+        title="รายได้"
+        onPress={() => navigation.navigate('Earnings')}
+        trailing="›"
+        testID="button-view-earnings"
+      />
+
       <Button label="ออกจากระบบ" variant="secondary" onPress={() => void signOut()} testID="button-sign-out" />
     </Screen>
   );

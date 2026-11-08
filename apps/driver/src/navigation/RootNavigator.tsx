@@ -13,6 +13,7 @@ import { ActiveDeliveryScreen } from '../screens/ActiveDeliveryScreen';
 import { ProofCameraScreen } from '../screens/ProofCameraScreen';
 import { ProofReviewScreen } from '../screens/ProofReviewScreen';
 import { DeliveryConfirmScreen } from '../screens/DeliveryConfirmScreen';
+import { EarningsScreen } from '../screens/EarningsScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RiderStack = createNativeStackNavigator<RiderStackParamList>();
@@ -60,6 +61,7 @@ function RiderNavigator() {
         component={OfferInboxScreen}
         options={{ title: 'งานที่เสนอ' }}
       />
+      <RiderStack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'รายได้' }} />
       <RiderStack.Screen
         name="ActiveDelivery"
         component={ActiveDeliveryScreen}
