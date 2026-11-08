@@ -15,6 +15,7 @@ import { RiderModule } from './modules/rider/rider.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TickModule } from './modules/tick/tick.module';
+import { EarningsModule } from './modules/earnings/earnings.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { RestaurantScopeGuard } from './common/guards/restaurant-scope.guard';
@@ -52,6 +53,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
     HealthModule,
     AuthModule,
     PaymentsModule,
+    EarningsModule,
     WebhooksModule,
     RiderModule,
     NotificationsModule,

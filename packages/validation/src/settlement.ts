@@ -77,3 +77,29 @@ export interface PayoutHistoryRow {
   voidedAt: string | null;
   voidReason: string | null;
 }
+
+/**
+ * DEC-073 / DEC-070 Q5 — a restaurant's or rider's own earnings for a week:
+ * each completed order/delivery and whether it has been paid, the week's
+ * totals, everything still unpaid, and recent transfers. Read-only.
+ */
+export interface EarningsLine {
+  id: string;
+  orderNumber: string | null;
+  deliveredAt: string;
+  /** Merchant only: food and commission behind the amount. */
+  foodSatang: number | null;
+  commissionSatang: number | null;
+  amountSatang: number;
+  paid: boolean;
+}
+
+export interface EarningsResponse {
+  period: { weekStart: string; weekEnd: string };
+  lines: EarningsLine[];
+  weekTotalSatang: number;
+  weekPaidSatang: number;
+  /** Every completed, unpaid item up to now — not only this week. */
+  outstandingSatang: number;
+  payouts: { paidOn: string; totalSatang: number; bankReference: string; items: number }[];
+}
