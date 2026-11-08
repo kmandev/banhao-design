@@ -8375,10 +8375,10 @@ recognition timing) and **DEC-048** (service-fee refund treatment) are
 > a sub-satang fraction is rounded half-up; D-02's whole-baht rule governs the
 > commission only and is deliberately not borrowed. Orders created before this
 > keep their stored ฿5. Delivery stays DEC-035's flat ฿10 — D-05…D-14 remain
-> unbuilt. **Known gap, not addressed here:** the customer app's Checkout and
-> PromptPay QR screens still display the design's sample totals
-> (`apps/customer/src/mocks/pricing.ts`), so the fee the customer sees before
-> paying is not the fee charged.
+> unbuilt. The customer app's Checkout and PromptPay QR screens displayed the
+> design's sample totals until the same day, when the QR screen moved to the
+> server's amount and the order's own fees (PayDetail and Refund still show
+> sample figures).
 
 ### D-05 — Rider share
 
