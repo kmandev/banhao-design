@@ -7,7 +7,7 @@ import type { AuthenticatedUser } from '../../common/types';
 import { OrdersService } from '../orders/orders.service';
 import { StorageService } from '../storage/storage.service';
 import { parseDeliveryProofObjectKey } from '../storage/object-key';
-import { resolveRiderEarningSatang, resolvePlatformWriteOffSatang } from './rider-earning-pricing';
+import { resolveDeliveryMarginEntry, resolveRiderEarningSatang } from './rider-earning-pricing';
 
 /** `deliveries`, what the guarded UPDATE returns on a match, and the diagnostic read's own shape. */
 interface DeliveryRow {
@@ -272,7 +272,21 @@ export class DeliveryCompletionService {
     // {@link assertProofUploaded}.
     await this.assertProofUploaded(deliveryId, objectKey);
 
-    const delivery = await this.claimCompletion(deliveryId, riderId, objectKey);
+    // DEC-071 — the rider's earning is 80% of THIS order's delivery fee (at
+    // least ฿12), so the fee is read first. It is an immutable column of the
+    // order, read to compute a value — never to decide the transition, which
+    // stays the guarded UPDATE below (ADR-003).
+    const orderDeliveryFeeSatang = await this.readOrderDeliveryFee(deliveryId);
+    if (orderDeliveryFeeSatang === null) {
+      return this.repairCompletion(user, deliveryId, riderId);
+    }
+
+    const delivery = await this.claimCompletion(
+      deliveryId,
+      riderId,
+      objectKey,
+      resolveRiderEarningSatang(orderDeliveryFeeSatang),
+    );
 
     if (!delivery) {
       // Lost the guarded UPDATE, or the delivery is not in a completable
@@ -481,6 +495,7 @@ export class DeliveryCompletionService {
     deliveryId: string,
     riderId: string,
     objectKey: string,
+    riderEarningSatang: number,
   ): Promise<DeliveryRow | null> {
     const { data, error } = await this.supabase.admin
       .from('deliveries')
@@ -493,7 +508,7 @@ export class DeliveryCompletionService {
         // DELIVERED with no earning recorded, and no second write a retry
         // could use to change it. See this file's own "Rider earning" doc
         // section above.
-        rider_earning_satang: resolveRiderEarningSatang(),
+        rider_earning_satang: riderEarningSatang,
       })
       .eq('id', deliveryId)
       .in('state', [...COMPLETABLE_DELIVERY_STATES])
@@ -509,6 +524,38 @@ export class DeliveryCompletionService {
     }
 
     return data ?? null;
+  }
+
+  /** DEC-071 — the delivery fee of the order this delivery belongs to, or null if the delivery does not exist. */
+  private async readOrderDeliveryFee(deliveryId: string): Promise<number | null> {
+    const { data, error } = await this.supabase.admin
+      .from('deliveries')
+      .select('order_id, orders!inner(delivery_fee_satang)')
+      .eq('id', deliveryId)
+      .maybeSingle<{ order_id: string; orders: { delivery_fee_satang: number } | { delivery_fee_satang: number }[] }>();
+
+    if (error) {
+      this.logger.error(`Order delivery fee read failed for delivery ${deliveryId}: ${error.message}`);
+      throw new DomainError('INTERNAL_ERROR', { message: 'Completion transition failed' });
+    }
+    if (!data) return null;
+    const order = Array.isArray(data.orders) ? data.orders[0] : data.orders;
+    if (!order) return null;
+    return order.delivery_fee_satang;
+  }
+
+  /** DEC-071 — the order's stored delivery fee, for the ledger's margin line. Throws rather than guessing. */
+  private async readOrderDeliveryFeeByOrderId(orderId: string): Promise<number> {
+    const { data, error } = await this.supabase.admin
+      .from('orders')
+      .select('delivery_fee_satang')
+      .eq('id', orderId)
+      .maybeSingle<{ delivery_fee_satang: number }>();
+
+    if (error || !data) {
+      throw new DomainError('INTERNAL_ERROR', { message: 'Order delivery fee read failed for the rider earning ledger' });
+    }
+    return data.delivery_fee_satang;
   }
 
   /**
@@ -720,6 +767,7 @@ export class DeliveryCompletionService {
     }
 
     const earningSatang = delivery.rider_earning_satang;
+    const orderDeliveryFeeSatang = await this.readOrderDeliveryFeeByOrderId(delivery.order_id);
     const groupKey = `rider-earning:${delivery.id}`;
 
     const { data: group, error: groupError } = await this.supabase.admin
@@ -737,7 +785,7 @@ export class DeliveryCompletionService {
       // or the group committed but the entry insert below did not (the same
       // class of narrow crash window this file's own history-write and
       // slot-release steps already tolerate).
-      await this.ensureRiderEarningEntryRecorded(groupKey, riderId, earningSatang);
+      await this.ensureRiderEarningEntryRecorded(groupKey, riderId, earningSatang, orderDeliveryFeeSatang);
       return;
     }
 
@@ -745,13 +793,14 @@ export class DeliveryCompletionService {
       throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger group insert returned no row' });
     }
 
-    await this.insertRiderEarningEntry(group.id, riderId, earningSatang);
+    await this.insertRiderEarningEntry(group.id, riderId, earningSatang, orderDeliveryFeeSatang);
   }
 
   private async ensureRiderEarningEntryRecorded(
     groupKey: string,
     riderId: string,
     earningSatang: number,
+    orderDeliveryFeeSatang: number,
   ): Promise<void> {
     const { data: existingGroup, error: groupReadError } = await this.supabase.admin
       .from('ledger_entry_groups')
@@ -782,7 +831,7 @@ export class DeliveryCompletionService {
       return;
     }
 
-    await this.insertRiderEarningEntry(existingGroup.id, riderId, earningSatang);
+    await this.insertRiderEarningEntry(existingGroup.id, riderId, earningSatang, orderDeliveryFeeSatang);
   }
 
   /**
@@ -807,8 +856,13 @@ export class DeliveryCompletionService {
    * Building a full `CUSTOMER_PAYMENT` ledger flow is a separate, larger,
    * not-yet-authorized engineering question.
    */
-  private async insertRiderEarningEntry(groupId: string, riderId: string, earningSatang: number): Promise<void> {
-    const { error } = await this.supabase.admin.from('ledger_entries').insert([
+  private async insertRiderEarningEntry(
+    groupId: string,
+    riderId: string,
+    earningSatang: number,
+    orderDeliveryFeeSatang: number,
+  ): Promise<void> {
+    const entries: Record<string, unknown>[] = [
       {
         group_id: groupId,
         account: 'RIDER_PAYABLE',
@@ -816,14 +870,21 @@ export class DeliveryCompletionService {
         party_id: riderId,
         amount_satang: -earningSatang,
       },
-      {
+    ];
+    // DEC-071: a legacy ฿10 order still posts DEC-045's write-off (+200); an
+    // order priced under DEC-071 posts BANHAO's delivery margin instead.
+    const margin = resolveDeliveryMarginEntry(orderDeliveryFeeSatang, earningSatang);
+    if (margin) {
+      entries.push({
         group_id: groupId,
-        account: 'PLATFORM_WRITE_OFF',
+        account: margin.account,
         party_type: 'PLATFORM',
         party_id: null,
-        amount_satang: resolvePlatformWriteOffSatang(),
-      },
-    ]);
+        amount_satang: margin.amountSatang,
+      });
+    }
+
+    const { error } = await this.supabase.admin.from('ledger_entries').insert(entries);
 
     if (error) {
       throw new DomainError('INTERNAL_ERROR', { message: 'Rider earning ledger entry insert failed' });

@@ -33,6 +33,16 @@ interface Recorded {
   payload?: Record<string, unknown>;
 }
 
+/**
+ * DEC-071: the order's stored delivery fee, read by two fixed-shape queries
+ * (before the claim, and for the ledger margin line). The stub answers those
+ * two reads itself, from this value, without consuming the ordered results
+ * every other test queues — so tests written before DEC-071 keep their
+ * sequences. Defaults to a legacy ฿10 order, which reproduces DEC-044/045
+ * exactly (earning 1200, write-off 200).
+ */
+let mockOrderDeliveryFeeSatang = 1000;
+
 function supabaseStub(results: Result[]) {
   const calls: Recorded[] = [];
   let index = 0;
@@ -41,10 +51,23 @@ function supabaseStub(results: Result[]) {
   const admin = {
     from(table: string) {
       const call: Recorded = { table, op: 'select', eq: {}, inFilters: {} };
-      calls.push(call);
+      let columns = '';
+      const feeRead = (): Result | null => {
+        if (call.op !== 'select') return null;
+        if (table === 'deliveries' && columns.includes('orders!inner(delivery_fee_satang)')) {
+          return { data: { order_id: ORDER_ID, orders: { delivery_fee_satang: mockOrderDeliveryFeeSatang } }, error: null };
+        }
+        if (table === 'orders' && columns === 'delivery_fee_satang') {
+          return { data: { delivery_fee_satang: mockOrderDeliveryFeeSatang }, error: null };
+        }
+        return null;
+      };
 
       const builder: Record<string, unknown> = {
-        select: () => builder,
+        select: (cols?: string) => {
+          if (call.op === 'select' && typeof cols === 'string') columns = cols;
+          return builder;
+        },
         insert(payload: Record<string, unknown>) {
           call.op = 'insert';
           call.payload = payload;
@@ -63,9 +86,20 @@ function supabaseStub(results: Result[]) {
           call.inFilters[column] = values;
           return builder;
         },
-        maybeSingle: () => Promise.resolve(nextResult()),
-        returns: () => Promise.resolve(nextResult()),
-        then: (resolve: (r: Result) => unknown) => Promise.resolve(nextResult()).then(resolve),
+        maybeSingle: () => {
+          const fee = feeRead();
+          if (fee) return Promise.resolve(fee);
+          calls.push(call);
+          return Promise.resolve(nextResult());
+        },
+        returns: () => {
+          calls.push(call);
+          return Promise.resolve(nextResult());
+        },
+        then: (resolve: (r: Result) => unknown) => {
+          calls.push(call);
+          return Promise.resolve(nextResult()).then(resolve);
+        },
       };
 
       return builder;
@@ -1244,11 +1278,10 @@ describe('DeliveryCompletionService — rider earning ledger (DEC-044 / DEC-045)
     // snapshot, not from a fresh resolveRiderEarningSatang() call.
     expect(riderPayable?.amount_satang).not.toBe(-RIDER_EARNING_SATANG);
 
-    // The write-off is independently resolved — always 200, regardless of
-    // what the historical rider earning was. It is never derived as
-    // "earning minus something", so a historical earning of 1500 does not
-    // change it.
-    expect(writeOff?.amount_satang).toBe(PLATFORM_WRITE_OFF_SATANG);
+    // DEC-071: the second line is derived from the order's OWN stored fee and
+    // the snapshot — here a ฿10 order whose rider was paid ฿15, so BANHAO
+    // covers ฿5. (Before DEC-071 this was a flat +200 whatever the earning.)
+    expect(writeOff?.amount_satang).toBe(HISTORICAL_AMOUNT - 1000);
   });
 
   it('fails closed rather than inventing an amount if a DELIVERED row somehow carries no snapshot', async () => {
@@ -1275,3 +1308,67 @@ describe('DeliveryCompletionService — rider earning ledger (DEC-044 / DEC-045)
     await expectDomainError(service.complete(riderUser(), DELIVERY_ID, PROOF_KEY), 'INTERNAL_ERROR');
   });
 });
+
+describe('DeliveryCompletionService — DEC-071 rider earning from the order\'s own delivery fee', () => {
+  afterEach(() => {
+    mockOrderDeliveryFeeSatang = 1000;
+  });
+
+  function freshCompletion(feeSatang: number, earningSatang: number) {
+    mockOrderDeliveryFeeSatang = feeSatang;
+    return supabaseStub([
+      { data: { ...(CLAIM_OK.data as Record<string, unknown>), rider_earning_satang: earningSatang }, error: null },
+      OK,
+      ASSIGNMENT_CLOSED,
+      SLOT_RELEASED,
+      ...freshRiderEarningLedgerStubs(),
+    ]);
+  }
+
+  it.each([
+    [1500, 1200],
+    [2500, 2000],
+    [3500, 2800],
+    [1000, 1200],
+  ])('a ฿%i-satang order snapshots a rider earning of %i in the guarded UPDATE', async (fee, earning) => {
+    const { supabase, calls } = freshCompletion(fee, earning);
+    const service = buildService(supabase, ordersStub(jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' })));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const claim = calls.find((c) => c.table === 'deliveries' && c.op === 'update');
+    expect(claim?.payload).toMatchObject({ rider_earning_satang: earning });
+  });
+
+  it('posts BANHAO\'s delivery margin as PLATFORM_REVENUE, and no write-off, when the fee exceeds the earning', async () => {
+    const { supabase, calls } = freshCompletion(2500, 2000);
+    const service = buildService(supabase, ordersStub(jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' })));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const entries = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert')?.payload as unknown as Array<
+      Record<string, unknown>
+    >;
+    expect(entries).toEqual([
+      expect.objectContaining({ account: 'RIDER_PAYABLE', party_type: 'RIDER', amount_satang: -2000 }),
+      expect.objectContaining({ account: 'PLATFORM_REVENUE', party_type: 'PLATFORM', amount_satang: 500 }),
+    ]);
+    expect(entries.some((e) => e.account === 'PLATFORM_WRITE_OFF')).toBe(false);
+  });
+
+  it('a legacy ฿10 order still posts DEC-045\'s +200 write-off, exactly as before', async () => {
+    const { supabase, calls } = freshCompletion(1000, 1200);
+    const service = buildService(supabase, ordersStub(jest.fn().mockResolvedValue({ orderId: ORDER_ID, state: 'DELIVERED' })));
+
+    await service.complete(riderUser(), DELIVERY_ID, PROOF_KEY);
+
+    const entries = calls.find((c) => c.table === 'ledger_entries' && c.op === 'insert')?.payload as unknown as Array<
+      Record<string, unknown>
+    >;
+    expect(entries).toEqual([
+      expect.objectContaining({ account: 'RIDER_PAYABLE', amount_satang: -1200 }),
+      expect.objectContaining({ account: 'PLATFORM_WRITE_OFF', amount_satang: 200 }),
+    ]);
+  });
+});
+

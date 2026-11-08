@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { computeDeliveryFeeSatang } from '@banhao/validation';
 import { calculateFoodSubtotalCommissionSatang } from '../payments/commission-pricing';
 import { calculateServiceFeeSatang } from './service-fee-pricing';
+import { DeliveryFeeSettingsService } from './delivery-fee-settings.service';
 
 /** The two fee amounts `create_order()` requires, in integer satang (CON-003). */
 export interface OrderFees {
@@ -20,15 +22,6 @@ export interface OrderCommission {
   foodSubtotalSatang: number;
 }
 
-/**
- * DEC-035 — the Phase 1 delivery fee. A flat ฿10 per order, charged
- * identically for every order regardless of distance, address, restaurant or
- * basket size. Deliberately not exported: nothing outside this file may reuse
- * it, because the server is the only pricing authority (DEC-E-01) and a
- * constant that can be imported is a constant that can end up in a client
- * bundle or a second, divergent calculation.
- */
-const DELIVERY_FEE_SATANG = 1000;
 
 /**
  * Order pricing — the single server-side authority for what an order costs
@@ -44,9 +37,10 @@ const DELIVERY_FEE_SATANG = 1000;
  *
  * ## What each fee depends on
  *
- * - **Delivery (DEC-035):** nothing. Flat ฿10 for every order, restaurant and
- *   basket. The dynamic, distance-based delivery fee of DEC-061 D-05…D-10 is
- *   locked but not built, and stays blocked on D-16/D-17.
+ * - **Delivery (DEC-070 §2 / DEC-071):** the back-office setting in force when
+ *   the order is created — FIXED, or a PERCENT of the food subtotal — always
+ *   held to ฿15–35, via `computeDeliveryFeeSatang`. The distance-based fee of
+ *   DEC-061 D-08 is still unbuilt and blocked on D-16/D-17.
  * - **Service (DEC-061 D-03/D-04):** the food subtotal only — 5%, floor ฿5,
  *   cap ฿15 — via `calculateServiceFeeSatang`. Never the restaurant.
  *
@@ -56,29 +50,32 @@ const DELIVERY_FEE_SATANG = 1000;
  * ## What this deliberately does not do
  *
  * No distance, coordinates, routing, geocoding, zones or restaurant location
- * (DEC-035 rules all of them out for Phase 1 — and customer addresses carry
- * null lat/lng anyway, per DQ-04-07). No environment variable, no
- * configuration table, no request field: neither DEC-035 nor D-03/D-04 needs
- * a schema change (the order stores amounts, never rates), and reading a fee from
- * anywhere a deployment or a caller could influence would move the pricing
- * authority off the server. Distance-banded delivery pricing is **not**
- * approved and must not be added here without a new Product Owner decision.
+ * (D-08 is unbuilt — and customer addresses carry null lat/lng anyway, per
+ * DQ-04-07). No environment variable and no request field: the delivery fee
+ * comes from the server's own `delivery_fee_settings` (DEC-071), changed only
+ * by ADMIN staff through an audited route, and the order stores amounts,
+ * never rates.
  *
- * @see docs/DECISIONS.md — DEC-035, DEC-061 (D-03/D-04, superseding DEC-036), DEC-E-01
+ * @see docs/DECISIONS.md — DEC-061 (D-03/D-04, D-05/D-06, D-09/D-10), DEC-070, DEC-071, DEC-E-01
  */
 @Injectable()
 export class OrderPricingService {
+  constructor(private readonly deliveryFees: DeliveryFeeSettingsService) {}
+
   /**
    * @throws if `subtotalSatang` is not a non-negative integer (the service fee
    *   depends on it). The caller has not yet called `create_order()`, so this
    *   fails closed and no order is created.
    */
-  resolveOrderFees(_restaurantId: string, subtotalSatang: number): OrderFees {
+  async resolveOrderFees(_restaurantId: string, subtotalSatang: number): Promise<OrderFees> {
+    // Validate the subtotal before any read, so a bad input never costs a query.
+    const serviceFeeSatang = calculateServiceFeeSatang(subtotalSatang);
+    const setting = await this.deliveryFees.current();
     // A fresh object per call: the caller receives a value it cannot use to
     // mutate this service's answer for the next order.
     return {
-      deliveryFeeSatang: DELIVERY_FEE_SATANG,
-      serviceFeeSatang: calculateServiceFeeSatang(subtotalSatang),
+      deliveryFeeSatang: computeDeliveryFeeSatang(setting, subtotalSatang),
+      serviceFeeSatang,
     };
   }
 

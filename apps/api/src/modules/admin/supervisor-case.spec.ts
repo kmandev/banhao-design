@@ -8,6 +8,7 @@ import { blockedByFor, isEscalationRow, type AuditRowForProjection } from './sup
 import { DomainError } from '../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../common/types';
 import type { SupabaseService } from '../../supabase/supabase.service';
+import type { DeliveryFeeSettingsService } from '../orders/delivery-fee-settings.service';
 
 /**
  * Phase I — the Human Supervisor case projection and its one command.
@@ -397,7 +398,7 @@ describe('Phase I — resolving a case (S-06)', () => {
 
 describe('Phase I — the controller boundary', () => {
   it('rejects a body with no reason, so a blank reason never reaches the database CHECK', async () => {
-    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService, {} as ReconciliationCaseService, {} as RestaurantAvailabilityService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService, {} as ReconciliationCaseService, {} as RestaurantAvailabilityService, {} as DeliveryFeeSettingsService);
 
     await expect(
       controller.resolve(CASE_ID, { outcome: 'RESOLVED', reason: '   ' }, staffUser()),
@@ -409,7 +410,7 @@ describe('Phase I — the controller boundary', () => {
   });
 
   it('refuses a body smuggling an actor or a case id', async () => {
-    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService, {} as ReconciliationCaseService, {} as RestaurantAvailabilityService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService, {} as ReconciliationCaseService, {} as RestaurantAvailabilityService, {} as DeliveryFeeSettingsService);
 
     await expect(
       controller.resolve(
@@ -443,6 +444,7 @@ describe('Phase I — the controller boundary', () => {
       'awaitingFailure',
       'detail',
       'failDelivery',
+      'getDeliveryFee',
       'getReconciliationCase',
       'initiateRefund',
       'list',
@@ -450,6 +452,7 @@ describe('Phase I — the controller boundary', () => {
       'me',
       'resolve',
       'resolveReconciliationCase',
+      'setDeliveryFee',
       'setRestaurantAvailability',
     ]);
   });
@@ -459,7 +462,7 @@ describe('Phase I — the controller boundary', () => {
    * read-only: the timer raises attention, and only `failDelivery`,
    * `initiateRefund` and `resolve` move any local state.
    */
-  it('exposes exactly the five known state-changing methods, however many read surfaces exist', () => {
+  it('exposes exactly the six known state-changing methods, however many read surfaces exist', () => {
     const methods = Object.getOwnPropertyNames(SupervisorController.prototype).filter(
       (name) => name !== 'constructor',
     );
@@ -473,6 +476,10 @@ describe('Phase I — the controller boundary', () => {
       // no order, delivery, payment or ledger row, and is not BQ-013's pause
       // policy.
       'setRestaurantAvailability',
+      // DEC-071: ADMIN changes the delivery-fee setting (a new append-only
+      // row). It moves no existing order, delivery, payment or ledger row:
+      // orders keep the fee they were created with.
+      'setDeliveryFee',
     ]);
     const mutating = methods.filter((name) => KNOWN_MUTATING.has(name));
 
@@ -481,6 +488,7 @@ describe('Phase I — the controller boundary', () => {
       'initiateRefund',
       'resolve',
       'resolveReconciliationCase',
+      'setDeliveryFee',
       'setRestaurantAvailability',
     ]);
     // Every read-only method is accounted for elsewhere in this describe
@@ -488,6 +496,7 @@ describe('Phase I — the controller boundary', () => {
     expect(methods.filter((name) => !KNOWN_MUTATING.has(name)).sort()).toEqual([
       'awaitingFailure',
       'detail',
+      'getDeliveryFee',
       'getReconciliationCase',
       'list',
       'listReconciliationCases',
@@ -534,7 +543,7 @@ describe('Phase I — the controller boundary', () => {
   );
 
   it('reports the grant held without reading anything', () => {
-    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService, {} as ReconciliationCaseService, {} as RestaurantAvailabilityService);
+    const controller = new SupervisorController({} as SupervisorCaseService, {} as DeliveryFailureService, {} as RefundService, {} as ReconciliationCaseService, {} as RestaurantAvailabilityService, {} as DeliveryFeeSettingsService);
 
     expect(controller.me(staffUser('ADMIN'))).toEqual({
       userId: STAFF_USER_ID,

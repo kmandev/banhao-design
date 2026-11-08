@@ -14,6 +14,7 @@ import {
   resolveSupervisorCaseSchema,
   resolveReconciliationCaseSchema,
   staffSetRestaurantAvailabilitySchema,
+  deliveryFeeSettingRequestSchema,
 } from '@banhao/validation';
 import type {
   AwaitingFailureListResponse,
@@ -27,6 +28,7 @@ import type {
   ReconciliationCaseDetailResponse,
   ResolveReconciliationCaseResponse,
   RestaurantAvailabilityResponse,
+  DeliveryFeeSettingsResponse,
 } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -37,6 +39,7 @@ import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
 import { ReconciliationCaseService } from './reconciliation-case.service';
 import { RestaurantAvailabilityService } from '../merchant/restaurant-availability.service';
+import { DeliveryFeeSettingsService } from '../orders/delivery-fee-settings.service';
 
 /**
  * Human Supervisor console — Phase I, screens S-02, S-03 and S-06 of the AI
@@ -94,7 +97,34 @@ export class SupervisorController {
     private readonly refunds: RefundService,
     private readonly reconciliation: ReconciliationCaseService,
     private readonly availability: RestaurantAvailabilityService,
+    private readonly deliveryFees: DeliveryFeeSettingsService,
   ) {}
+
+  /**
+   * DEC-070 §2 / DEC-071 — the delivery-fee setting in force, its recent
+   * history, and what it means at ฿50 / ฿100 / ฿300 of food (customer fee,
+   * rider earning, BANHAO margin). ADMIN and OPERATOR may read it.
+   */
+  @Get('pricing/delivery-fee')
+  @ApiOkResponse({ description: 'Delivery fee setting, history and preview' })
+  async getDeliveryFee(): Promise<DeliveryFeeSettingsResponse> {
+    return this.deliveryFees.overview();
+  }
+
+  /**
+   * Changes the delivery fee. **ADMIN only** (D-18, answered for the delivery
+   * fee by DEC-070): the method-level `@Roles('ADMIN')` overrides the class
+   * grant, so an OPERATOR is refused. FIXED or PERCENT, always within ฿15–35;
+   * a reason is required. Applies to orders created after the change only.
+   */
+  @Put('pricing/delivery-fee')
+  @Roles('ADMIN')
+  @ApiOkResponse({ description: 'The new setting, history and preview' })
+  @ApiForbiddenResponse({ description: 'Not an ADMIN' })
+  async setDeliveryFee(@Body() body: unknown, @CurrentUser() user: AuthenticatedUser): Promise<DeliveryFeeSettingsResponse> {
+    const request = parseOrThrow(deliveryFeeSettingRequestSchema, body);
+    return this.deliveryFees.change(user.id, request);
+  }
 
   /**
    * Who the console is signed in as, and with which grant.

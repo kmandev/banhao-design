@@ -8,6 +8,7 @@ import { DeliveryProofController } from './delivery-proof.controller';
 import { DeliveryProofService } from './delivery-proof.service';
 import { DeliveryAbandonmentService } from './delivery-abandonment.service';
 import { StaleCreatedOrderExpiryService } from './stale-created-order-expiry.service';
+import { DeliveryFeeSettingsService } from './delivery-fee-settings.service';
 
 /**
  * `CartModule` is imported explicitly for `CartService` — it is not
@@ -30,9 +31,10 @@ import { StaleCreatedOrderExpiryService } from './stale-created-order-expiry.ser
     DeliveryProofService,
     DeliveryAbandonmentService,
     StaleCreatedOrderExpiryService,
+    DeliveryFeeSettingsService,
   ],
   // The tick runs `DeliveryAbandonmentService`'s sweep for orders cancelled
   // before a delivery could be closed (or whose close failed).
-  exports: [OrdersService, DeliveryAbandonmentService, StaleCreatedOrderExpiryService],
+  exports: [OrdersService, DeliveryAbandonmentService, StaleCreatedOrderExpiryService, DeliveryFeeSettingsService],
 })
 export class OrdersModule {}

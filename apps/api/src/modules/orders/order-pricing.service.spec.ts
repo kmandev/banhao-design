@@ -1,5 +1,6 @@
 import { OrderPricingService } from './order-pricing.service';
 import { calculateServiceFeeSatang } from './service-fee-pricing';
+import type { DeliveryFeeSettingsService } from './delivery-fee-settings.service';
 
 /**
  * The Phase 1 fee amounts, written as literals on purpose.
@@ -8,10 +9,9 @@ import { calculateServiceFeeSatang } from './service-fee-pricing';
  * that imported them would only prove the service equals itself. Spelled out
  * here, this file fails the day an amount changes without a new decision.
  *
- * DEC-035 — delivery: flat ฿10 = 1000 satang, independent of everything.
+ * DEC-071 — delivery: from the back-office setting, always ฿15–35.
  * DEC-061 D-03/D-04 — service: 5% of the food subtotal, floor ฿5 (500), cap ฿15 (1500).
  */
-const DELIVERY_FEE_SATANG = 1000;
 
 describe('calculateServiceFeeSatang — D-03/D-04: 5% of food, floor ฿5, cap ฿15', () => {
   it.each([
@@ -62,92 +62,81 @@ describe('calculateServiceFeeSatang — D-03/D-04: 5% of food, floor ฿5, cap �
   );
 });
 
-describe('OrderPricingService.resolveOrderFees', () => {
-  it('returns flat ฿10 delivery and the D-03/D-04 service fee for the subtotal', () => {
-    const subject = new OrderPricingService();
+function withSetting(setting: unknown) {
+  const current = jest.fn().mockResolvedValue(setting);
+  return { subject: new OrderPricingService({ current } as unknown as DeliveryFeeSettingsService), current };
+}
 
-    expect(subject.resolveOrderFees('restaurant-1', 12000)).toEqual({ deliveryFeeSatang: 1000, serviceFeeSatang: 600 });
-    expect(subject.resolveOrderFees('restaurant-1', 4000)).toEqual({ deliveryFeeSatang: 1000, serviceFeeSatang: 500 });
-    expect(subject.resolveOrderFees('restaurant-1', 50000)).toEqual({ deliveryFeeSatang: 1000, serviceFeeSatang: 1500 });
+describe('OrderPricingService.resolveOrderFees — DEC-071 delivery fee from the back-office setting', () => {
+  it('FIXED: the setting\'s amount, plus the D-03/D-04 service fee', async () => {
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
+
+    await expect(subject.resolveOrderFees('restaurant-1', 12000)).resolves.toEqual({
+      deliveryFeeSatang: 1500,
+      serviceFeeSatang: 600,
+    });
   });
 
-  it.each([0, 1, 100, 4999, 12000, 100000, 9_999_999])(
-    'keeps delivery flat at 1000 satang for a subtotal of %i (DEC-035)',
-    (subtotal) => {
-      expect(new OrderPricingService().resolveOrderFees('restaurant-1', subtotal).deliveryFeeSatang).toBe(
-        DELIVERY_FEE_SATANG,
-      );
-    },
-  );
+  it('PERCENT: a percentage of the food subtotal, held to ฿15–35', async () => {
+    const { subject } = withSetting({ mode: 'PERCENT', percentBasisPoints: 800, minSatang: null, maxSatang: null });
 
-  it.each(['restaurant-1', 'restaurant-2', '00000000-0000-0000-0000-000000000000', ''])(
-    'gives the same fees for restaurant %j — neither fee is restaurant-specific',
-    (restaurantId) => {
-      expect(new OrderPricingService().resolveOrderFees(restaurantId, 15000)).toEqual({
-        deliveryFeeSatang: 1000,
-        serviceFeeSatang: 750,
-      });
-    },
-  );
-
-  it.each([-1, -100000, Number.NaN, Number.POSITIVE_INFINITY, undefined, null])(
-    'fails closed on a subtotal of %p — throws, never a zero or default fee',
-    (subtotal) => {
-      expect(() => new OrderPricingService().resolveOrderFees('restaurant-1', subtotal as unknown as number)).toThrow();
-    },
-  );
-
-  it('refuses a hostile object in the subtotal slot instead of pricing it', () => {
-    const smuggled = {
-      deliveryFeeSatang: 0,
-      serviceFeeSatang: 0,
-      grandTotalSatang: 0,
-      toString: () => 'restaurant-1',
-      valueOf: () => 0,
-    };
-
-    expect(() =>
-      new OrderPricingService().resolveOrderFees(smuggled as unknown as string, smuggled as unknown as number),
-    ).toThrow();
+    await expect(subject.resolveOrderFees('r', 10000)).resolves.toMatchObject({ deliveryFeeSatang: 1500 });
+    await expect(subject.resolveOrderFees('r', 25000)).resolves.toMatchObject({ deliveryFeeSatang: 2000 });
+    await expect(subject.resolveOrderFees('r', 100000)).resolves.toMatchObject({ deliveryFeeSatang: 3500 });
   });
 
-  it('reads nothing from the network, the database or the environment', () => {
-    expect(OrderPricingService.length).toBe(0);
+  it.each(['restaurant-1', 'restaurant-2', ''])('does not vary by restaurant (%j)', async (restaurantId) => {
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 2000 });
 
-    const subject = new OrderPricingService();
-    const before = { ...process.env };
-    process.env.DELIVERY_FEE_SATANG = '99999';
-    process.env.SERVICE_FEE_SATANG = '99999';
-    try {
-      expect(subject.resolveOrderFees('restaurant-1', 12000)).toEqual({ deliveryFeeSatang: 1000, serviceFeeSatang: 600 });
-    } finally {
-      process.env = before;
-    }
+    await expect(subject.resolveOrderFees(restaurantId, 15000)).resolves.toEqual({
+      deliveryFeeSatang: 2000,
+      serviceFeeSatang: 750,
+    });
   });
 
-  it('cannot be poisoned — a mutated result does not affect the next order', () => {
-    const subject = new OrderPricingService();
+  it('fails closed when the setting cannot be read — no order is priced on a guess', async () => {
+    const current = jest.fn().mockRejectedValue(new Error('Delivery fee is not configured'));
+    const subject = new OrderPricingService({ current } as unknown as DeliveryFeeSettingsService);
 
-    const first = subject.resolveOrderFees('restaurant-1', 12000);
+    await expect(subject.resolveOrderFees('r', 12000)).rejects.toThrow('not configured');
+  });
+
+  it.each([-1, Number.NaN, undefined, null])('refuses a subtotal of %p before reading the setting', async (subtotal) => {
+    const { subject, current } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
+
+    await expect(subject.resolveOrderFees('r', subtotal as unknown as number)).rejects.toThrow();
+    expect(current).not.toHaveBeenCalled();
+  });
+
+  it('ignores money a caller tries to smuggle in — a hostile subtotal object is refused', async () => {
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
+    const smuggled = { deliveryFeeSatang: 0, valueOf: () => 0 };
+
+    await expect(subject.resolveOrderFees('r', smuggled as unknown as number)).rejects.toThrow();
+  });
+
+  it('cannot be poisoned — a mutated result does not affect the next order', async () => {
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
+
+    const first = await subject.resolveOrderFees('r', 12000);
     first.deliveryFeeSatang = 0;
-    first.serviceFeeSatang = 0;
+    const second = await subject.resolveOrderFees('r', 12000);
 
-    const second = subject.resolveOrderFees('restaurant-1', 12000);
-    expect(second).toEqual({ deliveryFeeSatang: 1000, serviceFeeSatang: 600 });
+    expect(second.deliveryFeeSatang).toBe(1500);
     expect(second).not.toBe(first);
   });
 });
 
 describe('OrderPricingService.resolveOrderCommission — D-01 (10% of food subtotal), D-02 rounding', () => {
   it('resolves 10% of the food subtotal as a resolved amount, and returns the exact base it used', () => {
-    const subject = new OrderPricingService();
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
 
     // ฿120 × 10% = ฿12 exactly.
     expect(subject.resolveOrderCommission(12000)).toEqual({ commissionSatang: 1200, foodSubtotalSatang: 12000 });
   });
 
   it('preserves whole-baht round-half-up exactly as the canonical function does', () => {
-    const subject = new OrderPricingService();
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
 
     // ฿125 × 10% = ฿12.50 → ฿13; ฿184 × 10% = ฿18.40 → ฿18; ฿5 × 10% = ฿0.50 → ฿1.
     expect(subject.resolveOrderCommission(12500).commissionSatang).toBe(1300);
@@ -155,9 +144,9 @@ describe('OrderPricingService.resolveOrderCommission — D-01 (10% of food subto
     expect(subject.resolveOrderCommission(500).commissionSatang).toBe(100);
   });
 
-  it('is independent of the delivery and service fees — they are never part of the commission base', () => {
-    const subject = new OrderPricingService();
-    const fees = subject.resolveOrderFees('restaurant-1', 12000);
+  it('is independent of the delivery and service fees — they are never part of the commission base', async () => {
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
+    const fees = await subject.resolveOrderFees('restaurant-1', 12000);
 
     expect(subject.resolveOrderCommission(12000).commissionSatang).toBe(1200);
     expect(subject.resolveOrderCommission(12000 + fees.deliveryFeeSatang + fees.serviceFeeSatang).commissionSatang).not.toBe(
@@ -166,7 +155,7 @@ describe('OrderPricingService.resolveOrderCommission — D-01 (10% of food subto
   });
 
   it('throws on an invalid subtotal — commission resolution fails closed before any order is created', () => {
-    const subject = new OrderPricingService();
+    const { subject } = withSetting({ mode: 'FIXED', fixedSatang: 1500 });
 
     expect(() => subject.resolveOrderCommission(-1)).toThrow(/non-negative integer/);
     expect(() => subject.resolveOrderCommission(120.5)).toThrow(/non-negative integer/);

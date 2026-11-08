@@ -195,7 +195,7 @@ export class OrdersService {
     // Fees — server-derived, per DEC-E-01. See OrderPricingService.
     // ---------------------------------------------------------------------
 
-    const fees = this.pricing.resolveOrderFees(restaurantId, validation.subtotalSatang);
+    const fees = await this.pricing.resolveOrderFees(restaurantId, validation.subtotalSatang);
 
     // ---------------------------------------------------------------------
     // Commission — D-01 order-time snapshot. Resolved exactly once, here,

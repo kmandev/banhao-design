@@ -15,3 +15,4 @@ export * from './restaurant-availability';
 export * from './supervisor';
 export * from './reconciliation';
 export * from './restaurant-open';
+export * from './delivery-fee';

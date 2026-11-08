@@ -21,6 +21,7 @@ import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
 import { ReconciliationCaseService } from './reconciliation-case.service';
 import { RestaurantAvailabilityService } from '../merchant/restaurant-availability.service';
+import { DeliveryFeeSettingsService } from '../orders/delivery-fee-settings.service';
 
 /**
  * The HTTP boundary of the Human Supervisor console — Phase I.
@@ -160,6 +161,14 @@ function fakeAuthGuard(user: AuthenticatedUser | null): CanActivate {
 
 /** DEC-068 C3 — the staff availability route's service, reset before every test. */
 const availabilityStub = jest.fn();
+/** DEC-071 — the delivery-fee routes' service. */
+const deliveryFeeOverview = jest.fn();
+const deliveryFeeChange = jest.fn();
+const ADMIN: AuthenticatedUser = {
+  ...OPERATOR,
+  id: 'admin-user-1',
+  capabilities: { ...OPERATOR.capabilities, platformStaff: { staffRole: 'ADMIN' } },
+};
 
 async function buildApp(
   user: AuthenticatedUser | null,
@@ -182,6 +191,7 @@ async function buildApp(
       { provide: RefundService, useValue: refunds },
       { provide: ReconciliationCaseService, useValue: reconciliation },
       { provide: RestaurantAvailabilityService, useValue: { setAvailability: availabilityStub } },
+      { provide: DeliveryFeeSettingsService, useValue: { overview: deliveryFeeOverview, change: deliveryFeeChange } },
       ...guards,
       { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
       Reflector,
@@ -228,6 +238,7 @@ const ROUTES: ReadonlyArray<{ name: string; method: 'get' | 'post' | 'put'; path
     path: `/api/v1/admin/supervisor/restaurants/${RESTAURANT_ID}/availability`,
     body: { mode: 'PAUSED', reason: 'ร้านแจ้งว่าไฟดับ' },
   },
+  { name: 'delivery fee setting', method: 'get', path: '/api/v1/admin/supervisor/pricing/delivery-fee' },
   {
     name: 'reconciliation cases list',
     method: 'get',
@@ -254,6 +265,8 @@ describe('SupervisorController — HTTP boundary', () => {
   let reconciliation: ReconciliationStub;
 
   beforeEach(() => {
+    deliveryFeeOverview.mockReset().mockResolvedValue({ current: { mode: 'FIXED', fixedSatang: 1500 } });
+    deliveryFeeChange.mockReset().mockResolvedValue({ current: { mode: 'FIXED', fixedSatang: 2000 } });
     availabilityStub.mockReset();
     availabilityStub.mockResolvedValue({
       restaurantId: RESTAURANT_ID,
@@ -283,6 +296,8 @@ describe('SupervisorController — HTTP boundary', () => {
       reconciliation.getCase,
       reconciliation.resolveCase,
       availabilityStub,
+      deliveryFeeOverview,
+      deliveryFeeChange,
     ].some((fn) => fn.mock.calls.length > 0);
   }
 
@@ -309,6 +324,43 @@ describe('SupervisorController — HTTP boundary', () => {
     app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(200);
+  });
+
+  describe('change the delivery fee (DEC-071) — ADMIN only', () => {
+    const PATH = '/api/v1/admin/supervisor/pricing/delivery-fee';
+    const BODY = { mode: 'FIXED', fixedSatang: 2000, reason: 'ปรับค่าส่งช่วงนำร่อง' };
+
+    it('refuses an OPERATOR with 403, and changes nothing', async () => {
+      app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).put(PATH).send(BODY).expect(403);
+      expect(deliveryFeeChange).not.toHaveBeenCalled();
+    });
+
+    it('refuses an anonymous caller with 401', async () => {
+      app = await buildApp(null, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).put(PATH).send(BODY).expect(401);
+      expect(deliveryFeeChange).not.toHaveBeenCalled();
+    });
+
+    it('lets an ADMIN change it, passing the admin\'s id and the parsed request', async () => {
+      app = await buildApp(ADMIN, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).put(PATH).send(BODY).expect(200);
+      expect(deliveryFeeChange).toHaveBeenCalledWith('admin-user-1', BODY);
+    });
+
+    it.each<[Record<string, unknown>, string]>([
+      [{ mode: 'FIXED', fixedSatang: 1000, reason: 'r' }, 'below ฿15'],
+      [{ mode: 'FIXED', fixedSatang: 2000 }, 'no reason'],
+      [{ mode: 'PERCENT', percentBasisPoints: 800, minSatang: 3000, maxSatang: 2000, reason: 'r' }, 'min above max'],
+    ])('refuses %j (%s) with 400 before the service', async (body) => {
+      app = await buildApp(ADMIN, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).put(PATH).send(body).expect(400);
+      expect(deliveryFeeChange).not.toHaveBeenCalled();
+    });
   });
 
   describe('set restaurant availability (DEC-068 C3)', () => {
