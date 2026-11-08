@@ -1,5 +1,7 @@
 # BANHAO Roadmap
 
+> **For the current plan to launch, read [`LAUNCH_PLAN.md`](LAUNCH_PLAN.md) (2026-11-08).** This file's phase tables are historical.
+
 **Last updated 2026-08-19.** This file previously described the project's
 pre-implementation, design-only state (as of 2026-08-09) and predates
 Application Architecture V1.1. It has been rewritten to reflect the actual

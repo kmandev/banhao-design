@@ -403,6 +403,13 @@ terminate/relaunch Expo Go — reloading is not enough.
 
 ## 9. Next steps
 
+> **The plan to launch (Phase 1 pilot with real money) is
+> [`docs/LAUNCH_PLAN.md`](docs/LAUNCH_PLAN.md)** — written 2026-11-08: seven
+> stages (finish the apps incl. push, pilot settlement with manual payouts,
+> production infrastructure, app stores, legal in parallel, pilot, post-pilot)
+> and the owner questions Q1–Q8 that gate them. It is a work plan, not a
+> decision record: nothing in it is authorized until the owner answers.
+
 **Build the approved application architecture**, phase by phase, from
 [`docs/BANHAO-APP-ARCHITECTURE-V1.md`](docs/BANHAO-APP-ARCHITECTURE-V1.md)
 (V1.1 — APPROVED / READY FOR IMPLEMENTATION). That document is authoritative;
