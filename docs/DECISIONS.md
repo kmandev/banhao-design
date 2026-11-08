@@ -81,6 +81,7 @@ Every entry below is evidenced by content already in this repository — either 
 | **DEC-069** | **Customer cancel/refund notifications, cancel button through the whole free window (DQ-06), `CREATED` order expiry at 15 minutes, service-fee satang precision confirmed** | **ACCEPTED** (implementation authorized) | **2026-11-08** | DEC-050, DEC-058, DEC-061 D-03/D-04, DEC-068 D1, DQ-06 |
 | **DEC-070** | **Launch-plan answers: legal work deferred to the end; delivery fee editable from the back office (fixed or percentage); production stays on Supabase free tier with keep-alive; Q2–Q5, Q7 as recommended** | **ACCEPTED** (implementation authorized; migrations still need their own go-ahead) | **2026-11-08** | `docs/LAUNCH_PLAN.md`, DEC-035, DEC-045, DEC-061 D-18/D-19 |
 | **DEC-071** | **Delivery fee model for the pilot (Option C): back-office fee FIXED or PERCENT, always ฿15–35; rider 80% of the fee, at least ฿12; BANHAO never makes up a delivery shortfall** | **ACCEPTED** (implementation and migration authorized) | **2026-11-08** | DEC-061 D-05/D-06/D-09/D-10, DEC-070 §2, DEC-044, DEC-045 |
+| **DEC-072** | **Merchant and rider notification wording; merchant silent on OrderCreated/OrderReady; riders told of a new offer and of a cancelled job** | **ACCEPTED** (implemented) | **2026-11-08** | `docs/NOTIFICATION_COPY_DRAFT.md`, DEC-068 D1, DEC-069 |
 | **DEC-D-01** | **Cart validation returns a subtotal only; unknowable fees render as `คำนวณเมื่อยืนยัน`** | **ACCEPTED** | **2026-08-18** | `docs/design/BANHAO-UX-SPEC-V1.md` § C-09 |
 | **DEC-D-02** | **The persisted Supabase cart is the cart source of truth** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000004_cart_domain.sql` |
 | **DEC-D-03** | **No guest cart: an unauthenticated user cannot add to a cart** | **ACCEPTED** | **2026-08-18** | `supabase/migrations/20260811000011_rls_policies.sql` |
@@ -9669,4 +9670,23 @@ write-offs, and future promotions (to be checked against D-11 when built).
 flat ฿12 rider earning for new completions; DEC-045 for orders priced under this
 decision. **Implements:** DEC-061 D-05, D-06, D-09, D-10 (without D-08's
 distance component, still blocked on D-16/D-17).
+
+---
+
+## DEC-072 — Merchant and rider notification wording
+
+**Status:** ACCEPTED · implemented 2026-11-08 · **Owner:** PRODUCT_OWNER
+("อนุมัติทั้งหมด" on `docs/NOTIFICATION_COPY_DRAFT.md`)
+
+1. The Thai titles and bodies in `docs/NOTIFICATION_COPY_DRAFT.md` for
+   merchants (7 events) and riders (4 events) are approved verbatim and live in
+   `customer-notification-copy.ts` (`notificationCopyFor`).
+2. A merchant is **not** notified of `OrderCreated` (unpaid) or `OrderReady`
+   (its own action).
+3. **New rider events:** `RiderOfferAvailable` — written once per rider per
+   delivery, on the first round that rider is offered it (re-broadcasts do not
+   repeat it); and the assigned rider becomes a recipient of `OrderCancelled`.
+
+These are in-app records today. Riders and merchants see them as push only
+once LAUNCH_PLAN 1.1 (Expo Push) is built.
 
