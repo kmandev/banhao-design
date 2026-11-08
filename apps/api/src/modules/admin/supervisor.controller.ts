@@ -15,6 +15,9 @@ import {
   resolveReconciliationCaseSchema,
   staffSetRestaurantAvailabilitySchema,
   deliveryFeeSettingRequestSchema,
+  recordPayoutSchema,
+  voidPayoutSchema,
+  weekStartSchema,
 } from '@banhao/validation';
 import type {
   AwaitingFailureListResponse,
@@ -29,6 +32,8 @@ import type {
   ResolveReconciliationCaseResponse,
   RestaurantAvailabilityResponse,
   DeliveryFeeSettingsResponse,
+  PayoutHistoryRow,
+  SettlementReportResponse,
 } from '@banhao/validation';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -40,6 +45,7 @@ import { RefundService } from './refund.service';
 import { ReconciliationCaseService } from './reconciliation-case.service';
 import { RestaurantAvailabilityService } from '../merchant/restaurant-availability.service';
 import { DeliveryFeeSettingsService } from '../orders/delivery-fee-settings.service';
+import { SettlementService } from './settlement.service';
 
 /**
  * Human Supervisor console — Phase I, screens S-02, S-03 and S-06 of the AI
@@ -98,7 +104,48 @@ export class SupervisorController {
     private readonly reconciliation: ReconciliationCaseService,
     private readonly availability: RestaurantAvailabilityService,
     private readonly deliveryFees: DeliveryFeeSettingsService,
+    private readonly settlement: SettlementService,
   ) {}
+
+  /** DEC-073 — what is owed for the week starting `week` (a Monday, Asia/Bangkok), including unpaid carry-over. */
+  @Get('settlement/report')
+  @ApiOkResponse({ description: 'Weekly payout report' })
+  async settlementReport(@Query('week') week?: string): Promise<SettlementReportResponse> {
+    return this.settlement.report(parseOrThrow(weekStartSchema, week));
+  }
+
+  /** DEC-073 — recorded transfers, newest first. */
+  @Get('settlement/payouts')
+  @ApiOkResponse({ description: 'Payout history' })
+  async payoutHistory(): Promise<PayoutHistoryRow[]> {
+    return this.settlement.history();
+  }
+
+  /** DEC-073 S4 — ADMIN records a bank transfer (date + slip reference). Amounts are recomputed by the database. */
+  @Post('settlement/payouts')
+  @HttpCode(200)
+  @Roles('ADMIN')
+  @ApiOkResponse({ description: 'The new payout id' })
+  @ApiForbiddenResponse({ description: 'Not an ADMIN' })
+  @ApiConflictResponse({ description: 'An item is already paid' })
+  async recordPayout(@Body() body: unknown, @CurrentUser() user: AuthenticatedUser): Promise<{ payoutId: string }> {
+    return this.settlement.record(user.id, parseOrThrow(recordPayoutSchema, body));
+  }
+
+  /** DEC-073 S4 — ADMIN voids a mistaken record, with a reason. Its items become payable again. */
+  @Post('settlement/payouts/:id/void')
+  @HttpCode(200)
+  @Roles('ADMIN')
+  @ApiOkResponse({ description: 'Voided' })
+  @ApiForbiddenResponse({ description: 'Not an ADMIN' })
+  async voidPayout(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<{ voided: true }> {
+    await this.settlement.void(user.id, id, parseOrThrow(voidPayoutSchema, body).reason);
+    return { voided: true };
+  }
 
   /**
    * DEC-070 §2 / DEC-071 — the delivery-fee setting in force, its recent

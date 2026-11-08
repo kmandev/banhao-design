@@ -8,6 +8,7 @@ import { DeliveryFailureService } from './delivery-failure.service';
 import { RefundService } from './refund.service';
 import { ReconciliationCaseService } from './reconciliation-case.service';
 import { SupervisorController } from './supervisor.controller';
+import { SettlementService } from './settlement.service';
 
 /**
  * Phase I — the admin/operator API surface.
@@ -49,7 +50,7 @@ import { SupervisorController } from './supervisor.controller';
 @Module({
   imports: [SupabaseModule, OrdersModule, PaymentsModule, MerchantModule],
   controllers: [SupervisorController],
-  providers: [SupervisorCaseService, DeliveryFailureService, RefundService, ReconciliationCaseService],
+  providers: [SupervisorCaseService, DeliveryFailureService, RefundService, ReconciliationCaseService, SettlementService],
   exports: [SupervisorCaseService],
 })
 export class AdminModule {}

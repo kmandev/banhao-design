@@ -22,6 +22,7 @@ import { RefundService } from './refund.service';
 import { ReconciliationCaseService } from './reconciliation-case.service';
 import { RestaurantAvailabilityService } from '../merchant/restaurant-availability.service';
 import { DeliveryFeeSettingsService } from '../orders/delivery-fee-settings.service';
+import { SettlementService } from './settlement.service';
 
 /**
  * The HTTP boundary of the Human Supervisor console — Phase I.
@@ -164,6 +165,8 @@ const availabilityStub = jest.fn();
 /** DEC-071 — the delivery-fee routes' service. */
 const deliveryFeeOverview = jest.fn();
 const deliveryFeeChange = jest.fn();
+/** DEC-073 — the settlement routes' service. */
+const settlementStub = { report: jest.fn(), history: jest.fn(), record: jest.fn(), void: jest.fn() };
 const ADMIN: AuthenticatedUser = {
   ...OPERATOR,
   id: 'admin-user-1',
@@ -192,6 +195,7 @@ async function buildApp(
       { provide: ReconciliationCaseService, useValue: reconciliation },
       { provide: RestaurantAvailabilityService, useValue: { setAvailability: availabilityStub } },
       { provide: DeliveryFeeSettingsService, useValue: { overview: deliveryFeeOverview, change: deliveryFeeChange } },
+      { provide: SettlementService, useValue: settlementStub },
       ...guards,
       { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
       Reflector,
@@ -324,6 +328,60 @@ describe('SupervisorController — HTTP boundary', () => {
     app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
 
     await request(app.getHttpServer())[route.method](route.path).send(route.body ?? {}).expect(200);
+  });
+
+  describe('settlement (DEC-073) — recording and voiding are ADMIN only', () => {
+    const BODY = {
+      partyType: 'RIDER',
+      partyId: '11111111-1111-4111-8111-111111111111',
+      weekStart: '2026-11-02',
+      itemIds: ['22222222-2222-4222-8222-222222222222'],
+      paidOn: '2026-11-09',
+      bankReference: 'SLIP-001',
+    };
+
+    beforeEach(() => {
+      settlementStub.report.mockReset().mockResolvedValue({ merchants: [], riders: [], needsReview: [] });
+      settlementStub.record.mockReset().mockResolvedValue({ payoutId: 'p-1' });
+      settlementStub.void.mockReset().mockResolvedValue(undefined);
+    });
+
+    it('an OPERATOR can read the report but not record a transfer', async () => {
+      app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).get('/api/v1/admin/supervisor/settlement/report?week=2026-11-02').expect(200);
+      await request(app.getHttpServer()).post('/api/v1/admin/supervisor/settlement/payouts').send(BODY).expect(403);
+      expect(settlementStub.record).not.toHaveBeenCalled();
+    });
+
+    it('refuses a week that does not start on a Monday', async () => {
+      app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).get('/api/v1/admin/supervisor/settlement/report?week=2026-11-03').expect(400);
+      expect(settlementStub.report).not.toHaveBeenCalled();
+    });
+
+    it('an ADMIN records a transfer; a body carrying an amount is refused', async () => {
+      app = await buildApp(ADMIN, stub, failures, refunds, reconciliation);
+
+      await request(app.getHttpServer()).post('/api/v1/admin/supervisor/settlement/payouts').send(BODY).expect(200);
+      expect(settlementStub.record).toHaveBeenCalledWith('admin-user-1', BODY);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/admin/supervisor/settlement/payouts')
+        .send({ ...BODY, totalSatang: 1 })
+        .expect(400);
+    });
+
+    it('an ADMIN voids with a reason; an OPERATOR cannot', async () => {
+      app = await buildApp(OPERATOR, stub, failures, refunds, reconciliation);
+      await request(app.getHttpServer()).post('/api/v1/admin/supervisor/settlement/payouts/p-1/void').send({ reason: 'ผิด' }).expect(403);
+      await app.close();
+
+      app = await buildApp(ADMIN, stub, failures, refunds, reconciliation);
+      await request(app.getHttpServer()).post('/api/v1/admin/supervisor/settlement/payouts/p-1/void').send({ reason: 'ผิด' }).expect(200);
+      expect(settlementStub.void).toHaveBeenCalledWith('admin-user-1', 'p-1', 'ผิด');
+    });
   });
 
   describe('change the delivery fee (DEC-071) — ADMIN only', () => {
